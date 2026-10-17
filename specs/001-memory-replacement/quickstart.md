@@ -1,6 +1,6 @@
 # Quickstart & Validation Guide: Feature 001 — Memory Replacement
 
-**Feature**: `001-memory-replacement`  
+**Feature**: `001-memory-replacement`
 **Target Environment**: Windows 11 with PowerShell 7 (`pwsh`), .NET 10 SDK (`10.0.402` via `global.json`), Docker Desktop.
 
 ---

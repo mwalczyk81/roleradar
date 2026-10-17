@@ -37,10 +37,6 @@ jobs:
           }
           Write-Output "PSScriptAnalyzer passed with 0 issues."
 
-      - name: Run privacy path guard
-        shell: pwsh
-        run: ./scripts/pre-commit.ps1
-
       - name: Restore with locked dependencies
         run: dotnet restore RoleRadar.sln --locked-mode
 
@@ -51,12 +47,15 @@ jobs:
         run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
 
       - name: Run Unit and Architecture tests
+        env:
+          SKIP: roleradar-denylist
         run: |
+          pip install pre-commit
           dotnet test tests/RoleRadar.Tests.Unit/RoleRadar.Tests.Unit.csproj -c Release --no-build
           dotnet test tests/RoleRadar.Tests.Architecture/RoleRadar.Tests.Architecture.csproj -c Release --no-build
 
   ubuntu-integration-and-coverage:
-    name: Ubuntu (Build, Testcontainers, >=85% Coverage & Gitleaks)
+    name: Ubuntu (Build, Testcontainers, >=85% Coverage & Pre-Commit)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -64,14 +63,12 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Run Gitleaks secret scan
-        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+      - name: Run pre-commit hooks (gitleaks, hygiene, and path/workflow-SHA guard)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Run privacy path guard (no external denylist required in CI)
-        shell: pwsh
-        run: ./scripts/pre-commit.ps1
+          SKIP: roleradar-denylist
+        run: |
+          pipx install pre-commit
+          pre-commit run --all-files
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0

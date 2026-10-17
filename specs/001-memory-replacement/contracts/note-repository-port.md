@@ -1,7 +1,7 @@
 # Contract: `INoteRepository` Aggregate Port & Handler/Decorator Pipeline
 
-**Feature**: `001-memory-replacement`  
-**Layer**: `RoleRadar.Application.Abstractions`  
+**Feature**: `001-memory-replacement`
+**Layer**: `RoleRadar.Application.Abstractions`
 **ADR References**:
 - [ADR-0002: `INoteRepository` as the Aggregate-Level Transactional Write Port](../../../docs/adr/0002-inote-repository-single-write-port.md)
 - [ADR-0006: Command & Query Handlers with Explicit Decorators Instead of a Mediator Library](../../../docs/adr/0006-handlers-with-decorators-no-mediator.md)

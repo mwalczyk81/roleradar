@@ -1,8 +1,8 @@
 # Phase 0 Research: Feature 001 — Memory Replacement (Constitution v1.1.0)
 
-**Feature**: `001-memory-replacement`  
-**Date**: 2026-10-17  
-**Spec**: [spec.md](./spec.md)  
+**Feature**: `001-memory-replacement`
+**Date**: 2026-10-17
+**Spec**: [spec.md](./spec.md)
 **Constitution**: v1.1.0
 
 ---

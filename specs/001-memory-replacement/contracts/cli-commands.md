@@ -1,6 +1,6 @@
 # Contract: CLI Commands & PowerShell Operational Scripts (`RoleRadar.Cli`)
 
-**Feature**: `001-memory-replacement`  
+**Feature**: `001-memory-replacement`
 **Host**: `RoleRadar.Cli` (`System.CommandLine` `2.0.13` GA) + Windows PowerShell wrapper scripts under `scripts/`.
 
 ---

@@ -254,6 +254,118 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
         Assert.False(repo.HasFaultInjectionHook, "DI-built MongoNoteRepository must not have a fault-injection hook set.");
     }
 
+    [Fact]
+    public async Task PreCommitRunAllFiles_MustLeaveTestFixturesByteIdentical()
+    {
+        var repoRoot = LocateRepositoryRoot();
+        var preCommitConfigPath = Path.Combine(repoRoot, ".pre-commit-config.yaml");
+        Assert.True(File.Exists(preCommitConfigPath), $"Expected .pre-commit-config.yaml at {preCommitConfigPath}");
+
+        var configContent = await File.ReadAllTextAsync(preCommitConfigPath);
+        Assert.Contains("id: trailing-whitespace", configContent, StringComparison.Ordinal);
+        Assert.Contains("id: end-of-file-fixer", configContent, StringComparison.Ordinal);
+        Assert.Contains("id: mixed-line-ending", configContent, StringComparison.Ordinal);
+        Assert.Contains("exclude: ^tests/fixtures/", configContent, StringComparison.Ordinal);
+
+        var fixturesDir = Path.Combine(repoRoot, "tests", "fixtures");
+        var fixtureFiles = Directory.GetFiles(fixturesDir, "*", SearchOption.AllDirectories)
+            .OrderBy(p => p, StringComparer.Ordinal)
+            .ToArray();
+        Assert.NotEmpty(fixtureFiles);
+
+        var beforeSnapshots = new Dictionary<string, (byte[] Bytes, string Sha256)>(StringComparer.Ordinal);
+        foreach (var file in fixtureFiles)
+        {
+            var bytes = await File.ReadAllBytesAsync(file);
+            var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
+            beforeSnapshots[file] = (bytes, hash);
+        }
+
+        // Verify primary fixture actually has CRLF bytes that would be stripped if ^tests/fixtures/ were not excluded
+        var primaryFixturePath = Path.Combine(fixturesDir, "fictional-memory-primary.md");
+        Assert.True(beforeSnapshots.ContainsKey(primaryFixturePath));
+        Assert.Contains((byte)'\r', beforeSnapshots[primaryFixturePath].Bytes);
+
+        var preCommitExe = ResolvePreCommitExecutable();
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = preCommitExe,
+            Arguments = "run --all-files",
+            WorkingDirectory = repoRoot,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+
+        var userLocalBin = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin");
+        var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        if (Directory.Exists(userLocalBin) && !currentPath.Contains(userLocalBin, StringComparison.OrdinalIgnoreCase))
+        {
+            psi.Environment["PATH"] = $"{currentPath}{Path.PathSeparator}{userLocalBin}";
+        }
+
+        psi.Environment["SKIP"] = "roleradar-denylist";
+
+        using var process = System.Diagnostics.Process.Start(psi);
+        Assert.NotNull(process);
+
+        var stdoutTask = process!.StandardOutput.ReadToEndAsync();
+        var stderrTask = process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+        Assert.True(
+            process.ExitCode == 0,
+            $"pre-commit run --all-files exited with {process.ExitCode}.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}");
+
+        foreach (var file in fixtureFiles)
+        {
+            var afterBytes = await File.ReadAllBytesAsync(file);
+            var afterHash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(afterBytes));
+            var (beforeBytes, beforeHash) = beforeSnapshots[file];
+
+            Assert.Equal(beforeHash, afterHash);
+            Assert.Equal(beforeBytes.Length, afterBytes.Length);
+            Assert.Equal(beforeBytes, afterBytes);
+        }
+    }
+
+    private static string LocateRepositoryRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "RoleRadar.sln")) &&
+                File.Exists(Path.Combine(dir.FullName, ".pre-commit-config.yaml")))
+            {
+                return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException($"Could not locate repository root from {AppContext.BaseDirectory}.");
+    }
+
+    private static string ResolvePreCommitExecutable()
+    {
+        var exeName = OperatingSystem.IsWindows() ? "pre-commit.exe" : "pre-commit";
+        var userLocalCandidate = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".local",
+            "bin",
+            exeName);
+
+        if (File.Exists(userLocalCandidate))
+        {
+            return userLocalCandidate;
+        }
+
+        return "pre-commit";
+    }
+
     private static List<string> ExtractUserStringsFromMethodBody(Module module, byte[] il)
     {
         var strings = new List<string>();

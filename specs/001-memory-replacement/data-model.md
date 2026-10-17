@@ -1,7 +1,7 @@
 # Data Model: Feature 001 — Memory Replacement (Constitution v1.1.0)
 
-**Feature**: `001-memory-replacement`  
-**Date**: 2026-10-17  
+**Feature**: `001-memory-replacement`
+**Date**: 2026-10-17
 **Datastore**: MongoDB 8.0 (`mongo:8.0.34`), single-node replica set (`rs0`), `GuidRepresentation.Standard` configured globally once at process startup (`MongoDB.Driver` `3.12.0`).
 
 ---

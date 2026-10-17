@@ -1,8 +1,8 @@
 # Contract: MCP Stdio Tools (`RoleRadar.Mcp.Stdio`)
 
-**Feature**: `001-memory-replacement`  
-**Transport**: `stdio` only (`ModelContextProtocol` `2.2.0`, `Microsoft.Extensions.Hosting` `10.0.13`, zero network listeners, all logs routed to `stderr`).  
-**Handler Injection**: Each tool injects its corresponding `ICommandHandler<TCommand, TResponse>` or `IQueryHandler<TQuery, TResponse>` directly (no mediator library, per Constitution v1.1.0 Principle IV and [ADR-0006](../../../docs/adr/0006-handlers-with-decorators-no-mediator.md)).  
+**Feature**: `001-memory-replacement`
+**Transport**: `stdio` only (`ModelContextProtocol` `2.2.0`, `Microsoft.Extensions.Hosting` `10.0.13`, zero network listeners, all logs routed to `stderr`).
+**Handler Injection**: Each tool injects its corresponding `ICommandHandler<TCommand, TResponse>` or `IQueryHandler<TQuery, TResponse>` directly (no mediator library, per Constitution v1.1.0 Principle IV and [ADR-0006](../../../docs/adr/0006-handlers-with-decorators-no-mediator.md)).
 **Tool Cap**: 6 tools exposed (strictly within the <=8 tool cap in `FR-018` and Constitution Principle V).
 
 ---
