@@ -245,15 +245,18 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
     [Fact]
     public async Task McpStdioHost_StdoutCarriesExclusivelyValidJsonRpcFrames_AndRoutesLogsToStderr()
     {
-        var mcpProjectPath = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "..", "..", "..", "..", "..",
-            "src", "RoleRadar.Mcp.Stdio", "RoleRadar.Mcp.Stdio.csproj"));
+        var hostAssemblyPath = typeof(NoteMcpTools).Assembly.Location;
+        if (string.IsNullOrWhiteSpace(hostAssemblyPath) || !File.Exists(hostAssemblyPath))
+        {
+            hostAssemblyPath = Path.Combine(AppContext.BaseDirectory, "RoleRadar.Mcp.Stdio.dll");
+        }
+
+        Assert.True(File.Exists(hostAssemblyPath), $"Expected built MCP stdio host assembly at '{hostAssemblyPath}'.");
 
         var psi = new ProcessStartInfo
         {
             FileName = "dotnet",
-            Arguments = $"run --no-build --project \"{mcpProjectPath}\"",
+            Arguments = $"\"{hostAssemblyPath}\"",
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -266,6 +269,31 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
         using var proc = Process.Start(psi)!;
         Assert.NotNull(proc);
 
+        var stderrBuffer = new StringBuilder();
+        var stderrLock = new object();
+        proc.ErrorDataReceived += (_, e) =>
+        {
+            if (e.Data is not null)
+            {
+                lock (stderrLock)
+                {
+                    stderrBuffer.AppendLine(e.Data);
+                }
+            }
+        };
+        proc.BeginErrorReadLine();
+
+        string FormatDiagnosticMessage(string message)
+        {
+            string stderr;
+            lock (stderrLock)
+            {
+                stderr = stderrBuffer.ToString();
+            }
+
+            return $"{message}\nHost assembly: {hostAssemblyPath}\nHost stderr:\n{(string.IsNullOrWhiteSpace(stderr) ? "<empty>" : stderr)}";
+        }
+
         try
         {
             // Send JSON-RPC 2.0 initialize request followed by tools/list request
@@ -277,14 +305,18 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
             await proc.StandardInput.FlushAsync();
 
             var firstStdoutLine = await ReadLineWithTimeoutAsync(proc.StandardOutput, TimeSpan.FromSeconds(15));
-            Assert.False(string.IsNullOrWhiteSpace(firstStdoutLine), "Expected initialize JSON-RPC response on stdout.");
+            Assert.False(
+                string.IsNullOrWhiteSpace(firstStdoutLine),
+                FormatDiagnosticMessage("Expected initialize JSON-RPC response on stdout."));
 
             await proc.StandardInput.WriteLineAsync(initializedNotification);
             await proc.StandardInput.WriteLineAsync(listToolsRequest);
             await proc.StandardInput.FlushAsync();
 
             var secondStdoutLine = await ReadLineWithTimeoutAsync(proc.StandardOutput, TimeSpan.FromSeconds(15));
-            Assert.False(string.IsNullOrWhiteSpace(secondStdoutLine), "Expected tools/list JSON-RPC response on stdout.");
+            Assert.False(
+                string.IsNullOrWhiteSpace(secondStdoutLine),
+                FormatDiagnosticMessage("Expected tools/list JSON-RPC response on stdout."));
 
             proc.StandardInput.Close();
 
@@ -292,7 +324,9 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
             foreach (var line in new[] { firstStdoutLine!, secondStdoutLine! })
             {
                 using var json = JsonDocument.Parse(line);
-                Assert.Equal("2.0", json.RootElement.GetProperty("jsonrpc").GetString());
+                Assert.True(
+                    json.RootElement.TryGetProperty("jsonrpc", out var versionProp) && versionProp.GetString() == "2.0",
+                    FormatDiagnosticMessage($"Expected JSON-RPC 2.0 frame on stdout, but received: {line}"));
             }
 
             // Verify tools/list exposes the US1 tools (and <= 8 tools total)
@@ -302,12 +336,14 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
                 .Select(t => t.GetProperty("name").GetString()!)
                 .ToArray();
 
-            Assert.True(toolNames.Length <= 8, $"Expected at most 8 MCP tools, found {toolNames.Length}.");
-            Assert.Contains("note_create", toolNames);
-            Assert.Contains("note_get", toolNames);
-            Assert.Contains("note_append", toolNames);
-            Assert.Contains("note_replace_section", toolNames);
-            Assert.Contains("note_search", toolNames);
+            Assert.True(
+                toolNames.Length <= 8,
+                FormatDiagnosticMessage($"Expected at most 8 MCP tools, found {toolNames.Length}."));
+            Assert.True(toolNames.Contains("note_create"), FormatDiagnosticMessage("Missing 'note_create' tool."));
+            Assert.True(toolNames.Contains("note_get"), FormatDiagnosticMessage("Missing 'note_get' tool."));
+            Assert.True(toolNames.Contains("note_append"), FormatDiagnosticMessage("Missing 'note_append' tool."));
+            Assert.True(toolNames.Contains("note_replace_section"), FormatDiagnosticMessage("Missing 'note_replace_section' tool."));
+            Assert.True(toolNames.Contains("note_search"), FormatDiagnosticMessage("Missing 'note_search' tool."));
         }
         finally
         {
@@ -320,7 +356,14 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
 
     private static async Task<string?> ReadLineWithTimeoutAsync(StreamReader reader, TimeSpan timeout)
     {
-        using var cts = new CancellationTokenSource(timeout);
-        return await reader.ReadLineAsync(cts.Token);
+        try
+        {
+            using var cts = new CancellationTokenSource(timeout);
+            return await reader.ReadLineAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return null;
+        }
     }
 }
