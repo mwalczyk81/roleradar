@@ -1,6 +1,7 @@
 using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using MongoDB.Driver;
 using RoleRadar.Application;
 using RoleRadar.Cli.Commands;
 using RoleRadar.Infrastructure;
@@ -12,19 +13,30 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
-        var isVerbose = args.Any(a => string.Equals(a, "--verbose", StringComparison.OrdinalIgnoreCase)
-                                   || string.Equals(a, "-v", StringComparison.OrdinalIgnoreCase));
+        try
+        {
+            var isVerbose = args.Any(a => string.Equals(a, "--verbose", StringComparison.OrdinalIgnoreCase)
+                                       || string.Equals(a, "-v", StringComparison.OrdinalIgnoreCase));
 
-        await using var services = BuildServiceProvider(args, isVerbose: isVerbose);
+            await using var services = BuildServiceProvider(args, isVerbose: isVerbose);
 
-        var rootCommand = new RootCommand("RoleRadar local CLI");
-        rootCommand.Add(StatusCommand.Create(services));
-        rootCommand.Add(ImportCommand.Create(services));
-        rootCommand.Add(BackupCommand.Create(services));
-        rootCommand.Add(RestoreCommand.Create(services));
-        rootCommand.Add(WipeCommand.Create(services));
+            // Eagerly resolve IMongoClient to catch invalid connection strings before command dispatch
+            services.GetRequiredService<IMongoClient>();
 
-        return await rootCommand.Parse(args).InvokeAsync(cancellationToken: CancellationToken.None);
+            var rootCommand = new RootCommand("RoleRadar local CLI");
+            rootCommand.Add(StatusCommand.Create(services));
+            rootCommand.Add(ImportCommand.Create(services));
+            rootCommand.Add(BackupCommand.Create(services));
+            rootCommand.Add(RestoreCommand.Create(services));
+            rootCommand.Add(WipeCommand.Create(services));
+
+            return await rootCommand.Parse(args).InvokeAsync(cancellationToken: CancellationToken.None);
+        }
+        catch (InvalidOperationException ex) when (ex.Message == RoleRadar.Infrastructure.Mongo.ConnectionStringRedactor.InvalidConnectionStringErrorMessage)
+        {
+            Console.Error.WriteLine(RoleRadar.Infrastructure.Mongo.ConnectionStringRedactor.InvalidConnectionStringErrorMessage);
+            return 1;
+        }
     }
 
     public static ServiceProvider BuildServiceProvider(Action<IServiceCollection>? configure = null) =>

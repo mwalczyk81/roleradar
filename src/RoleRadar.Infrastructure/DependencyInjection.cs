@@ -25,10 +25,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IMongoClient>(sp =>
         {
             var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
-            var settings = MongoClientSettings.FromConnectionString(opts.ConnectionString);
-            settings.ServerSelectionTimeout = opts.ReadinessTimeout;
-            settings.ConnectTimeout = opts.ReadinessTimeout;
-            return new MongoClient(settings);
+            return ConnectionStringRedactor.CreateClient(opts.ConnectionString, opts.ReadinessTimeout);
         });
 
         services.TryAddSingleton<MongoReadinessProbe>();

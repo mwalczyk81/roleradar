@@ -9,6 +9,37 @@ namespace RoleRadar.Infrastructure.Mongo;
 public static class ConnectionStringRedactor
 {
     public const string RedactedFallback = "<redacted>";
+    public const string InvalidConnectionStringErrorMessage =
+        "ROLERADAR_MONGO_CONNECTION_STRING is not a valid MongoDB connection string. The value is hidden.";
+
+    /// <summary>
+    /// Validates the connection string and creates a configured <see cref="MongoClient"/>,
+    /// resolving SRV records eagerly and catching <see cref="MongoConfigurationException"/>,
+    /// <see cref="FormatException"/>, and <see cref="ArgumentException"/> so invalid input is never echoed.
+    /// </summary>
+    public static MongoClient CreateClient(string connectionString, TimeSpan timeout)
+    {
+        try
+        {
+            var trimmed = connectionString.Trim();
+            var mongoUrl = MongoUrl.Create(trimmed);
+
+            // If mongodb+srv://, resolve records eagerly to catch unresolvable host configurations at startup
+            if (trimmed.StartsWith("mongodb+srv://", StringComparison.OrdinalIgnoreCase))
+            {
+                mongoUrl = mongoUrl.Resolve(resolveHosts: true);
+            }
+
+            var settings = MongoClientSettings.FromUrl(mongoUrl);
+            settings.ServerSelectionTimeout = timeout;
+            settings.ConnectTimeout = timeout;
+            return new MongoClient(settings);
+        }
+        catch (Exception ex) when (ex is MongoConfigurationException or FormatException or ArgumentException)
+        {
+            throw new InvalidOperationException(InvalidConnectionStringErrorMessage);
+        }
+    }
 
     public static string Redact(string? connectionString)
     {

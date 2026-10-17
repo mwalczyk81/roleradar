@@ -742,18 +742,33 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         }
 
         // Verify MongoDB connection string points to loopback
-        var mongoUrl = new MongoUrl(_mongoOptions.ConnectionString);
-        foreach (var server in mongoUrl.Servers)
+        try
         {
-            var host = server.Host.Trim('[', ']');
-            if (!host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) &&
-                !host.Equals("localhost", StringComparison.OrdinalIgnoreCase) &&
-                !host.Equals("::1", StringComparison.OrdinalIgnoreCase))
+            var trimmed = _mongoOptions.ConnectionString.Trim();
+            var mongoUrl = MongoUrl.Create(trimmed);
+            if (trimmed.StartsWith("mongodb+srv://", StringComparison.OrdinalIgnoreCase))
             {
-                return Result<WipeSummaryDto>.Failure(
-                    ErrorCode.ValidationError,
-                    $"Wipe is only permitted against loopback MongoDB hosts (127.0.0.1, ::1, localhost). Found host: '{server.Host}'.");
+                mongoUrl = mongoUrl.Resolve(resolveHosts: true, cancellationToken);
             }
+
+            foreach (var server in mongoUrl.Servers)
+            {
+                var host = server.Host.Trim('[', ']');
+                if (!host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) &&
+                    !host.Equals("localhost", StringComparison.OrdinalIgnoreCase) &&
+                    !host.Equals("::1", StringComparison.OrdinalIgnoreCase))
+                {
+                    return Result<WipeSummaryDto>.Failure(
+                        ErrorCode.ValidationError,
+                        $"Wipe is only permitted against loopback MongoDB hosts (127.0.0.1, ::1, localhost). Found host: '{server.Host}'.");
+                }
+            }
+        }
+        catch (Exception ex) when (ex is MongoConfigurationException or FormatException or ArgumentException)
+        {
+            return Result<WipeSummaryDto>.Failure(
+                ErrorCode.ValidationError,
+                ConnectionStringRedactor.InvalidConnectionStringErrorMessage);
         }
 
         var db = _mongoClient.GetDatabase(_mongoOptions.DatabaseName);
