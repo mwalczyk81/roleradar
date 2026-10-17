@@ -13,7 +13,7 @@ RoleRadar is governed by the [RoleRadar Constitution](./.specify/memory/constitu
      pre-commit install --install-hooks -t pre-commit -t commit-msg -t pre-push
      ```
 
-   - Create your local private denylist at `%LOCALAPPDATA%\roleradar\private\denylist.txt` (one real company or contact name per line) so the `roleradar-denylist` hook scans for real names locally.
+   - Create your local private denylist at `%LOCALAPPDATA%\roleradar\private\denylist.txt` (see [docs/denylist.example.txt](docs/denylist.example.txt); one real company or contact name per line) so the `roleradar-denylist` hook scans for real names locally.
    - Always run `pre-commit run --all-files` before opening a pull request.
 2. **Test-First Development (Principle II)**:
    - Write unit, architecture, contract, or integration tests **first** and verify they fail before writing production implementation code.
