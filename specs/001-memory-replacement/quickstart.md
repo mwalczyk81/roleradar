@@ -95,6 +95,9 @@ dotnet publish src/RoleRadar.Mcp.Stdio -c Release -o "$env:LOCALAPPDATA\rolerada
 
 ## 5. Validate Streamed Encrypted Backup, Safe Wipe, and Two-Pass Restore (`US3`, `SC-006`)
 
+> [!NOTE]
+> Backup is consistent only when no writes happen during the dump because `--oplog` cannot be replayed together with `--nsInclude`.
+
 ```powershell
 $env:ROLERADAR_BACKUP_PASSPHRASE = "fictional-test-passphrase-2026"
 $backupDir = Join-Path $env:TEMP "roleradar-quickstart-backups"

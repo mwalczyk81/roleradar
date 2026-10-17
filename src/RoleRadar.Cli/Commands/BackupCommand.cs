@@ -11,7 +11,7 @@ public static class BackupCommand
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        var backupCommand = new Command("backup", "Create an encrypted, compressed backup archive of all RoleRadar data");
+        var backupCommand = new Command("backup", "Create an encrypted, compressed backup archive of all RoleRadar data. Consistent only when no writes happen during the dump because --oplog cannot be replayed together with --nsInclude.");
 
         var destinationArgument = new Argument<string?>("destination")
         {

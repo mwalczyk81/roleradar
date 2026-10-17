@@ -91,6 +91,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             var hasCurrentChunk = false;
             var currentChunkLen = 0;
             var isFirstChunk = true;
+            var chunkLengthBytes = new byte[4];
 
             while (true)
             {
@@ -116,7 +117,8 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                             fileHeader,
                             ChunkFlag.Final);
 
-                        await ciphertextStream.WriteAsync(BitConverter.GetBytes(BackupArchiveConstants.TagSize), cancellationToken);
+                        BitConverter.TryWriteBytes(chunkLengthBytes, BackupArchiveConstants.TagSize);
+                        await ciphertextStream.WriteAsync(chunkLengthBytes, cancellationToken);
                         await ciphertextStream.WriteAsync(ciphertextBuffer.AsMemory(0, BackupArchiveConstants.TagSize), cancellationToken);
                         break;
                     }
@@ -147,7 +149,8 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                         ad,
                         flag);
 
-                    await ciphertextStream.WriteAsync(BitConverter.GetBytes(cipherLen), cancellationToken);
+                    BitConverter.TryWriteBytes(chunkLengthBytes, cipherLen);
+                    await ciphertextStream.WriteAsync(chunkLengthBytes, cancellationToken);
                     await ciphertextStream.WriteAsync(ciphertextBuffer.AsMemory(0, cipherLen), cancellationToken);
 
                     totalPlaintextBytes += currentChunkLen;
@@ -869,7 +872,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         return (trimmed[..firstSpace], trimmed[(firstSpace + 1)..].Trim());
     }
 
-    private static async Task<int> ReadExactOrToEofAsync(
+    private static ValueTask<int> ReadExactOrToEofAsync(
         Stream stream,
         byte[] buffer,
         int offset,
@@ -879,7 +882,42 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         var totalRead = 0;
         while (totalRead < count)
         {
-            var read = await stream.ReadAsync(buffer.AsMemory(offset + totalRead, count - totalRead), cancellationToken);
+            var vt = stream.ReadAsync(buffer.AsMemory(offset + totalRead, count - totalRead), cancellationToken);
+            if (!vt.IsCompletedSuccessfully)
+            {
+                return ReadExactOrToEofSlowAsync(stream, buffer, offset + totalRead, count - totalRead, totalRead, vt, cancellationToken);
+            }
+
+            var read = vt.Result;
+            if (read == 0)
+            {
+                break;
+            }
+            totalRead += read;
+        }
+        return ValueTask.FromResult(totalRead);
+    }
+
+    private static async ValueTask<int> ReadExactOrToEofSlowAsync(
+        Stream stream,
+        byte[] buffer,
+        int offset,
+        int count,
+        int initialTotal,
+        ValueTask<int> pendingRead,
+        CancellationToken cancellationToken)
+    {
+        var totalRead = initialTotal;
+        var firstRead = await pendingRead;
+        if (firstRead == 0)
+        {
+            return totalRead;
+        }
+        totalRead += firstRead;
+
+        while (totalRead < initialTotal + count)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(offset + (totalRead - initialTotal), count - (totalRead - initialTotal)), cancellationToken);
             if (read == 0)
             {
                 break;

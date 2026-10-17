@@ -8,8 +8,16 @@ using RoleRadar.Infrastructure.Backup;
 using RoleRadar.Infrastructure.Mongo;
 using Xunit;
 
+[assembly: Xunit.v3.Parallelization(Mode = Xunit.Sdk.ParallelMode.None)]
+
 namespace RoleRadar.Tests.Unit.Backup;
 
+[CollectionDefinition("NonParallelCryptoMemory", DisableParallelization = true)]
+public sealed class NonParallelCryptoMemoryCollectionDefinition
+{
+}
+
+[Collection("NonParallelCryptoMemory")]
 public sealed class SecretStreamBackupCryptoTests
 {
     private readonly SecretStreamBackupArchiveService _sut;
@@ -290,26 +298,169 @@ public sealed class SecretStreamBackupCryptoTests
     }
 
     [Fact]
-    public async Task BoundedMemory_MultiMegabyteStream_StaysWithinBufferCeiling()
+    public async Task BoundedMemory_EncryptStream_ScalingInvariant_AllocationsIndependentOfStreamSize()
     {
-        // 8 MiB synthetic stream processed chunk-by-chunk staying within <= 256 KiB allocation overhead
-        const long totalSize = 8 * 1024 * 1024;
-        using var syntheticPlaintext = new SyntheticRepeatingStream(totalSize);
-        using var countingSink = new CountingSinkStream();
+        const string passphrase = "Password12345678!";
 
+        // Warm up JIT, static initializers, ArrayPool buckets
+        using (var warmPlain = new SyntheticRepeatingStream(1 * 1024 * 1024))
+        using (var warmCipher = new CountingSinkStream())
+        {
+            var warmRes = await _sut.EncryptStreamAsync(warmPlain, warmCipher, passphrase, iterations: 3, memoryKiB: 65536);
+            Assert.True(warmRes.IsSuccess);
+        }
+
+        // Measure 8 MiB stream
+        long alloc8;
+        using (var plain8 = new SyntheticRepeatingStream(8 * 1024 * 1024))
+        using (var cipher8 = new CountingSinkStream())
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            var before8 = GC.GetTotalAllocatedBytes(precise: true);
+            var res8 = await _sut.EncryptStreamAsync(plain8, cipher8, passphrase, iterations: 3, memoryKiB: 65536);
+            alloc8 = GC.GetTotalAllocatedBytes(precise: true) - before8;
+            Assert.True(res8.IsSuccess);
+        }
+
+        // Measure 32 MiB stream
+        long alloc32;
+        using (var plain32 = new SyntheticRepeatingStream(32 * 1024 * 1024))
+        using (var cipher32 = new CountingSinkStream())
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+            var before32 = GC.GetTotalAllocatedBytes(precise: true);
+            var res32 = await _sut.EncryptStreamAsync(plain32, cipher32, passphrase, iterations: 3, memoryKiB: 65536);
+            alloc32 = GC.GetTotalAllocatedBytes(precise: true) - before32;
+            Assert.True(res32.IsSuccess);
+        }
+
+        var diff = Math.Abs(alloc32 - alloc8);
+        Assert.True(diff < 64 * 1024, $"EncryptStream scaling difference {diff} bytes exceeded 64 KiB ceiling. Alloc8: {alloc8}, Alloc32: {alloc32}");
+    }
+
+    [Fact]
+    public async Task BoundedMemory_Pass1Verify_ScalingInvariant_AllocationsIndependentOfStreamSize()
+    {
+        const string passphrase = "Password12345678!";
+
+        using var plain8 = new SyntheticRepeatingStream(8 * 1024 * 1024);
+        using var cipherMem8 = new MemoryStream();
+        var enc8 = await _sut.EncryptStreamAsync(plain8, cipherMem8, passphrase, iterations: 3, memoryKiB: 65536);
+        Assert.True(enc8.IsSuccess);
+        using var cipher8 = new PreloadedCipherStream(cipherMem8.ToArray());
+
+        using var plain32 = new SyntheticRepeatingStream(32 * 1024 * 1024);
+        using var cipherMem32 = new MemoryStream();
+        var enc32 = await _sut.EncryptStreamAsync(plain32, cipherMem32, passphrase, iterations: 3, memoryKiB: 65536);
+        Assert.True(enc32.IsSuccess);
+        using var cipher32 = new PreloadedCipherStream(cipherMem32.ToArray());
+
+        // Warm up Pass 1
+        cipher8.Position = 0;
+        var warmRes = await _sut.Pass1VerifyAsync(cipher8, passphrase);
+        Assert.True(warmRes.IsSuccess);
+
+        // Measure 8 MiB archive verification
+        cipher8.Position = 0;
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
-        var before = GC.GetAllocatedBytesForCurrentThread();
+        var before8 = GC.GetTotalAllocatedBytes(precise: true);
+        var res8 = await _sut.Pass1VerifyAsync(cipher8, passphrase);
+        var alloc8 = GC.GetTotalAllocatedBytes(precise: true) - before8;
+        Assert.True(res8.IsSuccess);
 
-        var enc = await _sut.EncryptStreamAsync(syntheticPlaintext, countingSink, "Password12345678!", iterations: 3, memoryKiB: 65536);
-        Assert.True(enc.IsSuccess, $"Failed on bounded memory test: {enc.Error?.Message}");
+        // Measure 32 MiB archive verification
+        cipher32.Position = 0;
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var before32 = GC.GetTotalAllocatedBytes(precise: true);
+        var res32 = await _sut.Pass1VerifyAsync(cipher32, passphrase);
+        var alloc32 = GC.GetTotalAllocatedBytes(precise: true) - before32;
+        Assert.True(res32.IsSuccess);
 
-        var after = GC.GetAllocatedBytesForCurrentThread();
-        var overhead = after - before;
+        var diff = Math.Abs(alloc32 - alloc8);
+        Assert.True(diff < 64 * 1024, $"Pass1Verify scaling difference {diff} bytes exceeded 64 KiB ceiling. Alloc8: {alloc8}, Alloc32: {alloc32}");
+    }
 
-        Assert.True(overhead < 256 * 1024, $"Allocated overhead {overhead} bytes exceeded 256 KiB ceiling.");
-        Assert.True(countingSink.BytesWritten > totalSize);
+    [Fact]
+    public async Task BoundedMemory_Pass2Decrypt_ScalingInvariant_AllocationsIndependentOfStreamSize()
+    {
+        const string passphrase = "Password12345678!";
+
+        using var plain8 = new SyntheticRepeatingStream(8 * 1024 * 1024);
+        using var cipherMem8 = new MemoryStream();
+        var enc8 = await _sut.EncryptStreamAsync(plain8, cipherMem8, passphrase, iterations: 3, memoryKiB: 65536);
+        Assert.True(enc8.IsSuccess);
+        using var cipher8 = new PreloadedCipherStream(cipherMem8.ToArray());
+
+        using var plain32 = new SyntheticRepeatingStream(32 * 1024 * 1024);
+        using var cipherMem32 = new MemoryStream();
+        var enc32 = await _sut.EncryptStreamAsync(plain32, cipherMem32, passphrase, iterations: 3, memoryKiB: 65536);
+        Assert.True(enc32.IsSuccess);
+        using var cipher32 = new PreloadedCipherStream(cipherMem32.ToArray());
+
+        cipher8.Position = 0;
+        var verify8 = await _sut.Pass1VerifyAsync(cipher8, passphrase);
+        Assert.True(verify8.IsSuccess);
+        var derivedKey8 = verify8.Value!;
+
+        cipher32.Position = 0;
+        var verify32 = await _sut.Pass1VerifyAsync(cipher32, passphrase);
+        Assert.True(verify32.IsSuccess);
+        var derivedKey32 = verify32.Value!;
+
+        try
+        {
+            // Warm up Pass 2
+            cipher8.Position = 0;
+            using (var warmSink = new CountingSinkStream())
+            {
+                var warmRes = await _sut.Pass2DecryptAsync(cipher8, warmSink, derivedKey8);
+                Assert.True(warmRes.IsSuccess);
+            }
+
+            // Measure 8 MiB archive decryption
+            long alloc8;
+            cipher8.Position = 0;
+            using (var sink8 = new CountingSinkStream())
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                var before8 = GC.GetTotalAllocatedBytes(precise: true);
+                var res8 = await _sut.Pass2DecryptAsync(cipher8, sink8, derivedKey8);
+                alloc8 = GC.GetTotalAllocatedBytes(precise: true) - before8;
+                Assert.True(res8.IsSuccess);
+            }
+
+            // Measure 32 MiB archive decryption
+            long alloc32;
+            cipher32.Position = 0;
+            using (var sink32 = new CountingSinkStream())
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                var before32 = GC.GetTotalAllocatedBytes(precise: true);
+                var res32 = await _sut.Pass2DecryptAsync(cipher32, sink32, derivedKey32);
+                alloc32 = GC.GetTotalAllocatedBytes(precise: true) - before32;
+                Assert.True(res32.IsSuccess);
+            }
+
+            var diff = Math.Abs(alloc32 - alloc8);
+            Assert.True(diff < 64 * 1024, $"Pass2Decrypt scaling difference {diff} bytes exceeded 64 KiB ceiling. Alloc8: {alloc8}, Alloc32: {alloc32}");
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(derivedKey8);
+            CryptographicOperations.ZeroMemory(derivedKey32);
+        }
     }
 
     [Fact]
@@ -480,6 +631,29 @@ public sealed class SecretStreamBackupCryptoTests
             return toRead;
         }
 
+        public override int Read(Span<byte> buffer)
+        {
+            var remaining = _totalLength - _position;
+            if (remaining <= 0) return 0;
+            var toRead = (int)Math.Min(buffer.Length, remaining);
+            for (var i = 0; i < toRead; i++)
+            {
+                buffer[i] = (byte)((_position + i) % 251);
+            }
+            _position += toRead;
+            return toRead;
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromResult(Read(buffer.Span));
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Read(buffer, offset, count));
+        }
+
         public override void Flush() { }
         public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
         public override void SetLength(long value) => throw new NotSupportedException();
@@ -511,5 +685,67 @@ public sealed class SecretStreamBackupCryptoTests
             BytesWritten += buffer.Length;
             return ValueTask.CompletedTask;
         }
+    }
+
+    private sealed class PreloadedCipherStream : Stream
+    {
+        private readonly byte[] _data;
+        private int _position;
+
+        public PreloadedCipherStream(byte[] data)
+        {
+            _data = data;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => true;
+        public override bool CanWrite => false;
+        public override long Length => _data.Length;
+        public override long Position
+        {
+            get => _position;
+            set => _position = (int)value;
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            var remaining = _data.Length - _position;
+            if (remaining <= 0) return 0;
+            var toRead = Math.Min(count, remaining);
+            Buffer.BlockCopy(_data, _position, buffer, offset, toRead);
+            _position += toRead;
+            return toRead;
+        }
+
+        public override int Read(Span<byte> buffer)
+        {
+            var remaining = _data.Length - _position;
+            if (remaining <= 0) return 0;
+            var toRead = Math.Min(buffer.Length, remaining);
+            _data.AsSpan(_position, toRead).CopyTo(buffer);
+            _position += toRead;
+            return toRead;
+        }
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            return ValueTask.FromResult(Read(buffer.Span));
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Read(buffer, offset, count));
+        }
+
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            if (origin == SeekOrigin.Begin) _position = (int)offset;
+            else if (origin == SeekOrigin.Current) _position += (int)offset;
+            else if (origin == SeekOrigin.End) _position = _data.Length + (int)offset;
+            return _position;
+        }
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }
