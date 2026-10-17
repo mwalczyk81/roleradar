@@ -14,6 +14,9 @@ public static class Program
 
         var rootCommand = new RootCommand("RoleRadar local CLI");
         rootCommand.Add(ImportCommand.Create(services));
+        rootCommand.Add(BackupCommand.Create(services));
+        rootCommand.Add(RestoreCommand.Create(services));
+        rootCommand.Add(WipeCommand.Create(services));
 
         return await rootCommand.Parse(args).InvokeAsync(cancellationToken: CancellationToken.None);
     }

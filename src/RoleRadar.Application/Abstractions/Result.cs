@@ -11,7 +11,8 @@ public enum ErrorCode
     AmbiguousHeading,
     ImportConflict,
     InvalidUtf8,
-    DatastoreOffline
+    DatastoreOffline,
+    AuthenticationError
 }
 
 public readonly record struct ResultError(
