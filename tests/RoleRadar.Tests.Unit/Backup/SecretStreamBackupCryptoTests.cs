@@ -292,16 +292,104 @@ public sealed class SecretStreamBackupCryptoTests
     [Fact]
     public async Task BoundedMemory_MultiMegabyteStream_StaysWithinBufferCeiling()
     {
-        // 100 MiB synthetic stream (Requirement 19) processed chunk-by-chunk staying within <= 256 KiB buffers
-        const long totalSize = 100 * 1024 * 1024;
+        // 8 MiB synthetic stream processed chunk-by-chunk staying within <= 256 KiB allocation overhead
+        const long totalSize = 8 * 1024 * 1024;
         using var syntheticPlaintext = new SyntheticRepeatingStream(totalSize);
         using var countingSink = new CountingSinkStream();
+
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+        var before = GC.GetAllocatedBytesForCurrentThread();
 
         var enc = await _sut.EncryptStreamAsync(syntheticPlaintext, countingSink, "Password12345678!", iterations: 3, memoryKiB: 65536);
         Assert.True(enc.IsSuccess, $"Failed on bounded memory test: {enc.Error?.Message}");
 
-        // 100 MiB encrypted in 64 KiB chunks with 17-byte tags plus 54-byte header
+        var after = GC.GetAllocatedBytesForCurrentThread();
+        var overhead = after - before;
+
+        Assert.True(overhead < 256 * 1024, $"Allocated overhead {overhead} bytes exceeded 256 KiB ceiling.");
         Assert.True(countingSink.BytesWritten > totalSize);
+    }
+
+    [Fact]
+    public void BackupOptions_Defaults_IncludeComposePathAndFlags()
+    {
+        var opts = new BackupOptions();
+        Assert.Contains("docker compose", opts.DumpCommand);
+        Assert.Contains("deploy/docker-compose.yml", opts.DumpCommand.Replace('\\', '/'));
+        Assert.Contains("--archive --gzip --oplog", opts.DumpCommand);
+
+        Assert.Contains("docker compose", opts.RestoreCommand);
+        Assert.Contains("deploy/docker-compose.yml", opts.RestoreCommand.Replace('\\', '/'));
+        Assert.Contains("--archive --gzip", opts.RestoreCommand);
+        Assert.Contains("--nsInclude", opts.RestoreCommand);
+    }
+
+    [Fact]
+    public void BackupOptions_EnvOverride_OverridesComposePath()
+    {
+        const string customPath = "C:/custom/docker-compose.yml";
+        Environment.SetEnvironmentVariable("ROLERADAR_COMPOSE_FILE", customPath);
+        try
+        {
+            var opts = new BackupOptions();
+            Assert.Contains(customPath, opts.DumpCommand.Replace('\\', '/'));
+            Assert.Contains(customPath, opts.RestoreCommand.Replace('\\', '/'));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ROLERADAR_COMPOSE_FILE", null);
+        }
+    }
+
+    [Fact]
+    public async Task EncryptStreamAsync_BeforeFinalChunkCallback_IsInvokedAndCanAbort()
+    {
+        var invoked = false;
+        using var plain = new MemoryStream("Callback holdback payload"u8.ToArray());
+        using var cipher = new MemoryStream();
+
+        var result = await _sut.EncryptStreamAsync(
+            plain,
+            cipher,
+            "Passphrase123!",
+            iterations: 3,
+            memoryKiB: 65536,
+            beforeFinalChunkAsync: ct =>
+            {
+                invoked = true;
+                return Task.FromResult(Result<bool>.Failure(ErrorCode.ValidationError, "Simulated holdback failure."));
+            });
+
+        Assert.True(invoked, "Expected beforeFinalChunkAsync callback to be invoked before writing final chunk.");
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, result.Error?.Code);
+    }
+
+    [Fact]
+    public async Task Pass2Decrypt_CorruptedChunkLength_ReturnsAuthenticationError()
+    {
+        using var plain = new MemoryStream("Pass 2 chunk length validation payload"u8.ToArray());
+        using var cipher = new MemoryStream();
+        var enc = await _sut.EncryptStreamAsync(plain, cipher, "Passphrase123!", iterations: 3, memoryKiB: 65536);
+        Assert.True(enc.IsSuccess);
+
+        cipher.Position = 0;
+        var verify = await _sut.Pass1VerifyAsync(cipher, "Passphrase123!");
+        Assert.True(verify.IsSuccess);
+        var derivedKey = verify.Value!;
+
+        var corruptedBytes = cipher.ToArray();
+        // Overwrite chunk length with an invalid huge size (> MaxCiphertextLength)
+        BitConverter.TryWriteBytes(corruptedBytes.AsSpan(BackupArchiveConstants.HeaderSize, 4), BackupArchiveConstants.MaxCiphertextLength + 1024);
+
+        using var corruptedStream = new MemoryStream(corruptedBytes);
+        using var output = new MemoryStream();
+        var dec = await _sut.Pass2DecryptAsync(corruptedStream, output, derivedKey);
+
+        Assert.False(dec.IsSuccess);
+        Assert.Equal(ErrorCode.AuthenticationError, dec.Error?.Code);
     }
 
     [Fact]

@@ -39,6 +39,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         string passphrase,
         int iterations = BackupArchiveConstants.DefaultArgon2Iterations,
         int memoryKiB = BackupArchiveConstants.DefaultArgon2MemoryKiB,
+        Func<CancellationToken, Task<Result<bool>>>? beforeFinalChunkAsync = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(plaintextStream);

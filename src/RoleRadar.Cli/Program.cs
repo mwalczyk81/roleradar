@@ -21,7 +21,7 @@ public static class Program
         return await rootCommand.Parse(args).InvokeAsync(cancellationToken: CancellationToken.None);
     }
 
-    private static ServiceProvider BuildServiceProvider()
+    public static ServiceProvider BuildServiceProvider(Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
 
@@ -41,6 +41,8 @@ public static class Program
                 options.DatabaseName = databaseName.Trim();
             }
         });
+
+        configure?.Invoke(services);
 
         return services.BuildServiceProvider();
     }
