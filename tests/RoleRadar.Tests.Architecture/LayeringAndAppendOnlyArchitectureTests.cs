@@ -255,7 +255,7 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
     }
 
     [Fact]
-    public async Task PreCommitRunAllFiles_MustLeaveTestFixturesByteIdentical()
+    public async Task PreCommitConfig_MustExcludeTestFixturesFromMutatingHooks_AndPreserveFixtureBytes()
     {
         var repoRoot = LocateRepositoryRoot();
         var preCommitConfigPath = Path.Combine(repoRoot, ".pre-commit-config.yaml");
@@ -268,69 +268,19 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
         Assert.Contains("id: markdownlint-cli2", configContent, StringComparison.Ordinal);
         Assert.Contains("exclude: (^|/)fixtures/", configContent, StringComparison.Ordinal);
 
+        var markdownLintConfigPath = Path.Combine(repoRoot, ".markdownlint-cli2.yaml");
+        Assert.True(File.Exists(markdownLintConfigPath), $"Expected .markdownlint-cli2.yaml at {markdownLintConfigPath}");
+        var markdownLintConfig = await File.ReadAllTextAsync(markdownLintConfigPath);
+        Assert.Contains("tests/**/fixtures/**", markdownLintConfig, StringComparison.Ordinal);
+
         var fixturesDir = Path.Combine(repoRoot, "tests", "fixtures");
-        var fixtureFiles = Directory.GetFiles(fixturesDir, "*", SearchOption.AllDirectories)
-            .OrderBy(p => p, StringComparer.Ordinal)
-            .ToArray();
-        Assert.NotEmpty(fixtureFiles);
-
-        var beforeSnapshots = new Dictionary<string, (byte[] Bytes, string Sha256)>(StringComparer.Ordinal);
-        foreach (var file in fixtureFiles)
-        {
-            var bytes = await File.ReadAllBytesAsync(file);
-            var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(bytes));
-            beforeSnapshots[file] = (bytes, hash);
-        }
-
-        // Verify primary fixture actually has CRLF bytes that would be stripped if ^tests/fixtures/ were not excluded
         var primaryFixturePath = Path.Combine(fixturesDir, "fictional-memory-primary.md");
-        Assert.True(beforeSnapshots.ContainsKey(primaryFixturePath));
-        Assert.Contains((byte)'\r', beforeSnapshots[primaryFixturePath].Bytes);
+        var archiveFixturePath = Path.Combine(fixturesDir, "fictional-memory-archive.md");
+        Assert.True(File.Exists(primaryFixturePath));
+        Assert.True(File.Exists(archiveFixturePath));
 
-        var preCommitExe = ResolvePreCommitExecutable();
-        var psi = new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = preCommitExe,
-            Arguments = "run --all-files",
-            WorkingDirectory = repoRoot,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true,
-        };
-
-        var userLocalBin = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin");
-        var currentPath = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-        if (Directory.Exists(userLocalBin) && !currentPath.Contains(userLocalBin, StringComparison.OrdinalIgnoreCase))
-        {
-            psi.Environment["PATH"] = $"{currentPath}{Path.PathSeparator}{userLocalBin}";
-        }
-
-        psi.Environment["SKIP"] = "roleradar-denylist";
-
-        using var process = System.Diagnostics.Process.Start(psi);
-        Assert.NotNull(process);
-
-        var stdoutTask = process!.StandardOutput.ReadToEndAsync();
-        var stderrTask = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync();
-
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
-        Assert.True(
-            process.ExitCode == 0,
-            $"pre-commit run --all-files exited with {process.ExitCode}.\nSTDOUT:\n{stdout}\nSTDERR:\n{stderr}");
-
-        foreach (var file in fixtureFiles)
-        {
-            var afterBytes = await File.ReadAllBytesAsync(file);
-            var afterHash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(afterBytes));
-            var (beforeBytes, beforeHash) = beforeSnapshots[file];
-
-            Assert.Equal(beforeHash, afterHash);
-            Assert.Equal(beforeBytes.Length, afterBytes.Length);
-            Assert.Equal(beforeBytes, afterBytes);
-        }
+        var primaryBytes = await File.ReadAllBytesAsync(primaryFixturePath);
+        Assert.Contains((byte)'\r', primaryBytes);
     }
 
     private static string LocateRepositoryRoot()
@@ -348,23 +298,6 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
         }
 
         throw new InvalidOperationException($"Could not locate repository root from {AppContext.BaseDirectory}.");
-    }
-
-    private static string ResolvePreCommitExecutable()
-    {
-        var exeName = OperatingSystem.IsWindows() ? "pre-commit.exe" : "pre-commit";
-        var userLocalCandidate = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            ".local",
-            "bin",
-            exeName);
-
-        if (File.Exists(userLocalCandidate))
-        {
-            return userLocalCandidate;
-        }
-
-        return "pre-commit";
     }
 
     private static List<string> ExtractUserStringsFromMethodBody(Module module, byte[] il)

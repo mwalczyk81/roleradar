@@ -48,17 +48,10 @@ jobs:
       - name: Build solution
         run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
 
-      - name: Cache pre-commit environments
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/pre-commit
-          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
-
       - name: Run Unit and Architecture tests
         env:
-          SKIP: roleradar-denylist
+          SKIP: roleradar-denylist,no-commit-to-branch
         run: |
-          pip install pre-commit
           dotnet test tests/RoleRadar.Tests.Unit/RoleRadar.Tests.Unit.csproj -c Release --no-build
           dotnet test tests/RoleRadar.Tests.Architecture/RoleRadar.Tests.Architecture.csproj -c Release --no-build
 
@@ -78,12 +71,13 @@ jobs:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
 
-      - name: Run pre-commit hooks (gitleaks, hygiene, markdownlint, and path/workflow-SHA guard)
+      - name: Run pre-commit hooks (gitleaks, hygiene, markdownlint, zizmor, and forbidden-paths guard)
         env:
-          SKIP: roleradar-denylist
+          SKIP: roleradar-denylist,no-commit-to-branch
         run: |
           pipx install pre-commit
           pre-commit run --all-files --show-diff-on-failure
+          git diff --exit-code -- tests/fixtures
 
       - name: Verify workflow action SHA pins exist on GitHub
         shell: pwsh
