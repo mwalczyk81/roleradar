@@ -120,10 +120,13 @@ jobs:
           }
 
           [xml]$merged = Get-Content -LiteralPath $mergedXmlPath
-          $lineRate = [double]::Parse($merged.coverage.'line-rate', [System.Globalization.CultureInfo]::InvariantCulture)
+          $root = $merged.DocumentElement
+          $rawLineRate = $root.GetAttribute('line-rate')
+          $covered = $root.GetAttribute('lines-covered')
+          $valid = $root.GetAttribute('lines-valid')
+
+          $lineRate = [double]::Parse($rawLineRate, [System.Globalization.CultureInfo]::InvariantCulture)
           $pct = [math]::Round($lineRate * 100.0, 2)
-          $covered = $merged.coverage.'lines-covered'
-          $valid = $merged.coverage.'lines-valid'
           Write-Output "Merged Domain + Application Line Coverage: $pct% ($covered / $valid)"
 
           $summaryMdPath = "TestResults/merged/SummaryGithub.md"
