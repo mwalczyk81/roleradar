@@ -1,10 +1,16 @@
+using System.Diagnostics;
+using System.Globalization;
 using System.Security.Cryptography;
+using System.Text;
+using Geralt;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Infrastructure.Mongo;
+using ChunkFlag = Geralt.IncrementalXChaCha20Poly1305.ChunkFlag;
 
 namespace RoleRadar.Infrastructure.Backup;
 
@@ -27,7 +33,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         _logger = logger ?? NullLogger<SecretStreamBackupArchiveService>.Instance;
     }
 
-    public Task<Result<long>> EncryptStreamAsync(
+    public async Task<Result<long>> EncryptStreamAsync(
         Stream plaintextStream,
         Stream ciphertextStream,
         string passphrase,
@@ -35,56 +41,817 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         int memoryKiB = BackupArchiveConstants.DefaultArgon2MemoryKiB,
         CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(Result<long>.Failure(ErrorCode.ValidationError, "Not implemented yet."));
+        ArgumentNullException.ThrowIfNull(plaintextStream);
+        ArgumentNullException.ThrowIfNull(ciphertextStream);
+        ArgumentException.ThrowIfNullOrWhiteSpace(passphrase);
+
+        if (iterations < BackupArchiveConstants.MinArgon2Iterations || iterations > BackupArchiveConstants.MaxArgon2Iterations)
+        {
+            return Result<long>.Failure(ErrorCode.AuthenticationError, "Archive parameters are invalid.");
+        }
+
+        if (memoryKiB < BackupArchiveConstants.MinArgon2MemoryKiB || memoryKiB > BackupArchiveConstants.MaxArgon2MemoryKiB)
+        {
+            return Result<long>.Failure(ErrorCode.AuthenticationError, "Archive parameters are invalid.");
+        }
+
+        var salt = new byte[BackupArchiveConstants.SaltSize];
+        RandomNumberGenerator.Fill(salt);
+
+        var key = new byte[BackupArchiveConstants.KeySize];
+        var passphraseBytes = Encoding.UTF8.GetBytes(passphrase);
+
+        try
+        {
+            Geralt.Argon2id.DeriveKey(key, passphraseBytes, salt, iterations, memoryKiB * 1024);
+
+            var streamHeader = new byte[BackupArchiveConstants.StreamHeaderSize];
+            using var streamEncryptor = new IncrementalXChaCha20Poly1305(streamHeader, key, encryption: true);
+
+            var fileHeader = new byte[BackupArchiveConstants.HeaderSize];
+            Array.Copy(BackupArchiveConstants.Magic, 0, fileHeader, 0, 4);
+            fileHeader[4] = BackupArchiveConstants.CurrentFormatVersion;
+            fileHeader[5] = BackupArchiveConstants.ExpectedFlags;
+            Array.Copy(BitConverter.GetBytes(iterations), 0, fileHeader, 6, 4);
+            Array.Copy(BitConverter.GetBytes(memoryKiB), 0, fileHeader, 10, 4);
+            Array.Copy(salt, 0, fileHeader, 14, BackupArchiveConstants.SaltSize);
+            Array.Copy(streamHeader, 0, fileHeader, 30, BackupArchiveConstants.StreamHeaderSize);
+
+            await ciphertextStream.WriteAsync(fileHeader, cancellationToken);
+
+            long totalPlaintextBytes = 0;
+            var currentChunk = new byte[BackupArchiveConstants.ChunkPlaintextSize];
+            var nextChunk = new byte[BackupArchiveConstants.ChunkPlaintextSize];
+            var ciphertextBuffer = new byte[BackupArchiveConstants.ChunkPlaintextSize + BackupArchiveConstants.TagSize];
+
+            var hasCurrentChunk = false;
+            var currentChunkLen = 0;
+            var isFirstChunk = true;
+
+            while (true)
+            {
+                var bytesRead = await ReadExactOrToEofAsync(plaintextStream, nextChunk, 0, BackupArchiveConstants.ChunkPlaintextSize, cancellationToken);
+
+                if (!hasCurrentChunk)
+                {
+                    if (bytesRead == 0)
+                    {
+                        // 0-byte input stream
+                        streamEncryptor.EncryptChunk(
+                            ciphertextBuffer.AsSpan(0, BackupArchiveConstants.TagSize),
+                            ReadOnlySpan<byte>.Empty,
+                            fileHeader,
+                            ChunkFlag.Final);
+
+                        await ciphertextStream.WriteAsync(BitConverter.GetBytes(BackupArchiveConstants.TagSize), cancellationToken);
+                        await ciphertextStream.WriteAsync(ciphertextBuffer.AsMemory(0, BackupArchiveConstants.TagSize), cancellationToken);
+                        break;
+                    }
+
+                    Array.Copy(nextChunk, currentChunk, bytesRead);
+                    currentChunkLen = bytesRead;
+                    hasCurrentChunk = true;
+                }
+                else
+                {
+                    var isTerminal = bytesRead == 0;
+                    var flag = isTerminal ? ChunkFlag.Final : ChunkFlag.Message;
+                    var ad = isFirstChunk ? fileHeader : ReadOnlySpan<byte>.Empty;
+                    var cipherLen = currentChunkLen + BackupArchiveConstants.TagSize;
+
+                    streamEncryptor.EncryptChunk(
+                        ciphertextBuffer.AsSpan(0, cipherLen),
+                        currentChunk.AsSpan(0, currentChunkLen),
+                        ad,
+                        flag);
+
+                    await ciphertextStream.WriteAsync(BitConverter.GetBytes(cipherLen), cancellationToken);
+                    await ciphertextStream.WriteAsync(ciphertextBuffer.AsMemory(0, cipherLen), cancellationToken);
+
+                    totalPlaintextBytes += currentChunkLen;
+                    isFirstChunk = false;
+
+                    if (isTerminal)
+                    {
+                        break;
+                    }
+
+                    Array.Copy(nextChunk, currentChunk, bytesRead);
+                    currentChunkLen = bytesRead;
+                }
+            }
+
+            return Result<long>.Success(totalPlaintextBytes);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(key);
+            CryptographicOperations.ZeroMemory(passphraseBytes);
+        }
     }
 
-    public Task<Result<byte[]>> Pass1VerifyAsync(
+    public async Task<Result<byte[]>> Pass1VerifyAsync(
         Stream ciphertextStream,
         string passphrase,
         CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Not implemented yet."));
+        ArgumentNullException.ThrowIfNull(ciphertextStream);
+        ArgumentException.ThrowIfNullOrWhiteSpace(passphrase);
+
+        var header = new byte[BackupArchiveConstants.HeaderSize];
+        var readHeader = await ReadExactOrToEofAsync(ciphertextStream, header, 0, BackupArchiveConstants.HeaderSize, cancellationToken);
+        if (readHeader < BackupArchiveConstants.HeaderSize)
+        {
+            return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+        }
+
+        // Strict pre-KDF bounds and format verification
+        if (!header.AsSpan(0, 4).SequenceEqual(BackupArchiveConstants.Magic))
+        {
+            return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+        }
+
+        if (header[4] != BackupArchiveConstants.CurrentFormatVersion || header[5] != BackupArchiveConstants.ExpectedFlags)
+        {
+            return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+        }
+
+        var iterations = BitConverter.ToInt32(header, 6);
+        if (iterations < BackupArchiveConstants.MinArgon2Iterations || iterations > BackupArchiveConstants.MaxArgon2Iterations)
+        {
+            return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+        }
+
+        var memoryKiB = BitConverter.ToInt32(header, 10);
+        if (memoryKiB < BackupArchiveConstants.MinArgon2MemoryKiB || memoryKiB > BackupArchiveConstants.MaxArgon2MemoryKiB)
+        {
+            return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+        }
+
+        var salt = header.AsSpan(14, BackupArchiveConstants.SaltSize);
+        var streamHeader = header.AsSpan(30, BackupArchiveConstants.StreamHeaderSize);
+
+        var derivedKey = new byte[BackupArchiveConstants.KeySize];
+        var passphraseBytes = Encoding.UTF8.GetBytes(passphrase);
+
+        try
+        {
+            Geralt.Argon2id.DeriveKey(derivedKey, passphraseBytes, salt, iterations, memoryKiB * 1024);
+
+            var streamHeaderCopy = streamHeader.ToArray();
+            using var decryptor = new IncrementalXChaCha20Poly1305(streamHeaderCopy, derivedKey, encryption: false);
+
+            var lengthBuffer = new byte[4];
+            var chunkBuffer = new byte[BackupArchiveConstants.MaxCiphertextLength];
+            var scratchPlaintext = new byte[BackupArchiveConstants.MaxCiphertextLength];
+
+            var isFirstChunk = true;
+            var observedFinal = false;
+
+            while (true)
+            {
+                var lenRead = await ReadExactOrToEofAsync(ciphertextStream, lengthBuffer, 0, 4, cancellationToken);
+                if (lenRead == 0)
+                {
+                    break;
+                }
+
+                if (lenRead < 4)
+                {
+                    return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+                }
+
+                var chunkLen = BitConverter.ToInt32(lengthBuffer, 0);
+                if (chunkLen < BackupArchiveConstants.MinCiphertextLength || chunkLen > BackupArchiveConstants.MaxCiphertextLength)
+                {
+                    return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+                }
+
+                var chunkRead = await ReadExactOrToEofAsync(ciphertextStream, chunkBuffer, 0, chunkLen, cancellationToken);
+                if (chunkRead < chunkLen)
+                {
+                    return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+                }
+
+                var ad = isFirstChunk ? header.AsSpan() : ReadOnlySpan<byte>.Empty;
+                var plainLen = chunkLen - BackupArchiveConstants.TagSize;
+
+                ChunkFlag flag;
+                try
+                {
+                    flag = decryptor.DecryptChunk(
+                        scratchPlaintext.AsSpan(0, plainLen),
+                        chunkBuffer.AsSpan(0, chunkLen),
+                        ad);
+                }
+                catch (Exception)
+                {
+                    return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+                }
+
+                isFirstChunk = false;
+
+                if (flag == ChunkFlag.Final)
+                {
+                    observedFinal = true;
+                    // Check for trailing bytes after Final chunk
+                    var trailingTest = new byte[1];
+                    var trailingRead = await ciphertextStream.ReadAsync(trailingTest, cancellationToken);
+                    if (trailingRead > 0)
+                    {
+                        return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+                    }
+                    break;
+                }
+            }
+
+            if (!observedFinal)
+            {
+                return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+            }
+
+            // Return derived key so Pass 2 can reuse it without recomputing Argon2
+            var keyCopy = (byte[])derivedKey.Clone();
+            return Result<byte[]>.Success(keyCopy);
+        }
+        catch (Exception)
+        {
+            return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(derivedKey);
+            CryptographicOperations.ZeroMemory(passphraseBytes);
+        }
     }
 
-    public Task<Result<long>> Pass2DecryptAsync(
+    public async Task<Result<long>> Pass2DecryptAsync(
         Stream ciphertextStream,
         Stream plaintextStream,
         byte[] derivedKey,
         CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(Result<long>.Failure(ErrorCode.AuthenticationError, "Not implemented yet."));
+        ArgumentNullException.ThrowIfNull(ciphertextStream);
+        ArgumentNullException.ThrowIfNull(plaintextStream);
+        ArgumentNullException.ThrowIfNull(derivedKey);
+
+        ciphertextStream.Position = 0;
+
+        var header = new byte[BackupArchiveConstants.HeaderSize];
+        var readHeader = await ReadExactOrToEofAsync(ciphertextStream, header, 0, BackupArchiveConstants.HeaderSize, cancellationToken);
+        if (readHeader < BackupArchiveConstants.HeaderSize)
+        {
+            return Result<long>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+        }
+
+        var streamHeader = header.AsSpan(30, BackupArchiveConstants.StreamHeaderSize).ToArray();
+        using var decryptor = new IncrementalXChaCha20Poly1305(streamHeader, derivedKey, encryption: false);
+
+        var lengthBuffer = new byte[4];
+        var chunkBuffer = new byte[BackupArchiveConstants.MaxCiphertextLength];
+        var plaintextBuffer = new byte[BackupArchiveConstants.MaxCiphertextLength];
+
+        long totalDecrypted = 0;
+        var isFirstChunk = true;
+
+        while (true)
+        {
+            var lenRead = await ReadExactOrToEofAsync(ciphertextStream, lengthBuffer, 0, 4, cancellationToken);
+            if (lenRead == 0)
+            {
+                break;
+            }
+
+            var chunkLen = BitConverter.ToInt32(lengthBuffer, 0);
+            await ReadExactOrToEofAsync(ciphertextStream, chunkBuffer, 0, chunkLen, cancellationToken);
+
+            var ad = isFirstChunk ? header.AsSpan() : ReadOnlySpan<byte>.Empty;
+            var plainLen = chunkLen - BackupArchiveConstants.TagSize;
+
+            decryptor.DecryptChunk(
+                plaintextBuffer.AsSpan(0, plainLen),
+                chunkBuffer.AsSpan(0, chunkLen),
+                ad);
+
+            if (plainLen > 0)
+            {
+                await plaintextStream.WriteAsync(plaintextBuffer.AsMemory(0, plainLen), cancellationToken);
+                totalDecrypted += plainLen;
+            }
+
+            isFirstChunk = false;
+        }
+
+        return Result<long>.Success(totalDecrypted);
     }
 
-    public Task<Result<long>> DecryptStreamAsync(
+    public async Task<Result<long>> DecryptStreamAsync(
         Stream ciphertextStream,
         Stream plaintextStream,
         string passphrase,
         CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(Result<long>.Failure(ErrorCode.AuthenticationError, "Not implemented yet."));
+        // Two-Pass Decrypt: Pass 1 verifies and derives key, Pass 2 applies using identical derived key
+        var pass1 = await Pass1VerifyAsync(ciphertextStream, passphrase, cancellationToken);
+        if (!pass1.IsSuccess || pass1.Value is null)
+        {
+            return Result<long>.Failure(pass1.Error ?? new ResultError(ErrorCode.AuthenticationError, "Authentication failed."));
+        }
+
+        var key = pass1.Value;
+        try
+        {
+            return await Pass2DecryptAsync(ciphertextStream, plaintextStream, key, cancellationToken);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(key);
+        }
     }
 
-    public Task<Result<BackupArchiveSummaryDto>> CreateBackupAsync(
+    public async Task<Result<BackupArchiveSummaryDto>> CreateBackupAsync(
         string targetFilePath,
         string passphrase,
         CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(Result<BackupArchiveSummaryDto>.Failure(ErrorCode.ValidationError, "Not implemented yet."));
+        ArgumentException.ThrowIfNullOrWhiteSpace(targetFilePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(passphrase);
+
+        var resolvedTarget = ResolveTargetBackupFilePath(targetFilePath);
+        if (File.Exists(resolvedTarget))
+        {
+            return Result<BackupArchiveSummaryDto>.Failure(
+                ErrorCode.ValidationError,
+                $"Backup file '{resolvedTarget}' already exists.");
+        }
+
+        var targetDir = Path.GetDirectoryName(resolvedTarget);
+        if (!string.IsNullOrEmpty(targetDir))
+        {
+            Directory.CreateDirectory(targetDir);
+        }
+
+        var partialPath = resolvedTarget + ".partial";
+        if (File.Exists(partialPath))
+        {
+            File.Delete(partialPath);
+        }
+
+        Process? process = null;
+        Task<string>? stderrDrainTask = null;
+
+        try
+        {
+            var (cmdExe, cmdArgs) = SplitCommand(_backupOptions.DumpCommand);
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = cmdExe,
+                Arguments = cmdArgs,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            try
+            {
+                process = Process.Start(startInfo);
+            }
+            catch (Exception ex)
+            {
+                return Result<BackupArchiveSummaryDto>.Failure(
+                    ErrorCode.ValidationError,
+                    $"Failed to start mongodump command '{cmdExe}'. Ensure tools are available: {ex.Message}");
+            }
+
+            if (process is null)
+            {
+                return Result<BackupArchiveSummaryDto>.Failure(
+                    ErrorCode.ValidationError,
+                    "Failed to start mongodump process.");
+            }
+
+            stderrDrainTask = Task.Run(async () =>
+            {
+                using var reader = new StreamReader(process.StandardError.BaseStream, Encoding.UTF8);
+                return await reader.ReadToEndAsync(cancellationToken);
+            }, cancellationToken);
+
+            long bytesWritten = 0;
+            await using (var outputFile = new FileStream(partialPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.Asynchronous))
+            {
+                var dumpStdout = process.StandardOutput.BaseStream;
+
+                // Stream dump output into encrypted archive
+                var encResult = await EncryptDumpStreamWithProcessHoldbackAsync(
+                    dumpStdout,
+                    outputFile,
+                    process,
+                    stderrDrainTask,
+                    passphrase,
+                    cancellationToken);
+
+                if (!encResult.IsSuccess)
+                {
+                    return Result<BackupArchiveSummaryDto>.Failure(encResult.Error!.Value);
+                }
+
+                await outputFile.FlushAsync(cancellationToken);
+                bytesWritten = outputFile.Length;
+            }
+
+            await process.WaitForExitAsync(cancellationToken);
+            if (process.ExitCode != 0)
+            {
+                var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
+                if (File.Exists(partialPath)) File.Delete(partialPath);
+                return Result<BackupArchiveSummaryDto>.Failure(
+                    ErrorCode.ValidationError,
+                    $"mongodump failed with exit code {process.ExitCode}: {stderr}");
+            }
+
+            // Atomic rename
+            File.Move(partialPath, resolvedTarget);
+
+            return Result<BackupArchiveSummaryDto>.Success(
+                new BackupArchiveSummaryDto(resolvedTarget, bytesWritten, DateTime.UtcNow));
+        }
+        catch (Exception)
+        {
+            if (File.Exists(partialPath))
+            {
+                try { File.Delete(partialPath); } catch { }
+            }
+            throw;
+        }
+        finally
+        {
+            process?.Dispose();
+        }
     }
 
-    public Task<Result<RestoreArchiveSummaryDto>> RestoreBackupAsync(
+    public async Task<Result<RestoreArchiveSummaryDto>> RestoreBackupAsync(
         string backupFilePath,
         string passphrase,
         bool forceOverwrite = false,
         CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(Result<RestoreArchiveSummaryDto>.Failure(ErrorCode.ValidationError, "Not implemented yet."));
+        ArgumentException.ThrowIfNullOrWhiteSpace(backupFilePath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(passphrase);
+
+        // Check if database contains data
+        var db = _mongoClient.GetDatabase(_mongoOptions.DatabaseName);
+        var notesCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NotesCollectionName);
+        var revisionsCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NoteRevisionsCollectionName);
+        var auditCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
+
+        var existingNotes = await notesCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+        var existingRevisions = await revisionsCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+        var existingAudits = await auditCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+
+        if ((existingNotes > 0 || existingRevisions > 0 || existingAudits > 0) && !forceOverwrite)
+        {
+            return Result<RestoreArchiveSummaryDto>.Failure(
+                ErrorCode.ValidationError,
+                "Datastore is non-empty. Use --force-overwrite to drop existing collections before restoring.");
+        }
+
+        if (!File.Exists(backupFilePath))
+        {
+            return Result<RestoreArchiveSummaryDto>.Failure(
+                ErrorCode.NotFound,
+                $"Backup archive '{backupFilePath}' does not exist.");
+        }
+
+        // Pass 1: Verify archive authenticity without touching MongoDB
+        byte[]? derivedKey = null;
+        await using (var fileStream = new FileStream(backupFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous))
+        {
+            var pass1Result = await Pass1VerifyAsync(fileStream, passphrase, cancellationToken);
+            if (!pass1Result.IsSuccess || pass1Result.Value is null)
+            {
+                return Result<RestoreArchiveSummaryDto>.Failure(
+                    pass1Result.Error ?? new ResultError(ErrorCode.AuthenticationError, "Archive is invalid or corrupted."));
+            }
+            derivedKey = pass1Result.Value;
+        }
+
+        // Pass 2: Stream decrypted bytes into mongorestore stdin
+        try
+        {
+            var restoreCmdString = _backupOptions.RestoreCommand;
+            if (forceOverwrite && !restoreCmdString.Contains("--drop"))
+            {
+                restoreCmdString += " --drop";
+            }
+
+            var (cmdExe, cmdArgs) = SplitCommand(restoreCmdString);
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = cmdExe,
+                Arguments = cmdArgs,
+                RedirectStandardInput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            Process? process;
+            try
+            {
+                process = Process.Start(startInfo);
+            }
+            catch (Exception ex)
+            {
+                return Result<RestoreArchiveSummaryDto>.Failure(
+                    ErrorCode.ValidationError,
+                    $"Failed to start mongorestore command '{cmdExe}'. Ensure tools are available: {ex.Message}");
+            }
+
+            if (process is null)
+            {
+                return Result<RestoreArchiveSummaryDto>.Failure(
+                    ErrorCode.ValidationError,
+                    "Failed to start mongorestore process.");
+            }
+
+            using (process)
+            {
+                var stderrTask = Task.Run(async () =>
+                {
+                    using var reader = new StreamReader(process.StandardError.BaseStream, Encoding.UTF8);
+                    return await reader.ReadToEndAsync(cancellationToken);
+                }, cancellationToken);
+
+                await using (var fileStream = new FileStream(backupFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous))
+                {
+                    var restoreStdin = process.StandardInput.BaseStream;
+                    var decryptResult = await Pass2DecryptAsync(fileStream, restoreStdin, derivedKey, cancellationToken);
+                    if (!decryptResult.IsSuccess)
+                    {
+                        return Result<RestoreArchiveSummaryDto>.Failure(decryptResult.Error!.Value);
+                    }
+                    await restoreStdin.FlushAsync(cancellationToken);
+                }
+
+                process.StandardInput.Close();
+                await process.WaitForExitAsync(cancellationToken);
+
+                if (process.ExitCode != 0)
+                {
+                    var stderr = await stderrTask;
+                    return Result<RestoreArchiveSummaryDto>.Failure(
+                        ErrorCode.ValidationError,
+                        $"mongorestore failed with exit code {process.ExitCode}: {stderr}. The datastore may be partially restored; wipe and retry.");
+                }
+            }
+
+            // Verify indexes and collection counts
+            await MongoBootstrapAndIndexes.EnsureIndexesAsync(db, cancellationToken);
+
+            var finalNotes = await notesCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+            var finalRevisions = await revisionsCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+            var finalAudits = await auditCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+
+            var counts = new Dictionary<string, long>
+            {
+                [MongoBootstrapAndIndexes.NotesCollectionName] = finalNotes,
+                [MongoBootstrapAndIndexes.NoteRevisionsCollectionName] = finalRevisions,
+                [MongoBootstrapAndIndexes.AuditLogCollectionName] = finalAudits
+            };
+
+            return Result<RestoreArchiveSummaryDto>.Success(
+                new RestoreArchiveSummaryDto(backupFilePath, counts, DateTime.UtcNow));
+        }
+        finally
+        {
+            if (derivedKey is not null)
+            {
+                CryptographicOperations.ZeroMemory(derivedKey);
+            }
+        }
     }
 
-    public Task<Result<WipeSummaryDto>> WipeDatabaseAsync(
+    public async Task<Result<WipeSummaryDto>> WipeDatabaseAsync(
         string confirmation,
         CancellationToken cancellationToken = default)
     {
-        return Task.FromResult(Result<WipeSummaryDto>.Failure(ErrorCode.ValidationError, "Not implemented yet."));
+        if (confirmation != "WIPE-ALL-ROLERADAR-DATA")
+        {
+            return Result<WipeSummaryDto>.Failure(
+                ErrorCode.ValidationError,
+                "Wipe requires explicit confirmation token '--confirm WIPE-ALL-ROLERADAR-DATA'.");
+        }
+
+        // Verify MongoDB connection string points to loopback
+        var mongoUrl = new MongoUrl(_mongoOptions.ConnectionString);
+        foreach (var server in mongoUrl.Servers)
+        {
+            var host = server.Host.Trim('[', ']');
+            if (!host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) &&
+                !host.Equals("localhost", StringComparison.OrdinalIgnoreCase) &&
+                !host.Equals("::1", StringComparison.OrdinalIgnoreCase))
+            {
+                return Result<WipeSummaryDto>.Failure(
+                    ErrorCode.ValidationError,
+                    $"Wipe is only permitted against loopback MongoDB hosts (127.0.0.1, ::1, localhost). Found host: '{server.Host}'.");
+            }
+        }
+
+        var db = _mongoClient.GetDatabase(_mongoOptions.DatabaseName);
+        var notesCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NotesCollectionName);
+        var revisionsCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NoteRevisionsCollectionName);
+        var auditCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
+
+        var notesCount = await notesCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+        var revisionsCount = await revisionsCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+        var auditCount = await auditCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+
+        // Drop the database
+        await _mongoClient.DropDatabaseAsync(_mongoOptions.DatabaseName, cancellationToken);
+
+        // Re-create the indexes on empty collections
+        await MongoBootstrapAndIndexes.EnsureIndexesAsync(db, cancellationToken);
+
+        var droppedCounts = new Dictionary<string, long>
+        {
+            [MongoBootstrapAndIndexes.NotesCollectionName] = notesCount,
+            [MongoBootstrapAndIndexes.NoteRevisionsCollectionName] = revisionsCount,
+            [MongoBootstrapAndIndexes.AuditLogCollectionName] = auditCount
+        };
+
+        return Result<WipeSummaryDto>.Success(
+            new WipeSummaryDto(droppedCounts, DateTime.UtcNow));
+    }
+
+    private static async Task<Result<bool>> EncryptDumpStreamWithProcessHoldbackAsync(
+        Stream dumpStdout,
+        Stream outputFile,
+        Process dumpProcess,
+        Task<string>? stderrDrainTask,
+        string passphrase,
+        CancellationToken cancellationToken)
+    {
+        var salt = new byte[BackupArchiveConstants.SaltSize];
+        RandomNumberGenerator.Fill(salt);
+
+        var key = new byte[BackupArchiveConstants.KeySize];
+        var passphraseBytes = Encoding.UTF8.GetBytes(passphrase);
+
+        try
+        {
+            Geralt.Argon2id.DeriveKey(key, passphraseBytes, salt, BackupArchiveConstants.DefaultArgon2Iterations, BackupArchiveConstants.DefaultArgon2MemoryKiB * 1024);
+
+            var streamHeader = new byte[BackupArchiveConstants.StreamHeaderSize];
+            using var streamEncryptor = new IncrementalXChaCha20Poly1305(streamHeader, key, encryption: true);
+
+            var fileHeader = new byte[BackupArchiveConstants.HeaderSize];
+            Array.Copy(BackupArchiveConstants.Magic, 0, fileHeader, 0, 4);
+            fileHeader[4] = BackupArchiveConstants.CurrentFormatVersion;
+            fileHeader[5] = BackupArchiveConstants.ExpectedFlags;
+            Array.Copy(BitConverter.GetBytes(BackupArchiveConstants.DefaultArgon2Iterations), 0, fileHeader, 6, 4);
+            Array.Copy(BitConverter.GetBytes(BackupArchiveConstants.DefaultArgon2MemoryKiB), 0, fileHeader, 10, 4);
+            Array.Copy(salt, 0, fileHeader, 14, BackupArchiveConstants.SaltSize);
+            Array.Copy(streamHeader, 0, fileHeader, 30, BackupArchiveConstants.StreamHeaderSize);
+
+            await outputFile.WriteAsync(fileHeader, cancellationToken);
+
+            var currentChunk = new byte[BackupArchiveConstants.ChunkPlaintextSize];
+            var nextChunk = new byte[BackupArchiveConstants.ChunkPlaintextSize];
+            var ciphertextBuffer = new byte[BackupArchiveConstants.ChunkPlaintextSize + BackupArchiveConstants.TagSize];
+
+            var hasCurrentChunk = false;
+            var currentChunkLen = 0;
+            var isFirstChunk = true;
+
+            while (true)
+            {
+                var bytesRead = await ReadExactOrToEofAsync(dumpStdout, nextChunk, 0, BackupArchiveConstants.ChunkPlaintextSize, cancellationToken);
+
+                if (!hasCurrentChunk)
+                {
+                    if (bytesRead == 0)
+                    {
+                        // Wait for dump process to exit 0 before writing Final chunk
+                        await dumpProcess.WaitForExitAsync(cancellationToken);
+                        if (dumpProcess.ExitCode != 0)
+                        {
+                            var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
+                            return Result<bool>.Failure(ErrorCode.ValidationError, $"mongodump process exited with code {dumpProcess.ExitCode}: {stderr}");
+                        }
+
+                        streamEncryptor.EncryptChunk(
+                            ciphertextBuffer.AsSpan(0, BackupArchiveConstants.TagSize),
+                            ReadOnlySpan<byte>.Empty,
+                            fileHeader,
+                            ChunkFlag.Final);
+
+                        await outputFile.WriteAsync(BitConverter.GetBytes(BackupArchiveConstants.TagSize), cancellationToken);
+                        await outputFile.WriteAsync(ciphertextBuffer.AsMemory(0, BackupArchiveConstants.TagSize), cancellationToken);
+                        break;
+                    }
+
+                    Array.Copy(nextChunk, currentChunk, bytesRead);
+                    currentChunkLen = bytesRead;
+                    hasCurrentChunk = true;
+                }
+                else
+                {
+                    var isTerminal = bytesRead == 0;
+                    if (isTerminal)
+                    {
+                        // Hold back final chunk until dump process exits 0!
+                        await dumpProcess.WaitForExitAsync(cancellationToken);
+                        if (dumpProcess.ExitCode != 0)
+                        {
+                            var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
+                            return Result<bool>.Failure(ErrorCode.ValidationError, $"mongodump process exited with code {dumpProcess.ExitCode}: {stderr}");
+                        }
+
+                        var ad = isFirstChunk ? fileHeader : ReadOnlySpan<byte>.Empty;
+                        var cipherLen = currentChunkLen + BackupArchiveConstants.TagSize;
+
+                        streamEncryptor.EncryptChunk(
+                            ciphertextBuffer.AsSpan(0, cipherLen),
+                            currentChunk.AsSpan(0, currentChunkLen),
+                            ad,
+                            ChunkFlag.Final);
+
+                        await outputFile.WriteAsync(BitConverter.GetBytes(cipherLen), cancellationToken);
+                        await outputFile.WriteAsync(ciphertextBuffer.AsMemory(0, cipherLen), cancellationToken);
+                        break;
+                    }
+                    else
+                    {
+                        var ad = isFirstChunk ? fileHeader : ReadOnlySpan<byte>.Empty;
+                        var cipherLen = currentChunkLen + BackupArchiveConstants.TagSize;
+
+                        streamEncryptor.EncryptChunk(
+                            ciphertextBuffer.AsSpan(0, cipherLen),
+                            currentChunk.AsSpan(0, currentChunkLen),
+                            ad,
+                            ChunkFlag.Message);
+
+                        await outputFile.WriteAsync(BitConverter.GetBytes(cipherLen), cancellationToken);
+                        await outputFile.WriteAsync(ciphertextBuffer.AsMemory(0, cipherLen), cancellationToken);
+
+                        isFirstChunk = false;
+                        Array.Copy(nextChunk, currentChunk, bytesRead);
+                        currentChunkLen = bytesRead;
+                    }
+                }
+            }
+
+            return Result<bool>.Success(true);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(key);
+            CryptographicOperations.ZeroMemory(passphraseBytes);
+        }
+    }
+
+    private static string ResolveTargetBackupFilePath(string targetPath)
+    {
+        if (Directory.Exists(targetPath) || targetPath.EndsWith(Path.DirectorySeparatorChar) || targetPath.EndsWith(Path.AltDirectorySeparatorChar) || !Path.HasExtension(targetPath))
+        {
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+            var filename = $"roleradar-backup-{timestamp}.rrbak";
+            return Path.Combine(targetPath, filename);
+        }
+
+        return targetPath;
+    }
+
+    private static (string Exe, string Args) SplitCommand(string command)
+    {
+        var trimmed = command.Trim();
+        var firstSpace = trimmed.IndexOf(' ');
+        if (firstSpace < 0)
+        {
+            return (trimmed, string.Empty);
+        }
+
+        return (trimmed[..firstSpace], trimmed[(firstSpace + 1)..].Trim());
+    }
+
+    private static async Task<int> ReadExactOrToEofAsync(
+        Stream stream,
+        byte[] buffer,
+        int offset,
+        int count,
+        CancellationToken cancellationToken)
+    {
+        var totalRead = 0;
+        while (totalRead < count)
+        {
+            var read = await stream.ReadAsync(buffer.AsMemory(offset + totalRead, count - totalRead), cancellationToken);
+            if (read == 0)
+            {
+                break;
+            }
+            totalRead += read;
+        }
+        return totalRead;
     }
 }

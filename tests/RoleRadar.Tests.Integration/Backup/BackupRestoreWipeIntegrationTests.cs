@@ -48,6 +48,18 @@ public sealed class BackupRestoreWipeIntegrationTests : IAsyncLifetime
             opts.ReadinessTimeout = TimeSpan.FromSeconds(5);
         });
 
+        var mongoUrl = new MongoUrl(_connectionString);
+        var authPart = (!string.IsNullOrEmpty(mongoUrl.Username) && !string.IsNullOrEmpty(mongoUrl.Password))
+            ? $"{mongoUrl.Username}:{mongoUrl.Password}@"
+            : string.Empty;
+        var internalUri = $"mongodb://{authPart}localhost:27017/?replicaSet=rs0&authSource=admin";
+
+        services.Configure<BackupOptions>(opts =>
+        {
+            opts.DumpCommand = $"docker exec -i {_mongoContainer.Id} mongodump --uri=\"{internalUri}\" --archive --gzip --oplog";
+            opts.RestoreCommand = $"docker exec -i {_mongoContainer.Id} mongorestore --uri=\"{internalUri}\" --archive --gzip --oplogReplay";
+        });
+
         if (configureBackup is not null)
         {
             services.Configure(configureBackup);
@@ -101,12 +113,7 @@ public sealed class BackupRestoreWipeIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task FileWatcher_TempAndTargetLocations_ZeroPlaintextFilesWritten()
     {
-        await using var provider = BuildServiceProvider(opts =>
-        {
-            // Configure invocation against testcontainer
-            opts.DumpCommand = $"docker exec -i {_mongoContainer.Id} mongodump --archive --gzip --oplog";
-            opts.RestoreCommand = $"docker exec -i {_mongoContainer.Id} mongorestore --archive --gzip --oplogReplay";
-        });
+        await using var provider = BuildServiceProvider();
 
         var backupService = provider.GetRequiredService<IBackupArchiveService>();
         var targetDir = Path.Combine(Path.GetTempPath(), "roleradar_test_backup_" + Guid.NewGuid().ToString("N"));
@@ -276,11 +283,7 @@ public sealed class BackupRestoreWipeIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task EndToEnd_BackupWipeRestore_FullFidelityRoundTrip()
     {
-        await using var provider = BuildServiceProvider(opts =>
-        {
-            opts.DumpCommand = $"docker exec -i {_mongoContainer.Id} mongodump --archive --gzip --oplog";
-            opts.RestoreCommand = $"docker exec -i {_mongoContainer.Id} mongorestore --archive --gzip --oplogReplay";
-        });
+        await using var provider = BuildServiceProvider();
 
         var createHandler = provider.GetRequiredService<ICommandHandler<CreateNoteCommand, NoteCreatedDto>>();
         var createResult = await createHandler.HandleAsync(new CreateNoteCommand(

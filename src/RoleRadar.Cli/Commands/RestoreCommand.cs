@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using RoleRadar.Application.Abstractions;
 
@@ -52,11 +53,86 @@ public static class RestoreCommand
         {
             var file = parseResult.GetRequiredValue(fileArgument);
             var force = parseResult.GetValue(forceOverwriteOption);
+            var envVar = parseResult.GetValue(passphraseEnvOption);
+            var fromStdin = parseResult.GetValue(passphraseStdinOption);
+
+            string? passphrase = null;
+
+            if (!string.IsNullOrWhiteSpace(envVar))
+            {
+                passphrase = Environment.GetEnvironmentVariable(envVar);
+                if (string.IsNullOrEmpty(passphrase))
+                {
+                    Console.Error.WriteLine($"Environment variable '{envVar}' is not set or empty.");
+                    return 1;
+                }
+            }
+            else if (fromStdin)
+            {
+                passphrase = Console.In.ReadLine();
+                if (string.IsNullOrEmpty(passphrase))
+                {
+                    Console.Error.WriteLine("Passphrase read from stdin was empty.");
+                    return 1;
+                }
+            }
+            else
+            {
+                if (Console.IsInputRedirected)
+                {
+                    Console.Error.WriteLine("Standard input is redirected. Provide passphrase via --passphrase-env or --passphrase-stdin.");
+                    return 1;
+                }
+
+                Console.Write("Enter backup passphrase: ");
+                passphrase = ReadPasswordNoEcho();
+            }
+
             var service = services.GetRequiredService<IBackupArchiveService>();
-            var result = await service.RestoreBackupAsync(file, "stub", force, ct);
-            return result.IsSuccess ? 0 : 1;
+            var outcome = await service.RestoreBackupAsync(file, passphrase, force, ct);
+
+            if (!outcome.IsSuccess || outcome.Value is null)
+            {
+                Console.Error.WriteLine($"Restore failed: {outcome.Error?.Message}");
+                return 1;
+            }
+
+            var summary = outcome.Value;
+            var notes = summary.RestoredCounts.GetValueOrDefault("notes", 0);
+            var revisions = summary.RestoredCounts.GetValueOrDefault("note_revisions", 0);
+            var audits = summary.RestoredCounts.GetValueOrDefault("audit_log", 0);
+
+            Console.WriteLine($"Restore completed: {summary.ArchivePath}");
+            Console.WriteLine($"Restored counts: {notes} notes, {revisions} revisions, {audits} audit entries.");
+            return 0;
         });
 
         return restoreCommand;
+    }
+
+    private static string ReadPasswordNoEcho()
+    {
+        var sb = new StringBuilder();
+        while (true)
+        {
+            var key = Console.ReadKey(intercept: true);
+            if (key.Key == ConsoleKey.Enter)
+            {
+                Console.WriteLine();
+                break;
+            }
+            if (key.Key == ConsoleKey.Backspace)
+            {
+                if (sb.Length > 0)
+                {
+                    sb.Length--;
+                }
+            }
+            else if (!char.IsControl(key.KeyChar))
+            {
+                sb.Append(key.KeyChar);
+            }
+        }
+        return sb.ToString();
     }
 }

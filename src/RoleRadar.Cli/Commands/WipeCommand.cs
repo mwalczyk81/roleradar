@@ -24,9 +24,29 @@ public static class WipeCommand
         wipeCommand.SetAction(async (ParseResult parseResult, CancellationToken ct) =>
         {
             var confirm = parseResult.GetValue(confirmOption);
+            if (string.IsNullOrWhiteSpace(confirm))
+            {
+                Console.Error.WriteLine($"Wipe refused: requires explicit confirmation '--confirm {ConfirmationToken}'.");
+                return 1;
+            }
+
             var service = services.GetRequiredService<IBackupArchiveService>();
-            var result = await service.WipeDatabaseAsync(confirm ?? string.Empty, ct);
-            return result.IsSuccess ? 0 : 1;
+            var outcome = await service.WipeDatabaseAsync(confirm, ct);
+
+            if (!outcome.IsSuccess || outcome.Value is null)
+            {
+                Console.Error.WriteLine($"Wipe failed: {outcome.Error?.Message}");
+                return 1;
+            }
+
+            var summary = outcome.Value;
+            var notes = summary.DroppedCounts.GetValueOrDefault("notes", 0);
+            var revisions = summary.DroppedCounts.GetValueOrDefault("note_revisions", 0);
+            var audits = summary.DroppedCounts.GetValueOrDefault("audit_log", 0);
+
+            Console.WriteLine("Wipe completed successfully.");
+            Console.WriteLine($"Dropped records: {notes} notes, {revisions} revisions, {audits} audit entries.");
+            return 0;
         });
 
         return wipeCommand;

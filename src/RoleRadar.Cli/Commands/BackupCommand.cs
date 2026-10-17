@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using RoleRadar.Application.Abstractions;
 
@@ -45,12 +46,98 @@ public static class BackupCommand
 
         backupCommand.SetAction(async (ParseResult parseResult, CancellationToken ct) =>
         {
-            var destination = parseResult.GetValue(destinationArgument);
+            var destination = parseResult.GetValue(destinationArgument) ?? ".";
+            var envVar = parseResult.GetValue(passphraseEnvOption);
+            var fromStdin = parseResult.GetValue(passphraseStdinOption);
+
+            string? passphrase = null;
+
+            if (!string.IsNullOrWhiteSpace(envVar))
+            {
+                passphrase = Environment.GetEnvironmentVariable(envVar);
+                if (string.IsNullOrEmpty(passphrase))
+                {
+                    Console.Error.WriteLine($"Environment variable '{envVar}' is not set or empty.");
+                    return 1;
+                }
+            }
+            else if (fromStdin)
+            {
+                passphrase = Console.In.ReadLine();
+                if (string.IsNullOrEmpty(passphrase))
+                {
+                    Console.Error.WriteLine("Passphrase read from stdin was empty.");
+                    return 1;
+                }
+            }
+            else
+            {
+                if (Console.IsInputRedirected)
+                {
+                    Console.Error.WriteLine("Standard input is redirected. Provide passphrase via --passphrase-env or --passphrase-stdin.");
+                    return 1;
+                }
+
+                Console.Write("Enter backup passphrase: ");
+                var p1 = ReadPasswordNoEcho();
+                Console.Write("Confirm backup passphrase: ");
+                var p2 = ReadPasswordNoEcho();
+
+                if (p1 != p2)
+                {
+                    Console.Error.WriteLine("Passphrases do not match.");
+                    return 1;
+                }
+
+                passphrase = p1;
+            }
+
+            if (passphrase.Length < 12)
+            {
+                Console.Error.WriteLine("Passphrase must be at least 12 characters.");
+                return 1;
+            }
+
             var service = services.GetRequiredService<IBackupArchiveService>();
-            var result = await service.CreateBackupAsync(destination ?? ".", "stub", ct);
-            return result.IsSuccess ? 0 : 1;
+            var outcome = await service.CreateBackupAsync(destination, passphrase, ct);
+
+            if (!outcome.IsSuccess || outcome.Value is null)
+            {
+                Console.Error.WriteLine($"Backup failed: {outcome.Error?.Message}");
+                return 1;
+            }
+
+            var summary = outcome.Value;
+            Console.WriteLine($"Backup created: {summary.ArchivePath} ({summary.BytesWritten} bytes)");
+            return 0;
         });
 
         return backupCommand;
+    }
+
+    private static string ReadPasswordNoEcho()
+    {
+        var sb = new StringBuilder();
+        while (true)
+        {
+            var key = Console.ReadKey(intercept: true);
+            if (key.Key == ConsoleKey.Enter)
+            {
+                Console.WriteLine();
+                break;
+            }
+            if (key.Key == ConsoleKey.Backspace)
+            {
+                if (sb.Length > 0)
+                {
+                    sb.Length--;
+                }
+            }
+            else if (!char.IsControl(key.KeyChar))
+            {
+                sb.Append(key.KeyChar);
+            }
+        }
+        return sb.ToString();
     }
 }
