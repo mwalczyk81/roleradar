@@ -189,10 +189,10 @@
 
 **Purpose**: Finalize repository documentation, lock files, formatting, coverage gate verification, and clean-clone quickstart validation.
 
-- [ ] T044 [P] Write root `README.md` with `<10 minute` clean-clone quickstart, MCP client registration guide, CLI command reference, and Mermaid architecture diagram in `README.md`
-- [ ] T045 Synchronize NuGet `packages.lock.json` files across all projects (`dotnet restore RoleRadar.sln --use-lock-file` followed by `dotnet restore RoleRadar.sln --locked-mode`) and verify zero formatting/analyzer diffs (`dotnet format RoleRadar.sln --verify-no-changes`) in `RoleRadar.sln`
-- [ ] T046 Run full test suite (`dotnet test RoleRadar.sln -c Release --collect:"XPlat Code Coverage"`), verify `>=85%` line coverage across `RoleRadar.Domain` and `RoleRadar.Application`, and execute `pre-commit run --all-files` from the repository root (`.pre-commit-config.yaml`, `scripts/denylist-check.ps1`)
-- [ ] T047 Execute all end-to-end validation steps in `specs/001-memory-replacement/quickstart.md` (service start, two-file idempotent import, MCP stdio smoke test, streamed backup, unconfirmed/confirmed wipe, and two-pass restore) in `specs/001-memory-replacement/quickstart.md`
+- [X] T044 [P] Write root `README.md` with `<10 minute` clean-clone quickstart, MCP client registration guide, CLI command reference, and Mermaid architecture diagram in `README.md`
+- [X] T045 Synchronize NuGet `packages.lock.json` files across all projects (`dotnet restore RoleRadar.sln --use-lock-file` followed by `dotnet restore RoleRadar.sln --locked-mode`) and verify zero formatting/analyzer diffs (`dotnet format RoleRadar.sln --verify-no-changes`) in `RoleRadar.sln`
+- [X] T046 Run full test suite (`dotnet test RoleRadar.sln -c Release --collect:"XPlat Code Coverage"`), verify `>=85%` line coverage across `RoleRadar.Domain` and `RoleRadar.Application`, and execute `pre-commit run --all-files` from the repository root (`.pre-commit-config.yaml`, `scripts/denylist-check.ps1`)
+- [X] T047 Execute all end-to-end validation steps in `specs/001-memory-replacement/quickstart.md` (service start, two-file idempotent import, MCP stdio smoke test, streamed backup, unconfirmed/confirmed wipe, and two-pass restore) in `specs/001-memory-replacement/quickstart.md`
 
 ---
 
