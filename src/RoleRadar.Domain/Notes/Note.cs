@@ -4,7 +4,13 @@ namespace RoleRadar.Domain.Notes;
 
 public sealed class Note
 {
-    public const int MaxBodyBytes = 4 * 1024 * 1024; // Supports >=1 MB bodies comfortably up to 4 MiB
+    public const int MaxTitleChars = 300;
+    public const int MaxAreaChars = 64;
+    public const int MaxTagCount = 32;
+    public const int MaxTagChars = 64;
+    public const int MaxBodyBytes = 8 * 1024 * 1024; // 8 MiB (8,388,608 bytes) of UTF-8
+    public const int DefaultGetMaxChars = 200_000;
+    public const int MaxGetMaxChars = 200_000;
 
     public Guid Id { get; }
 
@@ -286,10 +292,20 @@ public sealed class Note
             }
 
             var tag = raw.Trim().ToLowerInvariant();
+            if (tag.Length > MaxTagChars)
+            {
+                throw new ArgumentException($"Tag length ({tag.Length}) exceeds maximum allowed ({MaxTagChars} characters).", nameof(tags));
+            }
+
             if (seen.Add(tag))
             {
                 normalized.Add(tag);
             }
+        }
+
+        if (normalized.Count > MaxTagCount)
+        {
+            throw new ArgumentException($"Tag count ({normalized.Count}) exceeds maximum allowed ({MaxTagCount}).", nameof(tags));
         }
 
         return normalized;
@@ -302,7 +318,13 @@ public sealed class Note
             throw new ArgumentException("Area label cannot be null or whitespace.", nameof(area));
         }
 
-        return area.Trim().ToLowerInvariant();
+        var normalized = area.Trim().ToLowerInvariant();
+        if (normalized.Length > MaxAreaChars)
+        {
+            throw new ArgumentException($"Area label length ({normalized.Length}) exceeds maximum allowed ({MaxAreaChars} characters).", nameof(area));
+        }
+
+        return normalized;
     }
 
     private static string NormalizeTitle(string title)
@@ -312,7 +334,13 @@ public sealed class Note
             throw new ArgumentException("Note title cannot be null or whitespace.", nameof(title));
         }
 
-        return title.Trim();
+        var normalized = title.Trim();
+        if (normalized.Length > MaxTitleChars)
+        {
+            throw new ArgumentException($"Note title length ({normalized.Length}) exceeds maximum allowed ({MaxTitleChars} characters).", nameof(title));
+        }
+
+        return normalized;
     }
 
     private static void ValidateBody(string body)

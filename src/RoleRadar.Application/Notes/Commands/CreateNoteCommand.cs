@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json.Serialization;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Domain.Audit;
 using RoleRadar.Domain.Common;
@@ -8,7 +10,7 @@ namespace RoleRadar.Application.Notes.Commands;
 public sealed record ProvenanceDto(
     string Kind,
     string Date,
-    string? Qualifier);
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.Never)] string? Qualifier);
 
 public sealed record NoteCreatedDto(
     Guid Id,
@@ -44,14 +46,64 @@ public sealed class CreateNoteCommandValidator : ICommandValidator<CreateNoteCom
             return new ResultError(ErrorCode.ValidationError, "Note title is required and cannot be blank.");
         }
 
+        var trimmedTitleLength = command.Title.Trim().Length;
+        if (trimmedTitleLength > Note.MaxTitleChars)
+        {
+            return new ResultError(
+                ErrorCode.ValidationError,
+                $"Note title length ({trimmedTitleLength} characters) exceeds maximum allowed ({Note.MaxTitleChars} characters).");
+        }
+
         if (command.Body is null)
         {
             return new ResultError(ErrorCode.ValidationError, "Note body is required.");
         }
 
+        var bodyByteCount = Encoding.UTF8.GetByteCount(command.Body);
+        if (bodyByteCount > Note.MaxBodyBytes)
+        {
+            return new ResultError(
+                ErrorCode.ValidationError,
+                $"Note body UTF-8 size ({bodyByteCount} bytes) exceeds maximum allowed ({Note.MaxBodyBytes} bytes / 8 MiB).");
+        }
+
         if (string.IsNullOrWhiteSpace(command.Area))
         {
             return new ResultError(ErrorCode.ValidationError, "Note area is required and cannot be blank.");
+        }
+
+        var trimmedAreaLength = command.Area.Trim().Length;
+        if (trimmedAreaLength > Note.MaxAreaChars)
+        {
+            return new ResultError(
+                ErrorCode.ValidationError,
+                $"Note area length ({trimmedAreaLength} characters) exceeds maximum allowed ({Note.MaxAreaChars} characters).");
+        }
+
+        if (command.Tags is not null)
+        {
+            if (command.Tags.Count > Note.MaxTagCount)
+            {
+                return new ResultError(
+                    ErrorCode.ValidationError,
+                    $"Tag count ({command.Tags.Count}) exceeds maximum allowed ({Note.MaxTagCount} tags).");
+            }
+
+            foreach (var rawTag in command.Tags)
+            {
+                if (string.IsNullOrWhiteSpace(rawTag))
+                {
+                    return new ResultError(ErrorCode.ValidationError, "Tag values cannot be blank or whitespace.");
+                }
+
+                var trimmedTagLength = rawTag.Trim().Length;
+                if (trimmedTagLength > Note.MaxTagChars)
+                {
+                    return new ResultError(
+                        ErrorCode.ValidationError,
+                        $"Tag length ({trimmedTagLength} characters) exceeds maximum allowed ({Note.MaxTagChars} characters).");
+                }
+            }
         }
 
         if (!ProvenanceKindExtensions.TryParseWireString(command.ProvenanceKind, out _))

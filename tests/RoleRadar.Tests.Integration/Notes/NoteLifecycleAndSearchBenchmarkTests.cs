@@ -134,17 +134,52 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
         Assert.False(staleDoc.RootElement.GetProperty("ok").GetBoolean());
         Assert.Equal("StaleVersionToken", staleDoc.RootElement.GetProperty("error").GetProperty("code").GetString());
 
-        // 5. Simulate session restart with a fresh DI container and verify full integrity
+        // 5. Simulate session restart with a fresh DI container and verify full integrity + note_get pagination metadata
         await using var providerAfterRestart = BuildServiceProvider();
         var toolsAfterRestart = providerAfterRestart.GetRequiredService<NoteMcpTools>();
         var getJson = await toolsAfterRestart.NoteGetAsync(noteId);
         using var getDoc = JsonDocument.Parse(getJson);
         Assert.True(getDoc.RootElement.GetProperty("ok").GetBoolean());
-        var fetchedBody = getDoc.RootElement.GetProperty("data").GetProperty("body").GetString()!;
+        var getData = getDoc.RootElement.GetProperty("data");
+        var fetchedBody = getData.GetProperty("body").GetString()!;
         Assert.Contains("Updated executive summary with verified compensation and scope.", fetchedBody);
         Assert.Contains("Session 1 concurrent append line.", fetchedBody);
         Assert.Contains("Session 2 concurrent append line.", fetchedBody);
-        Assert.Equal(1, getDoc.RootElement.GetProperty("data").GetProperty("revisionCount").GetInt32());
+        Assert.Equal(fetchedBody.Length, getData.GetProperty("totalChars").GetInt32());
+        Assert.False(getData.GetProperty("truncated").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, getData.GetProperty("nextOffset").ValueKind);
+        Assert.Equal(1, getData.GetProperty("revisionCount").GetInt32());
+
+        // 6. Append additional text so totalChars exceeds 200,000 and verify note_get pagination via MCP tool
+        var extraCharsNeeded = (230_000 - fetchedBody.Length) + 10;
+        var extraAppendJson = await toolsAfterRestart.NoteAppendAsync(
+            id: noteId,
+            textToAppend: new string('P', extraCharsNeeded));
+        using var extraAppendDoc = JsonDocument.Parse(extraAppendJson);
+        Assert.True(extraAppendDoc.RootElement.GetProperty("ok").GetBoolean());
+
+        var page1Json = await toolsAfterRestart.NoteGetAsync(noteId);
+        using var page1Doc = JsonDocument.Parse(page1Json);
+        var page1Data = page1Doc.RootElement.GetProperty("data");
+        var page1Body = page1Data.GetProperty("body").GetString()!;
+        var totalChars = page1Data.GetProperty("totalChars").GetInt32();
+        Assert.Equal(200_000, page1Body.Length);
+        Assert.True(totalChars > 200_000);
+        Assert.True(page1Data.GetProperty("truncated").GetBoolean());
+        var nextOffset = page1Data.GetProperty("nextOffset").GetInt32();
+        Assert.Equal(200_000, nextOffset);
+
+        var page2Json = await toolsAfterRestart.NoteGetAsync(noteId, offset: nextOffset, maxChars: 200_000);
+        using var page2Doc = JsonDocument.Parse(page2Json);
+        var page2Data = page2Doc.RootElement.GetProperty("data");
+        var page2Body = page2Data.GetProperty("body").GetString()!;
+        Assert.Equal(totalChars - 200_000, page2Body.Length);
+        Assert.Equal(totalChars, page2Data.GetProperty("totalChars").GetInt32());
+        Assert.False(page2Data.GetProperty("truncated").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, page2Data.GetProperty("nextOffset").ValueKind);
+        Assert.Equal(
+            page1Data.GetProperty("bodyHash").GetString(),
+            Sha256Hasher.ComputeLowerHex(page1Body + page2Body));
     }
 
     [Fact]

@@ -68,14 +68,138 @@ public sealed class NoteHandlersUnitTests
     }
 
     [Fact]
-    public async Task GetNoteQueryHandler_ReturnsNoteDetailDto_OrNotFoundError()
+    public async Task CreateNoteCommandHandler_EnforcesTitleAreaTagAndBodyCeilings_WithTypedValidationError()
+    {
+        var repo = new InMemoryFakeNoteRepository();
+        var clock = new FixedUtcClock(FixedNow);
+        var handler = new CreateNoteCommandHandler(repo, clock);
+
+        CreateNoteCommand ValidCommand() => new(
+            Title: new string('T', Note.MaxTitleChars),
+            Body: "Valid body",
+            Area: new string('a', Note.MaxAreaChars),
+            Tags: Enumerable.Range(1, Note.MaxTagCount).Select(i => $"tag-{i:D2}").ToArray(),
+            ProvenanceKind: "stated",
+            ProvenanceDate: "2026-10-17",
+            ProvenanceQualifier: null,
+            Actor: "unit-test");
+
+        // 1. Title > 300 chars -> ValidationError
+        var titleTooLong = await handler.HandleAsync(ValidCommand() with { Title = new string('T', Note.MaxTitleChars + 1) });
+        Assert.False(titleTooLong.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, titleTooLong.Error!.Value.Code);
+
+        // 2. Area > 64 chars -> ValidationError
+        var areaTooLong = await handler.HandleAsync(ValidCommand() with { Area = new string('a', Note.MaxAreaChars + 1) });
+        Assert.False(areaTooLong.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, areaTooLong.Error!.Value.Code);
+
+        // 3. Tags > 32 count -> ValidationError
+        var tooManyTags = Enumerable.Range(1, Note.MaxTagCount + 1).Select(i => $"tag-{i}").ToArray();
+        var tagsCountExceeded = await handler.HandleAsync(ValidCommand() with { Tags = tooManyTags });
+        Assert.False(tagsCountExceeded.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, tagsCountExceeded.Error!.Value.Code);
+
+        // 4. Single tag > 64 chars -> ValidationError
+        var tagTooLong = await handler.HandleAsync(ValidCommand() with { Tags = [new string('x', Note.MaxTagChars + 1)] });
+        Assert.False(tagTooLong.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, tagTooLong.Error!.Value.Code);
+
+        // 5. Body > 8 MiB UTF-8 -> ValidationError
+        var over8MiBBody = new string('B', Note.MaxBodyBytes + 1);
+        var bodyTooLarge = await handler.HandleAsync(ValidCommand() with { Body = over8MiBBody });
+        Assert.False(bodyTooLarge.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, bodyTooLarge.Error!.Value.Code);
+        Assert.Empty(repo.Notes);
+        Assert.Empty(repo.Audits);
+
+        // 6. Exact boundary values (300 title, 64 area, 32 tags of 64 chars, 8 MiB body) -> Success
+        var boundaryTags = Enumerable.Range(1, Note.MaxTagCount)
+            .Select(i => $"t{i:D2}-" + new string('z', Note.MaxTagChars - 4))
+            .ToArray();
+        var exact8MiBBody = new string('A', Note.MaxBodyBytes);
+        var boundarySuccess = await handler.HandleAsync(ValidCommand() with
+        {
+            Tags = boundaryTags,
+            Body = exact8MiBBody
+        });
+        Assert.True(boundarySuccess.IsSuccess, boundarySuccess.Error?.Message);
+        Assert.Single(repo.Notes);
+        Assert.Single(repo.Audits);
+    }
+
+    [Fact]
+    public async Task AppendAndReplaceSectionHandlers_EnforceInputAndResulting8MiBBodyCeilings_WithTypedValidationError()
     {
         var repo = new InMemoryFakeNoteRepository();
         var clock = new FixedUtcClock(FixedNow);
         var createHandler = new CreateNoteCommandHandler(repo, clock);
+        var appendHandler = new AppendToNoteCommandHandler(repo, clock);
+        var replaceHandler = new ReplaceNoteSectionCommandHandler(repo, clock);
+
+        // Create a note close to 8 MiB (8 MiB - 100 bytes)
+        const string prefix = "# Root\n## SectionA\nShort A.\n## SectionB\n";
+        var fillerLen = Note.MaxBodyBytes - System.Text.Encoding.UTF8.GetByteCount(prefix) - 100;
+        var initialBody = prefix + new string('X', fillerLen);
+
+        var created = await createHandler.HandleAsync(new CreateNoteCommand(
+            Title: "Near Limit Note",
+            Body: initialBody,
+            Area: "criteria",
+            Tags: ["limit"],
+            ProvenanceKind: "stated",
+            ProvenanceDate: "2026-10-17",
+            ProvenanceQualifier: null));
+        Assert.True(created.IsSuccess);
+        var noteId = created.Value!.Id;
+        var initialToken = created.Value.VersionToken;
+
+        // 1. Append with textToAppend > 8 MiB -> ValidationError
+        var appendInputTooLarge = await appendHandler.HandleAsync(new AppendToNoteCommand(
+            Id: noteId,
+            TextToAppend: new string('Y', Note.MaxBodyBytes + 1)));
+        Assert.False(appendInputTooLarge.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, appendInputTooLarge.Error!.Value.Code);
+
+        // 2. Append where textToAppend is small (200 bytes) but resulting body > 8 MiB -> ValidationError
+        var appendResultTooLarge = await appendHandler.HandleAsync(new AppendToNoteCommand(
+            Id: noteId,
+            TextToAppend: new string('Y', 200)));
+        Assert.False(appendResultTooLarge.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, appendResultTooLarge.Error!.Value.Code);
+        Assert.Single(repo.Audits); // Only the initial create audit entry exists
+
+        // 3. ReplaceSection with newSectionBody > 8 MiB -> ValidationError
+        var replaceInputTooLarge = await replaceHandler.HandleAsync(new ReplaceNoteSectionCommand(
+            Id: noteId,
+            Heading: "SectionA",
+            NewSectionBody: "## SectionA\n" + new string('Z', Note.MaxBodyBytes),
+            VersionToken: initialToken));
+        Assert.False(replaceInputTooLarge.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, replaceInputTooLarge.Error!.Value.Code);
+
+        // 4. ReplaceSection where newSectionBody is small (200 bytes) but resulting body > 8 MiB -> ValidationError
+        var replaceResultTooLarge = await replaceHandler.HandleAsync(new ReplaceNoteSectionCommand(
+            Id: noteId,
+            Heading: "SectionA",
+            NewSectionBody: "## SectionA\n" + new string('Z', 200),
+            VersionToken: initialToken));
+        Assert.False(replaceResultTooLarge.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, replaceResultTooLarge.Error!.Value.Code);
+        Assert.Empty(repo.Revisions);
+        Assert.Single(repo.Audits);
+    }
+
+    [Fact]
+    public async Task GetNoteQueryHandler_ReturnsNoteDetailDto_SupportsPagination_AndValidatesBounds()
+    {
+        var repo = new InMemoryFakeNoteRepository();
+        var clock = new FixedUtcClock(FixedNow);
+        var createHandler = new CreateNoteCommandHandler(repo, clock);
+        const string smallBody = "# Heading\nBody text.\n";
         var created = await createHandler.HandleAsync(new CreateNoteCommand(
             Title: "Sample Note",
-            Body: "# Heading\nBody text.\n",
+            Body: smallBody,
             Area: "runbook",
             Tags: ["interview"],
             ProvenanceKind: "researched",
@@ -86,8 +210,57 @@ public sealed class NoteHandlersUnitTests
         var found = await getHandler.HandleAsync(new GetNoteQuery(created.Value!.Id));
         Assert.True(found.IsSuccess);
         Assert.Equal(created.Value.Id, found.Value!.Id);
-        Assert.Equal("# Heading\nBody text.\n", found.Value.Body);
+        Assert.Equal(smallBody, found.Value.Body);
+        Assert.Equal(smallBody.Length, found.Value.TotalChars);
+        Assert.False(found.Value.Truncated);
+        Assert.Null(found.Value.NextOffset);
         Assert.Equal(0, found.Value.RevisionCount);
+
+        // Create a >200,000-character note (250,000 chars) and verify default truncation + paging
+        var largeBody = string.Concat(
+            new string('A', 100_000),
+            new string('B', 100_000),
+            new string('C', 50_000));
+        var largeCreated = await createHandler.HandleAsync(new CreateNoteCommand(
+            Title: "Paged Note",
+            Body: largeBody,
+            Area: "criteria",
+            Tags: ["paged"],
+            ProvenanceKind: "stated",
+            ProvenanceDate: "2026-10-17",
+            ProvenanceQualifier: null));
+
+        var page1 = await getHandler.HandleAsync(new GetNoteQuery(largeCreated.Value!.Id));
+        Assert.True(page1.IsSuccess);
+        Assert.Equal(200_000, page1.Value!.Body.Length);
+        Assert.Equal(250_000, page1.Value.TotalChars);
+        Assert.True(page1.Value.Truncated);
+        Assert.Equal(200_000, page1.Value.NextOffset);
+        Assert.Equal(Sha256Hasher.ComputeLowerHex(largeBody), page1.Value.BodyHash);
+
+        var page2 = await getHandler.HandleAsync(new GetNoteQuery(
+            Id: largeCreated.Value.Id,
+            Offset: page1.Value.NextOffset!.Value,
+            MaxChars: 200_000));
+        Assert.True(page2.IsSuccess);
+        Assert.Equal(50_000, page2.Value!.Body.Length);
+        Assert.Equal(250_000, page2.Value.TotalChars);
+        Assert.False(page2.Value.Truncated);
+        Assert.Null(page2.Value.NextOffset);
+        Assert.Equal(largeBody, page1.Value.Body + page2.Value.Body);
+
+        // Validation errors on invalid offset / maxChars
+        var negativeOffset = await getHandler.HandleAsync(new GetNoteQuery(created.Value.Id, Offset: -1));
+        Assert.False(negativeOffset.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, negativeOffset.Error!.Value.Code);
+
+        var zeroMaxChars = await getHandler.HandleAsync(new GetNoteQuery(created.Value.Id, Offset: 0, MaxChars: 0));
+        Assert.False(zeroMaxChars.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, zeroMaxChars.Error!.Value.Code);
+
+        var excessiveMaxChars = await getHandler.HandleAsync(new GetNoteQuery(created.Value.Id, Offset: 0, MaxChars: Note.MaxGetMaxChars + 1));
+        Assert.False(excessiveMaxChars.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, excessiveMaxChars.Error!.Value.Code);
 
         var missing = await getHandler.HandleAsync(new GetNoteQuery(Guid.CreateVersion7()));
         Assert.False(missing.IsSuccess);
@@ -270,6 +443,15 @@ public sealed class NoteHandlersUnitTests
             if (!Notes.TryGetValue(noteId, out var existing) || existing.OwnerId != ownerId)
             {
                 return Task.FromResult(Result<NoteWriteOutcome>.Failure(ErrorCode.NotFound, $"Note '{noteId}' not found."));
+            }
+
+            var appendBytes = System.Text.Encoding.UTF8.GetByteCount(textToAppend);
+            var resultingBytes = System.Text.Encoding.UTF8.GetByteCount(existing.Body) + appendBytes;
+            if (resultingBytes > Note.MaxBodyBytes)
+            {
+                return Task.FromResult(Result<NoteWriteOutcome>.Failure(
+                    ErrorCode.ValidationError,
+                    $"Resulting note body UTF-8 size ({resultingBytes} bytes) after append exceeds maximum allowed ({Note.MaxBodyBytes} bytes / 8 MiB)."));
             }
 
             var working = CloneNote(existing);

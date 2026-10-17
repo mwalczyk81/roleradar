@@ -1,6 +1,7 @@
 using System.Text;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Domain.Common;
+using RoleRadar.Domain.Notes;
 
 namespace RoleRadar.Application.Notes.Commands;
 
@@ -31,6 +32,14 @@ public sealed class AppendToNoteCommandValidator : ICommandValidator<AppendToNot
         if (string.IsNullOrEmpty(command.TextToAppend))
         {
             return new ResultError(ErrorCode.ValidationError, "TextToAppend cannot be empty.");
+        }
+
+        var appendBytes = Encoding.UTF8.GetByteCount(command.TextToAppend);
+        if (appendBytes > Note.MaxBodyBytes)
+        {
+            return new ResultError(
+                ErrorCode.ValidationError,
+                $"TextToAppend UTF-8 size ({appendBytes} bytes) exceeds maximum allowed ({Note.MaxBodyBytes} bytes / 8 MiB).");
         }
 
         return null;

@@ -582,6 +582,14 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
                     "Text to append cannot be empty.");
             }
 
+            var appendBytes = System.Text.Encoding.UTF8.GetByteCount(textToAppend);
+            if (appendBytes > Note.MaxBodyBytes)
+            {
+                return Result<NoteWriteOutcome>.Failure(
+                    ErrorCode.ValidationError,
+                    $"TextToAppend UTF-8 size ({appendBytes} bytes) exceeds maximum allowed ({Note.MaxBodyBytes} bytes / 8 MiB).");
+            }
+
             var filter = Builders<BsonDocument>.Filter.And(
                 Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
                 Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(noteId, GuidRepresentation.Standard)));
@@ -598,6 +606,14 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             }
 
             var note = MapDocumentToNote(existingDoc);
+            var resultingBytes = System.Text.Encoding.UTF8.GetByteCount(note.Body) + appendBytes;
+            if (resultingBytes > Note.MaxBodyBytes)
+            {
+                return Result<NoteWriteOutcome>.Failure(
+                    ErrorCode.ValidationError,
+                    $"Resulting note body UTF-8 size ({resultingBytes} bytes) after append exceeds maximum allowed ({Note.MaxBodyBytes} bytes / 8 MiB).");
+            }
+
             var beforeSummary = AuditContentSummary.FromNote(note);
 
             // Atomic inside a snapshot transaction (read, append, hash, update) with transient-error retry via WithTransactionAsync;

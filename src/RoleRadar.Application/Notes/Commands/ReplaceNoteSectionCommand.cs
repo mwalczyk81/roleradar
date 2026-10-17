@@ -1,3 +1,4 @@
+using System.Text;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Domain.Audit;
 using RoleRadar.Domain.Common;
@@ -40,6 +41,14 @@ public sealed class ReplaceNoteSectionCommandValidator : ICommandValidator<Repla
         if (command.NewSectionBody is null)
         {
             return new ResultError(ErrorCode.ValidationError, "NewSectionBody is required.");
+        }
+
+        var sectionBytes = Encoding.UTF8.GetByteCount(command.NewSectionBody);
+        if (sectionBytes > Note.MaxBodyBytes)
+        {
+            return new ResultError(
+                ErrorCode.ValidationError,
+                $"NewSectionBody UTF-8 size ({sectionBytes} bytes) exceeds maximum allowed ({Note.MaxBodyBytes} bytes / 8 MiB).");
         }
 
         if (command.VersionToken == Guid.Empty)
@@ -131,6 +140,14 @@ public sealed class ReplaceNoteSectionCommandHandler : ICommandHandler<ReplaceNo
                             ["matchingHeadings"] = sectionOutcome.MatchingHeadings,
                             ["availableHeadings"] = sectionOutcome.AvailableHeadings
                         });
+                }
+
+                var resultingBytes = Encoding.UTF8.GetByteCount(sectionOutcome.UpdatedBody!);
+                if (resultingBytes > Note.MaxBodyBytes)
+                {
+                    return Result<NoteWriteOutcome>.Failure(
+                        ErrorCode.ValidationError,
+                        $"Resulting note body UTF-8 size ({resultingBytes} bytes) after section replacement exceeds maximum allowed ({Note.MaxBodyBytes} bytes / 8 MiB).");
                 }
 
                 var beforeSummary = AuditContentSummary.FromNote(note);

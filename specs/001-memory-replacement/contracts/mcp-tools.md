@@ -23,12 +23,12 @@
 
 ## Tool 1: `note_create` → `ICommandHandler<CreateNoteCommand, NoteCreatedDto>`
 
-- **Description**: `"Creates a durable markdown note with title, body, tags, area label, and provenance marker (stated, researched, or inferred with YYYY-MM-DD date)."`
+- **Description**: `"Creates a durable markdown note with title (<=300 chars), body (<=8 MiB UTF-8), tags (<=32 tags, each <=64 chars), area label (<=64 chars), and provenance marker (stated, researched, or inferred with YYYY-MM-DD date)."`
 - **Input Parameters**:
-  - `title` (`string`, required): Non-empty title of the note.
-  - `body` (`string`, required): Markdown body (supports >100 KB up to 1 MB).
-  - `area` (`string`, required): Area label (e.g., `"criteria"`, `"runbook"`, `"preferences"`, `"general"`).
-  - `tags` (`string[]`, optional): List of tag labels.
+  - `title` (`string`, required): Non-empty title of the note (`1..300` characters).
+  - `body` (`string`, required): Markdown body (`<= 8 MiB` / `8,388,608` UTF-8 bytes).
+  - `area` (`string`, required): Area label (`1..64` characters, e.g., `"criteria"`, `"runbook"`, `"preferences"`, `"general"`).
+  - `tags` (`string[]`, optional): List of tag labels (at most `32` tags, each `1..64` characters).
   - `provenanceKind` (`string`, required): One of `"stated"`, `"researched"`, or `"inferred"`.
   - `provenanceDate` (`string`, required): ISO date `"YYYY-MM-DD"`.
   - `provenanceQualifier` (`string`, optional): Optional provenance qualifier text.
@@ -56,23 +56,26 @@
 
 ## Tool 2: `note_get` → `IQueryHandler<GetNoteQuery, NoteDetailDto>`
 
-- **Description**: `"Reads a single note in full by its unique id, including archived notes, returning its markdown body, metadata, and current version token."`
+- **Description**: `"Reads a single note by its unique id, including archived notes, returning at most 200,000 characters of its markdown body per call by default. Accepts optional offset and maxChars, and returns totalChars, truncated, and nextOffset so an agent can page through a large note."`
 - **Input Parameters**:
   - `id` (`Guid`, required): Unique identifier of the note.
+  - `offset` (`int`, optional, default `0`): Zero-based character offset into the note body (`>= 0`).
+  - `maxChars` (`int`, optional, default `200000`): Maximum characters of `body` to return in this call (`1..200000`; default `200,000`).
 - **Output Payload (JSON)**:
-  - Full note object including `id`, `title`, `body`, `area`, `tags`, `provenance`, `status`, `versionToken`, `bodyHash`, `revisionCount`, `createdAtUtc`, and `updatedAtUtc`.
-  - Maps `ErrorCode.NotFound` to a structured not-found tool response.
+  - Note object including `id`, `title`, `body` (sliced to `[offset .. offset + maxChars)`), `totalChars`, `truncated` (`bool`), `nextOffset` (`int?`, `null` when not truncated), `area`, `tags`, `provenance`, `status`, `versionToken`, `bodyHash`, `revisionCount`, `createdAtUtc`, and `updatedAtUtc`.
+  - Maps `ErrorCode.NotFound` to a structured not-found tool response and `ErrorCode.ValidationError` if `offset < 0` or `maxChars` is outside `1..200,000`.
 
 ---
 
 ## Tool 3: `note_append` → `ICommandHandler<AppendToNoteCommand, NoteUpdatedDto>`
 
-- **Description**: `"Atomically appends markdown text to the end of an existing note on the server side without requiring a version token."`
+- **Description**: `"Atomically appends markdown text (<=8 MiB UTF-8, resulting body <=8 MiB UTF-8) to the end of an existing note inside a snapshot transaction without requiring a version token."`
 - **Input Parameters**:
   - `id` (`Guid`, required): Unique identifier of the note.
-  - `textToAppend` (`string`, required): Markdown text to append to the existing body.
+  - `textToAppend` (`string`, required): Markdown text to append to the existing body (`<= 8 MiB` UTF-8 bytes; resulting note body `<= 8 MiB` UTF-8 bytes).
 - **Behavior**:
-  - Executes atomically on the server side (`FR-004`).
+  - Executes atomically inside a snapshot transaction (`read`, `append`, `hash`, `update`) with transient-error retry (`FR-004`).
+  - Rejects with `ErrorCode.ValidationError` if `textToAppend` or the resulting body exceeds `8 MiB` (`8,388,608` UTF-8 bytes).
   - Does **not** create a `NoteRevision` snapshot (`FR-008`).
   - Records `appended_text` and `resulting_version_token` in `audit_log` (`FR-017`).
 - **Output Payload (JSON)**:
@@ -82,13 +85,14 @@
 
 ## Tool 4: `note_replace_section` → `ICommandHandler<ReplaceNoteSectionCommand, NoteSectionReplacedDto>`
 
-- **Description**: `"Replaces the markdown content under a specific heading in an existing note. Requires the current versionToken and saves the full prior body in revision history."`
+- **Description**: `"Replaces the markdown content under a specific heading in an existing note (replacement and resulting body each <=8 MiB UTF-8). Requires the current versionToken and saves the full prior body in revision history."`
 - **Input Parameters**:
   - `id` (`Guid`, required): Unique identifier of the note.
   - `heading` (`string`, required): Heading title or heading path to replace (e.g., `"## Compensation"` or `"Compensation"`).
-  - `newSectionBody` (`string`, required): Replacement markdown content for that section.
+  - `newSectionBody` (`string`, required): Replacement markdown content for that section (`<= 8 MiB` UTF-8 bytes; resulting note body `<= 8 MiB` UTF-8 bytes).
   - `versionToken` (`Guid`, required): Current concurrency `versionToken` of the note.
 - **Behavior**:
+  - Rejects with `ErrorCode.ValidationError` if `newSectionBody` or the resulting note body exceeds `8 MiB` (`8,388,608` UTF-8 bytes).
   - If `versionToken` does not match the stored note's `version_token`, returns typed `ErrorCode.StaleVersionToken` with the current `versionToken` (`FR-005`).
   - If `heading` is not found or matches multiple sections ambiguously, returns typed `ErrorCode.SectionNotFound` or `ErrorCode.AmbiguousHeading` listing the available headings without modifying the note (`FR-005`).
   - Saves the full prior note body in `note_revisions` and records `note_revision_id` in `audit_log`.
@@ -99,9 +103,9 @@
 
 ## Tool 5: `note_search` → `IQueryHandler<SearchNotesQuery, NoteSearchResponseDto>`
 
-- **Description**: `"Searches notes by case-insensitive text query (supporting stemmed whole words and quoted phrases), tag filter, and area label. Excludes archived notes by default."`
+- **Description**: `"Searches notes by case-insensitive text query (supporting stemmed whole words where multi-word queries rank notes by relevance rather than requiring every term, quoted phrases that match exactly, and no prefix matching), tag filter, and area label. Excludes archived notes by default."`
 - **Input Parameters**:
-  - `query` (`string`, optional): Free-text search query (supports quoted phrases e.g. `"staff engineer"`).
+  - `query` (`string`, optional): Free-text search query (multi-word queries rank notes by relevance rather than requiring every term; quoted phrases e.g. `"staff engineer"` match exactly; prefix matching is not supported).
   - `tags` (`string[]`, optional): Tag filters combined with logical `AND`.
   - `area` (`string`, optional): Area label filter combined with logical `AND`.
   - `includeArchived` (`bool`, optional, default `false`): Whether to include archived notes.
