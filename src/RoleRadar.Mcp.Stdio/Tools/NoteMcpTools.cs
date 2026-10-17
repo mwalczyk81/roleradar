@@ -24,25 +24,29 @@ public sealed class NoteMcpTools
     private readonly ICommandHandler<AppendToNoteCommand, NoteUpdatedDto> _appendToNoteHandler;
     private readonly ICommandHandler<ReplaceNoteSectionCommand, NoteSectionReplacedDto> _replaceNoteSectionHandler;
     private readonly IQueryHandler<SearchNotesQuery, NoteSearchResponseDto> _searchNotesHandler;
+    private readonly ICommandHandler<ArchiveNoteCommand, NoteArchivedDto> _archiveNoteHandler;
 
     public NoteMcpTools(
         ICommandHandler<CreateNoteCommand, NoteCreatedDto> createNoteHandler,
         IQueryHandler<GetNoteQuery, NoteDetailDto> getNoteHandler,
         ICommandHandler<AppendToNoteCommand, NoteUpdatedDto> appendToNoteHandler,
         ICommandHandler<ReplaceNoteSectionCommand, NoteSectionReplacedDto> replaceNoteSectionHandler,
-        IQueryHandler<SearchNotesQuery, NoteSearchResponseDto> searchNotesHandler)
+        IQueryHandler<SearchNotesQuery, NoteSearchResponseDto> searchNotesHandler,
+        ICommandHandler<ArchiveNoteCommand, NoteArchivedDto> archiveNoteHandler)
     {
         ArgumentNullException.ThrowIfNull(createNoteHandler);
         ArgumentNullException.ThrowIfNull(getNoteHandler);
         ArgumentNullException.ThrowIfNull(appendToNoteHandler);
         ArgumentNullException.ThrowIfNull(replaceNoteSectionHandler);
         ArgumentNullException.ThrowIfNull(searchNotesHandler);
+        ArgumentNullException.ThrowIfNull(archiveNoteHandler);
 
         _createNoteHandler = createNoteHandler;
         _getNoteHandler = getNoteHandler;
         _appendToNoteHandler = appendToNoteHandler;
         _replaceNoteSectionHandler = replaceNoteSectionHandler;
         _searchNotesHandler = searchNotesHandler;
+        _archiveNoteHandler = archiveNoteHandler;
     }
 
     [McpServerTool(Name = "note_create"), Description("Creates a durable markdown note with title (<= 300 chars), body (<= 8 MiB UTF-8), tags (<= 32 tags, each <= 64 chars), area label (<= 64 chars), and provenance marker (stated, researched, or inferred with YYYY-MM-DD date).")]
@@ -132,6 +136,21 @@ public sealed class NoteMcpTools
             Limit: limit);
 
         var result = await _searchNotesHandler.HandleAsync(searchQuery, cancellationToken);
+        return SerializeResult(result);
+    }
+
+    [McpServerTool(Name = "note_archive"), Description("Archives a note by ID, preserving body and revisions intact while hiding it from default search.")]
+    public async Task<string> NoteArchiveAsync(
+        [Description("Unique ID of the note to archive.")] Guid id,
+        [Description("Optional expected version token for optimistic concurrency control.")] Guid? expectedVersionToken = null,
+        CancellationToken cancellationToken = default)
+    {
+        var command = new ArchiveNoteCommand(
+            Id: id,
+            ExpectedVersionToken: expectedVersionToken,
+            Actor: "mcp-stdio");
+
+        var result = await _archiveNoteHandler.HandleAsync(command, cancellationToken);
         return SerializeResult(result);
     }
 

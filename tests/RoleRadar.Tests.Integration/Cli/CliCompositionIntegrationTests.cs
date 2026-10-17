@@ -55,7 +55,13 @@ public sealed class CliCompositionIntegrationTests
         var importHandler = provider.GetService<ICommandHandler<ImportMarkdownCommand, ImportMarkdownSummaryDto>>();
         Assert.NotNull(importHandler);
 
+        var archiveHandler = provider.GetService<ICommandHandler<ArchiveNoteCommand, NoteArchivedDto>>();
+        Assert.NotNull(archiveHandler);
+
         // 3. System.CommandLine command trees must be constructable without throwing
+        var statusCmd = StatusCommand.Create(provider);
+        Assert.NotNull(statusCmd);
+
         var importCmd = ImportCommand.Create(provider);
         Assert.NotNull(importCmd);
 
@@ -117,6 +123,17 @@ public sealed class CliCompositionIntegrationTests
         {
             await File.WriteAllTextAsync(tempFile, "# Test Heading\nTest body content.");
 
+            // 0. status check with running container
+            var (exitCodeStatus, stdoutStatus, stderrStatus) = await RunCliAsync(cliDllPath, "status", env);
+            Assert.DoesNotContain("Unhandled exception", stderrStatus, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(0, exitCodeStatus);
+            Assert.Contains("RoleRadar Store: Ready", stdoutStatus);
+
+            var (exitCodeStatusJson, stdoutStatusJson, _) = await RunCliAsync(cliDllPath, "status --json", env);
+            Assert.Equal(0, exitCodeStatusJson);
+            Assert.Contains("\"isReady\": true", stdoutStatusJson);
+
+            // 1. import --dry-run on a valid empty/minimal markdown file
             var (exitCodeImport, _, stderrImport) = await RunCliAsync(cliDllPath, $"import \"{tempFile}\" --dry-run", env);
             Assert.DoesNotContain("Unhandled exception", stderrImport, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(0, exitCodeImport);
@@ -138,6 +155,74 @@ public sealed class CliCompositionIntegrationTests
                 File.Delete(tempFile);
             }
         }
+    }
+
+    [Fact]
+    public async Task McpServer_SmokeTest_RunsBuiltDll_InitializesAndListsToolsWithoutUnhandledErrors()
+    {
+        var mcpDllPath = typeof(RoleRadar.Mcp.Stdio.Program).Assembly.Location;
+        if (string.IsNullOrWhiteSpace(mcpDllPath) || !File.Exists(mcpDllPath))
+        {
+            mcpDllPath = Path.Combine(AppContext.BaseDirectory, "RoleRadar.Mcp.Stdio.dll");
+        }
+
+        Assert.True(File.Exists(mcpDllPath), $"Expected built MCP server assembly at '{mcpDllPath}'.");
+
+        var uniqueDb = $"roleradar_mcp_smoke_{Guid.CreateVersion7():N}";
+        var env = new Dictionary<string, string>
+        {
+            ["ROLERADAR_MONGO_CONNECTION_STRING"] = _sharedMongo.ConnectionString,
+            ["ROLERADAR_MONGO_DATABASE"] = uniqueDb
+        };
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            Arguments = $"\"{mcpDllPath}\"",
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        foreach (var (k, v) in env)
+        {
+            psi.Environment[k] = v;
+        }
+
+        using var proc = Process.Start(psi)!;
+        Assert.NotNull(proc);
+
+        // Send initialize
+        await proc.StandardInput.WriteLineAsync("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"test-client\",\"version\":\"1.0.0\"}}}");
+        await proc.StandardInput.FlushAsync();
+
+        // Read response to initialize
+        var initResponse = await proc.StandardOutput.ReadLineAsync();
+
+        // Send notifications/initialized
+        await proc.StandardInput.WriteLineAsync("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+        await proc.StandardInput.FlushAsync();
+
+        // Send tools/list
+        await proc.StandardInput.WriteLineAsync("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}");
+        await proc.StandardInput.FlushAsync();
+
+        // Read response to tools/list
+        var toolsResponse = await proc.StandardOutput.ReadLineAsync();
+
+        proc.StandardInput.Close();
+        await proc.WaitForExitAsync();
+
+        var stderr = await proc.StandardError.ReadToEndAsync();
+
+        Assert.DoesNotContain("Unhandled exception", stderr, StringComparison.OrdinalIgnoreCase);
+        Assert.NotNull(initResponse);
+        Assert.Contains("\"result\":", initResponse);
+        Assert.NotNull(toolsResponse);
+        Assert.Contains("note_create", toolsResponse);
+        Assert.Contains("note_archive", toolsResponse);
     }
 
     private static async Task<(int ExitCode, string Stdout, string Stderr)> RunCliAsync(

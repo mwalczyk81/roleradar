@@ -16,16 +16,18 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton<IUtcClock>(SystemUtcClock.Instance);
 
-        // US1 Validators
+        // US1 & US4 Validators
         services.AddSingleton<ICommandValidator<CreateNoteCommand>, CreateNoteCommandValidator>();
         services.AddSingleton<ICommandValidator<AppendToNoteCommand>, AppendToNoteCommandValidator>();
         services.AddSingleton<ICommandValidator<ReplaceNoteSectionCommand>, ReplaceNoteSectionCommandValidator>();
+        services.AddSingleton<ICommandValidator<ArchiveNoteCommand>, ArchiveNoteCommandValidator>();
         services.AddSingleton<ICommandValidator<RoleRadar.Application.Import.Commands.ImportMarkdownCommand>, RoleRadar.Application.Import.Commands.ImportMarkdownCommandValidator>();
 
-        // US1 & US2 Command Handlers (wrapped by TransactionAndAuditCommandDecorator + LoggingCommandDecorator)
+        // US1, US2 & US4 Command Handlers (wrapped by TransactionAndAuditCommandDecorator + LoggingCommandDecorator)
         services.AddCommandHandler<CreateNoteCommand, NoteCreatedDto, CreateNoteCommandHandler>();
         services.AddCommandHandler<AppendToNoteCommand, NoteUpdatedDto, AppendToNoteCommandHandler>();
         services.AddCommandHandler<ReplaceNoteSectionCommand, NoteSectionReplacedDto, ReplaceNoteSectionCommandHandler>();
+        services.AddCommandHandler<ArchiveNoteCommand, NoteArchivedDto, ArchiveNoteCommandHandler>();
         services.AddCommandHandler<RoleRadar.Application.Import.Commands.ImportMarkdownCommand, RoleRadar.Application.Import.Commands.ImportMarkdownSummaryDto, RoleRadar.Application.Import.Commands.ImportMarkdownCommandHandler>();
 
         // US1 Query Handlers (wrapped by LoggingQueryDecorator)

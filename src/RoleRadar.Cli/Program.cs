@@ -15,6 +15,7 @@ public static class Program
         await using var services = BuildServiceProvider();
 
         var rootCommand = new RootCommand("RoleRadar local CLI");
+        rootCommand.Add(StatusCommand.Create(services));
         rootCommand.Add(ImportCommand.Create(services));
         rootCommand.Add(BackupCommand.Create(services));
         rootCommand.Add(RestoreCommand.Create(services));
