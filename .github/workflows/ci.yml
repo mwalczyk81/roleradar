@@ -117,7 +117,8 @@ jobs:
             "-reports:TestResults/**/coverage.cobertura.xml" `
             "-targetdir:TestResults/merged" `
             "-reporttypes:Cobertura;MarkdownSummaryGithub" `
-            "-assemblyfilters:+RoleRadar.Domain;+RoleRadar.Application"
+            "-assemblyfilters:+RoleRadar.Domain;+RoleRadar.Application" `
+            "-filefilters:-*.g.cs"
 
           $mergedXmlPath = "TestResults/merged/Cobertura.xml"
           if (-not (Test-Path -LiteralPath $mergedXmlPath)) {

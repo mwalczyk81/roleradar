@@ -23,7 +23,12 @@ public static class ImportCommand
         var filesArgument = new Argument<string[]>("files")
         {
             Arity = ArgumentArity.OneOrMore,
-            Description = "Paths to UTF-8 markdown files to import."
+            Description = "Paths to UTF-8 markdown files to import. Source file identity defaults to the file name so moving a file between folders is safe, but renaming it orphans its sections."
+        };
+
+        var sourceIdOption = new Option<string?>("--source-id")
+        {
+            Description = "Override source file identity (only valid when importing a single file). Defaults to the file name so moving a file between folders is safe, but renaming it orphans its sections."
         };
 
         var areaOption = new Option<string>("--area")
@@ -59,6 +64,7 @@ public static class ImportCommand
         };
 
         importCommand.Add(filesArgument);
+        importCommand.Add(sourceIdOption);
         importCommand.Add(areaOption);
         importCommand.Add(tagsOption);
         importCommand.Add(defaultDateOption);
@@ -69,6 +75,7 @@ public static class ImportCommand
         importCommand.SetAction(async (ParseResult parseResult, CancellationToken ct) =>
         {
             var files = parseResult.GetRequiredValue(filesArgument);
+            var sourceId = parseResult.GetValue(sourceIdOption);
             var area = parseResult.GetValue(areaOption) ?? "imported";
             var tags = parseResult.GetValue(tagsOption);
             var defaultDate = parseResult.GetValue(defaultDateOption);
@@ -85,6 +92,7 @@ public static class ImportCommand
                 Tags: tags,
                 DefaultDate: defaultDate,
                 DryRun: dryRun,
+                SourceFileId: sourceId,
                 Actor: "cli-import");
 
             var outcome = await handler.HandleAsync(command, ct);

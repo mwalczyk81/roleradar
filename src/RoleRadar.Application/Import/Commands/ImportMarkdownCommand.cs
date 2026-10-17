@@ -32,6 +32,7 @@ public sealed record ImportMarkdownCommand(
     IReadOnlyList<string>? Tags = null,
     string? DefaultDate = null,
     bool DryRun = false,
+    string? SourceFileId = null,
     string Actor = "cli-import",
     string? OwnerId = null) : ICommand<ImportMarkdownSummaryDto>;
 
@@ -56,6 +57,30 @@ public sealed class ImportMarkdownCommandValidator : ICommandValidator<ImportMar
             if (!File.Exists(path))
             {
                 return new ResultError(ErrorCode.ValidationError, $"File not found: '{path}'.");
+            }
+        }
+
+        var collidingGroups = command.FilePaths
+            .GroupBy(p => Path.GetFileName(p), StringComparer.OrdinalIgnoreCase)
+            .Where(g => g.Count() > 1)
+            .ToList();
+
+        if (collidingGroups.Count > 0)
+        {
+            var firstGroup = collidingGroups[0];
+            var collidingPaths = string.Join("', '", firstGroup);
+            return new ResultError(
+                ErrorCode.ValidationError,
+                $"Input file paths resolve to colliding source file identifier '{firstGroup.Key}': '{collidingPaths}'.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(command.SourceFileId))
+        {
+            if (command.FilePaths.Count > 1)
+            {
+                return new ResultError(
+                    ErrorCode.ValidationError,
+                    "Option '--source-id' can only be specified when importing exactly one file.");
             }
         }
 
@@ -165,7 +190,11 @@ public sealed class ImportMarkdownCommandHandler : ICommandHandler<ImportMarkdow
                     $"File '{path}' contains invalid UTF-8 byte sequences.");
             }
 
-            fileDataList.Add((path, Path.GetFileName(path), bytes));
+            var sourceFileId = (!string.IsNullOrWhiteSpace(command.SourceFileId) && command.FilePaths.Count == 1)
+                ? command.SourceFileId.Trim()
+                : Path.GetFileName(path);
+
+            fileDataList.Add((path, sourceFileId, bytes));
         }
 
         var createdCount = 0;
