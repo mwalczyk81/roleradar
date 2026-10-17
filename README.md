@@ -52,7 +52,7 @@ flowchart TD
 Clone the repository and start the persistent, loopback-bound MongoDB replica set:
 
 ```powershell
-git clone https://github.com/mwalch/roleradar.git
+git clone https://github.com/mwalczyk81/roleradar.git
 cd roleradar
 
 # Start local MongoDB replica set (rs0 on 127.0.0.1:27017)
@@ -69,9 +69,9 @@ Expected output:
 
 ```text
 RoleRadar Store: Ready
-Endpoint:        127.0.0.1:27017
+Endpoint:        127.0.0.1:27017 (rs0)
 Replica Set:     rs0
-Latency:         1.20 ms
+Latency:         115.69 ms
 ```
 
 ### 3. Import Fictional Notes
@@ -100,10 +100,10 @@ The compiled binary will be located at `./dist/mcp/RoleRadar.Mcp.Stdio.exe` (or 
 
 ### Claude Code CLI
 
-Register RoleRadar into Claude Code:
+Register RoleRadar into Claude Code (the target path must be absolute because Claude Code launches MCP servers from arbitrary working directories):
 
 ```powershell
-claude mcp add roleradar -- dotnet ./dist/mcp/RoleRadar.Mcp.Stdio.dll
+claude mcp add roleradar -- dotnet C:/Users/<username>/source/repos/roleradar/dist/mcp/RoleRadar.Mcp.Stdio.dll
 ```
 
 Or using the published Windows executable directly:

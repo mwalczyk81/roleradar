@@ -46,5 +46,7 @@ if (-not $healthy) {
     exit 1
 }
 
-Write-Output 'RoleRadar MongoDB service is healthy and ready on 127.0.0.1:27017 (rs0).'
+$portOutput = (& docker compose @composeArgs port mongo 27017 2>$null)
+$endpoint = if (-not [string]::IsNullOrWhiteSpace($portOutput)) { $portOutput.Trim() } else { '127.0.0.1:27017' }
+Write-Output "RoleRadar MongoDB service is healthy and ready on $endpoint (rs0)."
 exit 0

@@ -8,6 +8,9 @@ param(
 
     [switch]$PassphraseStdin,
 
+    [Parameter(DontShow = $true)]
+    [string]$Passphrase = '',
+
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$RemainingArgs = @()
 )
@@ -15,11 +18,11 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-foreach ($arg in $RemainingArgs) {
-    if ($arg -match '^--passphrase(=.*)?$') {
-        Write-Error 'Supplying passphrase via CLI argument is forbidden for security. Use interactive prompt, --passphrase-env, or --passphrase-stdin.'
-        exit 1
-    }
+if ($PSBoundParameters.ContainsKey('Passphrase') -or
+    $Destination -match '^--?passphrase(=.*)?$' -or
+    ($RemainingArgs | Where-Object { $_ -match '^--?passphrase(=.*)?$' })) {
+    [Console]::Error.WriteLine('Supplying passphrase via CLI argument is forbidden for security. Use interactive prompt, --passphrase-env, or --passphrase-stdin.')
+    exit 1
 }
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path

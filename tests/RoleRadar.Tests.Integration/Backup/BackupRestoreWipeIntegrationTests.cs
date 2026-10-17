@@ -117,6 +117,60 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
         Assert.Contains(restoreParse.Errors, e => e.Message.Contains("forbidden", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Theory]
+    [InlineData("scripts/backup.ps1", "--passphrase hunter2")]
+    [InlineData("scripts/backup.ps1", "-Passphrase hunter2")]
+    [InlineData("scripts/backup.ps1", "--passphrase=hunter2")]
+    [InlineData("scripts/restore.ps1", "--passphrase hunter2")]
+    [InlineData("scripts/restore.ps1", "-Passphrase hunter2")]
+    [InlineData("scripts/restore.ps1", "--passphrase=hunter2")]
+    public async Task OperationalScripts_RejectPassphraseValueArguments(string scriptRelativePath, string args)
+    {
+        var repoRoot = FindRepoRoot();
+        var scriptPath = Path.Combine(repoRoot, scriptRelativePath);
+        Assert.True(File.Exists(scriptPath), $"Script not found at '{scriptPath}'.");
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "pwsh",
+            Arguments = $"-NoProfile -NonInteractive -File \"{scriptPath}\" {args}",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var proc = Process.Start(psi)!;
+        Assert.NotNull(proc);
+
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync();
+        var stderrTask = proc.StandardError.ReadToEndAsync();
+
+        await proc.WaitForExitAsync();
+        var stdout = await stdoutTask;
+        var stderr = await stderrTask;
+
+        var combined = stdout + "\n" + stderr;
+
+        Assert.Equal(1, proc.ExitCode);
+        Assert.DoesNotContain("hunter2", combined, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "Supplying passphrase via CLI argument is forbidden for security. Use interactive prompt, --passphrase-env, or --passphrase-stdin.",
+            combined);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null && !File.Exists(Path.Combine(dir.FullName, "RoleRadar.sln")))
+        {
+            dir = dir.Parent;
+        }
+
+        Assert.NotNull(dir);
+        return dir.FullName;
+    }
+
     [Fact]
     public async Task FileWatcher_TempAndTargetLocations_ZeroPlaintextFilesWritten()
     {

@@ -1,14 +1,17 @@
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true, Position = 0)]
+    [Parameter(Position = 0)]
     [Alias('ArchivePath')]
-    [string]$File,
+    [string]$File = '',
 
     [string]$PassphraseEnv = '',
 
     [switch]$PassphraseStdin,
 
     [switch]$ForceOverwrite,
+
+    [Parameter(DontShow = $true)]
+    [string]$Passphrase = '',
 
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$RemainingArgs = @()
@@ -17,11 +20,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-foreach ($arg in $RemainingArgs) {
-    if ($arg -match '^--passphrase(=.*)?$') {
-        Write-Error 'Supplying passphrase via CLI argument is forbidden for security. Use interactive prompt, --passphrase-env, or --passphrase-stdin.'
-        exit 1
-    }
+if ($PSBoundParameters.ContainsKey('Passphrase') -or
+    $File -match '^--?passphrase(=.*)?$' -or
+    ($RemainingArgs | Where-Object { $_ -match '^--?passphrase(=.*)?$' })) {
+    [Console]::Error.WriteLine('Supplying passphrase via CLI argument is forbidden for security. Use interactive prompt, --passphrase-env, or --passphrase-stdin.')
+    exit 1
+}
+
+if ([string]::IsNullOrWhiteSpace($File)) {
+    [Console]::Error.WriteLine('Archive file path is required.')
+    exit 1
 }
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
