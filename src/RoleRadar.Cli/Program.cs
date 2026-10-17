@@ -12,7 +12,10 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
-        await using var services = BuildServiceProvider();
+        var isVerbose = args.Any(a => string.Equals(a, "--verbose", StringComparison.OrdinalIgnoreCase)
+                                   || string.Equals(a, "-v", StringComparison.OrdinalIgnoreCase));
+
+        await using var services = BuildServiceProvider(args, isVerbose: isVerbose);
 
         var rootCommand = new RootCommand("RoleRadar local CLI");
         rootCommand.Add(StatusCommand.Create(services));
@@ -24,13 +27,22 @@ public static class Program
         return await rootCommand.Parse(args).InvokeAsync(cancellationToken: CancellationToken.None);
     }
 
-    public static ServiceProvider BuildServiceProvider(Action<IServiceCollection>? configure = null)
+    public static ServiceProvider BuildServiceProvider(Action<IServiceCollection>? configure = null) =>
+        BuildServiceProvider(args: null, isVerbose: false, configure: configure);
+
+    public static ServiceProvider BuildServiceProvider(
+        string[]? args,
+        bool isVerbose = false,
+        Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
+
+        var logLevel = ResolveLogLevel(args, isVerbose);
 
         services.AddLogging(logging =>
         {
             logging.ClearProviders();
+            logging.SetMinimumLevel(logLevel);
             logging.AddConsole(options =>
             {
                 options.LogToStandardErrorThreshold = LogLevel.Trace;
@@ -72,5 +84,25 @@ public static class Program
         configure?.Invoke(services);
 
         return services.BuildServiceProvider();
+    }
+
+    private static LogLevel ResolveLogLevel(string[]? args, bool isVerbose)
+    {
+        // 1. Explicit --verbose / -v flag raises log level to Information (or Debug)
+        if (isVerbose || (args != null && args.Any(a => string.Equals(a, "--verbose", StringComparison.OrdinalIgnoreCase)
+                                                     || string.Equals(a, "-v", StringComparison.OrdinalIgnoreCase))))
+        {
+            return LogLevel.Information;
+        }
+
+        // 2. ROLERADAR_LOG_LEVEL environment variable override
+        var envLevel = Environment.GetEnvironmentVariable("ROLERADAR_LOG_LEVEL");
+        if (!string.IsNullOrWhiteSpace(envLevel) && Enum.TryParse<LogLevel>(envLevel.Trim(), ignoreCase: true, out var parsedLevel))
+        {
+            return parsedLevel;
+        }
+
+        // 3. Default to Warning so status and import --dry-run do not print info logs
+        return LogLevel.Warning;
     }
 }

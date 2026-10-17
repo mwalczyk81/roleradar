@@ -12,11 +12,17 @@ public sealed class MongoReadinessProbe
     public const string StartServicesCommand = "pwsh ./scripts/start-services.ps1";
     public const string DockerComposeCommand = "docker compose -f deploy/docker-compose.yml up -d";
 
-    private static readonly Action<ILogger, string, Exception?> LogReadinessFailure =
+    private static readonly Action<ILogger, string, Exception?> LogReadinessWarning =
         LoggerMessage.Define<string>(
             LogLevel.Warning,
-            new EventId(3001, "MongoReadinessFailed"),
+            new EventId(3001, "MongoReadinessWarning"),
             "MongoDB replica set readiness probe failed for {Endpoint}");
+
+    private static readonly Action<ILogger, string, Exception?> LogReadinessDebug =
+        LoggerMessage.Define<string>(
+            LogLevel.Debug,
+            new EventId(3002, "MongoReadinessDebug"),
+            "MongoDB replica set readiness probe exception details for {Endpoint}");
 
     private readonly IMongoClient _client;
     private readonly MongoOptions _options;
@@ -36,13 +42,16 @@ public sealed class MongoReadinessProbe
         _logger = logger;
     }
 
-    public static string FormatOfflineMessage(string connectionString) =>
-        $"""
-        RoleRadar data services are not running or unreachable at {connectionString}.
-        Start them from the repository root with:
-          {StartServicesCommand}
-        (or: {DockerComposeCommand})
-        """;
+    public static string FormatOfflineMessage(string connectionString)
+    {
+        var redactedEndpoint = ConnectionStringRedactor.Redact(connectionString);
+        return $"""
+            RoleRadar data services are not running or unreachable at {redactedEndpoint}.
+            Start them from the repository root with:
+              {StartServicesCommand}
+            (or: {DockerComposeCommand})
+            """;
+    }
 
     public async Task<Result<StoreReadinessStatus>> CheckAsync(CancellationToken cancellationToken = default)
     {
@@ -52,6 +61,8 @@ public sealed class MongoReadinessProbe
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(timeout);
+
+        var redactedEndpoint = ConnectionStringRedactor.Redact(_options.ConnectionString);
 
         var sw = Stopwatch.StartNew();
         try
@@ -77,7 +88,7 @@ public sealed class MongoReadinessProbe
                     notPrimaryMsg,
                     new Dictionary<string, object?>
                     {
-                        ["endpoint"] = _options.ConnectionString,
+                        ["endpoint"] = redactedEndpoint,
                         ["remediationCommand"] = StartServicesCommand
                     });
             }
@@ -85,21 +96,24 @@ public sealed class MongoReadinessProbe
             return Result<StoreReadinessStatus>.Success(
                 new StoreReadinessStatus(
                     IsReady: true,
-                    Endpoint: _options.ConnectionString,
+                    Endpoint: redactedEndpoint,
                     ReplicaSet: setName,
                     LatencyMs: Math.Round(sw.Elapsed.TotalMilliseconds, 2)));
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             sw.Stop();
-            LogReadinessFailure(_logger, _options.ConnectionString, ex);
+            // Log warning without exception object or stack trace; keep full exception only at Debug level
+            LogReadinessWarning(_logger, redactedEndpoint, null);
+            LogReadinessDebug(_logger, redactedEndpoint, ex);
+
             var message = FormatOfflineMessage(_options.ConnectionString);
             return Result<StoreReadinessStatus>.Failure(
                 ErrorCode.DatastoreOffline,
                 message,
                 new Dictionary<string, object?>
                 {
-                    ["endpoint"] = _options.ConnectionString,
+                    ["endpoint"] = redactedEndpoint,
                     ["remediationCommand"] = StartServicesCommand
                 });
         }
