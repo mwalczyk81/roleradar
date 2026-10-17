@@ -126,16 +126,19 @@ public sealed class CliCompositionIntegrationTests
             // 0. status check with running container
             var (exitCodeStatus, stdoutStatus, stderrStatus) = await RunCliAsync(cliDllPath, "status", env);
             Assert.DoesNotContain("Unhandled exception", stderrStatus, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("info:", stderrStatus, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(0, exitCodeStatus);
             Assert.Contains("RoleRadar Store: Ready", stdoutStatus);
 
-            var (exitCodeStatusJson, stdoutStatusJson, _) = await RunCliAsync(cliDllPath, "status --json", env);
+            var (exitCodeStatusJson, stdoutStatusJson, stderrStatusJson) = await RunCliAsync(cliDllPath, "status --json", env);
             Assert.Equal(0, exitCodeStatusJson);
+            Assert.DoesNotContain("info:", stderrStatusJson, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("\"isReady\": true", stdoutStatusJson);
 
             // 1. import --dry-run on a valid empty/minimal markdown file
             var (exitCodeImport, _, stderrImport) = await RunCliAsync(cliDllPath, $"import \"{tempFile}\" --dry-run", env);
             Assert.DoesNotContain("Unhandled exception", stderrImport, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("info:", stderrImport, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(0, exitCodeImport);
 
             // 2. backup missing passphrase or arguments

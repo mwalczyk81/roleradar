@@ -280,8 +280,14 @@ public sealed class AuditArchiveAndReadinessIntegrationTests : IAsyncLifetime, I
         // Stop the dedicated container to simulate offline datastore
         await _dedicatedMongo.StopAsync();
 
+        // Ensure password and credentials are present in the raw connection string to test redaction
+        const string rawPassword = "SuperSecretPassword123!";
+        var credentialedConn = dedicatedConn.Contains('@')
+            ? dedicatedConn
+            : dedicatedConn.Replace("mongodb://", $"mongodb://admin:{rawPassword}@");
+
         // 1. MCP Tool Call offline test (< 5 seconds, typed error naming 'pwsh ./scripts/start-services.ps1', valid JSON-RPC return)
-        await using var provider = BuildServiceProvider(dedicatedConn, dedicatedDb);
+        await using var provider = BuildServiceProvider(credentialedConn, dedicatedDb);
         var tools = provider.GetRequiredService<NoteMcpTools>();
 
         var sw = Stopwatch.StartNew();
@@ -297,6 +303,8 @@ public sealed class AuditArchiveAndReadinessIntegrationTests : IAsyncLifetime, I
         Assert.Equal("DatastoreOffline", errorObj.GetProperty("code").GetString());
         var message = errorObj.GetProperty("message").GetString()!;
         Assert.Contains("pwsh ./scripts/start-services.ps1", message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(rawPassword, message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(rawPassword, toolJson, StringComparison.OrdinalIgnoreCase);
 
         // 2. roleradar status CLI offline test (< 5 seconds, exit code non-zero, names 'pwsh ./scripts/start-services.ps1')
         var cliDllPath = Path.Combine(AppContext.BaseDirectory, "RoleRadar.Cli.dll");
@@ -307,7 +315,7 @@ public sealed class AuditArchiveAndReadinessIntegrationTests : IAsyncLifetime, I
 
         var env = new Dictionary<string, string>
         {
-            ["ROLERADAR_MONGO_CONNECTION_STRING"] = dedicatedConn,
+            ["ROLERADAR_MONGO_CONNECTION_STRING"] = credentialedConn,
             ["ROLERADAR_MONGO_DATABASE"] = dedicatedDb
         };
 
@@ -320,6 +328,13 @@ public sealed class AuditArchiveAndReadinessIntegrationTests : IAsyncLifetime, I
         var combinedOutput = stdout + "\n" + stderr;
         Assert.Contains("pwsh ./scripts/start-services.ps1", combinedOutput, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Unhandled exception", stderr, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(rawPassword, combinedOutput, StringComparison.OrdinalIgnoreCase);
+
+        // 3. roleradar status --json CLI offline test
+        var (exitCodeJson, stdoutJson, stderrJson) = await RunCliAsync(cliDllPath, "status --json", env);
+        Assert.NotEqual(0, exitCodeJson);
+        var combinedJsonOutput = stdoutJson + "\n" + stderrJson;
+        Assert.DoesNotContain(rawPassword, combinedJsonOutput, StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<(int ExitCode, string Stdout, string Stderr)> RunCliAsync(
