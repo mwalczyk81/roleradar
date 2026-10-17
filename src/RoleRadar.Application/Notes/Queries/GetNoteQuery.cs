@@ -98,10 +98,37 @@ public sealed class GetNoteQueryHandler : IQueryHandler<GetNoteQuery, NoteDetail
         }
         else
         {
-            var take = Math.Min(query.MaxChars, totalChars - query.Offset);
-            slicedBody = fullBody.Substring(query.Offset, take);
-            truncated = (query.Offset + take) < totalChars;
-            nextOffset = truncated ? query.Offset + take : null;
+            var startOffset = query.Offset;
+            if (startOffset > 0 &&
+                char.IsLowSurrogate(fullBody[startOffset]) &&
+                char.IsHighSurrogate(fullBody[startOffset - 1]))
+            {
+                startOffset--;
+            }
+
+            var take = Math.Min(query.MaxChars, totalChars - startOffset);
+            var endOffset = startOffset + take;
+
+            if (endOffset < totalChars &&
+                endOffset > startOffset &&
+                char.IsHighSurrogate(fullBody[endOffset - 1]) &&
+                char.IsLowSurrogate(fullBody[endOffset]))
+            {
+                if (take > 1)
+                {
+                    take--;
+                    endOffset--;
+                }
+                else
+                {
+                    take = 2;
+                    endOffset = startOffset + 2;
+                }
+            }
+
+            slicedBody = fullBody.Substring(startOffset, take);
+            truncated = endOffset < totalChars;
+            nextOffset = truncated ? endOffset : null;
         }
 
         return Result<NoteDetailDto>.Success(new NoteDetailDto(
