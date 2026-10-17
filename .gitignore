@@ -157,6 +157,7 @@ job-search-export*
 *.sql.gz
 *.7z
 *.age
+*.rrbak
 .env
 .env.*
 !.env.example
@@ -164,6 +165,13 @@ job-search-export*
 # .NET build artifacts and IDE state
 [Bb]in/
 [Oo]bj/
+[Tt]est[Rr]esults/
 .vs/
+.idea/
 *.user
+*.suo
+packages/
+.DS_Store
+Thumbs.db
+
 

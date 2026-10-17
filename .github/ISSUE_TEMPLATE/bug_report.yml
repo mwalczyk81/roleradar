@@ -1,0 +1,29 @@
+name: Bug Report
+description: Report a reproducible defect using strictly fictional sample data
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > **Privacy Reminder (Principle I)**: Do **not** paste real job-search notes, company names, or personal data. Use fictional examples only.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Concise description of the defect.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: Exact PowerShell or CLI commands to reproduce using fictional inputs.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected vs. Actual Behavior
+    validations:
+      required: true

@@ -1,0 +1,21 @@
+title = "RoleRadar Gitleaks Configuration"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "roleradar-private-path-marker"
+description = "Detects references to private job-search export paths or backup passphrases"
+regex = '''(?i)(roleradar[_-]?backup[_-]?passphrase\s*[:=]\s*["'][^"']{8,}["'])'''
+tags = ["secret", "roleradar"]
+
+[allowlist]
+description = "Allow fictional test fixtures and documentation examples"
+paths = [
+  '''tests/fixtures/fictional-memory-.*\.md$''',
+  '''specs/001-memory-replacement/.*\.md$''',
+  '''docs/adr/.*\.md$'''
+]
+stopwords = [
+  "fictional-test-passphrase-2026"
+]

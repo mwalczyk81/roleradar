@@ -1,0 +1,23 @@
+name: Feature Request
+description: Propose a capability aligned with the RoleRadar Constitution
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        > **Privacy Reminder (Principle I)**: Use strictly fictional scenarios and examples.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What workflow friction or capability gap does this address?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution & Constitutional Alignment
+      description: Describe the proposed behavior and any ADR considerations.
+    validations:
+      required: true

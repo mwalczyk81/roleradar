@@ -1,0 +1,11 @@
+# Default to LF line endings for cross-platform consistency
+* text=auto eol=lf
+
+# Windows PowerShell scripts use CRLF
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Preserve exact byte sequences (CRLF, LF, UTF-8 BOM) in test fixtures for byte-exact import tests
+tests/**/fixtures/** -text
+tests/fixtures/** -text
