@@ -376,4 +376,94 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
         Assert.Equal(dryRunSummary.ConflictCount, realSummary.ConflictCount);
         Assert.Equal(dryRunSummary.OrphanCount, realSummary.OrphanCount);
     }
+
+    [Fact]
+    public async Task Import_WhenFilePathsCollideOnFileNameCaseInsensitive_FailsValidationAndWritesZeroRecords()
+    {
+        var tempDirA = Path.Combine(Path.GetTempPath(), $"dirA_{Guid.CreateVersion7():N}");
+        var tempDirB = Path.Combine(Path.GetTempPath(), $"dirB_{Guid.CreateVersion7():N}");
+        Directory.CreateDirectory(tempDirA);
+        Directory.CreateDirectory(tempDirB);
+
+        var pathA = Path.Combine(tempDirA, "collide.md");
+        var pathB = Path.Combine(tempDirB, "COLLIDE.MD");
+
+        try
+        {
+            await File.WriteAllTextAsync(pathA, "# Heading A\nContent A\n");
+            await File.WriteAllTextAsync(pathB, "# Heading B\nContent B\n");
+
+            await using var provider = BuildServiceProvider();
+            var handler = provider.GetRequiredService<ICommandHandler<ImportMarkdownCommand, ImportMarkdownSummaryDto>>();
+            var repo = provider.GetRequiredService<INoteRepository>();
+
+            var outcome = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [pathA, pathB]));
+
+            Assert.False(outcome.IsSuccess);
+            Assert.Equal(ErrorCode.ValidationError, outcome.Error!.Value.Code);
+            Assert.Contains(pathA, outcome.Error.Value.Message, StringComparison.Ordinal);
+            Assert.Contains(pathB, outcome.Error.Value.Message, StringComparison.Ordinal);
+
+            // Verify zero notes and zero audit entries were written
+            var notesA = (await repo.GetImportedBySourceFileAsync(OwnerId.Default.Value, "collide.md")).Value!;
+            Assert.Empty(notesA);
+
+            var auditEntries = (await repo.GetAuditEntriesAsync(OwnerId.Default.Value)).Value!;
+            Assert.Empty(auditEntries);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDirA))
+            {
+                Directory.Delete(tempDirA, true);
+            }
+
+            if (Directory.Exists(tempDirB))
+            {
+                Directory.Delete(tempDirB, true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Import_WhenSingleFileWithSourceId_UsesOverriddenSourceFileId()
+    {
+        var tempFile = Path.Combine(Path.GetTempPath(), $"test-source-id-{Guid.CreateVersion7():N}.md");
+        const string customSourceId = "overridden-source-id.md";
+
+        try
+        {
+            await File.WriteAllTextAsync(tempFile, "# Section One\r\nContent one.\r\n## Section Two\r\nContent two.\r\n");
+
+            await using var provider = BuildServiceProvider();
+            var handler = provider.GetRequiredService<ICommandHandler<ImportMarkdownCommand, ImportMarkdownSummaryDto>>();
+            var repo = provider.GetRequiredService<INoteRepository>();
+
+            var outcome = await handler.HandleAsync(new ImportMarkdownCommand(
+                FilePaths: [tempFile],
+                SourceFileId: customSourceId));
+
+            Assert.True(outcome.IsSuccess);
+            Assert.Equal(2, outcome.Value!.CreatedCount);
+
+            // Verify notes are stored under the overridden source ID, not the temp file name
+            var notesByCustomId = (await repo.GetImportedBySourceFileAsync(OwnerId.Default.Value, customSourceId)).Value!;
+            Assert.Equal(2, notesByCustomId.Count);
+            Assert.All(notesByCustomId, n =>
+            {
+                Assert.Equal(customSourceId, n.ImportMetadata!.SourceFileId);
+                Assert.StartsWith($"{customSourceId}#", n.ImportMetadata.ImportKey, StringComparison.Ordinal);
+            });
+
+            var notesByFileName = (await repo.GetImportedBySourceFileAsync(OwnerId.Default.Value, Path.GetFileName(tempFile))).Value!;
+            Assert.Empty(notesByFileName);
+        }
+        finally
+        {
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
+        }
+    }
 }
