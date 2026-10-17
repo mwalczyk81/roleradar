@@ -15,7 +15,7 @@ We evaluated maintained .NET bindings for libsodium (`crypto_secretstream_xchach
 We queried `api.nuget.org` and inspected the downloaded `.nupkg` assemblies for all four candidates:
 
 | Package | Latest Version on NuGet.org | Stable Release? | Actively Maintained? | `Argon2id` KDF? | `crypto_secretstream_xchacha20poly1305`? | Verdict |
-|---------|-----------------------------|-----------------|----------------------|-----------------|------------------------------------------|---------|
+| --------- | ----------------------------- | ----------------- | ---------------------- | ----------------- | ------------------------------------------ | --------- |
 | **`Geralt`** | `4.4.0` | Yes (`net8.0` / `net10.0`) | Yes (2026 release, MIT license, `libsodium` `1.0.22`) | **Yes** (`Geralt.Argon2id.DeriveKey`) | **Yes** (`Geralt.IncrementalXChaCha20Poly1305` with `ChunkFlag.Message`, `Boundary`, `Rekey`, `Final`) | **Selected** |
 | **`NSec.Cryptography`** | `26.4.0` | Yes (`net9.0`) | Yes (MIT license) | Yes (`NSec.Cryptography.Argon2id`) | **No** (exposes one-shot `XChaCha20Poly1305` and `IncrementalHash`/`Mac`/`Signature`, no `secretstream`) | Rejected |
 | **`Sodium.Core`** | `1.4.1` | Yes (`net9.0`) | Moderate | Yes (`Sodium.PasswordHash`) | **No** (exposes one-shot `SecretAeadXChaCha20Poly1305`, no `secretstream`) | Rejected |
@@ -28,7 +28,7 @@ Chosen option: **Use `Geralt` `4.4.0` (`Geralt.IncrementalXChaCha20Poly1305` + `
 ### 1. Binary `.rrbak` Archive Format (`v1`)
 
 | Offset | Size (Bytes) | Field | Description |
-|--------|--------------|-------|-------------|
+| -------- | -------------- | ------- | ------------- |
 | `0..3` | `4` | `Magic` | ASCII `"RRBK"` (`0x52, 0x52, 0x42, 0x4B`) |
 | `4` | `1` | `FormatVersion` | `0x01` (must equal `1`; any other value rejected before key derivation) |
 | `5` | `1` | `Flags` | `0x00` (reserved; must equal `0`) |
@@ -53,12 +53,14 @@ Chosen option: **Use `Geralt` `4.4.0` (`Geralt.IncrementalXChaCha20Poly1305` + `
 ### 2. Two-Pass Restore Protocol
 
 Because `mongorestore --archive --gzip` mutates the target database as bytes stream into its `stdin`, a single-pass decrypt-into-mongorestore pipeline could apply early collections/documents before encountering a corrupted or truncated chunk near the end of the file. To prevent partial restores:
+
 1. **Pass 1 (Verify-Only)**: Opens the `.rrbak` file stream, validates the 54-byte header against the pre-KDF ceilings (`FormatVersion == 1`, `Argon2Iterations <= 10`, `Argon2MemoryKiB <= 1 GiB`), derives the 32-byte key via `Argon2id.DeriveKey`, and decrypts every chunk (enforcing `CiphertextLength <= 1 MiB` before reading) through `IncrementalXChaCha20Poly1305.DecryptChunk` into a reusable 64 KiB stack/pooled scratch buffer (discarding the plaintext bytes), verifying that the final chunk carries `ChunkFlag.Final` and no trailing bytes exist after `ChunkFlag.Final`.
 2. **Pass 2 (Apply)**: Only if Pass 1 completes with zero authentication or framing errors, seeks the `.rrbak` file stream back to byte `0` and streams the decrypted plaintext directly into `mongorestore --archive --gzip` `stdin`.
 
 ### 3. Mandatory Cryptographic & Streaming Verification Tests
 
 `RoleRadar.Tests.Unit` and `RoleRadar.Tests.Integration` MUST include:
+
 1. **Known-Answer / Deterministic Seed Vector Test**: Deterministic key + header round-trip verification.
 2. **Header & Chunk Length Ceiling Rejection Tests (Pre-KDF / Pre-Allocation)**: Crafted headers with `Argon2MemoryKiB > 1 GiB`, `Argon2Iterations > 10`, unknown `FormatVersion`, or a chunk length prefix `> 1 MiB` are rejected with a typed error **before** key derivation or any large buffer allocation.
 3. **Wrong Passphrase Test**: Fails during Pass 1 on chunk `0` with authentication error.

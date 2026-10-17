@@ -32,7 +32,7 @@ Start a new Claude Code session and ask it to call the `echo` tool. Remove later
 }
 ```
 
-3. Start Desktop and ask it to call `echo`.
+1. Start Desktop and ask it to call `echo`.
 
 ## Test 3: Cowork scheduled task (the one that matters)
 
@@ -43,7 +43,7 @@ Pass criteria: the run output contains `roleradar echo: scheduled run | utc=... 
 ## Reading the result
 
 | Result | Consequence |
-|---|---|
+| --- | --- |
 | Works in Code, Desktop and the scheduled task | Phase 1 is stdio only |
 | Works in Code and Desktop, fails in the scheduled task | Weekly job needs localhost HTTP, so Duende comes before the weekly job moves |
 | Fails everywhere | Check the stderr log in the client, confirm the path, run the exe by hand |

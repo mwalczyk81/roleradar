@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
@@ -46,6 +48,12 @@ jobs:
       - name: Build solution
         run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
 
+      - name: Cache pre-commit environments
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
       - name: Run Unit and Architecture tests
         env:
           SKIP: roleradar-denylist
@@ -62,13 +70,26 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+          persist-credentials: false
 
-      - name: Run pre-commit hooks (gitleaks, hygiene, and path/workflow-SHA guard)
+      - name: Cache pre-commit environments
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit hooks (gitleaks, hygiene, markdownlint, and path/workflow-SHA guard)
         env:
           SKIP: roleradar-denylist
         run: |
           pipx install pre-commit
-          pre-commit run --all-files
+          pre-commit run --all-files --show-diff-on-failure
+
+      - name: Verify workflow action SHA pins exist on GitHub
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-action-pins.ps1
 
       - name: Setup .NET 10 SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0

@@ -58,7 +58,7 @@ Technically, the solution is built on **.NET 10 / C#** (`global.json` pinned to 
 
 | Principle (Constitution v1.1.0) | Pre-Research Check | Post-Design Re-Check | Evidence / Enforcement |
 |---------------------------------|--------------------|----------------------|------------------------|
-| **I. Privacy First (NON-NEGOTIABLE)** | PASS | PASS | All fixtures (`tests/fixtures/fictional-memory-*.md`) and tests use strictly fictional data. `.gitignore`, pre-commit hook (`scripts/pre-commit.ps1` with `gitleaks`, path/pattern guard, and external denylist check at `%LOCALAPPDATA%\roleradar\private\denylist.txt`), and GitHub Actions CI (`gitleaks` + path guard without needing the private denylist) are enforced. Backup writes zero plaintext temp files (verified by temp-dir inspection test). |
+| **I. Privacy First (NON-NEGOTIABLE)** | PASS | PASS | All fixtures (`tests/fixtures/fictional-memory-*.md`) and tests use strictly fictional data. `.gitignore`, `.pre-commit-config.yaml` (running `gitleaks`, `zizmor`, `roleradar-forbidden-paths`, and `scripts/denylist-check.ps1` against `%LOCALAPPDATA%\roleradar\private\denylist.txt`), and GitHub Actions CI (`pre-commit run --all-files --show-diff-on-failure` with `SKIP=roleradar-denylist`) are enforced. Backup writes zero plaintext temp files (verified by temp-dir inspection test). |
 | **II. Test-First Development (NON-NEGOTIABLE)** | PASS | PASS | Test projects (`Unit`, `Contract`, `Integration`, `Architecture`) use `xunit.v3` `4.0.2` and `Testcontainers.MongoDb` `4.16.0` with replica set; dedicated `INoteRepository` contract test suite ([contracts/note-repository-port.md](./contracts/note-repository-port.md)) includes fault-injection rollback test; >=85% line coverage gate enforced on `Domain` and `Application` in CI. |
 | **III. Test-Enforced Layering** | PASS | PASS | `Domain` has zero external dependencies; `Application` depends only on `Domain`; `Infrastructure` implements `INoteRepository` using `MongoDB.Driver`; `Mcp.Stdio` and `Cli` invoke `ICommandHandler`/`IQueryHandler` directly in-process. `RoleRadar.Tests.Architecture` verifies both one-way inward dependencies **and** that every `ICommandHandler<,>` registration is wrapped by `TransactionAndAuditCommandDecorator<,>`. |
 | **IV. Named Seams Only** | PASS | PASS | `INoteRepository` is the sole aggregate-level storage port ([ADR-0002](../../docs/adr/0002-inote-repository-single-write-port.md)); no generic `IRepository<T>` exists. Plain hand-written handlers (`CreateNote`, `AppendToNote`, `ReplaceNoteSection`, `ArchiveNote`, `ImportMarkdown`, `GetNote`, `SearchNotes`) + explicit decorators are used without any mediator library ([ADR-0006](../../docs/adr/0006-handlers-with-decorators-no-mediator.md)). Expected failures return typed `Result<T>` values, never exceptions. |
@@ -133,7 +133,8 @@ scripts/
 ├── backup.ps1                       # Wrapper for streamed encrypted backup
 ├── restore.ps1                      # Wrapper for two-pass encrypted restore
 ├── wipe-data.ps1                    # Confirmation-guarded destructive wipe script
-└── pre-commit.ps1                   # Local pre-commit guard (gitleaks + path rules + external denylist check)
+├── denylist-check.ps1               # Local private denylist guard (Staged, CommitMsg, and PrePush modes)
+└── verify-action-pins.ps1           # CI check verifying every workflow uses: SHA resolves via gh api
 
 src/
 ├── RoleRadar.Domain/

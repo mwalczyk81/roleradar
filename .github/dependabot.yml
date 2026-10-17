@@ -4,6 +4,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     groups:
       nuget-minor-patch:
         update-types:
@@ -14,6 +16,8 @@ updates:
     directory: "/deploy"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     groups:
       docker-minor-patch:
         update-types:
@@ -24,6 +28,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     groups:
       actions-minor-patch:
         update-types:
@@ -34,6 +40,8 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    cooldown:
+      default-days: 7
     groups:
       pre-commit-minor-patch:
         update-types:

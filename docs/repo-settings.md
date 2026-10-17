@@ -17,6 +17,6 @@ This checklist records the GitHub repository settings required to enforce the [R
 ## 2. Security & Automated Analysis
 
 - **Private Vulnerability Reporting**: Enabled (`SECURITY.md`)
-- **Secret Scanning & Push Protection**: Enabled (complemented by `.gitleaks.toml` in CI and `scripts/pre-commit.ps1`)
+- **Secret Scanning & Push Protection**: Enabled (complemented by `.gitleaks.toml`, `.pre-commit-config.yaml`, and `scripts/denylist-check.ps1`)
 - **Dependabot Alerts & Security Updates**: Enabled (`.github/dependabot.yml`)
 - **CodeQL Analysis**: Enabled via `.github/workflows/codeql.yml`

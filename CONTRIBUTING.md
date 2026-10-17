@@ -7,10 +7,12 @@ RoleRadar is governed by the [RoleRadar Constitution](./.specify/memory/constitu
 1. **Privacy First (Principle I)**:
    - Never include real job postings, company names from your personal search, recruiter contacts, or salary figures in code, tests, fixtures, commit messages, or pull requests.
    - Install and enable the repository `pre-commit` and `pre-push` hooks before making commits:
+
      ```powershell
      uv tool install pre-commit
-     pre-commit install --install-hooks -t pre-commit -t pre-push
+     pre-commit install --install-hooks -t pre-commit -t commit-msg -t pre-push
      ```
+
    - Create your local private denylist at `%LOCALAPPDATA%\roleradar\private\denylist.txt` (one real company or contact name per line) so the `roleradar-denylist` hook scans for real names locally.
    - Always run `pre-commit run --all-files` before opening a pull request.
 2. **Test-First Development (Principle II)**:
@@ -26,7 +28,7 @@ RoleRadar is governed by the [RoleRadar Constitution](./.specify/memory/constitu
 
 ```powershell
 uv tool install pre-commit
-pre-commit install --install-hooks -t pre-commit -t pre-push
+pre-commit install --install-hooks -t pre-commit -t commit-msg -t pre-push
 dotnet restore RoleRadar.sln --locked-mode
 dotnet format RoleRadar.sln --verify-no-changes
 dotnet build RoleRadar.sln -c Release -warnaserror

@@ -15,7 +15,7 @@ At plan time (2026-10-17), we queried `https://api.nuget.org/v3-flatcontainer/<i
 ### 1. Live-Verified Version Pins (`2026-10-17`)
 
 | Dependency | Pinned Version | Target / Notes |
-|------------|----------------|----------------|
+| ------------ | ---------------- | ---------------- |
 | **.NET SDK (`global.json`)** | `10.0.402` | `rollForward: "latestPatch"` |
 | **MongoDB Container Image** | `mongo:8.0.34` | Latest stable `8.0.x` patch tag on Docker Hub |
 | **`ModelContextProtocol`** | `2.2.0` | Official C# MCP SDK (`net10.0` verified in `spikes/StdioEcho`) |

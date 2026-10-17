@@ -265,7 +265,8 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
         Assert.Contains("id: trailing-whitespace", configContent, StringComparison.Ordinal);
         Assert.Contains("id: end-of-file-fixer", configContent, StringComparison.Ordinal);
         Assert.Contains("id: mixed-line-ending", configContent, StringComparison.Ordinal);
-        Assert.Contains("exclude: ^tests/fixtures/", configContent, StringComparison.Ordinal);
+        Assert.Contains("id: markdownlint-cli2", configContent, StringComparison.Ordinal);
+        Assert.Contains("exclude: (^|/)fixtures/", configContent, StringComparison.Ordinal);
 
         var fixturesDir = Path.Combine(repoRoot, "tests", "fixtures");
         var fixtureFiles = Directory.GetFiles(fixturesDir, "*", SearchOption.AllDirectories)
