@@ -107,31 +107,32 @@ jobs:
         run: |
           Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
-          $coberturaFiles = @(Get-ChildItem -Path ./TestResults -Filter "coverage.cobertura.xml" -Recurse)
-          if ($coberturaFiles.Count -eq 0) {
-              throw "No coverage.cobertura.xml files were produced."
+          dotnet tool restore
+          dotnet tool run reportgenerator `
+            "-reports:TestResults/**/coverage.cobertura.xml" `
+            "-targetdir:TestResults/merged" `
+            "-reporttypes:Cobertura;MarkdownSummaryGithub" `
+            "-assemblyfilters:+RoleRadar.Domain;+RoleRadar.Application"
+
+          $mergedXmlPath = "TestResults/merged/Cobertura.xml"
+          if (-not (Test-Path -LiteralPath $mergedXmlPath)) {
+              throw "Merged Cobertura report not found at '$mergedXmlPath'."
           }
-          $coveredLines = 0
-          $validLines = 0
-          foreach ($file in $coberturaFiles) {
-              [xml]$xml = Get-Content -LiteralPath $file.FullName
-              $packages = @($xml.coverage.packages.package | Where-Object { $_.name -in @('RoleRadar.Domain', 'RoleRadar.Application') })
-              foreach ($pkg in $packages) {
-                  foreach ($cls in @($pkg.classes.class)) {
-                      foreach ($line in @($cls.lines.line)) {
-                          $validLines++
-                          if ([int]$line.hits -gt 0) {
-                              $coveredLines++
-                          }
-                      }
-                  }
+
+          [xml]$merged = Get-Content -LiteralPath $mergedXmlPath
+          $lineRate = [double]::Parse($merged.coverage.'line-rate', [System.Globalization.CultureInfo]::InvariantCulture)
+          $pct = [math]::Round($lineRate * 100.0, 2)
+          $covered = $merged.coverage.'lines-covered'
+          $valid = $merged.coverage.'lines-valid'
+          Write-Output "Merged Domain + Application Line Coverage: $pct% ($covered / $valid)"
+
+          $summaryMdPath = "TestResults/merged/SummaryGithub.md"
+          if (Test-Path -LiteralPath $summaryMdPath) {
+              if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+                  Get-Content -LiteralPath $summaryMdPath -Raw | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
               }
           }
-          if ($validLines -eq 0) {
-              throw "Zero instrumentable lines found in RoleRadar.Domain and RoleRadar.Application."
-          }
-          $pct = [math]::Round(($coveredLines / $validLines) * 100.0, 2)
-          Write-Output "Domain + Application Line Coverage: $pct% ($coveredLines / $validLines)"
+
           if ($pct -lt 85.0) {
-              throw "Line coverage $pct% is below the mandatory 85.0% threshold."
+              throw "Merged line coverage $pct% is below the mandatory 85.0% threshold."
           }
