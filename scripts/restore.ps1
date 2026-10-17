@@ -1,4 +1,6 @@
 [CmdletBinding()]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'PassphraseEnv')]
+[Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingPlainTextForPassword', 'Passphrase')]
 param(
     [Parameter(Position = 0)]
     [Alias('ArchivePath')]
