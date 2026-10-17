@@ -14,7 +14,7 @@ Technically, the solution is built on **.NET 10 / C#** (`global.json` pinned to 
 - `TransactionAndAuditCommandDecorator<TCommand, TResponse>` wraps every command handler registration (applying input validation, opening the multi-document ACID transaction across `notes`, `note_revisions`, and `audit_log`, and recording the append-only audit entry), while `LoggingDecorator` wraps both commands and queries. An automated test in `RoleRadar.Tests.Architecture` proves every `ICommandHandler<,>` registration is decorated.
 - Expected failures (`NotFound`, `StaleVersionToken`, `SectionNotFound`, `AmbiguousHeading`, `ImportConflict`, `InvalidUtf8`, `DatastoreOffline`) are returned as typed `Result<T>` values, never thrown as exceptions.
 - Full prior-body `NoteRevision` snapshots are stored only on text-destroying writes (`ReplaceNoteSection` and `ImportMarkdown` overwrite), whereas `AppendToNote` executes atomically server-side without a version token and records only `appended_text` and `resulting_version_token` in `audit_log` ([ADR-0005](../../docs/adr/0005-revision-history-policy.md)).
-- Streamed backups pipe `mongodump --archive --gzip` directly through libsodium `crypto_secretstream_xchacha20poly1305` (`Geralt` `4.4.0` `IncrementalXChaCha20Poly1305` + `Argon2id`, with header authenticated as associated data and `ChunkFlag.Final` on the terminal chunk), and restore uses a **two-pass protocol** (Pass 1 authenticates and decrypts the entire stream with output discarded; Pass 2 decrypts into `mongorestore` only after Pass 1 succeeds) ([ADR-0007](../../docs/adr/0007-backup-streaming-aead-encryption.md)).
+- Streamed backups pipe `mongodump --archive --gzip` directly through libsodium `crypto_secretstream_xchacha20poly1305` (`Geralt` `4.4.0` `IncrementalXChaCha20Poly1305` + `Argon2id`, with header authenticated as associated data, strict pre-KDF/pre-allocation ceilings of `FormatVersion == 1`, `Argon2Iterations <= 10`, `Argon2MemoryKiB <= 1 GiB`, and chunk length `<= 1 MiB`, and `ChunkFlag.Final` on the terminal chunk), and restore uses a **two-pass protocol** (Pass 1 authenticates and decrypts the entire stream with output discarded; Pass 2 decrypts into `mongorestore` only after Pass 1 succeeds) ([ADR-0007](../../docs/adr/0007-backup-streaming-aead-encryption.md)). The on-disk `.rrbak` stream uses plain `libsodium` `secretstream` headers and chunks so it remains readable by any `libsodium` binding despite `Geralt` having a single maintainer.
 
 ## Technical Context
 
@@ -25,7 +25,7 @@ Technically, the solution is built on **.NET 10 / C#** (`global.json` pinned to 
 - `Microsoft.Extensions.Hosting` `10.0.13`
 - `MongoDB.Driver` `3.12.0`
 - `System.CommandLine` `2.0.13` (stable 2.0.x GA release)
-- `Geralt` `4.4.0` (MIT-licensed .NET 8+ libsodium wrapper for `IncrementalXChaCha20Poly1305` and `Argon2id`, backed by `libsodium` `1.0.22`)
+- `Geralt` `4.4.0` (MIT-licensed .NET 8+ libsodium wrapper for `IncrementalXChaCha20Poly1305` and `Argon2id`, backed by `libsodium` `1.0.22`; produces standard `libsodium` `secretstream` wire format readable by any `libsodium` binding)
 
 **Storage**: MongoDB `mongo:8.0.34` (latest `8.0.x` patch tag verified on Docker Hub) running as a single-node replica set (`rs0`) in `deploy/docker-compose.yml` with named persistent volume `roleradar-mongo-data`, health check, `restart: unless-stopped`, bound exclusively to `127.0.0.1:27017`. Collections: `notes`, `note_revisions`, `audit_log`. `GuidRepresentation.Standard` configured globally once; IDs and version tokens generated with `Guid.CreateVersion7()`.
 
@@ -35,19 +35,19 @@ Technically, the solution is built on **.NET 10 / C#** (`global.json` pinned to 
 - `NetArchTest.Rules` `1.3.2` (inward dependency rules + command handler decorator registration verification + reflection check forbidding update/delete methods on `note_revisions` and `audit_log`)
 - `coverlet.collector` `10.1.0` (**>=85% line coverage gate** across `RoleRadar.Domain` and `RoleRadar.Application`)
 
-**Target Platform**: Windows 11 with PowerShell 7 (`pwsh`) as primary developer/operator environment; Ubuntu runner in GitHub Actions CI with Linux containers (`mongo:8.0.34`).
+**Target Platform**: Windows 11 with PowerShell 7 (`pwsh`) as primary developer/operator environment; GitHub Actions CI runs a `windows-latest` job for unit tests, architecture tests, and `PSScriptAnalyzer` on `scripts/*.ps1`, and an `ubuntu-latest` job for contract and integration tests with Linux containers (`mongo:8.0.34`).
 
 **Project Type**: Local `stdio` MCP server (`RoleRadar.Mcp.Stdio`) + CLI tool (`RoleRadar.Cli`) + layered class libraries (`RoleRadar.Domain`, `RoleRadar.Application`, `RoleRadar.Infrastructure`).
 
 **Performance Goals**:
 - Search across 5,000 fictional notes completes in **<200 ms at p95** (`SC-003`), verified by an automated benchmark test.
 - Offline datastore readiness probe fails fast in **<5 seconds** (`SC-007`) returning typed `ErrorCode.DatastoreOffline` with the exact start command (`pwsh ./scripts/start-services.ps1`).
-- Streamed backup encryption/decryption processes multi-megabyte archives in bounded memory (`<= 256 KiB` chunk buffers) without buffering the full archive.
+- Streamed backup encryption/decryption processes multi-megabyte archives in bounded memory (`<= 256 KiB` chunk buffers) without buffering the full archive, and enforces strict pre-KDF/pre-allocation header and chunk length ceilings (`Argon2MemoryKiB <= 1 GiB`, `Argon2Iterations <= 10`, `FormatVersion == 1`, `CiphertextLength <= 1 MiB`).
 
 **Constraints**:
 - Stdio-only MCP transport; zero network listeners; all logging routed to `stderr` (`FR-020`, [ADR-0003](../../docs/adr/0003-stdio-first-mcp.md)).
 - Agent-facing tool set capped at `<= 8` tools (6 tools defined: `note_create`, `note_get`, `note_append`, `note_replace_section`, `note_search`, `note_archive`).
-- Backup passphrase accepted only via interactive prompt, environment variable, or `stdin` (never CLI arg); backup streams `mongodump` directly into `Geralt.IncrementalXChaCha20Poly1305` encryption with zero plaintext temp files; restore is strictly two-pass ([ADR-0007](../../docs/adr/0007-backup-streaming-aead-encryption.md)).
+- Backup passphrase accepted only via interactive prompt, environment variable, or `stdin` (never CLI arg); backup streams `mongodump` directly into `Geralt.IncrementalXChaCha20Poly1305` encryption with zero plaintext temp files; restore validates header/chunk ceilings before KDF/allocation and is strictly two-pass ([ADR-0007](../../docs/adr/0007-backup-streaming-aead-encryption.md)).
 - Strictly fictional data in all repo files, tests, and fixtures (`FR-021`).
 
 **Scale/Scope**: Single-owner local store (`owner_id` on every collection), individual note bodies >100 KB (up to >=1 MB), 5,000+ notes search benchmark.
@@ -64,7 +64,7 @@ Technically, the solution is built on **.NET 10 / C#** (`global.json` pinned to 
 | **IV. Named Seams Only** | PASS | PASS | `INoteRepository` is the sole aggregate-level storage port ([ADR-0002](../../docs/adr/0002-inote-repository-single-write-port.md)); no generic `IRepository<T>` exists. Plain hand-written handlers (`CreateNote`, `AppendToNote`, `ReplaceNoteSection`, `ArchiveNote`, `ImportMarkdown`, `GetNote`, `SearchNotes`) + explicit decorators are used without any mediator library ([ADR-0006](../../docs/adr/0006-handlers-with-decorators-no-mediator.md)). Expected failures return typed `Result<T>` values, never exceptions. |
 | **V. Agent Safety & Auditability** | PASS | PASS | 6 narrow MCP tools (<=8 cap), no hard-delete tool (`note_archive` only), append-only `audit_log` and `note_revisions` verified by architecture/reflection test and transactional write decorator. |
 | **VI. stdio Protocol Hygiene** | PASS | PASS | `RoleRadar.Mcp.Stdio` routes all logs to `stderr`, opens zero network listeners, and is verified by an automated stdout-hygiene test ([ADR-0003](../../docs/adr/0003-stdio-first-mcp.md)). |
-| **VII. Data Durability & Safe Recovery** | PASS | PASS | `deploy/docker-compose.yml` uses named volume `roleradar-mongo-data`; `wipe` is isolated in `scripts/wipe-data.ps1` / `roleradar wipe` requiring explicit confirmation; backups stream directly into `Geralt` `IncrementalXChaCha20Poly1305` + `Argon2id` encryption with two-pass restore ([ADR-0007](../../docs/adr/0007-backup-streaming-aead-encryption.md)). |
+| **VII. Data Durability & Safe Recovery** | PASS | PASS | `deploy/docker-compose.yml` uses named volume `roleradar-mongo-data`; `wipe` is isolated in `scripts/wipe-data.ps1` / `roleradar wipe` requiring explicit confirmation; backups stream directly into `Geralt` `IncrementalXChaCha20Poly1305` + `Argon2id` encryption with pre-KDF header/chunk bounds and two-pass restore ([ADR-0007](../../docs/adr/0007-backup-streaming-aead-encryption.md)). |
 | **VIII. Recorded Decisions & Pinned Dependencies** | PASS | PASS | ADRs `0001`–`0007` recorded under `docs/adr/` with index; all NuGet versions live-verified and pinned in `Directory.Packages.props` with lock files (`packages.lock.json`) and `NuGetAudit` as errors; Docker image pinned to `mongo:8.0.34`; GitHub Actions pinned by commit SHA; Dependabot configured for `nuget`, `docker`, and `github-actions`. |
 | **IX. Baseline Technical Conventions** | PASS | PASS | `.NET 10` (`global.json` `10.0.402`), `<Nullable>enable</Nullable>`, `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`, UTC timestamps, `Guid.CreateVersion7()`, global `GuidRepresentation.Standard`, and `owner_id` on `notes`, `note_revisions`, and `audit_log`. |
 
@@ -124,7 +124,7 @@ deploy/
 │   ├── bug_report.yml
 │   └── feature_request.yml
 └── workflows/
-    ├── ci.yml                       # SHA-pinned actions, locked restore, format check, build, Testcontainers tests, 85% coverage, gitleaks
+    ├── ci.yml                       # SHA-pinned actions: windows-latest (unit, architecture, PSScriptAnalyzer on scripts/*.ps1) + ubuntu-latest (locked restore, format check, build, Testcontainers contract/integration tests, 85% coverage, gitleaks)
     ├── codeql.yml                   # SHA-pinned CodeQL analysis for C#
     └── dependency-review.yml        # SHA-pinned dependency review on pull requests
 
@@ -148,10 +148,10 @@ src/
 │   │   └── Queries/                 # GetNote, SearchNotes queries + handlers
 │   ├── Import/
 │   │   └── Commands/                # ImportMarkdownCommand + ImportMarkdownCommandHandler
-│   └── DependencyInjection.cs       # Registers handlers and wraps all ICommandHandler<,> with TransactionAndAuditCommandDecorator + LoggingDecorator
+│   └── DependencyInjection.cs       # Registers handlers incrementally and wraps all ICommandHandler<,> with TransactionAndAuditCommandDecorator + LoggingDecorator
 ├── RoleRadar.Infrastructure/
-│   ├── Mongo/                       # MongoNoteRepository, MongoOptions, GuidSerializer bootstrap, index initializer, readiness probe
-│   └── Backup/                      # SecretStreamBackupArchiveService (Geralt IncrementalXChaCha20Poly1305 + Argon2id + Two-Pass Restore)
+│   ├── Mongo/                       # MongoNoteRepository, MongoOptions, GuidSerializer bootstrap, index initializer, MongoReadinessProbe
+│   └── Backup/                      # SecretStreamBackupArchiveService (Geralt IncrementalXChaCha20Poly1305 + Argon2id + Pre-KDF Header Ceilings + Two-Pass Restore)
 ├── RoleRadar.Mcp.Stdio/
 │   ├── Program.cs                   # Stdio host bootstrap (stderr logging only)
 │   └── Tools/
@@ -164,10 +164,10 @@ tests/
 ├── fixtures/                        # Marked -text in .gitattributes to preserve exact CRLF and UTF-8 BOM bytes
 │   ├── fictional-memory-primary.md  # ~46 KB fictional markdown memory file with [stated/researched/inferred] tags
 │   └── fictional-memory-archive.md  # ~26 KB fictional markdown memory file
-├── RoleRadar.Tests.Unit/            # Domain & Application unit tests + Geralt secretstream KAT, wrong passphrase, bit flip, truncation, dropped/reordered chunk, and bounded-memory stream tests
-├── RoleRadar.Tests.Architecture/    # NetArchTest layering rules + DI decorator verification test + reflection check forbidding update/delete on revisions and audit_log
+├── RoleRadar.Tests.Unit/            # Domain & Application unit tests + Geralt secretstream KAT, pre-KDF header/chunk ceiling rejection, wrong passphrase, bit flip, truncation, dropped/reordered chunk, and bounded-memory stream tests
+├── RoleRadar.Tests.Architecture/    # NetArchTest layering rules + DI decorator verification test + reflection check forbidding update/delete on revisions and audit_log + MCP tool surface test
 ├── RoleRadar.Tests.Contract/        # INoteRepository contract tests + fault-injection transaction rollback + typed Result<T> tests (Testcontainers replica set)
-└── RoleRadar.Tests.Integration/     # End-to-end import idempotence/conflict/orphan tests, 5,000-note <200ms p95 search benchmark, corrupted-restore-leaves-db-untouched test, temp-dir inspection test, and MCP stdout-hygiene test
+└── RoleRadar.Tests.Integration/     # End-to-end import idempotence/conflict/orphan tests, 5,000-note <200ms p95 search benchmark, MCP stdout-hygiene test, corrupted-restore-leaves-db-untouched test, temp-dir inspection test, and audit/archive/readiness tests
 ```
 
 **Structure Decision**: 5-project `.NET 10` solution under `src/` (`Domain`, `Application`, `Infrastructure`, `Mcp.Stdio`, `Cli`), 4 test projects under `tests/` (`Unit`, `Architecture`, `Contract`, `Integration`), container deployment files under `deploy/`, PowerShell scripts under `scripts/`, and MADR architecture decision records under `docs/adr/`.

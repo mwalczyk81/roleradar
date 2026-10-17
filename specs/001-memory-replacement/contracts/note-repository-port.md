@@ -180,6 +180,9 @@ public interface INoteTransactionContext
     /// <summary>
     /// Atomically marks an existing Note as Archived without altering its body or revisions, rotates its VersionToken,
     /// and inserts an AuditLogEntry ("note_archive").
+    /// Note: The MCP tool and ArchiveNoteCommand take only the Note ID (no caller VersionToken is required);
+    /// ArchiveNoteCommandHandler reads the Note inside the active transaction and passes its current note.VersionToken
+    /// as expectedVersionToken to guard the in-transaction update.
     /// </summary>
     Task<Result<NoteWriteOutcome>> ArchiveAsync(
         Note archivedNote,
