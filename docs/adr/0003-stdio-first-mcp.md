@@ -22,7 +22,7 @@ Which transport should Feature 001 use?
 
 ## Decision Outcome
 
-Chosen option: **Option 1 — Stdio-only MCP host**, verified by the `spikes/StdioEcho` prototype and enforced by an automated stdout-hygiene integration test that launches `RoleRadar.Mcp.Stdio`, executes MCP requests + invalid error requests, and asserts every line emitted on `stdout` is a valid JSON-RPC 2.0 frame.
+Chosen option: **Option 1 — Stdio-only MCP host**, verified by the early `spikes/StdioEcho` prototype (which proved ModelContextProtocol 2.2.0 stdio framing on net10.0 with stderr-only logging, and was removed prior to release) and enforced by an automated stdout-hygiene integration test that launches `RoleRadar.Mcp.Stdio`, executes MCP requests + invalid error requests, and asserts every line emitted on `stdout` is a valid JSON-RPC 2.0 frame.
 
 ### Consequences
 

@@ -18,7 +18,7 @@ At plan time (2026-10-17), we queried `https://api.nuget.org/v3-flatcontainer/<i
 | ------------ | ---------------- | ---------------- |
 | **.NET SDK (`global.json`)** | `10.0.402` | `rollForward: "latestPatch"` |
 | **MongoDB Container Image** | `mongo:8.0.34` | Latest stable `8.0.x` patch tag on Docker Hub |
-| **`ModelContextProtocol`** | `2.2.0` | Official C# MCP SDK (`net10.0` verified in `spikes/StdioEcho`) |
+| **`ModelContextProtocol`** | `2.2.0` | Official C# MCP SDK (`net10.0` verified in early spike, removed prior to release) |
 | **`Microsoft.Extensions.Hosting`** | `10.0.13` | Latest stable `10.0.x` release on NuGet.org |
 | **`MongoDB.Driver`** | `3.12.0` | Latest stable `3.x` release on NuGet.org (Apache-2.0) |
 | **`System.CommandLine`** | `2.0.13` | Stable `2.0.x` GA release on NuGet.org (replaces 2022 `2.0.0-beta4`) |
