@@ -318,9 +318,9 @@ public sealed class SecretStreamBackupCryptoTests
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
-            var before8 = GC.GetTotalAllocatedBytes(precise: true);
+            var before8 = GC.GetAllocatedBytesForCurrentThread();
             var res8 = await _sut.EncryptStreamAsync(plain8, cipher8, passphrase, iterations: 3, memoryKiB: 65536);
-            alloc8 = GC.GetTotalAllocatedBytes(precise: true) - before8;
+            alloc8 = GC.GetAllocatedBytesForCurrentThread() - before8;
             Assert.True(res8.IsSuccess);
         }
 
@@ -332,9 +332,9 @@ public sealed class SecretStreamBackupCryptoTests
             GC.Collect();
             GC.WaitForPendingFinalizers();
             GC.Collect();
-            var before32 = GC.GetTotalAllocatedBytes(precise: true);
+            var before32 = GC.GetAllocatedBytesForCurrentThread();
             var res32 = await _sut.EncryptStreamAsync(plain32, cipher32, passphrase, iterations: 3, memoryKiB: 65536);
-            alloc32 = GC.GetTotalAllocatedBytes(precise: true) - before32;
+            alloc32 = GC.GetAllocatedBytesForCurrentThread() - before32;
             Assert.True(res32.IsSuccess);
         }
 
@@ -369,9 +369,9 @@ public sealed class SecretStreamBackupCryptoTests
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
-        var before8 = GC.GetTotalAllocatedBytes(precise: true);
+        var before8 = GC.GetAllocatedBytesForCurrentThread();
         var res8 = await _sut.Pass1VerifyAsync(cipher8, passphrase);
-        var alloc8 = GC.GetTotalAllocatedBytes(precise: true) - before8;
+        var alloc8 = GC.GetAllocatedBytesForCurrentThread() - before8;
         Assert.True(res8.IsSuccess);
 
         // Measure 32 MiB archive verification
@@ -379,9 +379,9 @@ public sealed class SecretStreamBackupCryptoTests
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
-        var before32 = GC.GetTotalAllocatedBytes(precise: true);
+        var before32 = GC.GetAllocatedBytesForCurrentThread();
         var res32 = await _sut.Pass1VerifyAsync(cipher32, passphrase);
-        var alloc32 = GC.GetTotalAllocatedBytes(precise: true) - before32;
+        var alloc32 = GC.GetAllocatedBytesForCurrentThread() - before32;
         Assert.True(res32.IsSuccess);
 
         var diff = Math.Abs(alloc32 - alloc8);
@@ -433,9 +433,9 @@ public sealed class SecretStreamBackupCryptoTests
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
                 GC.Collect();
-                var before8 = GC.GetTotalAllocatedBytes(precise: true);
+                var before8 = GC.GetAllocatedBytesForCurrentThread();
                 var res8 = await _sut.Pass2DecryptAsync(cipher8, sink8, derivedKey8);
-                alloc8 = GC.GetTotalAllocatedBytes(precise: true) - before8;
+                alloc8 = GC.GetAllocatedBytesForCurrentThread() - before8;
                 Assert.True(res8.IsSuccess);
             }
 
@@ -447,9 +447,9 @@ public sealed class SecretStreamBackupCryptoTests
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
                 GC.Collect();
-                var before32 = GC.GetTotalAllocatedBytes(precise: true);
+                var before32 = GC.GetAllocatedBytesForCurrentThread();
                 var res32 = await _sut.Pass2DecryptAsync(cipher32, sink32, derivedKey32);
-                alloc32 = GC.GetTotalAllocatedBytes(precise: true) - before32;
+                alloc32 = GC.GetAllocatedBytesForCurrentThread() - before32;
                 Assert.True(res32.IsSuccess);
             }
 
