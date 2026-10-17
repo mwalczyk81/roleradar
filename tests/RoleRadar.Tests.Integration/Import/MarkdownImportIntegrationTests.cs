@@ -184,7 +184,7 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
             Assert.Equal(0, summary2.OrphanCount);
 
             var notes = (await repo.GetImportedBySourceFileAsync(OwnerId.Default.Value, Path.GetFileName(tempFile))).Value!;
-            var headerOneNote = notes.First(n => n.HeadingPath == "# Header One");
+            var headerOneNote = notes.First(n => n.ImportMetadata?.HeadingPath == "# Header One");
             Assert.Contains("Updated source content.", headerOneNote.Body);
             Assert.Equal(1, headerOneNote.RevisionCount);
 

@@ -20,11 +20,13 @@ public static class DependencyInjection
         services.AddSingleton<ICommandValidator<CreateNoteCommand>, CreateNoteCommandValidator>();
         services.AddSingleton<ICommandValidator<AppendToNoteCommand>, AppendToNoteCommandValidator>();
         services.AddSingleton<ICommandValidator<ReplaceNoteSectionCommand>, ReplaceNoteSectionCommandValidator>();
+        services.AddSingleton<ICommandValidator<RoleRadar.Application.Import.Commands.ImportMarkdownCommand>, RoleRadar.Application.Import.Commands.ImportMarkdownCommandValidator>();
 
-        // US1 Command Handlers (wrapped by TransactionAndAuditCommandDecorator + LoggingCommandDecorator)
+        // US1 & US2 Command Handlers (wrapped by TransactionAndAuditCommandDecorator + LoggingCommandDecorator)
         services.AddCommandHandler<CreateNoteCommand, NoteCreatedDto, CreateNoteCommandHandler>();
         services.AddCommandHandler<AppendToNoteCommand, NoteUpdatedDto, AppendToNoteCommandHandler>();
         services.AddCommandHandler<ReplaceNoteSectionCommand, NoteSectionReplacedDto, ReplaceNoteSectionCommandHandler>();
+        services.AddCommandHandler<RoleRadar.Application.Import.Commands.ImportMarkdownCommand, RoleRadar.Application.Import.Commands.ImportMarkdownSummaryDto, RoleRadar.Application.Import.Commands.ImportMarkdownCommandHandler>();
 
         // US1 Query Handlers (wrapped by LoggingQueryDecorator)
         services.AddQueryHandler<GetNoteQuery, NoteDetailDto, GetNoteQueryHandler>();
