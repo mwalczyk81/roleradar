@@ -268,6 +268,107 @@ public sealed class NoteHandlersUnitTests
     }
 
     [Fact]
+    public async Task GetNoteQueryHandler_Paging_NeverSplitsSurrogatePair_AndReturnsEmptyPageWhenOffsetBeyondEnd()
+    {
+        var repo = new InMemoryFakeNoteRepository();
+        var clock = new FixedUtcClock(FixedNow);
+        var createHandler = new CreateNoteCommandHandler(repo, clock);
+        var getHandler = new GetNoteQueryHandler(repo);
+
+        // 1. Surrogate pair ("🚀" = \uD83D\uDE80 at char indices 4 and 5) straddling a custom page boundary (maxChars = 5)
+        const string emojiBody = "abcd🚀efgh"; // length = 10 UTF-16 chars ('🚀' is 2 chars at indices 4..5)
+        Assert.Equal(10, emojiBody.Length);
+        Assert.True(char.IsHighSurrogate(emojiBody[4]));
+        Assert.True(char.IsLowSurrogate(emojiBody[5]));
+
+        var emojiCreated = await createHandler.HandleAsync(new CreateNoteCommand(
+            Title: "Surrogate Boundary Note",
+            Body: emojiBody,
+            Area: "criteria",
+            Tags: ["unicode"],
+            ProvenanceKind: "stated",
+            ProvenanceDate: "2026-10-17",
+            ProvenanceQualifier: null));
+
+        // Request offset = 0, maxChars = 5 -> naive slice [0..5) would end at index 4 (high surrogate of 🚀)!
+        // Must back off by 1 char to return "abcd" (4 chars) with nextOffset = 4.
+        var slice1 = await getHandler.HandleAsync(new GetNoteQuery(emojiCreated.Value!.Id, Offset: 0, MaxChars: 5));
+        Assert.True(slice1.IsSuccess);
+        Assert.Equal("abcd", slice1.Value!.Body);
+        Assert.False(char.IsHighSurrogate(slice1.Value.Body[^1]), "Slice must not end with a lone high surrogate.");
+        Assert.Equal(10, slice1.Value.TotalChars);
+        Assert.True(slice1.Value.Truncated);
+        Assert.Equal(4, slice1.Value.NextOffset);
+
+        // Next page from nextOffset = 4, maxChars = 5 -> returns "🚀efg" (5 chars, indices 4..8) with nextOffset = 9
+        var slice2 = await getHandler.HandleAsync(new GetNoteQuery(emojiCreated.Value.Id, Offset: slice1.Value.NextOffset!.Value, MaxChars: 5));
+        Assert.True(slice2.IsSuccess);
+        Assert.Equal("🚀efg", slice2.Value!.Body);
+        Assert.False(char.IsLowSurrogate(slice2.Value.Body[0]), "Slice must not start with a lone low surrogate.");
+        Assert.Equal(10, slice2.Value.TotalChars);
+        Assert.True(slice2.Value.Truncated);
+        Assert.Equal(9, slice2.Value.NextOffset);
+
+        // Final page from nextOffset = 9, maxChars = 5 -> returns "h", truncated = false, nextOffset = null
+        var slice3 = await getHandler.HandleAsync(new GetNoteQuery(emojiCreated.Value.Id, Offset: slice2.Value.NextOffset!.Value, MaxChars: 5));
+        Assert.True(slice3.IsSuccess);
+        Assert.Equal("h", slice3.Value!.Body);
+        Assert.Equal(10, slice3.Value.TotalChars);
+        Assert.False(slice3.Value.Truncated);
+        Assert.Null(slice3.Value.NextOffset);
+        Assert.Equal(emojiBody, slice1.Value.Body + slice2.Value.Body + slice3.Value.Body);
+
+        // Caller passing offset = 5 (landing directly on the low surrogate of "🚀") must not split the surrogate pair
+        var midSurrogateOffset = await getHandler.HandleAsync(new GetNoteQuery(emojiCreated.Value.Id, Offset: 5, MaxChars: 5));
+        Assert.True(midSurrogateOffset.IsSuccess);
+        Assert.False(char.IsLowSurrogate(midSurrogateOffset.Value!.Body[0]), "Slice must not start with a lone low surrogate when offset points to low surrogate.");
+        Assert.StartsWith("🚀", midSurrogateOffset.Value.Body, StringComparison.Ordinal);
+
+        // 2. Surrogate pair straddling the default 200,000-character cap (at indices 199,999 and 200,000)
+        var boundary200kBody = string.Concat(new string('A', 199_999), "🚀", new string('B', 50_000));
+        Assert.Equal(250_001, boundary200kBody.Length);
+        var boundaryCreated = await createHandler.HandleAsync(new CreateNoteCommand(
+            Title: "Default Cap Surrogate Boundary",
+            Body: boundary200kBody,
+            Area: "criteria",
+            Tags: ["unicode"],
+            ProvenanceKind: "stated",
+            ProvenanceDate: "2026-10-17",
+            ProvenanceQualifier: null));
+
+        var defaultPage1 = await getHandler.HandleAsync(new GetNoteQuery(boundaryCreated.Value!.Id));
+        Assert.True(defaultPage1.IsSuccess);
+        Assert.Equal(199_999, defaultPage1.Value!.Body.Length);
+        Assert.False(char.IsHighSurrogate(defaultPage1.Value.Body[^1]));
+        Assert.Equal(250_001, defaultPage1.Value.TotalChars);
+        Assert.True(defaultPage1.Value.Truncated);
+        Assert.Equal(199_999, defaultPage1.Value.NextOffset);
+
+        var defaultPage2 = await getHandler.HandleAsync(new GetNoteQuery(boundaryCreated.Value.Id, Offset: defaultPage1.Value.NextOffset!.Value));
+        Assert.True(defaultPage2.IsSuccess);
+        Assert.StartsWith("🚀", defaultPage2.Value!.Body, StringComparison.Ordinal);
+        Assert.Equal(50_002, defaultPage2.Value.Body.Length);
+        Assert.False(defaultPage2.Value.Truncated);
+        Assert.Null(defaultPage2.Value.NextOffset);
+        Assert.Equal(boundary200kBody, defaultPage1.Value.Body + defaultPage2.Value.Body);
+
+        // 3. Offset at or beyond the end returns an empty page with truncated = false and nextOffset = null
+        var atEnd = await getHandler.HandleAsync(new GetNoteQuery(emojiCreated.Value.Id, Offset: emojiBody.Length, MaxChars: 100));
+        Assert.True(atEnd.IsSuccess);
+        Assert.Equal(string.Empty, atEnd.Value!.Body);
+        Assert.Equal(emojiBody.Length, atEnd.Value.TotalChars);
+        Assert.False(atEnd.Value.Truncated);
+        Assert.Null(atEnd.Value.NextOffset);
+
+        var pastEnd = await getHandler.HandleAsync(new GetNoteQuery(emojiCreated.Value.Id, Offset: emojiBody.Length + 5_000, MaxChars: 100));
+        Assert.True(pastEnd.IsSuccess);
+        Assert.Equal(string.Empty, pastEnd.Value!.Body);
+        Assert.Equal(emojiBody.Length, pastEnd.Value.TotalChars);
+        Assert.False(pastEnd.Value.Truncated);
+        Assert.Null(pastEnd.Value.NextOffset);
+    }
+
+    [Fact]
     public async Task AppendToNoteCommandHandler_AppendsWithoutVersionTokenOrRevision_AndReturnsNoteUpdatedDto()
     {
         var repo = new InMemoryFakeNoteRepository();

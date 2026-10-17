@@ -183,6 +183,91 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task NoteGetMcpTool_PagesAcrossNoteOver1Mb_WithoutSplittingSurrogatePairs_AndReturnsEmptyPageBeyondEnd()
+    {
+        await using var provider = BuildServiceProvider();
+        var tools = provider.GetRequiredService<NoteMcpTools>();
+
+        // Construct a note > 1 MB (1,100,000+ UTF-8 bytes / ~1,050,003 UTF-16 chars) with a surrogate pair ("🚀" = 2 UTF-16 chars)
+        // straddling the first 200,000-character page boundary at char indices 199,999..200,000.
+        var over1MbBody = string.Concat(
+            new string('M', 199_999),
+            "🚀",
+            new string('N', 850_002));
+
+        Assert.True(Encoding.UTF8.GetByteCount(over1MbBody) > 1_048_576, "Expected note body > 1 MiB.");
+        Assert.Equal(1_050_003, over1MbBody.Length);
+
+        var createJson = await tools.NoteCreateAsync(
+            title: "Over 1 MB Paged Fictional Dossier",
+            body: over1MbBody,
+            area: "criteria",
+            tags: ["large-note", "paging"],
+            provenanceKind: "stated",
+            provenanceDate: "2026-10-17",
+            provenanceQualifier: "1mb paging test");
+
+        using var createDoc = JsonDocument.Parse(createJson);
+        Assert.True(createDoc.RootElement.GetProperty("ok").GetBoolean());
+        var noteId = createDoc.RootElement.GetProperty("data").GetProperty("id").GetGuid();
+
+        var reassembled = new StringBuilder(over1MbBody.Length);
+        var currentOffset = 0;
+        var pageCount = 0;
+
+        while (true)
+        {
+            var pageJson = currentOffset == 0
+                ? await tools.NoteGetAsync(noteId)
+                : await tools.NoteGetAsync(noteId, offset: currentOffset, maxChars: 200_000);
+
+            using var pageDoc = JsonDocument.Parse(pageJson);
+            Assert.True(pageDoc.RootElement.GetProperty("ok").GetBoolean());
+            var data = pageDoc.RootElement.GetProperty("data");
+
+            var slice = data.GetProperty("body").GetString()!;
+            var totalChars = data.GetProperty("totalChars").GetInt32();
+            var truncated = data.GetProperty("truncated").GetBoolean();
+            var nextOffsetElem = data.GetProperty("nextOffset");
+
+            Assert.Equal(over1MbBody.Length, totalChars);
+            Assert.NotEmpty(slice);
+            Assert.True(slice.Length <= 200_000);
+            Assert.False(char.IsLowSurrogate(slice[0]), $"Page {pageCount + 1} started with a lone low surrogate.");
+            Assert.False(char.IsHighSurrogate(slice[^1]), $"Page {pageCount + 1} ended with a lone high surrogate.");
+
+            reassembled.Append(slice);
+            pageCount++;
+
+            if (!truncated)
+            {
+                Assert.Equal(JsonValueKind.Null, nextOffsetElem.ValueKind);
+                break;
+            }
+
+            Assert.Equal(JsonValueKind.Number, nextOffsetElem.ValueKind);
+            var nextOffset = nextOffsetElem.GetInt32();
+            Assert.True(nextOffset > currentOffset);
+            currentOffset = nextOffset;
+        }
+
+        Assert.Equal(6, pageCount);
+        var fullReassembled = reassembled.ToString();
+        Assert.Equal(over1MbBody.Length, fullReassembled.Length);
+        Assert.Equal(Sha256Hasher.ComputeLowerHex(over1MbBody), Sha256Hasher.ComputeLowerHex(fullReassembled));
+
+        // Verify offset beyond the end returns an empty page via the MCP tool
+        var pastEndJson = await tools.NoteGetAsync(noteId, offset: over1MbBody.Length + 10_000, maxChars: 200_000);
+        using var pastEndDoc = JsonDocument.Parse(pastEndJson);
+        Assert.True(pastEndDoc.RootElement.GetProperty("ok").GetBoolean());
+        var pastEndData = pastEndDoc.RootElement.GetProperty("data");
+        Assert.Equal(string.Empty, pastEndData.GetProperty("body").GetString());
+        Assert.Equal(over1MbBody.Length, pastEndData.GetProperty("totalChars").GetInt32());
+        Assert.False(pastEndData.GetProperty("truncated").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, pastEndData.GetProperty("nextOffset").ValueKind);
+    }
+
+    [Fact]
     public async Task SearchAcross5000FictionalNotes_SupportsStemmingQuotedPhrasesAndFilters_WithP95Under200Ms()
     {
         var benchmarkDbName = $"roleradar_bench_{Guid.CreateVersion7():N}";

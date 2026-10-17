@@ -56,13 +56,17 @@
 
 ## Tool 2: `note_get` → `IQueryHandler<GetNoteQuery, NoteDetailDto>`
 
-- **Description**: `"Reads a single note by its unique id, including archived notes, returning at most 200,000 characters of its markdown body per call by default. Accepts optional offset and maxChars, and returns totalChars, truncated, and nextOffset so an agent can page through a large note."`
+- **Description**: `"Reads a single note by its unique id, including archived notes, returning a character-paged slice of its markdown body (at most 200,000 characters per call by default), pagination metadata (totalChars, truncated, nextOffset), note metadata, and current version token."`
 - **Input Parameters**:
   - `id` (`Guid`, required): Unique identifier of the note.
   - `offset` (`int`, optional, default `0`): Zero-based character offset into the note body (`>= 0`).
   - `maxChars` (`int`, optional, default `200000`): Maximum characters of `body` to return in this call (`1..200000`; default `200,000`).
+- **Behavior**:
+  - Returns at most `maxChars` (`200,000` by default) UTF-16 `char` units starting at `offset`.
+  - **No split inside a UTF-16 surrogate pair**: If `offset` lands on a low surrogate preceded by a high surrogate, or if the end of the slice (`offset + take`) would split a high/low surrogate pair, the slice boundaries are adjusted so no page starts or ends inside a surrogate pair, and `nextOffset` points to the high surrogate of the unreturned pair.
+  - **Offset at or beyond end**: If `offset >= totalChars`, returns an empty `body` (`""`), `totalChars`, `truncated: false`, and `nextOffset: null`.
 - **Output Payload (JSON)**:
-  - Note object including `id`, `title`, `body` (sliced to `[offset .. offset + maxChars)`), `totalChars`, `truncated` (`bool`), `nextOffset` (`int?`, `null` when not truncated), `area`, `tags`, `provenance`, `status`, `versionToken`, `bodyHash`, `revisionCount`, `createdAtUtc`, and `updatedAtUtc`.
+  - Note object including `id`, `title`, `body` (surrogate-safe paged slice), `totalChars`, `truncated` (`bool`), `nextOffset` (`int?`, `null` when not truncated), `area`, `tags`, `provenance`, `status`, `versionToken`, `bodyHash`, `revisionCount`, `createdAtUtc`, and `updatedAtUtc`.
   - Maps `ErrorCode.NotFound` to a structured not-found tool response and `ErrorCode.ValidationError` if `offset < 0` or `maxChars` is outside `1..200,000`.
 
 ---

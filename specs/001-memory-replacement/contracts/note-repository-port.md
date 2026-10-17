@@ -101,7 +101,9 @@ public interface INoteRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Retrieves a single Note by owner and ID (including archived notes), or ResultError(ErrorCode.NotFound).
+    /// Retrieves a single Note aggregate in full by owner and ID (including archived notes), or ResultError(ErrorCode.NotFound).
+    /// Character-based pagination (offset, maxChars default 200,000, totalChars, truncated, nextOffset, with UTF-16 surrogate-pair
+    /// boundary protection) is applied by GetNoteQueryHandler when mapping Note to NoteDetailDto.
     /// </summary>
     Task<Result<Note>> GetByIdAsync(
         string ownerId,
