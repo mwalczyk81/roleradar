@@ -3,6 +3,8 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Decorators;
+using RoleRadar.Application.Notes.Commands;
+using RoleRadar.Application.Notes.Queries;
 using RoleRadar.Domain.Common;
 
 namespace RoleRadar.Application;
@@ -14,7 +16,20 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton<IUtcClock>(SystemUtcClock.Instance);
 
-        // Handlers are registered incrementally via AddCommandHandler / AddQueryHandler as they land in T028, T033, and T043.
+        // US1 Validators
+        services.AddSingleton<ICommandValidator<CreateNoteCommand>, CreateNoteCommandValidator>();
+        services.AddSingleton<ICommandValidator<AppendToNoteCommand>, AppendToNoteCommandValidator>();
+        services.AddSingleton<ICommandValidator<ReplaceNoteSectionCommand>, ReplaceNoteSectionCommandValidator>();
+
+        // US1 Command Handlers (wrapped by TransactionAndAuditCommandDecorator + LoggingCommandDecorator)
+        services.AddCommandHandler<CreateNoteCommand, NoteCreatedDto, CreateNoteCommandHandler>();
+        services.AddCommandHandler<AppendToNoteCommand, NoteUpdatedDto, AppendToNoteCommandHandler>();
+        services.AddCommandHandler<ReplaceNoteSectionCommand, NoteSectionReplacedDto, ReplaceNoteSectionCommandHandler>();
+
+        // US1 Query Handlers (wrapped by LoggingQueryDecorator)
+        services.AddQueryHandler<GetNoteQuery, NoteDetailDto, GetNoteQueryHandler>();
+        services.AddQueryHandler<SearchNotesQuery, NoteSearchResponseDto, SearchNotesQueryHandler>();
+
         return services;
     }
 

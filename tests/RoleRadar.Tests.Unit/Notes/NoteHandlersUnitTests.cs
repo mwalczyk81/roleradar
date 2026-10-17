@@ -35,7 +35,7 @@ public sealed class NoteHandlersUnitTests
         Assert.NotNull(result.Value);
         Assert.Equal("Target Role Criteria", result.Value.Title);
         Assert.Equal("criteria", result.Value.Area);
-        Assert.Equal(["dotnet", "remote"], result.Value.Tags);
+        Assert.Equal(["remote", "dotnet"], result.Value.Tags);
         Assert.Equal("stated", result.Value.Provenance.Kind);
         Assert.Equal("2026-10-17", result.Value.Provenance.Date);
         Assert.Equal("initial setup", result.Value.Provenance.Qualifier);
