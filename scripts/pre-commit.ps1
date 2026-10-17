@@ -98,7 +98,42 @@ try {
         }
     }
 
-    # 3. Gitleaks secret scan (if gitleaks binary is installed on PATH)
+    # 3. GitHub Actions workflow SHA pin guard: verify every `uses:` in .github/workflows
+    # is pinned to a 40-character commit SHA with a `# vX.Y.Z` version comment.
+    $workflowDir = Join-Path -Path $repoRoot -ChildPath ".github\workflows"
+    if (Test-Path -LiteralPath $workflowDir -PathType Container) {
+        $workflowFiles = @(Get-ChildItem -LiteralPath $workflowDir -File | Where-Object { $_.Extension -in @('.yml', '.yaml') })
+        $pinViolations = [System.Collections.Generic.List[string]]::new()
+        $usesCount = 0
+        $pinnedUsesPattern = '^\s*(?:-\s*)?uses:\s*[A-Za-z0-9_.-]+/[A-Za-z0-9_./-]+@[0-9a-f]{40}\s+#\s*v\d+\.\d+\.\d+\b'
+
+        foreach ($wf in $workflowFiles) {
+            $lines = @(Get-Content -LiteralPath $wf.FullName -Encoding UTF8)
+            for ($i = 0; $i -lt $lines.Count; $i++) {
+                $line = $lines[$i]
+                if ($line -match '^\s*#') {
+                    continue
+                }
+                if ($line -match '^\s*(?:-\s*)?uses:\s*') {
+                    $usesCount++
+                    if ($line -notmatch $pinnedUsesPattern) {
+                        $lineNum = $i + 1
+                        $pinViolations.Add("$($wf.Name):$lineNum -> '$($line.Trim())' must be a 40-character hex SHA with a '# vX.Y.Z' comment.")
+                    }
+                }
+            }
+        }
+
+        if ($pinViolations.Count -gt 0) {
+            foreach ($pinViolation in $pinViolations) {
+                Write-Error $pinViolation -ErrorAction Continue
+            }
+            throw "Workflow action SHA pin check failed with $($pinViolations.Count) violation(s)."
+        }
+        Write-Output "[pre-commit] GitHub Actions SHA pin check passed ($usesCount 'uses:' reference(s) verified across $($workflowFiles.Count) workflow file(s))."
+    }
+
+    # 4. Gitleaks secret scan (if gitleaks binary is installed on PATH)
     $gitleaksCmd = Get-Command -Name 'gitleaks' -ErrorAction SilentlyContinue
     if ($null -ne $gitleaksCmd) {
         if ($StagedOnly) {
@@ -111,7 +146,7 @@ try {
         }
         Write-Output "[pre-commit] gitleaks scan passed."
     } else {
-        Write-Output "[pre-commit] gitleaks CLI not found on PATH; path/pattern and denylist checks completed."
+        Write-Output "[pre-commit] gitleaks CLI not found on PATH; path/pattern, denylist, and workflow SHA checks completed."
     }
 
     Write-Output "[pre-commit] All privacy and secret checks passed."
