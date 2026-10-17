@@ -36,14 +36,15 @@ dotnet test RoleRadar.sln -c Release --collect:"XPlat Code Coverage"
 
 ## 2. Start Local Persistent Data Services (`US3`)
 
-Start the single-node MongoDB replica set (`rs0`, image `mongo:8.0.34`) defined in `deploy/docker-compose.yml`, bound strictly to `127.0.0.1:27017` with named volume `roleradar-mongo-data`:
+Start the single-node MongoDB replica set (`rs0`, image `mongo:8.0.34`) defined in `deploy/docker-compose.yml`, bound strictly to `127.0.0.1:27017` with named volume `roleradar-mongo-data`. The replica set is initiated with member host `127.0.0.1:27017` (`rs.initiate({ _id: "rs0", members: [{ _id: 0, host: "127.0.0.1:27017" }] })`) so processes on the host machine can connect directly to `mongodb://127.0.0.1:27017/?replicaSet=rs0` without container-hostname resolution errors (`directConnection=true` is also supported for single-node host connections):
 
 ```powershell
 pwsh ./scripts/start-services.ps1
 ```
 
 **Expected Outcome**:
-- `roleradar-mongo` container starts from `deploy/docker-compose.yml`, initializes replica set `rs0`, passes healthcheck, and prints `RoleRadar MongoDB replica set (rs0) is healthy and ready.`
+- `roleradar-mongo` container starts from `deploy/docker-compose.yml`, initializes replica set `rs0` with member host `127.0.0.1:27017`, passes healthcheck, and prints `RoleRadar MongoDB replica set (rs0) is healthy and ready.`
+- Host processes (`roleradar` CLI, `RoleRadar.Mcp.Stdio`, and the host-to-compose integration test in `BackupRestoreWipeIntegrationTests`) connect cleanly from the host machine to `127.0.0.1:27017`.
 
 ---
 
