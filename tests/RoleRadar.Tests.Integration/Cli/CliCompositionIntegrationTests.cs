@@ -12,8 +12,17 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Cli;
 
+[Collection(Fixtures.SharedMongoCollectionDefinition.Name)]
 public sealed class CliCompositionIntegrationTests
 {
+    private readonly Fixtures.SharedMongoFixture _sharedMongo;
+
+    public CliCompositionIntegrationTests(Fixtures.SharedMongoFixture sharedMongo)
+    {
+        ArgumentNullException.ThrowIfNull(sharedMongo);
+        _sharedMongo = sharedMongo;
+    }
+
     [Fact]
     public void Program_BuildServiceProvider_ResolvesAllCliCommandsAndLogging()
     {
@@ -97,21 +106,28 @@ public sealed class CliCompositionIntegrationTests
 
         // 1. import --dry-run on a valid empty/minimal markdown file
         var tempFile = Path.GetTempFileName();
+        var uniqueDb = $"roleradar_cli_smoke_{Guid.CreateVersion7():N}";
+        var env = new Dictionary<string, string>
+        {
+            ["ROLERADAR_MONGO_CONNECTION_STRING"] = _sharedMongo.ConnectionString,
+            ["ROLERADAR_MONGO_DATABASE"] = uniqueDb
+        };
+
         try
         {
             await File.WriteAllTextAsync(tempFile, "# Test Heading\nTest body content.");
 
-            var (exitCodeImport, _, stderrImport) = await RunCliAsync(cliDllPath, $"import \"{tempFile}\" --dry-run");
+            var (exitCodeImport, _, stderrImport) = await RunCliAsync(cliDllPath, $"import \"{tempFile}\" --dry-run", env);
             Assert.DoesNotContain("Unhandled exception", stderrImport, StringComparison.OrdinalIgnoreCase);
             Assert.Equal(0, exitCodeImport);
 
             // 2. backup missing passphrase or arguments
-            var (exitCodeBackup, _, stderrBackup) = await RunCliAsync(cliDllPath, "backup");
+            var (exitCodeBackup, _, stderrBackup) = await RunCliAsync(cliDllPath, "backup", env);
             Assert.DoesNotContain("Unhandled exception", stderrBackup, StringComparison.OrdinalIgnoreCase);
             Assert.NotEqual(0, exitCodeBackup);
 
             // 3. wipe without --confirm
-            var (exitCodeWipe, _, stderrWipe) = await RunCliAsync(cliDllPath, "wipe");
+            var (exitCodeWipe, _, stderrWipe) = await RunCliAsync(cliDllPath, "wipe", env);
             Assert.DoesNotContain("Unhandled exception", stderrWipe, StringComparison.OrdinalIgnoreCase);
             Assert.NotEqual(0, exitCodeWipe);
         }
@@ -124,7 +140,10 @@ public sealed class CliCompositionIntegrationTests
         }
     }
 
-    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunCliAsync(string dllPath, string arguments)
+    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunCliAsync(
+        string dllPath,
+        string arguments,
+        IReadOnlyDictionary<string, string>? environmentVariables = null)
     {
         var psi = new ProcessStartInfo
         {
@@ -135,6 +154,14 @@ public sealed class CliCompositionIntegrationTests
             UseShellExecute = false,
             CreateNoWindow = true
         };
+
+        if (environmentVariables is not null)
+        {
+            foreach (var (k, v) in environmentVariables)
+            {
+                psi.Environment[k] = v;
+            }
+        }
 
         using var proc = Process.Start(psi)!;
         Assert.NotNull(proc);
