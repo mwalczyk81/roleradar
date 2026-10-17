@@ -1,25 +1,27 @@
 # Contract: MCP Stdio Tools (`RoleRadar.Mcp.Stdio`)
 
 **Feature**: `001-memory-replacement`  
-**Transport**: `stdio` only (`ModelContextProtocol` `2.2.0`, zero network listeners, all logs routed to `stderr`).  
+**Transport**: `stdio` only (`ModelContextProtocol` `2.2.0`, `Microsoft.Extensions.Hosting` `10.0.13`, zero network listeners, all logs routed to `stderr`).  
+**Handler Injection**: Each tool injects its corresponding `ICommandHandler<TCommand, TResponse>` or `IQueryHandler<TQuery, TResponse>` directly (no mediator library, per Constitution v1.1.0 Principle IV and [ADR-0006](../../../docs/adr/0006-handlers-with-decorators-no-mediator.md)).  
 **Tool Cap**: 6 tools exposed (strictly within the <=8 tool cap in `FR-018` and Constitution Principle V).
 
 ---
 
-## Protocol & Readiness Error Envelope
+## Protocol, Typed Result Mapping & Readiness Error Envelope
 
-- Every tool checks datastore readiness before executing. If the MongoDB replica set is unreachable or not started, the tool fails within **5 seconds** (`FR-019`) and returns a structured tool error message:
+- Every tool invokes its injected handler and maps `Result<T>` into an MCP tool response. Expected failures (`NotFound`, `StaleVersionToken`, `SectionNotFound`, `AmbiguousHeading`, `ValidationError`, `DatastoreOffline`) are returned as structured MCP tool error payloads without throwing unhandled exceptions.
+- If the MongoDB replica set is unreachable or not started, `CheckReadinessAsync` returns `ErrorCode.DatastoreOffline` within **5 seconds** (`FR-019`) with the exact start command:
   ```text
   RoleRadar data services are not running or unreachable at mongodb://127.0.0.1:27017/?replicaSet=rs0.
   Start them from the repository root with:
     pwsh ./scripts/start-services.ps1
-  (or: docker compose up -d)
+  (or: docker compose -f deploy/docker-compose.yml up -d)
   ```
 - No tool exists to hard-delete a note or alter/delete revisions or audit logs (`FR-018`).
 
 ---
 
-## Tool 1: `note_create`
+## Tool 1: `note_create` → `ICommandHandler<CreateNoteCommand, NoteCreatedDto>`
 
 - **Description**: `"Creates a durable markdown note with title, body, tags, area label, and provenance marker (stated, researched, or inferred with YYYY-MM-DD date)."`
 - **Input Parameters**:
@@ -52,18 +54,18 @@
 
 ---
 
-## Tool 2: `note_get`
+## Tool 2: `note_get` → `IQueryHandler<GetNoteQuery, NoteDetailDto>`
 
 - **Description**: `"Reads a single note in full by its unique id, including archived notes, returning its markdown body, metadata, and current version token."`
 - **Input Parameters**:
   - `id` (`Guid`, required): Unique identifier of the note.
 - **Output Payload (JSON)**:
   - Full note object including `id`, `title`, `body`, `area`, `tags`, `provenance`, `status`, `versionToken`, `bodyHash`, `revisionCount`, `createdAtUtc`, and `updatedAtUtc`.
-  - Returns a clear not-found error if `id` does not exist.
+  - Maps `ErrorCode.NotFound` to a structured not-found tool response.
 
 ---
 
-## Tool 3: `note_append`
+## Tool 3: `note_append` → `ICommandHandler<AppendToNoteCommand, NoteUpdatedDto>`
 
 - **Description**: `"Atomically appends markdown text to the end of an existing note on the server side without requiring a version token."`
 - **Input Parameters**:
@@ -78,7 +80,7 @@
 
 ---
 
-## Tool 4: `note_replace_section`
+## Tool 4: `note_replace_section` → `ICommandHandler<ReplaceNoteSectionCommand, NoteSectionReplacedDto>`
 
 - **Description**: `"Replaces the markdown content under a specific heading in an existing note. Requires the current versionToken and saves the full prior body in revision history."`
 - **Input Parameters**:
@@ -87,15 +89,15 @@
   - `newSectionBody` (`string`, required): Replacement markdown content for that section.
   - `versionToken` (`Guid`, required): Current concurrency `versionToken` of the note.
 - **Behavior**:
-  - If `versionToken` does not match the stored note's `version_token`, rejects the edit with a retryable conflict error containing the current `versionToken` (`FR-005`).
-  - If `heading` is not found or matches multiple sections ambiguously, rejects the edit without modifying the note and lists the available headings in the error message (`FR-005`).
+  - If `versionToken` does not match the stored note's `version_token`, returns typed `ErrorCode.StaleVersionToken` with the current `versionToken` (`FR-005`).
+  - If `heading` is not found or matches multiple sections ambiguously, returns typed `ErrorCode.SectionNotFound` or `ErrorCode.AmbiguousHeading` listing the available headings without modifying the note (`FR-005`).
   - Saves the full prior note body in `note_revisions` and records `note_revision_id` in `audit_log`.
 - **Output Payload (JSON)**:
   - Updated note metadata (`id`, `versionToken`, `revisionId`, `revisionCount`, `bodyHash`, `updatedAtUtc`).
 
 ---
 
-## Tool 5: `note_search`
+## Tool 5: `note_search` → `IQueryHandler<SearchNotesQuery, NoteSearchResponseDto>`
 
 - **Description**: `"Searches notes by case-insensitive text query (supporting stemmed whole words and quoted phrases), tag filter, and area label. Excludes archived notes by default."`
 - **Input Parameters**:
@@ -111,7 +113,7 @@
 
 ---
 
-## Tool 6: `note_archive`
+## Tool 6: `note_archive` → `ICommandHandler<ArchiveNoteCommand, NoteArchivedDto>`
 
 - **Description**: `"Archives a note so it is excluded from default searches while preserving its full text and revision history intact."`
 - **Input Parameters**:

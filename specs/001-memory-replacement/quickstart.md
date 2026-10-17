@@ -1,13 +1,13 @@
 # Quickstart & Validation Guide: Feature 001 — Memory Replacement
 
 **Feature**: `001-memory-replacement`  
-**Target Environment**: Windows 11 with PowerShell 7 (`pwsh`), .NET 10 SDK, Docker Desktop.
+**Target Environment**: Windows 11 with PowerShell 7 (`pwsh`), .NET 10 SDK (`10.0.402` via `global.json`), Docker Desktop.
 
 ---
 
 ## Prerequisites
 
-1. **.NET 10 SDK** (`dotnet --version` >= `10.0.100`)
+1. **.NET 10 SDK** (`dotnet --version` >= `10.0.402`, governed by `global.json` with `rollForward: "latestPatch"`)
 2. **Docker Desktop** running with Linux containers enabled (`docker info`)
 3. **PowerShell 7+** (`pwsh --version`)
 
@@ -15,36 +15,41 @@
 
 ## 1. Build & Run Full Automated Test Suite (Clean Clone)
 
-All unit, architecture, contract, stdout-hygiene, 5,000-note search benchmark, and Testcontainers replica-set integration tests run against ephemeral containers without touching any local running MongoDB container (`Constitution Principle II`):
+All unit, architecture, contract, backup tamper/streaming, 5,000-note search benchmark, and Testcontainers replica-set integration tests run against ephemeral `mongo:8.0.34` containers without touching any local running MongoDB container (`Constitution Principle II`):
 
 ```powershell
+dotnet restore RoleRadar.sln --locked-mode
+dotnet format RoleRadar.sln --verify-no-changes
 dotnet build RoleRadar.sln -c Release -warnaserror
 dotnet test RoleRadar.sln -c Release --collect:"XPlat Code Coverage"
 ```
 
 **Expected Outcome**:
-- Zero compiler or analyzer warnings.
-- Architecture test (`RoleRadar.Tests.Architecture`) confirms strict inward dependencies (`Domain` → `Application` → `Infrastructure` → `Hosts`) and verifies no update/delete methods exist on `note_revisions` or `audit_log`.
-- Contract & integration tests (`RoleRadar.Tests.Contract`, `RoleRadar.Tests.Integration`) provision an ephemeral `mongo:8.0.4` replica-set container via Testcontainers, verify multi-document transaction rollback on injected faults, verify 5,000-note search p95 < 200 ms (`SC-003`), verify stdout protocol hygiene (`FR-020`), and verify >=85% line coverage across `RoleRadar.Domain` and `RoleRadar.Application`.
+- Zero compiler, analyzer, formatting, or `NuGetAudit` warnings.
+- Architecture test (`RoleRadar.Tests.Architecture`) confirms:
+  - Strict inward dependencies (`Domain` → `Application` → `Infrastructure` → `Hosts`).
+  - Every `ICommandHandler<,>` registration in DI is wrapped by `TransactionAndAuditCommandDecorator<,>` (Constitution v1.1.0 Principle III).
+  - No `Update*`, `Replace*`, or `Delete*` methods exist against `note_revisions` or `audit_log`, and no hard-delete method exists on `INoteRepository`.
+- Contract & integration tests (`RoleRadar.Tests.Contract`, `RoleRadar.Tests.Integration`) provision an ephemeral `mongo:8.0.34` replica-set container via `Testcontainers.MongoDb` `4.16.0`, verify multi-document transaction rollback on injected faults, verify typed `Result<T>` outcomes for expected failures, verify all backup encryption tamper/truncation/reorder/two-pass restore cases, verify 5,000-note search p95 < 200 ms (`SC-003`), verify stdout protocol hygiene (`FR-020`), and verify >=85% line coverage across `RoleRadar.Domain` and `RoleRadar.Application`.
 
 ---
 
 ## 2. Start Local Persistent Data Services (`US3`)
 
-Start the single-node MongoDB replica set (`rs0`) bound strictly to `127.0.0.1:27017` with named volume `roleradar-mongo-data`:
+Start the single-node MongoDB replica set (`rs0`, image `mongo:8.0.34`) defined in `deploy/docker-compose.yml`, bound strictly to `127.0.0.1:27017` with named volume `roleradar-mongo-data`:
 
 ```powershell
 pwsh ./scripts/start-services.ps1
 ```
 
 **Expected Outcome**:
-- `roleradar-mongo` container starts, initializes replica set `rs0`, passes healthcheck, and prints `RoleRadar MongoDB replica set (rs0) is healthy and ready.`
+- `roleradar-mongo` container starts from `deploy/docker-compose.yml`, initializes replica set `rs0`, passes healthcheck, and prints `RoleRadar MongoDB replica set (rs0) is healthy and ready.`
 
 ---
 
 ## 3. Validate Idempotent Byte-Exact Markdown Import (`US2`, `SC-001`, `SC-002`)
 
-Import the two fictional sample memory files (~46 KB and ~26 KB) twice:
+Import the two fictional sample memory files (~46 KB and ~26 KB, marked `-text` in `.gitattributes` to preserve exact `CRLF` and UTF-8 BOM bytes) twice:
 
 ```powershell
 dotnet run --project src/RoleRadar.Cli -- import `
@@ -80,20 +85,20 @@ dotnet publish src/RoleRadar.Mcp.Stdio -c Release -o "$env:LOCALAPPDATA\rolerada
 
 1. **Create, Append, Replace-Section, Search, Archive (`US1`)**:
    - Invoke `note_create`, `note_append` (no version token required; no `note_revisions` snapshot created), `note_replace_section` (requires `versionToken`; saves full prior body in `note_revisions`), `note_search`, `note_get`, and `note_archive`.
-   - Restart the container (`docker compose restart`) and confirm `note_search` and `note_get` return the persisted notes.
+   - Restart the container (`docker compose -f deploy/docker-compose.yml restart`) and confirm `note_search` and `note_get` return the persisted notes.
 2. **Offline Fast-Fail Check (`US4`, `SC-007`)**:
-   - Stop the container (`docker compose stop`), invoke any MCP tool, and confirm it fails in under 5 seconds with instructions to run `pwsh ./scripts/start-services.ps1`.
+   - Stop the container (`docker compose -f deploy/docker-compose.yml stop`), invoke any MCP tool, and confirm it returns a structured offline error in under 5 seconds with instructions to run `pwsh ./scripts/start-services.ps1`.
    - Restart services (`pwsh ./scripts/start-services.ps1`).
 
 ---
 
-## 5. Validate Streamed Encrypted Backup, Safe Wipe, and Restore (`US3`, `SC-006`)
+## 5. Validate Streamed Encrypted Backup, Safe Wipe, and Two-Pass Restore (`US3`, `SC-006`)
 
 ```powershell
 $env:ROLERADAR_BACKUP_PASSPHRASE = "fictional-test-passphrase-2026"
 $backupDir = Join-Path $env:TEMP "roleradar-quickstart-backups"
 
-# 1. Streamed encrypted backup (no plaintext temp files written)
+# 1. Streamed encrypted backup via libsodium secretstream + Argon2id (no plaintext temp files written)
 pwsh ./scripts/backup.ps1 -OutputDirectory $backupDir -PassphraseEnv ROLERADAR_BACKUP_PASSPHRASE
 
 # 2. Verify wipe without confirmation is rejected
@@ -103,12 +108,12 @@ pwsh ./scripts/wipe-data.ps1
 # 3. Execute confirmed wipe
 pwsh ./scripts/wipe-data.ps1 -Confirm "WIPE-ALL-ROLERADAR-DATA"
 
-# 4. Restore from the encrypted archive
+# 4. Two-pass restore from the encrypted archive (Pass 1 verifies entire stream; Pass 2 restores)
 $latestBackup = Get-ChildItem $backupDir -Filter "*.rrbak" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
 pwsh ./scripts/restore.ps1 -ArchivePath $latestBackup.FullName -PassphraseEnv ROLERADAR_BACKUP_PASSPHRASE
 ```
 
 **Expected Outcome**:
-- Backup writes a `.rrbak` encrypted archive without touching `%TEMP%` with plaintext dump files.
+- Backup writes a `.rrbak` archive encrypted with `Geralt` (`IncrementalXChaCha20Poly1305` + `Argon2id`) without touching `%TEMP%` with plaintext dump files.
 - Unconfirmed wipe refuses to run; confirmed wipe empties `notes`, `note_revisions`, and `audit_log`.
-- Restore repopulates 100% of notes, revisions, and audit entries identically; attempting a second restore without `-ForceOverwrite` fails safely because the datastore is non-empty.
+- Two-pass restore verifies the full archive in Pass 1 before applying Pass 2 to `mongorestore`, restoring 100% of notes, revisions, and audit entries identically; attempting a second restore without `-ForceOverwrite` fails safely because the datastore is non-empty.

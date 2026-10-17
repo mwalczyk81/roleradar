@@ -14,20 +14,20 @@ When should a full prior-body `NoteRevision` document be written to `note_revisi
 
 - **Zero Text Loss (`FR-008`)**: Any write that overwrites or removes existing text must preserve the complete prior markdown body.
 - **Linear Storage Scaling on Appends (`FR-004`, `FR-008`)**: Because `append` strictly concatenates text to the end of the existing body, the old body is always an exact prefix of the new body. Writing a full-body snapshot on every `append` to a 100 KB+ note would consume $O(N^2)$ bytes across $N$ appends.
-- **Concurrency Safety (`FR-004`, `FR-005`)**: `append` can execute atomically server-side without a caller version token, whereas `replace-section` requires optimistic concurrency (`version_token`) and `import-overwrite` requires verifying `current_body_hash == last_imported_body_hash`.
+- **Concurrency Safety & Typed Results (`FR-004`, `FR-005`, Constitution v1.1.0 Principle IV)**: `AppendToNote` executes atomically server-side without a caller version token, whereas `ReplaceNoteSection` requires optimistic concurrency (`version_token`, returning typed `ErrorCode.StaleVersionToken` on mismatch) and `ImportMarkdown` overwrite verifies `current_body_hash == last_imported_body_hash` (returning typed `ErrorCode.ImportConflict` on mismatch).
 
 ## Considered Options
 
-1. **Full prior-body `NoteRevision` snapshots only on `replace-section` and `import-overwrite`; `append` records only `appended_text` and `resulting_version_token` in `audit_log`**.
-2. **Full prior-body `NoteRevision` snapshots on all writes including `append`**.
+1. **Full prior-body `NoteRevision` snapshots only on `ReplaceNoteSection` and `ImportMarkdown` overwrite; `AppendToNote` records only `appended_text` and `resulting_version_token` in `audit_log`**.
+2. **Full prior-body `NoteRevision` snapshots on all writes including `AppendToNote`**.
 3. **Delta/diff patches for all writes**.
 
 ## Decision Outcome
 
-Chosen option: **Option 1 — Full prior-body `NoteRevision` snapshots only on `replace-section` and `import-overwrite`**, while `append` executes atomically server-side, writes no `NoteRevision`, and records `appended_text` plus `resulting_version_token` in `audit_log`.
+Chosen option: **Option 1 — Full prior-body `NoteRevision` snapshots only on `ReplaceNoteSection` and `ImportMarkdown` overwrite**, while `AppendToNote` executes atomically server-side, writes no `NoteRevision`, and records `appended_text` plus `resulting_version_token` in `audit_log`.
 
 ### Consequences
 
 - **Good**: Storage grows linearly ($O(N)$) across repeated appends to large notes while keeping 100% of historical text recoverable (since prior append states are prefixes of the current body or the next destructive revision's `prior_body`).
-- **Good**: Destructive edits (`replace-section` and `import-overwrite`) always capture a complete, self-contained prior markdown body in `note_revisions` linked via `audit_log.note_revision_id`.
+- **Good**: Destructive edits (`ReplaceNoteSection` and `ImportMarkdown` overwrite) always capture a complete, self-contained prior markdown body in `note_revisions` linked via `audit_log.note_revision_id`.
 - **Bad / Trade-off**: Reconstructing the exact body state between two historical appends requires slicing the body at the appended text boundary recorded in `audit_log` rather than reading a standalone `note_revisions` row.

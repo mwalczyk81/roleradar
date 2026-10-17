@@ -1,120 +1,109 @@
-# Phase 0 Research: Feature 001 — Memory Replacement
+# Phase 0 Research: Feature 001 — Memory Replacement (Constitution v1.1.0)
 
 **Feature**: `001-memory-replacement`  
 **Date**: 2026-10-17  
-**Spec**: [spec.md](./spec.md)
+**Spec**: [spec.md](./spec.md)  
+**Constitution**: v1.1.0
 
-## 1. Datastore Selection & Multi-Document Atomicity for Feature 001 (ADR-0001)
+---
 
-- **Decision**: Use MongoDB (`mongo:8.0.4` pinned container image) configured as a single-node replica set (`rs0`) as the sole datastore for Feature 001 (`notes`, `note_revisions`, and `audit_log` collections), deferring PostgreSQL until Feature 002 (structured companies, postings, and applications).
+## 1. Datastore Selection & Multi-Document Atomicity for Feature 001 ([ADR-0001](../../docs/adr/0001-mongo-only-for-feature-001.md))
+
+- **Decision**: Use MongoDB (`mongo:8.0.34`, verified on Docker Hub as the latest `8.0.x` patch tag on 2026-10-17) configured as a single-node replica set (`rs0`) bound to `127.0.0.1:27017` under `deploy/docker-compose.yml` as the sole datastore for Feature 001 (`notes`, `note_revisions`, and `audit_log` collections), deferring PostgreSQL until Feature 002.
 - **Rationale**:
-  - Feature 001 deals exclusively with narrative markdown notes, their destructive-edit revisions, and their write audit log.
-  - Every write operation (`create`, `append`, `replace-section`, `archive`, and `import`) must atomically persist the note mutation, the prior-body revision (when applicable), and the `audit_log` entry so a crash or fault can never leave an unaudited write or a revision out of sync with the note.
-  - Keeping all three collections inside a single MongoDB replica set allows standard multi-document ACID transactions (`IClientSessionHandle.WithTransactionAsync`) across `notes`, `note_revisions`, and `audit_log` without distributed two-phase commit (`2PC`) or cross-database outbox complexity.
+  - Feature 001 manages narrative markdown notes, their destructive-edit revisions, and their write audit log.
+  - Every write operation (`CreateNote`, `AppendToNote`, `ReplaceNoteSection`, `ArchiveNote`, and `ImportMarkdown`) must atomically persist the note mutation, the prior-body revision (for `ReplaceNoteSection` and `ImportMarkdown` overwrite), and the `audit_log` entry so a crash or fault can never leave an unaudited write or an out-of-sync revision.
+  - Keeping all three collections inside a single MongoDB replica set enables standard multi-document ACID transactions (`IClientSessionHandle.WithTransactionAsync`) across `notes`, `note_revisions`, and `audit_log` without distributed two-phase commit (`2PC`) or cross-database outbox complexity.
 - **Alternatives Considered**:
-  - *Split Notes in MongoDB and Audit Log in PostgreSQL in Feature 001*: Rejected because coordinating atomic writes across MongoDB and PostgreSQL would require a distributed transaction or outbox processor before any relational entities exist.
+  - *Split Notes in MongoDB and Audit Log in PostgreSQL in Feature 001*: Rejected because coordinating atomic writes across MongoDB and PostgreSQL would require distributed transactions or an outbox worker before any relational entities exist.
   - *Standalone MongoDB instance (no replica set)*: Rejected because MongoDB requires a replica set topology (`--replSet rs0`) to support multi-document transactions.
 
 ---
 
-## 2. Single Write Port: `INoteStore` (ADR-0002)
+## 2. Aggregate-Level Repository Port: `INoteRepository` ([ADR-0002](../../docs/adr/0002-inote-repository-single-write-port.md))
 
-- **Decision**: Define a single storage port interface, `INoteStore`, in `RoleRadar.Application` that encapsulates all note reads, searches, and transactional write units (updating `notes`, appending `note_revisions` when applicable, and appending `audit_log` entries in one atomic call). Introduce no other storage port or repository interfaces in Feature 001.
+- **Decision**: Define a single aggregate-level repository port, `INoteRepository`, in `RoleRadar.Application.Abstractions` whose methods express domain use cases covering a `Note`, its `NoteRevision` snapshots, and the `AuditLogEntry` written in the same transaction. Introduce no generic `IRepository<T>` over the database driver.
 - **Rationale**:
-  - Directly satisfies Constitution Principle IV (*Named Seams Only*), which explicitly authorizes `INoteStore` for narrative storage isolation and forbids generic repositories or unapproved seams.
-  - Modelling each write command on `INoteStore` as a complete unit of work (accepting the note mutation intent plus audit metadata and executing inside a single storage transaction) makes it impossible for application code to mutate a note without recording its audit entry.
+  - Directly satisfies Constitution v1.1.0 Principle IV (*Named Seams Only*), which adopts the repository pattern at the aggregate level (`INoteRepository`) and forbids generic `IRepository<T>` without an ADR.
+  - Works in concert with the `TransactionAndAuditCommandDecorator<TCommand, TResponse>` so that every command handler execution runs inside an atomic transaction and records its append-only `AuditLogEntry` in the same commit unit.
 - **Alternatives Considered**:
-  - *Separate `INoteRepository`, `INoteRevisionRepository`, and `IAuditLogRepository` plus `IUnitOfWork`*: Rejected because it adds three extra abstractions not named in Principle IV and shifts transaction session types into the `Application` layer.
+  - *Generic `IRepository<Note>`, `IRepository<NoteRevision>`, `IRepository<AuditLogEntry>`*: Explicitly forbidden by Constitution Principle IV because it leaks table-level CRUD semantics into `Application` and breaks aggregate transactional cohesion.
 
 ---
 
-## 3. MCP Transport & SDK Selection (ADR-0003 & ADR-0004)
+## 3. Command & Query Handlers with Explicit Decorators Instead of a Mediator ([ADR-0006](../../docs/adr/0006-handlers-with-decorators-no-mediator.md))
 
-- **Decision**: Use the official `ModelContextProtocol` NuGet package pinned at `2.2.0` (verified in `spikes/StdioEcho/StdioEcho.csproj`) with `Microsoft.Extensions.Hosting` `10.0.0`, running exclusively over `stdio` transport (`WithStdioServerTransport()`) and exposing at most 8 tools.
+- **Decision**: Implement each application use case as a plain handler class implementing `ICommandHandler<TCommand, Result<TResponse>>` or `IQueryHandler<TQuery, Result<TResponse>>`, injected directly into the `RoleRadar.Mcp.Stdio` tools and `RoleRadar.Cli` commands:
+  - **Command Handlers (5)**: `CreateNoteCommandHandler`, `AppendToNoteCommandHandler`, `ReplaceNoteSectionCommandHandler`, `ArchiveNoteCommandHandler`, `ImportMarkdownCommandHandler`.
+  - **Query Handlers (2)**: `GetNoteQueryHandler`, `SearchNotesQueryHandler`.
+  - **Decorators**: `TransactionAndAuditCommandDecorator<TCommand, TResponse>` wraps every `ICommandHandler<,>` registration (validating inputs, opening the atomic unit-of-work transaction, and enforcing audit entry recording); `LoggingDecorator` wraps both command and query handlers (routing logs to `stderr`).
+  - **Typed Results**: Expected domain/application failures (`NotFound`, `StaleVersionToken`, `AmbiguousHeading`, `SectionNotFound`, `ImportConflict`, `InvalidUtf8`, `DatastoreOffline`) are returned via a discriminated `Result<T>` / `Error` type rather than thrown as exceptions.
+  - **Architecture Enforcement**: A dedicated test in `RoleRadar.Tests.Architecture` resolves the DI `IServiceProvider` / `IServiceCollection` descriptors and proves that every registered `ICommandHandler<,>` has `TransactionAndAuditCommandDecorator<,>` in its pipeline (Constitution v1.1.0 Principle III).
 - **Rationale**:
-  - `ModelContextProtocol` `2.2.0` was validated in the `spikes/StdioEcho` spike on .NET 10 using:
-    - `builder.Logging.ClearProviders();`
-    - `builder.Logging.AddConsole(o => o.LogToStandardErrorThreshold = LogLevel.Trace);`
-    - `builder.Services.AddMcpServer().WithStdioServerTransport().WithTools<...>();`
-    - `[McpServerToolType]` and `[McpServerTool(Name = "..."), Description("...")]`
-  - Satisfies Constitution Principle VI (*stdio Protocol Hygiene*): `stdout` carries exclusively JSON-RPC protocol frames, all logs route to `stderr`, and zero network sockets/listeners are opened.
-  - Capping the agent surface at 6 focused tools (well under the 8-tool ceiling: `note_create`, `note_get`, `note_append`, `note_replace_section`, `note_search`, `note_archive`) keeps context token overhead minimal and omits any permanent delete capability (Principle V).
+  - Keeps control flow explicit, allocation-light, and trivially navigable in Visual Studio ("Go To Implementation" jumps straight to the handler).
+  - Avoids third-party mediator licensing risk: per secondary sources, `MediatR` 13+ transitioned to a dual-license model (Reciprocal Public License `RPL-1.5` or paid commercial license, to be verified before any future adoption), which is incompatible with RoleRadar's permissive `MIT` license (`Constitution Principle IV`).
 - **Alternatives Considered**:
-  - *HTTP/SSE MCP listener on localhost*: Rejected for Feature 001 because Principle VI and the spec forbid network listeners in Phase 1; authentication (Duende IdentityServer) arrives in Feature 004.
-  - *Custom JSON-RPC stdin/stdout parser*: Rejected because the official `ModelContextProtocol` `2.2.0` SDK handles framing, tool schema generation, and cancellation cleanly.
+  - *MediatR*: Rejected per Constitution Principle IV due to `RPL-1.5` / commercial licensing incompatibility with an MIT portfolio repository and unnecessary indirection for 7 handlers.
+  - *Monolithic `NoteService` / `MarkdownImportService` classes*: Replaced by single-responsibility command/query handlers so cross-cutting transaction, audit, validation, and logging decorators apply uniformly per command.
 
 ---
 
-## 4. Revision History & Concurrency Policy (ADR-0005)
+## 4. MCP Transport & Live-Verified NuGet / Docker Versions ([ADR-0003](../../docs/adr/0003-stdio-first-mcp.md) & [ADR-0004](../../docs/adr/0004-verified-mcp-sdk-usage.md))
+
+- **Decision**: Query `api.nuget.org` and `hub.docker.com` live at plan time (2026-10-17) and pin the exact current stable releases in `Directory.Packages.props`, `global.json`, and `deploy/docker-compose.yml`:
+  - **.NET SDK (`global.json`)**: `10.0.402` (`rollForward: "latestPatch"`)
+  - **Docker Image**: `mongo:8.0.34` (latest `8.0.x` patch tag on Docker Hub)
+  - **`ModelContextProtocol`**: `2.2.0`
+  - **`Microsoft.Extensions.Hosting`**: `10.0.13`
+  - **`MongoDB.Driver`**: `3.12.0`
+  - **`System.CommandLine`**: `2.0.13` (stable 2.0.x GA release; replaces the stale 2022 beta `2.0.0-beta4.22272.1` and uses the GA `Command.Add`, `Command.SetAction`, `ParseResult.GetValue`, and `Parse(args).InvokeAsync()` APIs)
+  - **`Geralt`**: `4.4.0` (with transitive `libsodium` `1.0.22`)
+  - **`xunit.v3`**: `4.0.2` (evaluated and adopted over legacy `xunit` `2.9.3`; natively targets `net8.0`+ with `Microsoft.Testing.Platform` v2 support)
+  - **`xunit.runner.visualstudio`**: `4.0.1`
+  - **`Microsoft.NET.Test.Sdk`**: `18.11.0`
+  - **`Testcontainers.MongoDb`**: `4.16.0` (natively targets `net10.0`; exposes `new MongoDbBuilder("mongo:8.0.34").WithReplicaSet("rs0").Build()`)
+  - **`NetArchTest.Rules`**: `1.3.2`
+  - **`coverlet.collector`**: `10.1.0`
+- **Rationale**:
+  - Eliminates stale remembered versions and 2022 pre-release betas while satisfying Constitution Principle VIII (*Pinned Dependencies*) and enabling `RestorePackagesWithLockFile` (`packages.lock.json`) + `NuGetAudit` as errors in CI.
+
+---
+
+## 5. Revision History & Concurrency Policy ([ADR-0005](../../docs/adr/0005-revision-history-policy.md))
 
 - **Decision**:
-  - Record a full prior-body `NoteRevision` document **only** on text-destroying writes (`replace-section` and `import-overwrite`).
-  - Execute `append` as an atomic server-side operation (no caller version token required) that records only the appended text and resulting version token in `audit_log` without creating a `NoteRevision` snapshot.
-  - Require the caller's `VersionToken` on `replace-section` and reject stale tokens with a retryable conflict error inside the transaction.
+  - Store a full prior-body `NoteRevision` document **only** on text-destroying writes (`ReplaceNoteSection` and `ImportMarkdown` overwrite).
+  - Execute `AppendToNote` as an atomic server-side update (no caller version token required) that records only `appended_text` and `resulting_version_token` in `audit_log` without creating a `NoteRevision` snapshot.
+  - Require the caller's `VersionToken` on `ReplaceNoteSection` and return a typed `Result` failure (`ErrorCode.StaleVersionToken`) inside the transaction when stale.
 - **Rationale**:
-  - Because `append` only concatenates to the end of the existing body, the prior body is strictly a prefix of the new body. Storing full-body snapshots on every append to a 100 KB+ note would cause $O(N^2)$ storage growth across $N$ appends.
-  - By contrast, `replace-section` and `import-overwrite` overwrite existing text, so preserving the full prior body in `note_revisions` (referenced by `revision_id` in `audit_log`) guarantees zero text loss.
-- **Alternatives Considered**:
-  - *Full-body revision snapshot on every write including `append`*: Rejected due to quadratic storage amplification on frequent appends to large notes.
-  - *Line-diff patches for all revisions*: Rejected because storing full prior bodies on infrequent destructive edits is simpler, faster to inspect/restore, and immune to diff reconstruction bugs.
+  - Prevents $O(N^2)$ quadratic storage growth across repeated appends to 100 KB+ notes while preserving 100% of overwritten text on destructive edits.
 
 ---
 
-## 5. Search Indexing & Query Semantics
+## 6. Streamed Authenticated Backup Encryption & Two-Pass Restore ([ADR-0007](../../docs/adr/0007-backup-streaming-aead-encryption.md))
 
 - **Decision**:
-  - Create a MongoDB compound text index on `title` (weight 10) and `body` (weight 1) with `default_language: "english"` (providing case-insensitive, whole-word matching with basic Porter stemming and quoted exact-phrase support via `$text: { $search: query, $caseSensitive: false, $diacriticSensitive: false }`), combined with equality/set filters on `owner_id`, `status`, `area`, and `tags` (`$all` for ANDed tag filtering).
-  - Sort results by `{ score: { $meta: "textScore" }, updated_at: -1, _id: 1 }` when a text query is present, or `{ updated_at: -1, _id: 1 }` when filtering by tags/area only.
-- **Rationale**:
-  - MongoDB's built-in English text index natively supports case-insensitive whole-word stemming and double-quoted exact phrases (`"..."`), and executes in single-digit milliseconds over 5,000 notes—well below the 200 ms p95 requirement (`SC-003`).
-- **Alternatives Considered**:
-  - *In-memory regex scanning*: Rejected because regex scans do not provide stemming or relevance scoring and degrade on 5,000+ large notes.
-  - *External search engine (Elasticsearch / Meilisearch)*: Rejected as unnecessary operational complexity for 5,000 notes.
+  - **Live Evaluation of .NET libsodium Candidates on NuGet.org (2026-10-17)**:
+    1. **`Geralt` (`4.4.0`) — SELECTED**: Actively maintained (2026 release), MIT licensed, stable release on NuGet.org (`net8.0` target, compatible with `net10.0`), backed by official `libsodium` `1.0.22`. Reflection inspection of `Geralt.dll` confirmed first-class span-based APIs for both **Argon2id** (`Geralt.Argon2id.DeriveKey(Span<byte> outputKeyingMaterial, ReadOnlySpan<byte> password, ReadOnlySpan<byte> salt, int iterations, int memorySize)`) and **libsodium `crypto_secretstream_xchacha20poly1305`** (`Geralt.IncrementalXChaCha20Poly1305` with `KeySize = 32`, `HeaderSize = 24`, `TagSize = 17`, `ChunkFlag.Message = 0`, `ChunkFlag.Boundary = 1`, `ChunkFlag.Rekey = 2`, `ChunkFlag.Final = 3`, `EncryptChunk`, and `DecryptChunk` with `associatedData` support).
+    2. **`NSec.Cryptography` (`26.4.0`) — Rejected**: Stable and maintained (`net9.0`), includes `Argon2id` and one-shot `XChaCha20Poly1305`, but assembly inspection confirmed it does **not** expose `crypto_secretstream_xchacha20poly1305` / incremental AEAD streaming.
+    3. **`Sodium.Core` (`1.4.1`) — Rejected**: Exposes `PasswordHash` and one-shot `SecretAeadXChaCha20Poly1305`, but does **not** expose `crypto_secretstream_xchacha20poly1305`.
+    4. **`LibSodium.Net` (`0.16.0-alpha`) — Rejected**: No stable release exists on NuGet.org (alpha pre-releases only).
+  - **Archive Format & Streaming Pipeline**:
+    - Header (`48 bytes`): Magic `"RRBK"` (4B) + Format Version `0x01` (1B) + Flags `0x00` (1B) + Argon2id Iterations (4B LE) + Argon2id Memory KiB (4B LE) + 16-byte random Salt + 24-byte `IncrementalXChaCha20Poly1305` Header (total 54 bytes).
+    - Key Derivation: `Geralt.Argon2id.DeriveKey` derives a 32-byte key from the passphrase + 16-byte salt (default: `iterations = 4`, `memorySize = 262144` KiB = 256 MiB).
+    - Chunked Stream: Streams `mongodump --archive --gzip` stdout in 64 KiB chunks through `IncrementalXChaCha20Poly1305.EncryptChunk`, passing the binary file header as `associatedData` on chunk `0` and setting `ChunkFlag.Final` (`3`) on the terminal chunk. Because `crypto_secretstream_xchacha20poly1305` increments its internal nonce per chunk and authenticates `ChunkFlag.Final`, wrong passphrase, bit flips, truncated streams, dropped chunks, and reordered chunks are all cryptographically rejected.
+  - **Two-Pass Restore**:
+    - **Pass 1 (Verify-Only)**: Streams the entire `.rrbak` archive file through `IncrementalXChaCha20Poly1305.DecryptChunk`, verifying header associated data, every chunk's Poly1305 tag, sequence integrity, and the terminal `ChunkFlag.Final` tag while discarding plaintext output in memory.
+    - **Pass 2 (Apply)**: Only after Pass 1 succeeds 100%, rewinds the `.rrbak` file stream and decrypts a second time directly into `mongorestore --archive --gzip` stdin. A corrupted or truncated archive is guaranteed to leave the datastore completely untouched.
 
 ---
 
-## 6. Byte-Exact Markdown Import & Provenance Grammar
+## 7. Repository Standards, CI/CD, and Community Governance
 
 - **Decision**:
-  - Validate input file bytes using `new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)` before any database write.
-  - Parse markdown files by scanning lines while preserving exact raw slices (including UTF-8 BOM at byte 0, original `CRLF` or `LF` line sequences, and trailing newline) and ignoring `#` lines inside fenced code blocks (`` ``` `` or `~~~`).
-  - Split on `#` (level 1) and `##` (level 2) headings (`###` and deeper remain inside the parent section body). Any bytes before the first `#`/`##` heading (such as UTF-8 BOM, frontmatter, or preamble text) are stored in section order index `0` with heading path `""` (or `$preamble`) so concatenating all sections for a file ordered by `section_order_index` reproduces the source file byte-for-byte.
-  - Compute `import_key = "{normalized_source_file_id}#{heading_path}#{sibling_occurrence_index}"` and `body_hash = SHA-256(raw_section_bytes)`.
-  - Parse inline provenance tags matching `\[(stated|researched|inferred)(?:\s+(\d{4}-\d{2}-\d{2})(?:\s+([^\]]+?))?)?\]` anywhere in the section (including the heading). Use the first match in document order; if undated (`[kind]`), use `--default-date` if supplied on the CLI or else the UTC date of `File.GetLastWriteTimeUtc(path)`. Record the resolved default date in the import `audit_log` entry.
-- **Rationale**:
-  - Guarantees 100% byte-for-byte round-trip fidelity (`SC-001`), deterministic idempotence (`SC-002`), conflict preservation when `current_body_hash != last_imported_body_hash`, and orphan reporting when previous `import_key` values are absent from the source file.
-- **Alternatives Considered**:
-  - *AST re-serialization via Markdig*: Rejected because AST round-tripping normalizes whitespace, list markers, and line endings, violating byte-exact preservation.
-
----
-
-## 7. Streamed Encrypted Backups & Safe Lifecycle Scripts
-
-- **Decision**:
-  - Stream `docker exec roleradar-mongo mongodump --archive --gzip --db roleradar` directly over process `stdout` into an in-process authenticated AES-256-GCM (PBKDF2-SHA256, 600,000 iterations, random 16-byte salt + 12-byte nonce, chunked AEAD stream) encryption pipeline in `RoleRadar.Cli backup` so no plaintext dump file ever touches the filesystem or `%TEMP%`.
-  - Read the passphrase exclusively from `--passphrase-env <VAR>`, `--passphrase-stdin`, or an interactive masked console prompt; reject any `--passphrase` value argument on the command line.
-  - Provide PowerShell operational wrapper scripts under `scripts/` (`start-services.ps1`, `backup.ps1`, `restore.ps1`, `wipe-data.ps1`) that invoke `docker compose` and `RoleRadar.Cli`.
-- **Rationale**:
-  - Streaming directly from `mongodump --archive` stdout into .NET's `Rfc2898DeriveBytes` + `AesGcm` chunked stream requires zero external encryption binaries (`age`/`7z`) to be pre-installed on Windows while guaranteeing authenticated encryption and zero temporary plaintext files (`SC-006`).
-- **Alternatives Considered**:
-  - *Dumping to a temp file then encrypting*: Strictly forbidden by `FR-014` and `SC-006`.
-  - *Requiring external `age.exe` binary on PATH*: Rejected as the primary mechanism because a built-in .NET 10 `AesGcm` streaming format works out of the box from a clean clone without extra binary dependencies.
-
----
-
-## 8. Pinned Dependencies & Quality Gates
-
-- **Decision**: Use Central Package Management (`Directory.Packages.props`) and strict build settings (`Directory.Build.props` with `TargetFramework=net10.0`, `Nullable=enable`, `TreatWarningsAsErrors=true`, `AnalysisLevel=latest-recommended`) with the following pinned versions:
-  - `ModelContextProtocol`: `2.2.0`
-  - `Microsoft.Extensions.Hosting`: `10.0.0`
-  - `MongoDB.Driver`: `3.1.0`
-  - `System.CommandLine`: `2.0.0-beta4.22272.1`
-  - `xunit`: `2.9.3`
-  - `xunit.runner.visualstudio`: `3.0.2`
-  - `Microsoft.NET.Test.Sdk`: `17.13.0`
-  - `Testcontainers.MongoDb`: `4.3.0`
-  - `NetArchTest.Rules`: `1.3.2`
-  - `coverlet.collector`: `6.0.4`
-  - Docker image: `mongo:8.0.4`
-  - Minimum coverage gate: **85% line coverage** across `RoleRadar.Domain` and `RoleRadar.Application` enforced in CI.
-- **Rationale**: Satisfies Constitution Principles II, III, VIII, and IX.
+  - Layout: `src/`, `tests/`, `docs/adr/`, `scripts/`, `deploy/` (`deploy/docker-compose.yml`), `.github/`, and `RoleRadar.sln` at the repository root.
+  - `global.json` pinning `.NET SDK 10.0.402` (`rollForward: "latestPatch"`).
+  - `.gitattributes` enforcing `* text=auto eol=lf`, `*.ps1 text eol=crlf`, and `tests/**/fixtures/** -text` so Git never mutates `CRLF` or UTF-8 BOM bytes in test fixtures.
+  - NuGet lock files (`RestorePackagesWithLockFile=true`) with locked-mode restore (`dotnet restore --locked-mode`) in CI and `NuGetAudit` (`TreatWarningsAsErrors=true`, `NuGetAuditMode=all`, `NuGetAuditLevel=low`).
+  - GitHub Actions (`ci.yml`, `codeql.yml`, `dependency-review.yml`) with actions pinned by full 40-char commit SHA, least-privilege `permissions`, and concurrency groups; Dependabot for `nuget`, `docker`, and `github-actions` with grouped minor/patch updates.
+  - Community & Governance files: `README.md` (with `<10 minute` quickstart and Mermaid architecture diagram), `docs/adr/README.md` (ADR index), `SECURITY.md`, `CONTRIBUTING.md`, `CODEOWNERS`, `.github/PULL_REQUEST_TEMPLATE.md`, `.github/ISSUE_TEMPLATE/`, and `docs/repo-settings.md`.
