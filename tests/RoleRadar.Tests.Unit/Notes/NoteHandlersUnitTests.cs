@@ -478,6 +478,38 @@ public sealed class NoteHandlersUnitTests
         Assert.Equal("Distributed Kafka Architecture", searchResult.Value.Results[0].Title);
     }
 
+    [Fact]
+    public async Task ArchiveNoteCommandHandler_ValidActiveNote_RotatesTokenAndMarksArchived()
+    {
+        var repo = new InMemoryFakeNoteRepository();
+        var clock = new FixedUtcClock(FixedNow);
+        var createHandler = new CreateNoteCommandHandler(repo, clock);
+        var created = await createHandler.HandleAsync(new CreateNoteCommand(
+            Title: "Archive Unit Target",
+            Body: "# Archive Me\nKeep body verbatim.\n",
+            Area: "general",
+            Tags: ["unit"],
+            ProvenanceKind: "stated",
+            ProvenanceDate: "2026-10-17",
+            ProvenanceQualifier: null));
+        Assert.True(created.IsSuccess);
+
+        var archiveHandler = new ArchiveNoteCommandHandler(repo, clock);
+        var archiveResult = await archiveHandler.HandleAsync(new ArchiveNoteCommand(created.Value!.Id));
+
+        Assert.True(archiveResult.IsSuccess);
+        Assert.NotNull(archiveResult.Value);
+        Assert.Equal(created.Value.Id, archiveResult.Value.Id);
+        Assert.Equal("archived", archiveResult.Value.Status);
+        Assert.NotEqual(created.Value.VersionToken, archiveResult.Value.VersionToken);
+
+        var noteInRepo = repo.Notes[created.Value.Id];
+        Assert.Equal(NoteStatus.Archived, noteInRepo.Status);
+        Assert.Equal("# Archive Me\nKeep body verbatim.\n", noteInRepo.Body);
+        Assert.Equal(2, repo.Audits.Count); // 1 create + 1 archive
+        Assert.Equal(AuditOperation.NoteArchive, repo.Audits[1].Operation);
+    }
+
     private sealed class FixedUtcClock(DateTime utcNow) : IUtcClock
     {
         public DateTime UtcNow { get; } = utcNow;
@@ -586,8 +618,25 @@ public sealed class NoteHandlersUnitTests
             return Task.FromResult(Result<NoteWriteOutcome>.Success(new NoteWriteOutcome(CloneNote(updatedNote), auditEntry, priorBodyRevision)));
         }
 
-        public Task<Result<NoteWriteOutcome>> ArchiveAsync(Note archivedNote, Guid expectedVersionToken, AuditLogEntry auditEntry, CancellationToken cancellationToken = default) =>
-            throw new NotSupportedException();
+        public Task<Result<NoteWriteOutcome>> ArchiveAsync(Note archivedNote, Guid expectedVersionToken, AuditLogEntry auditEntry, CancellationToken cancellationToken = default)
+        {
+            if (!Notes.TryGetValue(archivedNote.Id, out var existing))
+            {
+                return Task.FromResult(Result<NoteWriteOutcome>.Failure(ErrorCode.NotFound, $"Note '{archivedNote.Id}' not found."));
+            }
+
+            if (existing.VersionToken != expectedVersionToken)
+            {
+                return Task.FromResult(Result<NoteWriteOutcome>.Failure(
+                    ErrorCode.StaleVersionToken,
+                    "Stale version token.",
+                    new Dictionary<string, object?> { ["currentVersionToken"] = existing.VersionToken.ToString() }));
+            }
+
+            Notes[archivedNote.Id] = CloneNote(archivedNote);
+            Audits.Add(auditEntry);
+            return Task.FromResult(Result<NoteWriteOutcome>.Success(new NoteWriteOutcome(CloneNote(archivedNote), auditEntry)));
+        }
 
         public Task<Result<NoteWriteOutcome>> UpsertImportedSectionAsync(UpsertImportedSectionRequest request, CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
