@@ -95,11 +95,13 @@
     - **Tool Source & Invocation Model**:
       - Default to `docker compose exec -T mongo mongodump` and `docker compose exec -T mongo mongorestore` so tool binaries match the server version (`mongo:8.0.34`) without requiring database tools to be installed on the host machine.
       - Make invocation configurable via `BackupOptions.DumpCommand` and `BackupOptions.RestoreCommand` so both production compose services and integration Testcontainers can supply explicit container or host invocations.
-    - **Oplog Consistency Evaluation**:
-      - Evaluated `mongodump --oplog` on single-node replica set `rs0`. Because `rs0` initiates an active `local.oplog.rs` collection, full-instance dumps with `--oplog` are fully supported (restored via `mongorestore --archive --gzip --oplogReplay`). We chose full-instance dump with `--oplog` because it captures a point-in-time consistent state across all collections (`notes`, `note_revisions`, and `audit_log`) even when concurrent writes occur during the dump.
+    - **Oplog Consistency Evaluation & Scoped Database Restore**:
+      - Evaluated `mongodump --oplog` on single-node replica set `rs0`. Full-instance dumps with `--oplog` capture point-in-time consistent state across all collections (`notes`, `note_revisions`, and `audit_log`).
+      - In `mongorestore` (verified on `mongo:8.0.34`), `--oplogReplay` conflicts with namespace inclusion options: passing `--oplogReplay` together with `--nsInclude` causes `mongorestore` to immediately abort with `Failed: cannot use --oplogReplay with includes specified`.
+      - To guarantee that restoring into a specific database never drops or overwrites unrelated databases on the same MongoDB instance, `RestoreCommand` scopes restoration using `--nsInclude "<db>.*"` and omits `--oplogReplay`. If a user-provided or custom restore command specifies both flags, `SecretStreamBackupArchiveService` automatically strips `--oplogReplay` so that `mongorestore` executes cleanly without cross-database interference.
   - **Two-Pass Restore**:
-    - **Pass 1 (Verify-Only)**: Streams the entire `.rrbak` archive file through `IncrementalXChaCha20Poly1305.DecryptChunk`, verifying header associated data, every chunk's Poly1305 tag, sequence integrity, and the terminal `ChunkFlag.Final` tag while discarding plaintext output in memory.
-    - **Pass 2 (Apply)**: Only after Pass 1 succeeds 100%, rewinds the `.rrbak` file stream and decrypts a second time directly into `mongorestore --archive --gzip` stdin. A corrupted or truncated archive is guaranteed to leave the datastore completely untouched.
+    - **Pass 1 (Verify-Only)**: Streams the entire `.rrbak` archive file through `IncrementalXChaCha20Poly1305.DecryptChunk`, verifying header associated data, every chunk's Poly1305 tag, sequence integrity, and the terminal `ChunkFlag.Final` tag while discarding plaintext output in memory. Single `FileStream` with `FileShare.Read` is maintained across both passes and rewound (`Position = 0`) before Pass 2.
+    - **Pass 2 (Apply)**: Only after Pass 1 succeeds 100%, decrypts directly into `mongorestore --archive --gzip` stdin from the rewound file stream, enforcing chunk length sanity bounds. A corrupted or truncated archive is guaranteed to leave the datastore completely untouched.
 
 ---
 

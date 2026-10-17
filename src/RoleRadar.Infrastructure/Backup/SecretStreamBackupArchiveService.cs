@@ -1,7 +1,10 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Geralt;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -62,6 +65,10 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         var key = new byte[BackupArchiveConstants.KeySize];
         var passphraseBytes = Encoding.UTF8.GetBytes(passphrase);
 
+        byte[] currentChunk = ArrayPool<byte>.Shared.Rent(BackupArchiveConstants.ChunkPlaintextSize);
+        byte[] nextChunk = ArrayPool<byte>.Shared.Rent(BackupArchiveConstants.ChunkPlaintextSize);
+        byte[] ciphertextBuffer = ArrayPool<byte>.Shared.Rent(BackupArchiveConstants.ChunkPlaintextSize + BackupArchiveConstants.TagSize);
+
         try
         {
             Geralt.Argon2id.DeriveKey(key, passphraseBytes, salt, iterations, memoryKiB * 1024);
@@ -81,10 +88,6 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             await ciphertextStream.WriteAsync(fileHeader, cancellationToken);
 
             long totalPlaintextBytes = 0;
-            var currentChunk = new byte[BackupArchiveConstants.ChunkPlaintextSize];
-            var nextChunk = new byte[BackupArchiveConstants.ChunkPlaintextSize];
-            var ciphertextBuffer = new byte[BackupArchiveConstants.ChunkPlaintextSize + BackupArchiveConstants.TagSize];
-
             var hasCurrentChunk = false;
             var currentChunkLen = 0;
             var isFirstChunk = true;
@@ -98,6 +101,15 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                     if (bytesRead == 0)
                     {
                         // 0-byte input stream
+                        if (beforeFinalChunkAsync is not null)
+                        {
+                            var gate = await beforeFinalChunkAsync(cancellationToken);
+                            if (!gate.IsSuccess)
+                            {
+                                return Result<long>.Failure(gate.Error ?? new ResultError(ErrorCode.ValidationError, "Final chunk holdback check failed."));
+                            }
+                        }
+
                         streamEncryptor.EncryptChunk(
                             ciphertextBuffer.AsSpan(0, BackupArchiveConstants.TagSize),
                             ReadOnlySpan<byte>.Empty,
@@ -116,6 +128,15 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                 else
                 {
                     var isTerminal = bytesRead == 0;
+                    if (isTerminal && beforeFinalChunkAsync is not null)
+                    {
+                        var gate = await beforeFinalChunkAsync(cancellationToken);
+                        if (!gate.IsSuccess)
+                        {
+                            return Result<long>.Failure(gate.Error ?? new ResultError(ErrorCode.ValidationError, "Final chunk holdback check failed."));
+                        }
+                    }
+
                     var flag = isTerminal ? ChunkFlag.Final : ChunkFlag.Message;
                     var ad = isFirstChunk ? fileHeader : ReadOnlySpan<byte>.Empty;
                     var cipherLen = currentChunkLen + BackupArchiveConstants.TagSize;
@@ -146,6 +167,9 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         }
         finally
         {
+            ArrayPool<byte>.Shared.Return(currentChunk, clearArray: true);
+            ArrayPool<byte>.Shared.Return(nextChunk, clearArray: true);
+            ArrayPool<byte>.Shared.Return(ciphertextBuffer, clearArray: true);
             CryptographicOperations.ZeroMemory(key);
             CryptographicOperations.ZeroMemory(passphraseBytes);
         }
@@ -195,6 +219,9 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         var derivedKey = new byte[BackupArchiveConstants.KeySize];
         var passphraseBytes = Encoding.UTF8.GetBytes(passphrase);
 
+        byte[] chunkBuffer = ArrayPool<byte>.Shared.Rent(BackupArchiveConstants.MaxCiphertextLength);
+        byte[] scratchPlaintext = ArrayPool<byte>.Shared.Rent(BackupArchiveConstants.MaxCiphertextLength);
+
         try
         {
             Geralt.Argon2id.DeriveKey(derivedKey, passphraseBytes, salt, iterations, memoryKiB * 1024);
@@ -203,9 +230,6 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             using var decryptor = new IncrementalXChaCha20Poly1305(streamHeaderCopy, derivedKey, encryption: false);
 
             var lengthBuffer = new byte[4];
-            var chunkBuffer = new byte[BackupArchiveConstants.MaxCiphertextLength];
-            var scratchPlaintext = new byte[BackupArchiveConstants.MaxCiphertextLength];
-
             var isFirstChunk = true;
             var observedFinal = false;
 
@@ -281,6 +305,8 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         }
         finally
         {
+            ArrayPool<byte>.Shared.Return(chunkBuffer, clearArray: true);
+            ArrayPool<byte>.Shared.Return(scratchPlaintext, clearArray: true);
             CryptographicOperations.ZeroMemory(derivedKey);
             CryptographicOperations.ZeroMemory(passphraseBytes);
         }
@@ -309,41 +335,54 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         using var decryptor = new IncrementalXChaCha20Poly1305(streamHeader, derivedKey, encryption: false);
 
         var lengthBuffer = new byte[4];
-        var chunkBuffer = new byte[BackupArchiveConstants.MaxCiphertextLength];
-        var plaintextBuffer = new byte[BackupArchiveConstants.MaxCiphertextLength];
+        byte[] chunkBuffer = ArrayPool<byte>.Shared.Rent(BackupArchiveConstants.MaxCiphertextLength);
+        byte[] plaintextBuffer = ArrayPool<byte>.Shared.Rent(BackupArchiveConstants.MaxCiphertextLength);
 
-        long totalDecrypted = 0;
-        var isFirstChunk = true;
-
-        while (true)
+        try
         {
-            var lenRead = await ReadExactOrToEofAsync(ciphertextStream, lengthBuffer, 0, 4, cancellationToken);
-            if (lenRead == 0)
+            long totalDecrypted = 0;
+            var isFirstChunk = true;
+
+            while (true)
             {
-                break;
+                var lenRead = await ReadExactOrToEofAsync(ciphertextStream, lengthBuffer, 0, 4, cancellationToken);
+                if (lenRead == 0)
+                {
+                    break;
+                }
+
+                var chunkLen = BitConverter.ToInt32(lengthBuffer, 0);
+                if (chunkLen < BackupArchiveConstants.MinCiphertextLength || chunkLen > BackupArchiveConstants.MaxCiphertextLength)
+                {
+                    return Result<long>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+                }
+
+                await ReadExactOrToEofAsync(ciphertextStream, chunkBuffer, 0, chunkLen, cancellationToken);
+
+                var ad = isFirstChunk ? header.AsSpan() : ReadOnlySpan<byte>.Empty;
+                var plainLen = chunkLen - BackupArchiveConstants.TagSize;
+
+                decryptor.DecryptChunk(
+                    plaintextBuffer.AsSpan(0, plainLen),
+                    chunkBuffer.AsSpan(0, chunkLen),
+                    ad);
+
+                if (plainLen > 0)
+                {
+                    await plaintextStream.WriteAsync(plaintextBuffer.AsMemory(0, plainLen), cancellationToken);
+                    totalDecrypted += plainLen;
+                }
+
+                isFirstChunk = false;
             }
 
-            var chunkLen = BitConverter.ToInt32(lengthBuffer, 0);
-            await ReadExactOrToEofAsync(ciphertextStream, chunkBuffer, 0, chunkLen, cancellationToken);
-
-            var ad = isFirstChunk ? header.AsSpan() : ReadOnlySpan<byte>.Empty;
-            var plainLen = chunkLen - BackupArchiveConstants.TagSize;
-
-            decryptor.DecryptChunk(
-                plaintextBuffer.AsSpan(0, plainLen),
-                chunkBuffer.AsSpan(0, chunkLen),
-                ad);
-
-            if (plainLen > 0)
-            {
-                await plaintextStream.WriteAsync(plaintextBuffer.AsMemory(0, plainLen), cancellationToken);
-                totalDecrypted += plainLen;
-            }
-
-            isFirstChunk = false;
+            return Result<long>.Success(totalDecrypted);
         }
-
-        return Result<long>.Success(totalDecrypted);
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(chunkBuffer, clearArray: true);
+            ArrayPool<byte>.Shared.Return(plaintextBuffer, clearArray: true);
+        }
     }
 
     public async Task<Result<long>> DecryptStreamAsync(
@@ -438,22 +477,57 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                 return await reader.ReadToEndAsync(cancellationToken);
             }, cancellationToken);
 
+            var dumpStdout = process.StandardOutput.BaseStream;
+            var firstChunk = new byte[BackupArchiveConstants.ChunkPlaintextSize];
+            var firstRead = await ReadExactOrToEofAsync(dumpStdout, firstChunk, 0, BackupArchiveConstants.ChunkPlaintextSize, cancellationToken);
+
+            if (firstRead == 0)
+            {
+                await TerminateProcessTreeAsync(process);
+                if (File.Exists(partialPath)) File.Delete(partialPath);
+                var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
+                return Result<BackupArchiveSummaryDto>.Failure(
+                    ErrorCode.ValidationError,
+                    $"mongodump produced zero bytes. An empty archive cannot be created: {stderr}");
+            }
+
+            if (!IsValidMongodumpArchive(firstChunk, firstRead))
+            {
+                await TerminateProcessTreeAsync(process);
+                if (File.Exists(partialPath)) File.Delete(partialPath);
+                var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
+                return Result<BackupArchiveSummaryDto>.Failure(
+                    ErrorCode.ValidationError,
+                    $"mongodump stream is not a valid archive. Decoded stream does not match mongodump archive magic: {stderr}");
+            }
+
+            using var prefixStream = new PrefixStream(firstChunk, firstRead, dumpStdout);
+
             long bytesWritten = 0;
             await using (var outputFile = new FileStream(partialPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.Asynchronous))
             {
-                var dumpStdout = process.StandardOutput.BaseStream;
-
-                // Stream dump output into encrypted archive
-                var encResult = await EncryptDumpStreamWithProcessHoldbackAsync(
-                    dumpStdout,
+                var encResult = await EncryptStreamAsync(
+                    prefixStream,
                     outputFile,
-                    process,
-                    stderrDrainTask,
                     passphrase,
-                    cancellationToken);
+                    beforeFinalChunkAsync: async ct =>
+                    {
+                        await process.WaitForExitAsync(ct);
+                        if (process.ExitCode != 0)
+                        {
+                            var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
+                            return Result<bool>.Failure(
+                                ErrorCode.ValidationError,
+                                $"mongodump failed with exit code {process.ExitCode}: {stderr}");
+                        }
+                        return Result<bool>.Success(true);
+                    },
+                    cancellationToken: cancellationToken);
 
                 if (!encResult.IsSuccess)
                 {
+                    await TerminateProcessTreeAsync(process);
+                    if (File.Exists(partialPath)) File.Delete(partialPath);
                     return Result<BackupArchiveSummaryDto>.Failure(encResult.Error!.Value);
                 }
 
@@ -479,6 +553,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         }
         catch (Exception)
         {
+            await TerminateProcessTreeAsync(process);
             if (File.Exists(partialPath))
             {
                 try { File.Delete(partialPath); } catch { }
@@ -487,6 +562,10 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         }
         finally
         {
+            if (File.Exists(partialPath))
+            {
+                try { File.Delete(partialPath); } catch { }
+            }
             process?.Dispose();
         }
     }
@@ -524,24 +603,35 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                 $"Backup archive '{backupFilePath}' does not exist.");
         }
 
-        // Pass 1: Verify archive authenticity without touching MongoDB
-        byte[]? derivedKey = null;
-        await using (var fileStream = new FileStream(backupFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous))
+        // Single FileStream opened for both Pass 1 and Pass 2
+        await using var fileStream = new FileStream(backupFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous);
+
+        var pass1Result = await Pass1VerifyAsync(fileStream, passphrase, cancellationToken);
+        if (!pass1Result.IsSuccess || pass1Result.Value is null)
         {
-            var pass1Result = await Pass1VerifyAsync(fileStream, passphrase, cancellationToken);
-            if (!pass1Result.IsSuccess || pass1Result.Value is null)
-            {
-                return Result<RestoreArchiveSummaryDto>.Failure(
-                    pass1Result.Error ?? new ResultError(ErrorCode.AuthenticationError, "Archive is invalid or corrupted."));
-            }
-            derivedKey = pass1Result.Value;
+            return Result<RestoreArchiveSummaryDto>.Failure(
+                pass1Result.Error ?? new ResultError(ErrorCode.AuthenticationError, "Archive is invalid or corrupted."));
         }
+        var derivedKey = pass1Result.Value;
 
         // Pass 2: Stream decrypted bytes into mongorestore stdin
+        Process? process = null;
         try
         {
             var restoreCmdString = _backupOptions.RestoreCommand;
-            if (forceOverwrite && !restoreCmdString.Contains("--drop"))
+            if (restoreCmdString.Contains("<db>", StringComparison.OrdinalIgnoreCase))
+            {
+                restoreCmdString = restoreCmdString.Replace("<db>", _mongoOptions.DatabaseName);
+            }
+
+            if (restoreCmdString.Contains("--nsInclude", StringComparison.OrdinalIgnoreCase) &&
+                restoreCmdString.Contains("--oplogReplay", StringComparison.OrdinalIgnoreCase))
+            {
+                // mongorestore fails if both --oplogReplay and --nsInclude are present
+                restoreCmdString = Regex.Replace(restoreCmdString, @"\s*--oplogReplay\b", "");
+            }
+
+            if (forceOverwrite && !restoreCmdString.Contains("--drop", StringComparison.OrdinalIgnoreCase))
             {
                 restoreCmdString += " --drop";
             }
@@ -557,7 +647,6 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                 CreateNoWindow = true
             };
 
-            Process? process;
             try
             {
                 process = Process.Start(startInfo);
@@ -584,16 +673,16 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                     return await reader.ReadToEndAsync(cancellationToken);
                 }, cancellationToken);
 
-                await using (var fileStream = new FileStream(backupFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous))
+                // Rewind fileStream for Pass 2
+                fileStream.Position = 0;
+                var restoreStdin = process.StandardInput.BaseStream;
+                var decryptResult = await Pass2DecryptAsync(fileStream, restoreStdin, derivedKey, cancellationToken);
+                if (!decryptResult.IsSuccess)
                 {
-                    var restoreStdin = process.StandardInput.BaseStream;
-                    var decryptResult = await Pass2DecryptAsync(fileStream, restoreStdin, derivedKey, cancellationToken);
-                    if (!decryptResult.IsSuccess)
-                    {
-                        return Result<RestoreArchiveSummaryDto>.Failure(decryptResult.Error!.Value);
-                    }
-                    await restoreStdin.FlushAsync(cancellationToken);
+                    await TerminateProcessTreeAsync(process);
+                    return Result<RestoreArchiveSummaryDto>.Failure(decryptResult.Error!.Value);
                 }
+                await restoreStdin.FlushAsync(cancellationToken);
 
                 process.StandardInput.Close();
                 await process.WaitForExitAsync(cancellationToken);
@@ -623,6 +712,11 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
             return Result<RestoreArchiveSummaryDto>.Success(
                 new RestoreArchiveSummaryDto(backupFilePath, counts, DateTime.UtcNow));
+        }
+        catch (Exception)
+        {
+            await TerminateProcessTreeAsync(process);
+            throw;
         }
         finally
         {
@@ -685,130 +779,69 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             new WipeSummaryDto(droppedCounts, DateTime.UtcNow));
     }
 
-    private static async Task<Result<bool>> EncryptDumpStreamWithProcessHoldbackAsync(
-        Stream dumpStdout,
-        Stream outputFile,
-        Process dumpProcess,
-        Task<string>? stderrDrainTask,
-        string passphrase,
-        CancellationToken cancellationToken)
+    private static bool IsValidMongodumpArchive(byte[] chunk, int count)
     {
-        var salt = new byte[BackupArchiveConstants.SaltSize];
-        RandomNumberGenerator.Fill(salt);
+        if (count < 4) return false;
+        var span = chunk.AsSpan(0, count);
 
-        var key = new byte[BackupArchiveConstants.KeySize];
-        var passphraseBytes = Encoding.UTF8.GetBytes(passphrase);
-
-        try
+        // 1. Direct uncompressed archive magic
+        if (MatchesArchiveMagic(span))
         {
-            Geralt.Argon2id.DeriveKey(key, passphraseBytes, salt, BackupArchiveConstants.DefaultArgon2Iterations, BackupArchiveConstants.DefaultArgon2MemoryKiB * 1024);
+            return true;
+        }
 
-            var streamHeader = new byte[BackupArchiveConstants.StreamHeaderSize];
-            using var streamEncryptor = new IncrementalXChaCha20Poly1305(streamHeader, key, encryption: true);
-
-            var fileHeader = new byte[BackupArchiveConstants.HeaderSize];
-            Array.Copy(BackupArchiveConstants.Magic, 0, fileHeader, 0, 4);
-            fileHeader[4] = BackupArchiveConstants.CurrentFormatVersion;
-            fileHeader[5] = BackupArchiveConstants.ExpectedFlags;
-            Array.Copy(BitConverter.GetBytes(BackupArchiveConstants.DefaultArgon2Iterations), 0, fileHeader, 6, 4);
-            Array.Copy(BitConverter.GetBytes(BackupArchiveConstants.DefaultArgon2MemoryKiB), 0, fileHeader, 10, 4);
-            Array.Copy(salt, 0, fileHeader, 14, BackupArchiveConstants.SaltSize);
-            Array.Copy(streamHeader, 0, fileHeader, 30, BackupArchiveConstants.StreamHeaderSize);
-
-            await outputFile.WriteAsync(fileHeader, cancellationToken);
-
-            var currentChunk = new byte[BackupArchiveConstants.ChunkPlaintextSize];
-            var nextChunk = new byte[BackupArchiveConstants.ChunkPlaintextSize];
-            var ciphertextBuffer = new byte[BackupArchiveConstants.ChunkPlaintextSize + BackupArchiveConstants.TagSize];
-
-            var hasCurrentChunk = false;
-            var currentChunkLen = 0;
-            var isFirstChunk = true;
-
-            while (true)
+        // 2. GZIP compressed archive (0x1f, 0x8b)
+        if (span.Length >= 2 && span[0] == 0x1f && span[1] == 0x8b)
+        {
+            try
             {
-                var bytesRead = await ReadExactOrToEofAsync(dumpStdout, nextChunk, 0, BackupArchiveConstants.ChunkPlaintextSize, cancellationToken);
-
-                if (!hasCurrentChunk)
+                using var ms = new MemoryStream(chunk, 0, count);
+                using var gzip = new GZipStream(ms, CompressionMode.Decompress);
+                var decompHeader = new byte[8];
+                var read = gzip.Read(decompHeader, 0, decompHeader.Length);
+                if (read >= 4 && MatchesArchiveMagic(decompHeader.AsSpan(0, read)))
                 {
-                    if (bytesRead == 0)
-                    {
-                        // Wait for dump process to exit 0 before writing Final chunk
-                        await dumpProcess.WaitForExitAsync(cancellationToken);
-                        if (dumpProcess.ExitCode != 0)
-                        {
-                            var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
-                            return Result<bool>.Failure(ErrorCode.ValidationError, $"mongodump process exited with code {dumpProcess.ExitCode}: {stderr}");
-                        }
-
-                        streamEncryptor.EncryptChunk(
-                            ciphertextBuffer.AsSpan(0, BackupArchiveConstants.TagSize),
-                            ReadOnlySpan<byte>.Empty,
-                            fileHeader,
-                            ChunkFlag.Final);
-
-                        await outputFile.WriteAsync(BitConverter.GetBytes(BackupArchiveConstants.TagSize), cancellationToken);
-                        await outputFile.WriteAsync(ciphertextBuffer.AsMemory(0, BackupArchiveConstants.TagSize), cancellationToken);
-                        break;
-                    }
-
-                    Array.Copy(nextChunk, currentChunk, bytesRead);
-                    currentChunkLen = bytesRead;
-                    hasCurrentChunk = true;
-                }
-                else
-                {
-                    var isTerminal = bytesRead == 0;
-                    if (isTerminal)
-                    {
-                        // Hold back final chunk until dump process exits 0!
-                        await dumpProcess.WaitForExitAsync(cancellationToken);
-                        if (dumpProcess.ExitCode != 0)
-                        {
-                            var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
-                            return Result<bool>.Failure(ErrorCode.ValidationError, $"mongodump process exited with code {dumpProcess.ExitCode}: {stderr}");
-                        }
-
-                        var ad = isFirstChunk ? fileHeader : ReadOnlySpan<byte>.Empty;
-                        var cipherLen = currentChunkLen + BackupArchiveConstants.TagSize;
-
-                        streamEncryptor.EncryptChunk(
-                            ciphertextBuffer.AsSpan(0, cipherLen),
-                            currentChunk.AsSpan(0, currentChunkLen),
-                            ad,
-                            ChunkFlag.Final);
-
-                        await outputFile.WriteAsync(BitConverter.GetBytes(cipherLen), cancellationToken);
-                        await outputFile.WriteAsync(ciphertextBuffer.AsMemory(0, cipherLen), cancellationToken);
-                        break;
-                    }
-                    else
-                    {
-                        var ad = isFirstChunk ? fileHeader : ReadOnlySpan<byte>.Empty;
-                        var cipherLen = currentChunkLen + BackupArchiveConstants.TagSize;
-
-                        streamEncryptor.EncryptChunk(
-                            ciphertextBuffer.AsSpan(0, cipherLen),
-                            currentChunk.AsSpan(0, currentChunkLen),
-                            ad,
-                            ChunkFlag.Message);
-
-                        await outputFile.WriteAsync(BitConverter.GetBytes(cipherLen), cancellationToken);
-                        await outputFile.WriteAsync(ciphertextBuffer.AsMemory(0, cipherLen), cancellationToken);
-
-                        isFirstChunk = false;
-                        Array.Copy(nextChunk, currentChunk, bytesRead);
-                        currentChunkLen = bytesRead;
-                    }
+                    return true;
                 }
             }
-
-            return Result<bool>.Success(true);
+            catch
+            {
+                return false;
+            }
         }
-        finally
+
+        return false;
+    }
+
+    private static bool MatchesArchiveMagic(ReadOnlySpan<byte> span)
+    {
+        if (span.Length < 4) return false;
+
+        ReadOnlySpan<byte> magic1 = [0x6d, 0xe2, 0x99, 0x81];
+        ReadOnlySpan<byte> magic2 = [0x81, 0x99, 0xe2, 0x6d];
+        ReadOnlySpan<byte> magic3 = [0x6d, 0xe2, 0x99, 0x45];
+        ReadOnlySpan<byte> magic4 = [0x45, 0x99, 0xe2, 0x6d];
+
+        return span[..4].SequenceEqual(magic1) ||
+               span[..4].SequenceEqual(magic2) ||
+               span[..4].SequenceEqual(magic3) ||
+               span[..4].SequenceEqual(magic4);
+    }
+
+    private static async Task TerminateProcessTreeAsync(Process? process)
+    {
+        if (process is null) return;
+        try
         {
-            CryptographicOperations.ZeroMemory(key);
-            CryptographicOperations.ZeroMemory(passphraseBytes);
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                await process.WaitForExitAsync(CancellationToken.None);
+            }
+        }
+        catch
+        {
+            // Process may already have exited
         }
     }
 
@@ -854,5 +887,64 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             totalRead += read;
         }
         return totalRead;
+    }
+
+    private sealed class PrefixStream : Stream
+    {
+        private readonly byte[] _prefix;
+        private readonly int _prefixLength;
+        private int _prefixOffset;
+        private readonly Stream _underlying;
+
+        public PrefixStream(byte[] prefix, int prefixLength, Stream underlying)
+        {
+            _prefix = prefix;
+            _prefixLength = prefixLength;
+            _underlying = underlying;
+        }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+
+        public override void Flush() => _underlying.Flush();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            if (_prefixOffset < _prefixLength)
+            {
+                var available = _prefixLength - _prefixOffset;
+                var toCopy = Math.Min(count, available);
+                Array.Copy(_prefix, _prefixOffset, buffer, offset, toCopy);
+                _prefixOffset += toCopy;
+                return toCopy;
+            }
+
+            return _underlying.Read(buffer, offset, count);
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            if (_prefixOffset < _prefixLength)
+            {
+                var available = _prefixLength - _prefixOffset;
+                var toCopy = Math.Min(buffer.Length, available);
+                _prefix.AsMemory(_prefixOffset, toCopy).CopyTo(buffer);
+                _prefixOffset += toCopy;
+                return toCopy;
+            }
+
+            return await _underlying.ReadAsync(buffer, cancellationToken);
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            return ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+        }
     }
 }

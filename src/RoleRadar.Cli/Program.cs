@@ -1,8 +1,10 @@
 using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using RoleRadar.Application;
 using RoleRadar.Cli.Commands;
 using RoleRadar.Infrastructure;
+using RoleRadar.Infrastructure.Backup;
 
 namespace RoleRadar.Cli;
 
@@ -25,8 +27,19 @@ public static class Program
     {
         var services = new ServiceCollection();
 
+        services.AddLogging(logging =>
+        {
+            logging.ClearProviders();
+            logging.AddConsole(options =>
+            {
+                options.LogToStandardErrorThreshold = LogLevel.Trace;
+            });
+        });
+
         var connectionString = Environment.GetEnvironmentVariable("ROLERADAR_MONGO_CONNECTION_STRING");
         var databaseName = Environment.GetEnvironmentVariable("ROLERADAR_MONGO_DATABASE");
+        var backupDumpCommand = Environment.GetEnvironmentVariable("ROLERADAR_BACKUP_DUMP_COMMAND");
+        var backupRestoreCommand = Environment.GetEnvironmentVariable("ROLERADAR_BACKUP_RESTORE_COMMAND");
 
         services.AddRoleRadarApplication();
         services.AddRoleRadarInfrastructure(options =>
@@ -39,6 +52,19 @@ public static class Program
             if (!string.IsNullOrWhiteSpace(databaseName))
             {
                 options.DatabaseName = databaseName.Trim();
+            }
+        });
+
+        services.Configure<BackupOptions>(options =>
+        {
+            if (!string.IsNullOrWhiteSpace(backupDumpCommand))
+            {
+                options.DumpCommand = backupDumpCommand.Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(backupRestoreCommand))
+            {
+                options.RestoreCommand = backupRestoreCommand.Trim();
             }
         });
 
