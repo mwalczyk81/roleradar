@@ -10,28 +10,45 @@ using RoleRadar.Domain.Common;
 using RoleRadar.Domain.Notes;
 using RoleRadar.Infrastructure;
 using RoleRadar.Infrastructure.Mongo;
+using RoleRadar.Tests.Integration.Fixtures;
 using Testcontainers.MongoDb;
 using Xunit;
 
 namespace RoleRadar.Tests.Integration.Import;
 
+[Collection(SharedMongoCollectionDefinition.Name)]
 public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
 {
-    private readonly MongoDbContainer _mongoContainer = new MongoDbBuilder("mongo:8.0.34")
-        .WithReplicaSet("rs0")
-        .Build();
+    private readonly SharedMongoFixture _sharedMongo;
+    private readonly string _databaseName;
+    private MongoClient? _client;
 
-    private string _connectionString = string.Empty;
-    private string _databaseName = string.Empty;
-
-    public async ValueTask InitializeAsync()
+    public MarkdownImportIntegrationTests(SharedMongoFixture sharedMongo)
     {
-        await _mongoContainer.StartAsync();
-        _connectionString = _mongoContainer.GetConnectionString();
+        _sharedMongo = sharedMongo;
         _databaseName = $"roleradar_import_{Guid.CreateVersion7():N}";
     }
 
-    public async ValueTask DisposeAsync() => await _mongoContainer.DisposeAsync();
+    public ValueTask InitializeAsync()
+    {
+        _client = new MongoClient(_sharedMongo.ConnectionString);
+        return ValueTask.CompletedTask;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_client != null)
+            {
+                await _client.DropDatabaseAsync(_databaseName);
+            }
+        }
+        finally
+        {
+            _client?.Dispose();
+        }
+    }
 
     private ServiceProvider BuildServiceProvider(string? dbNameOverride = null)
     {
@@ -41,7 +58,7 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
         services.AddRoleRadarApplication();
         services.AddRoleRadarInfrastructure(opts =>
         {
-            opts.ConnectionString = _connectionString;
+            opts.ConnectionString = _sharedMongo.ConnectionString;
             opts.DatabaseName = dbNameOverride ?? _databaseName;
             opts.ReadinessTimeout = TimeSpan.FromSeconds(5);
         });

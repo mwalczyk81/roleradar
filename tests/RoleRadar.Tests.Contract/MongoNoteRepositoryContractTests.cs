@@ -6,26 +6,27 @@ using RoleRadar.Domain.Audit;
 using RoleRadar.Domain.Common;
 using RoleRadar.Domain.Notes;
 using RoleRadar.Infrastructure.Mongo;
-using Testcontainers.MongoDb;
+using RoleRadar.Tests.Contract.Fixtures;
 using Xunit;
 
 namespace RoleRadar.Tests.Contract;
 
-public sealed class MongoNoteRepositoryContractTests : IAsyncLifetime
+public sealed class MongoNoteRepositoryContractTests : IClassFixture<SharedMongoFixture>, IAsyncLifetime
 {
-    private readonly MongoDbContainer _mongoContainer = new MongoDbBuilder("mongo:8.0.34")
-        .WithReplicaSet("rs0")
-        .Build();
-
+    private readonly SharedMongoFixture _sharedMongo;
     private MongoClient _client = null!;
     private MongoOptions _options = null!;
 
+    public MongoNoteRepositoryContractTests(SharedMongoFixture sharedMongo)
+    {
+        _sharedMongo = sharedMongo;
+    }
+
     public async ValueTask InitializeAsync()
     {
-        await _mongoContainer.StartAsync();
         _options = new MongoOptions
         {
-            ConnectionString = _mongoContainer.GetConnectionString(),
+            ConnectionString = _sharedMongo.ConnectionString,
             DatabaseName = $"roleradar_contract_{Guid.CreateVersion7():N}",
             ReadinessTimeout = TimeSpan.FromSeconds(5)
         };
@@ -39,8 +40,17 @@ public sealed class MongoNoteRepositoryContractTests : IAsyncLifetime
 
     public async ValueTask DisposeAsync()
     {
-        _client?.Dispose();
-        await _mongoContainer.DisposeAsync();
+        try
+        {
+            if (_client != null && !string.IsNullOrWhiteSpace(_options?.DatabaseName))
+            {
+                await _client.DropDatabaseAsync(_options.DatabaseName);
+            }
+        }
+        finally
+        {
+            _client?.Dispose();
+        }
     }
 
     private MongoNoteRepository CreateRepository(Func<string, CancellationToken, Task>? faultInjectionHook = null)

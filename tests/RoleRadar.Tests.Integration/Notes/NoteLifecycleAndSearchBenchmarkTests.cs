@@ -15,28 +15,45 @@ using RoleRadar.Domain.Notes;
 using RoleRadar.Infrastructure;
 using RoleRadar.Infrastructure.Mongo;
 using RoleRadar.Mcp.Stdio.Tools;
+using RoleRadar.Tests.Integration.Fixtures;
 using Testcontainers.MongoDb;
 using Xunit;
 
 namespace RoleRadar.Tests.Integration.Notes;
 
+[Collection(SharedMongoCollectionDefinition.Name)]
 public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
 {
-    private readonly MongoDbContainer _mongoContainer = new MongoDbBuilder("mongo:8.0.34")
-        .WithReplicaSet("rs0")
-        .Build();
+    private readonly SharedMongoFixture _sharedMongo;
+    private readonly string _databaseName;
+    private MongoClient? _client;
 
-    private string _connectionString = string.Empty;
-    private string _databaseName = string.Empty;
-
-    public async ValueTask InitializeAsync()
+    public NoteLifecycleAndSearchBenchmarkTests(SharedMongoFixture sharedMongo)
     {
-        await _mongoContainer.StartAsync();
-        _connectionString = _mongoContainer.GetConnectionString();
+        _sharedMongo = sharedMongo;
         _databaseName = $"roleradar_us1_{Guid.CreateVersion7():N}";
     }
 
-    public async ValueTask DisposeAsync() => await _mongoContainer.DisposeAsync();
+    public ValueTask InitializeAsync()
+    {
+        _client = new MongoClient(_sharedMongo.ConnectionString);
+        return ValueTask.CompletedTask;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_client != null)
+            {
+                await _client.DropDatabaseAsync(_databaseName);
+            }
+        }
+        finally
+        {
+            _client?.Dispose();
+        }
+    }
 
     private ServiceProvider BuildServiceProvider(string? dbNameOverride = null)
     {
@@ -46,7 +63,7 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
         services.AddRoleRadarApplication();
         services.AddRoleRadarInfrastructure(opts =>
         {
-            opts.ConnectionString = _connectionString;
+            opts.ConnectionString = _sharedMongo.ConnectionString;
             opts.DatabaseName = dbNameOverride ?? _databaseName;
             opts.ReadinessTimeout = TimeSpan.FromSeconds(5);
         });
@@ -383,7 +400,7 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
             UseShellExecute = false,
             CreateNoWindow = true
         };
-        psi.Environment["ROLERADAR_MONGO_CONNECTION_STRING"] = _connectionString;
+        psi.Environment["ROLERADAR_MONGO_CONNECTION_STRING"] = _sharedMongo.ConnectionString;
         psi.Environment["ROLERADAR_MONGO_DATABASE"] = _databaseName;
 
         using var proc = Process.Start(psi)!;
