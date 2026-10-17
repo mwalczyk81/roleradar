@@ -7,10 +7,10 @@ $ErrorActionPreference = 'Stop'
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $composeFile = Join-Path (Split-Path -Parent $scriptDir) 'deploy\docker-compose.yml'
 
-Write-Host "Starting RoleRadar data services using $composeFile..."
+Write-Output "Starting RoleRadar data services using $composeFile..."
 & docker compose -f $composeFile up -d
 
-Write-Host 'Waiting for MongoDB container to become healthy...'
+Write-Output 'Waiting for MongoDB container to become healthy...'
 $maxRetries = 30
 $retryCount = 0
 $healthy = $false
@@ -30,5 +30,5 @@ if (-not $healthy) {
     exit 1
 }
 
-Write-Host 'RoleRadar MongoDB service is healthy and ready on 127.0.0.1:27017 (rs0).'
+Write-Output 'RoleRadar MongoDB service is healthy and ready on 127.0.0.1:27017 (rs0).'
 exit 0
