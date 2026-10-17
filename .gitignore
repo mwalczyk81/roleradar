@@ -147,3 +147,16 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+
+# RoleRadar: never commit personal job-search data
+/import-review/
+/private/
+/db/
+job-search-export*
+*.dump
+*.sql.gz
+*.7z
+*.age
+.env
+.env.*
+!.env.example
