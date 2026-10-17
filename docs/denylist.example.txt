@@ -1,0 +1,7 @@
+# RoleRadar private denylist example template.
+# The real file lives at %LOCALAPPDATA%\roleradar\private\denylist.txt and is never committed.
+# One term per line. Matches are case-insensitive and match whole terms.
+
+Zorblax Corp
+Acme Inc.
+Jane Example

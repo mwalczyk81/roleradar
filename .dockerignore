@@ -1,0 +1,14 @@
+# Ignore build outputs, git state, local secrets, and backup archives in Docker contexts
+[Bb]in/
+[Oo]bj/
+[Tt]est[Rr]esults/
+coverage/
+.git/
+.vs/
+.idea/
+*.log*
+.env*
+*.rrbak
+/private/
+/import-review/
+/db/

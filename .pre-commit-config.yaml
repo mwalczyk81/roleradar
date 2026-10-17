@@ -1,0 +1,89 @@
+minimum_pre_commit_version: "3.2.0"
+default_install_hook_types:
+  - pre-commit
+  - commit-msg
+  - pre-push
+default_stages:
+  - pre-commit
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-case-conflict
+      - id: detect-private-key
+      - id: no-commit-to-branch
+        args: ["--branch", "main"]
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: trailing-whitespace
+        args: ["--markdown-linebreak-ext=md"]
+        exclude: (^|/)fixtures/
+      - id: end-of-file-fixer
+        exclude: (^|/)fixtures/
+      - id: mixed-line-ending
+        exclude: (^|/)fixtures/
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: v0.23.3
+    hooks:
+      - id: markdownlint-cli2
+        exclude: (^|/)fixtures/|^\.specify/|^\.agents/|^specs/
+
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.31.1
+    hooks:
+      - id: zizmor
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.4.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+
+  - repo: local
+    hooks:
+      - id: roleradar-forbidden-paths
+        name: Forbid private directories, database dumps, and backup archives
+        entry: Forbidden path or file extension cannot be committed (import-review/, private/, db/, job-search-export, .dump, .sql.gz, .7z, .age, .rrbak, .env).
+        language: fail
+        files: (^import-review/|^private/|^db/|job-search-export|\.dump$|\.sql\.gz$|\.7z$|\.age$|\.rrbak$|(^|/)\.env$)
+
+      - id: roleradar-denylist
+        name: RoleRadar staged-diff real-name denylist check
+        entry: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/denylist-check.ps1 -Mode Staged
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-commit]
+
+      - id: roleradar-commit-msg-denylist
+        name: RoleRadar commit-msg real-name denylist check
+        entry: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/denylist-check.ps1 -Mode CommitMsg
+        language: system
+        stages: [commit-msg]
+
+      - id: roleradar-pre-push-denylist
+        name: RoleRadar pre-push outgoing range real-name denylist check
+        entry: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/denylist-check.ps1 -Mode PrePush
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+
+      - id: roleradar-dotnet-format
+        name: Verify C# formatting (dotnet format)
+        entry: dotnet format RoleRadar.sln --verify-no-changes
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

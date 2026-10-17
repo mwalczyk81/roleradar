@@ -1,3 +1,19 @@
+<!--
+Sync Impact Report
+- Version change: 1.0.1 -> 1.1.0 (MINOR: material expansion of Principles III and IV)
+- Modified principles:
+  - III. Test-Enforced Layering (added mandatory architecture test verifying every command handler registration is wrapped by the transaction-and-audit decorator; updated delivery adapter rule to reference command/query handlers)
+  - IV. Named Seams Only (replaced INoteStore with aggregate-level INoteRepository; adopted plain ICommandHandler / IQueryHandler pattern with decorator pipeline for transaction, audit, validation, and logging; required typed result returns for expected failures instead of exceptions; gated mediator libraries including MediatR behind an ADR addressing MIT license compatibility alongside factories, plugin frameworks, event buses, and generic IRepository<T>)
+- Added sections: None
+- Removed sections: None
+- Templates & downstream artifacts status:
+  - .specify/templates/plan-template.md: compatible (reads constitution dynamically)
+  - .specify/templates/spec-template.md: compatible
+  - .specify/templates/tasks-template.md: compatible
+  - Follow-up action needed in specs/001-memory-replacement/ (plan.md, research.md, contracts/, and docs/adr/0002) via /speckit-plan to align Feature 001 design artifacts with INoteRepository, ICommandHandler/IQueryHandler decorators, and typed results.
+- Follow-up TODOs: None
+-->
+
 # RoleRadar Constitution
 
 RoleRadar is a single-owner, local-first job search tracker that an AI agent reads and writes
@@ -39,26 +55,44 @@ job-search data.
 
 - `Domain`, `Application`, `Infrastructure`, and host projects MUST obey a strict one-way inward
   dependency rule verified automatically by an architecture test in CI.
-- Delivery adapters (MCP tools, REST endpoints, CLI commands) MUST invoke `Application` services
-  directly in-process rather than calling across network boundaries to internal adapters.
+- Delivery adapters (MCP tools, REST endpoints, CLI commands) MUST invoke `Application` command and
+  query handlers (`ICommandHandler`, `IQueryHandler`) directly in-process rather than calling
+  across network boundaries to internal adapters.
+- An automated architecture test MUST verify that every command handler registration is wrapped by
+  the transaction-and-audit decorator, ensuring a write path cannot skip transaction or audit
+  enforcement.
 
-**Rationale**: Architectural boundaries degrade when left to code-review convention alone;
-automated architecture tests make dependency violations fail the build immediately.
+**Rationale**: Architectural boundaries and cross-cutting write invariants degrade when left to
+code-review convention alone; automated architecture tests make dependency violations or un-audited
+command handler registrations fail the build immediately.
 
 ### IV. Named Seams Only
 
 - Only the following abstractions are permitted without an approved Architecture Decision Record
   (ADR):
-  - `INoteStore` for narrative storage isolation.
+  - Aggregate-level domain repository ports whose methods express use cases, specifically
+    `INoteRepository` for narrative storage isolation (covering a `Note`, its revisions, and the
+    audit entry written in the same transaction) and storage ports required to isolate Postgres and
+    MongoDB from the `Application` and `Domain` layers.
+  - Plain command and query handler interfaces (`ICommandHandler`, `IQueryHandler`) where each use
+    case is a plain handler class injected directly into the MCP, CLI, and later REST adapters, and
+    cross-cutting concerns (transaction, audit, validation, logging) are applied as decorators
+    around handlers.
   - The identity-provider boundary: only the dedicated identity host project may reference Duende
     packages, while the web application MUST use generic OpenID Connect (OIDC).
-  - Storage ports required to isolate Postgres and MongoDB from the `Application` and `Domain`
-    layers.
-- Factories, plugin frameworks, mediator libraries, and generic repositories MUST NOT be introduced
-  without a prior MADR ADR justifying the complexity.
+- Expected failures (such as not found, stale version token, ambiguous heading, or conflict) MUST
+  be returned as typed results, not thrown as exceptions.
+- A generic `IRepository<T>` over the database driver MUST NOT be introduced without a prior MADR
+  ADR.
+- Mediator libraries (including MediatR) MUST NOT be introduced without a prior MADR ADR that
+  explicitly addresses licensing compatibility with this repository's MIT license.
+- Factories, plugin frameworks, and event buses MUST NOT be introduced without a prior MADR ADR
+  justifying the complexity.
 
-**Rationale**: Constraining abstractions to explicit, high-value boundaries prevents speculative
-over-engineering while preserving the ability to swap narrative storage or identity providers.
+**Rationale**: Adopting aggregate-level use-case repositories, plain command/query handlers with
+explicit decorators, and typed failure results keeps control flow explicit, testable, and free of
+third-party licensing risk while preserving the ability to swap narrative storage or identity
+providers.
 
 ### V. Agent Safety & Auditability
 
@@ -139,8 +173,8 @@ schema retrofits later.
   run the real-name check against the external denylist stored outside the repository.
 - **Compiler & Static Analysis Gate**: Builds MUST compile with zero warnings under
   `TreatWarningsAsErrors`.
-- **Architecture & Contract Gate**: The automated architecture dependency test suite and all
-  storage port contract tests MUST pass on every CI run.
+- **Architecture & Contract Gate**: The automated architecture dependency and handler-decorator
+  registration test suite and all storage port contract tests MUST pass on every CI run.
 - **Integration & Coverage Gate**: All Testcontainers-backed integration tests MUST pass in CI and
   meet the configured coverage threshold before any feature branch is merged.
 
@@ -160,4 +194,4 @@ schema retrofits later.
   proposed deviation from Principle IV (Named Seams Only) or Principle VIII requires an approved
   ADR under `docs/adr/` prior to implementation.
 
-**Version**: 1.0.1 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-17
+**Version**: 1.1.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-17

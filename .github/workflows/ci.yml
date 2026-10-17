@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows-verify:
+    name: Windows (Unit, Architecture & PSScriptAnalyzer)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Run PSScriptAnalyzer on scripts/*.ps1
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
+              Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force -SkipPublisherCheck
+          }
+          $results = Invoke-ScriptAnalyzer -Path ./scripts -Recurse -Severity Warning,Error
+          if ($results) {
+              $results | Format-Table -AutoSize | Out-String | Write-Output
+              throw "PSScriptAnalyzer reported $($results.Count) issue(s)."
+          }
+          Write-Output "PSScriptAnalyzer passed with 0 issues."
+
+      - name: Restore with locked dependencies
+        run: dotnet restore RoleRadar.sln --locked-mode
+
+      - name: Verify formatting
+        run: dotnet format RoleRadar.sln --verify-no-changes
+
+      - name: Build solution
+        run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
+
+      - name: Run Unit and Architecture tests
+        env:
+          SKIP: roleradar-denylist,no-commit-to-branch
+        run: |
+          dotnet test tests/RoleRadar.Tests.Unit/RoleRadar.Tests.Unit.csproj -c Release --no-build
+          dotnet test tests/RoleRadar.Tests.Architecture/RoleRadar.Tests.Architecture.csproj -c Release --no-build
+
+  ubuntu-integration-and-coverage:
+    name: Ubuntu (Build, Testcontainers, >=85% Coverage & Pre-Commit)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Cache pre-commit environments
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run pre-commit hooks (gitleaks, hygiene, markdownlint, zizmor, and forbidden-paths guard)
+        env:
+          SKIP: roleradar-denylist,no-commit-to-branch
+        run: |
+          pipx install pre-commit
+          pre-commit run --all-files --show-diff-on-failure
+          git diff --exit-code -- tests/fixtures
+
+      - name: Verify workflow action SHA pins exist on GitHub
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-action-pins.ps1
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore with locked dependencies
+        run: dotnet restore RoleRadar.sln --locked-mode
+
+      - name: Verify formatting
+        run: dotnet format RoleRadar.sln --verify-no-changes
+
+      - name: Build solution
+        run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
+
+      - name: Run full test suite (Unit, Architecture, Contract, Integration) with Coverage
+        run: dotnet test RoleRadar.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
+
+      - name: Verify >=85% line coverage across RoleRadar.Domain and RoleRadar.Application
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          dotnet tool restore
+          dotnet tool run reportgenerator `
+            "-reports:TestResults/**/coverage.cobertura.xml" `
+            "-targetdir:TestResults/merged" `
+            "-reporttypes:Cobertura;MarkdownSummaryGithub" `
+            "-assemblyfilters:+RoleRadar.Domain;+RoleRadar.Application" `
+            "-filefilters:-*.g.cs"
+
+          $mergedXmlPath = "TestResults/merged/Cobertura.xml"
+          if (-not (Test-Path -LiteralPath $mergedXmlPath)) {
+              throw "Merged Cobertura report not found at '$mergedXmlPath'."
+          }
+
+          [xml]$merged = Get-Content -LiteralPath $mergedXmlPath
+          $root = $merged.DocumentElement
+          $rawLineRate = $root.GetAttribute('line-rate')
+          $covered = $root.GetAttribute('lines-covered')
+          $valid = $root.GetAttribute('lines-valid')
+
+          $lineRate = [double]::Parse($rawLineRate, [System.Globalization.CultureInfo]::InvariantCulture)
+          $pct = [math]::Round($lineRate * 100.0, 2)
+          Write-Output "Merged Domain + Application Line Coverage: $pct% ($covered / $valid)"
+
+          $summaryMdPath = "TestResults/merged/SummaryGithub.md"
+          if (Test-Path -LiteralPath $summaryMdPath) {
+              if (-not [string]::IsNullOrWhiteSpace($env:GITHUB_STEP_SUMMARY)) {
+                  Get-Content -LiteralPath $summaryMdPath -Raw | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+              }
+          }
+
+          if ($pct -lt 85.0) {
+              throw "Merged line coverage $pct% is below the mandatory 85.0% threshold."
+          }
