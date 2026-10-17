@@ -101,6 +101,7 @@ dotnet publish src/RoleRadar.Mcp.Stdio -c Release -o "$env:LOCALAPPDATA\rolerada
 ```powershell
 $env:ROLERADAR_BACKUP_PASSPHRASE = "fictional-test-passphrase-2026"
 $backupDir = Join-Path $env:TEMP "roleradar-quickstart-backups"
+New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
 
 # 1. Streamed encrypted backup via libsodium secretstream + Argon2id (no plaintext temp files written)
 pwsh ./scripts/backup.ps1 -OutputDirectory $backupDir -PassphraseEnv ROLERADAR_BACKUP_PASSPHRASE

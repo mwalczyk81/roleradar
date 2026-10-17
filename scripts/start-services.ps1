@@ -1,14 +1,27 @@
 [CmdletBinding()]
-param()
+param(
+    [string]$ComposeFile = '',
+    [string]$ProjectName = ''
+)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$composeFile = Join-Path (Split-Path -Parent $scriptDir) 'deploy\docker-compose.yml'
+if ([string]::IsNullOrWhiteSpace($ComposeFile)) {
+    $ComposeFile = $env:ROLERADAR_COMPOSE_FILE
+}
+if ([string]::IsNullOrWhiteSpace($ComposeFile)) {
+    $ComposeFile = Join-Path (Split-Path -Parent $scriptDir) 'deploy\docker-compose.yml'
+}
 
-Write-Output "Starting RoleRadar data services using $composeFile..."
-& docker compose -f $composeFile up -d
+$composeArgs = @('-f', $ComposeFile)
+if (-not [string]::IsNullOrWhiteSpace($ProjectName)) {
+    $composeArgs += @('-p', $ProjectName)
+}
+
+Write-Output "Starting RoleRadar data services using $ComposeFile..."
+& docker compose @composeArgs up -d
 
 Write-Output 'Waiting for MongoDB container to become healthy...'
 $maxRetries = 30
@@ -16,10 +29,13 @@ $retryCount = 0
 $healthy = $false
 
 while ($retryCount -lt $maxRetries) {
-    $status = (& docker inspect --format='{{json .State.Health.Status}}' roleradar-mongo 2>$null)
-    if ($status -eq '"healthy"') {
-        $healthy = $true
-        break
+    $containerId = (& docker compose @composeArgs ps -q mongo 2>$null)
+    if (-not [string]::IsNullOrWhiteSpace($containerId)) {
+        $status = (& docker inspect --format='{{json .State.Health.Status}}' $containerId.Trim() 2>$null)
+        if ($status -eq '"healthy"') {
+            $healthy = $true
+            break
+        }
     }
     Start-Sleep -Seconds 1
     $retryCount++

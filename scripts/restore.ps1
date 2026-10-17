@@ -1,7 +1,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true, Position = 0)]
+    [Alias('ArchivePath')]
     [string]$File,
+
+    [string]$PassphraseEnv = '',
+
+    [switch]$PassphraseStdin,
 
     [switch]$ForceOverwrite,
 
@@ -23,6 +28,12 @@ $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
 
 $cliArgs = @('restore', $File)
+if (-not [string]::IsNullOrWhiteSpace($PassphraseEnv)) {
+    $cliArgs += @('--passphrase-env', $PassphraseEnv)
+}
+if ($PassphraseStdin) {
+    $cliArgs += '--passphrase-stdin'
+}
 if ($ForceOverwrite) {
     $cliArgs += '--force-overwrite'
 }

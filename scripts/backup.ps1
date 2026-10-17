@@ -1,7 +1,12 @@
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
+    [Alias('OutputDirectory')]
     [string]$Destination = '.',
+
+    [string]$PassphraseEnv = '',
+
+    [switch]$PassphraseStdin,
 
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]]$RemainingArgs = @()
@@ -20,5 +25,14 @@ foreach ($arg in $RemainingArgs) {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
 
-& dotnet run --project "$repoRoot\src\RoleRadar.Cli" --no-build -c Release -- backup $Destination @RemainingArgs
+$cliArgs = @('backup', $Destination)
+if (-not [string]::IsNullOrWhiteSpace($PassphraseEnv)) {
+    $cliArgs += @('--passphrase-env', $PassphraseEnv)
+}
+if ($PassphraseStdin) {
+    $cliArgs += '--passphrase-stdin'
+}
+$cliArgs += $RemainingArgs
+
+& dotnet run --project "$repoRoot\src\RoleRadar.Cli" --no-build -c Release -- @cliArgs
 exit $LASTEXITCODE

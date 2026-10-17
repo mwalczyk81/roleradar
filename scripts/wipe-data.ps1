@@ -1,6 +1,9 @@
 [CmdletBinding()]
 param(
-    [string]$Confirm = ''
+    [string]$Confirm = '',
+
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$RemainingArgs = @()
 )
 
 Set-StrictMode -Version Latest
@@ -13,6 +16,7 @@ $cliArgs = @('wipe')
 if (-not [string]::IsNullOrWhiteSpace($Confirm)) {
     $cliArgs += @('--confirm', $Confirm)
 }
+$cliArgs += $RemainingArgs
 
 & dotnet run --project "$repoRoot\src\RoleRadar.Cli" --no-build -c Release -- @cliArgs
 exit $LASTEXITCODE
