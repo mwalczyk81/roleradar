@@ -18,6 +18,8 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
     private readonly MongoReadinessProbe _readinessProbe;
     private readonly ILogger<MongoNoteRepository> _logger;
     private readonly Func<string, CancellationToken, Task>? _faultInjectionHook;
+    private readonly AppendOnlyMongoCollection _revisionsCollection;
+    private readonly AppendOnlyMongoCollection _auditsCollection;
     private readonly SemaphoreSlim _indexInitLock = new(1, 1);
     private bool _indexesInitialized;
 
@@ -39,16 +41,18 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
         _readinessProbe = readinessProbe;
         _logger = logger;
         _faultInjectionHook = faultInjectionHook;
+        _revisionsCollection = new AppendOnlyMongoCollection(_database, MongoBootstrapAndIndexes.NoteRevisionsCollectionName);
+        _auditsCollection = new AppendOnlyMongoCollection(_database, MongoBootstrapAndIndexes.AuditLogCollectionName);
     }
+
+    public bool HasFaultInjectionHook => _faultInjectionHook is not null;
 
     private IMongoCollection<BsonDocument> NotesCollection =>
         _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NotesCollectionName);
 
-    private IMongoCollection<BsonDocument> RevisionsCollection =>
-        _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NoteRevisionsCollectionName);
+    private AppendOnlyMongoCollection RevisionsCollection => _revisionsCollection;
 
-    private IMongoCollection<BsonDocument> AuditsCollection =>
-        _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
+    private AppendOnlyMongoCollection AuditsCollection => _auditsCollection;
 
     public Task<Result<StoreReadinessStatus>> CheckReadinessAsync(CancellationToken cancellationToken = default) =>
         _readinessProbe.CheckAsync(cancellationToken);
@@ -256,7 +260,8 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             Builders<BsonDocument>.Filter.Eq("note_id", new BsonBinaryData(noteId, GuidRepresentation.Standard)));
 
         var sort = Builders<BsonDocument>.Sort.Ascending("revision_number");
-        var docs = await RevisionsCollection.Find(filter).Sort(sort).ToListAsync(cancellationToken);
+        var activeSession = CurrentTransactionScope.Value?.Context.Session;
+        var docs = await RevisionsCollection.FindSortedAsync(filter, sort, activeSession, cancellationToken);
         var revisions = docs.Select(MapDocumentToRevision).ToArray();
         return Result<IReadOnlyList<NoteRevision>>.Success(revisions);
     }
@@ -284,10 +289,12 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             .Ascending("occurred_at")
             .Ascending("_id");
 
-        var docs = await AuditsCollection
-            .Find(Builders<BsonDocument>.Filter.And(filters))
-            .Sort(sort)
-            .ToListAsync(cancellationToken);
+        var activeSession = CurrentTransactionScope.Value?.Context.Session;
+        var docs = await AuditsCollection.FindSortedAsync(
+            Builders<BsonDocument>.Filter.And(filters),
+            sort,
+            activeSession,
+            cancellationToken);
 
         var entries = docs.Select(MapDocumentToAudit).ToArray();
         return Result<IReadOnlyList<AuditLogEntry>>.Success(entries);
@@ -593,7 +600,8 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             var note = MapDocumentToNote(existingDoc);
             var beforeSummary = AuditContentSummary.FromNote(note);
 
-            // Atomic server-side append in the active transaction (no caller version token required; no NoteRevision snapshot created)
+            // Atomic inside a snapshot transaction (read, append, hash, update) with transient-error retry via WithTransactionAsync;
+            // no caller version token required and no NoteRevision snapshot created.
             note.AppendBody(textToAppend, occurredAtUtc);
             var afterSummary = AuditContentSummary.FromNote(note);
 

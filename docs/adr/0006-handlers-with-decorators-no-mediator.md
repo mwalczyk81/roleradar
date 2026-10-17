@@ -38,11 +38,14 @@ Chosen option: **Option 1 — Plain command and query handlers with explicit DI 
 2. **Queries & Handlers**:
    - `GetNoteQuery` → `GetNoteQueryHandler`
    - `SearchNotesQuery` → `SearchNotesQueryHandler`
-3. **Decorator Chain**:
-   - Commands: `LoggingCommandDecorator<TCommand, TResponse>` → `TransactionAndAuditCommandDecorator<TCommand, TResponse>` → concrete `TCommandHandler`.
+3. **Validation Contract (`ICommandValidator<in TCommand>`)**:
+   - Defined in `RoleRadar.Application.Abstractions.Messaging` with signature `ResultError? Validate(TCommand command);`.
+   - `TransactionAndAuditCommandDecorator<TCommand, TResponse>` injects `IEnumerable<ICommandValidator<TCommand>>` and runs all registered validators before calling `INoteRepository.CheckReadinessAsync` or opening a MongoDB transaction. If any validator returns a non-null `ResultError`, the decorator short-circuits with `Result<TResponse>.Failure(validationError.Value)`.
+4. **Decorator Chain**:
+   - Commands: `LoggingCommandDecorator<TCommand, TResponse>` → `TransactionAndAuditCommandDecorator<TCommand, TResponse>` (executes `ICommandValidator<TCommand>` validators, `CheckReadinessAsync`, and `ExecuteInTransactionAsync`) → concrete `TCommandHandler`.
    - Queries: `LoggingQueryDecorator<TQuery, TResponse>` → concrete `TQueryHandler`.
-4. **Architecture Test Verification**:
-   - `CommandHandlerDecorationArchitectureTests` in `RoleRadar.Tests.Architecture` enumerates all concrete `ICommandHandler<,>` implementations in `RoleRadar.Application`, builds the service provider via `AddRoleRadarApplication()`, and asserts that every resolved `ICommandHandler<,>` has `TransactionAndAuditCommandDecorator<,>` in its decorator chain.
+5. **Architecture Test Verification**:
+   - `LayeringAndAppendOnlyArchitectureTests` in `RoleRadar.Tests.Architecture` enumerates all concrete `ICommandHandler<,>` implementations in `RoleRadar.Application`, builds the service provider via `AddRoleRadarApplication()`, and asserts that every resolved `ICommandHandler<,>` has `TransactionAndAuditCommandDecorator<,>` in its decorator chain.
 
 ### Consequences
 

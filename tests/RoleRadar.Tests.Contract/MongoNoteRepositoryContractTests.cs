@@ -224,4 +224,203 @@ public sealed class MongoNoteRepositoryContractTests : IAsyncLifetime
         Assert.True(storedAfterConflict.IsSuccess);
         Assert.Contains("Agent post-import note.", storedAfterConflict.Value!.Body);
     }
+
+    [Fact]
+    public async Task TwentyParallelAppends_ToSingleNote_AllLandWithNoLostText_AndCorrectBodyHash()
+    {
+        using var repo = CreateRepository();
+        var owner = OwnerId.Default.Value;
+        var now = new DateTime(2026, 10, 17, 18, 0, 0, DateTimeKind.Utc);
+
+        var note = Note.Create(
+            ownerId: owner,
+            title: "Concurrent Append Target",
+            body: "# Parallel Log\n",
+            tags: ["concurrency"],
+            area: "runbook",
+            provenance: new ProvenanceMarker(ProvenanceKind.Stated, "2026-10-17"),
+            createdAtUtc: now);
+
+        var createAudit = AuditLogEntry.CreateForCreate(
+            ownerId: owner,
+            actor: "contract-test",
+            targetNoteId: note.Id,
+            resultingVersionToken: note.VersionToken,
+            occurredAtUtc: now,
+            afterSummary: AuditContentSummary.FromNote(note));
+
+        var createOutcome = await repo.ExecuteInTransactionAsync(
+            (tx, ct) => tx.CreateAsync(note, createAudit, ct));
+        Assert.True(createOutcome.IsSuccess);
+
+        var appendLines = Enumerable.Range(1, 20)
+            .Select(i => $"- Parallel entry #{i:D2}\n")
+            .ToArray();
+
+        var tasks = appendLines
+            .Select((line, idx) => repo.ExecuteInTransactionAsync(
+                (tx, ct) => tx.AppendAsync(owner, note.Id, line, $"worker-{idx + 1:D2}", now.AddSeconds(idx + 1), ct)))
+            .ToArray();
+
+        var outcomes = await Task.WhenAll(tasks);
+        Assert.All(outcomes, outcome => Assert.True(outcome.IsSuccess, outcome.Error?.Message));
+
+        var finalNoteResult = await repo.GetByIdAsync(owner, note.Id);
+        Assert.True(finalNoteResult.IsSuccess);
+        var finalNote = finalNoteResult.Value!;
+
+        foreach (var line in appendLines)
+        {
+            Assert.Contains(line, finalNote.Body);
+        }
+
+        Assert.Equal(Sha256Hasher.ComputeLowerHex(finalNote.Body), finalNote.CurrentBodyHash);
+        Assert.Equal(0, finalNote.RevisionCount);
+
+        var revisions = await repo.GetRevisionsAsync(owner, note.Id);
+        Assert.Empty(revisions.Value!);
+
+        var audits = await repo.GetAuditEntriesAsync(owner, note.Id);
+        Assert.Equal(21, audits.Value!.Count); // 1 create + 20 appends
+    }
+
+    [Fact]
+    public async Task ArchiveAsync_WithStaleVersionToken_ReturnsStaleVersionToken_AndWritesNoAuditOrRevisionRow()
+    {
+        using var repo = CreateRepository();
+        var owner = OwnerId.Default.Value;
+        var now = new DateTime(2026, 10, 17, 18, 30, 0, DateTimeKind.Utc);
+
+        var note = Note.Create(
+            ownerId: owner,
+            title: "Stale Archive Target",
+            body: "# Archive Target\nInitial body.\n",
+            tags: ["archive"],
+            area: "general",
+            provenance: new ProvenanceMarker(ProvenanceKind.Stated, "2026-10-17"),
+            createdAtUtc: now);
+
+        var initialToken = note.VersionToken;
+        var createAudit = AuditLogEntry.CreateForCreate(
+            ownerId: owner,
+            actor: "contract-test",
+            targetNoteId: note.Id,
+            resultingVersionToken: note.VersionToken,
+            occurredAtUtc: now,
+            afterSummary: AuditContentSummary.FromNote(note));
+
+        var createOutcome = await repo.ExecuteInTransactionAsync(
+            (tx, ct) => tx.CreateAsync(note, createAudit, ct));
+        Assert.True(createOutcome.IsSuccess);
+
+        // Rotate the stored version token via an append
+        var appendOutcome = await repo.ExecuteInTransactionAsync(
+            (tx, ct) => tx.AppendAsync(owner, note.Id, "Rotated token.\n", "contract-test", now.AddMinutes(1), ct));
+        Assert.True(appendOutcome.IsSuccess);
+
+        var auditsBeforeStaleArchive = await repo.GetAuditEntriesAsync(owner, note.Id);
+        Assert.Equal(2, auditsBeforeStaleArchive.Value!.Count);
+
+        // Attempt ArchiveAsync using the stale initialToken
+        var beforeSummary = AuditContentSummary.FromNote(note);
+        note.Archive(now.AddMinutes(2));
+        var staleArchiveAudit = AuditLogEntry.CreateForArchive(
+            ownerId: owner,
+            actor: "contract-test",
+            targetNoteId: note.Id,
+            resultingVersionToken: note.VersionToken,
+            occurredAtUtc: now.AddMinutes(2),
+            beforeSummary: beforeSummary,
+            afterSummary: AuditContentSummary.FromNote(note));
+
+        var staleArchiveResult = await repo.ExecuteInTransactionAsync(
+            (tx, ct) => tx.ArchiveAsync(note, initialToken, staleArchiveAudit, ct));
+
+        Assert.False(staleArchiveResult.IsSuccess);
+        Assert.Equal(ErrorCode.StaleVersionToken, staleArchiveResult.Error!.Value.Code);
+
+        var auditsAfterStaleArchive = await repo.GetAuditEntriesAsync(owner, note.Id);
+        Assert.Equal(2, auditsAfterStaleArchive.Value!.Count);
+
+        var revisionsAfterStaleArchive = await repo.GetRevisionsAsync(owner, note.Id);
+        Assert.Empty(revisionsAfterStaleArchive.Value!);
+
+        var storedNote = await repo.GetByIdAsync(owner, note.Id);
+        Assert.Equal(NoteStatus.Active, storedNote.Value!.Status);
+    }
+
+    [Fact]
+    public async Task DestructiveWrites_ProduceMonotonicAndGapFreeRevisionNumbers()
+    {
+        using var repo = CreateRepository();
+        var owner = OwnerId.Default.Value;
+        var now = new DateTime(2026, 10, 17, 19, 0, 0, DateTimeKind.Utc);
+
+        var req = new UpsertImportedSectionRequest(
+            OwnerId: owner,
+            SourceFileId: "monotonic-test.md",
+            HeadingPath: "# Root / ## Section",
+            OccurrenceIndex: 0,
+            SectionOrderIndex: 1,
+            Title: "Section",
+            Body: "## Section\nVersion 0\n",
+            Tags: ["revisions"],
+            Area: "criteria",
+            Provenance: new ProvenanceMarker(ProvenanceKind.Stated, "2026-10-17"),
+            ResolvedDefaultDate: "2026-10-17",
+            Actor: "cli-import",
+            OccurredAtUtc: now);
+
+        var created = await repo.ExecuteInTransactionAsync((tx, ct) => tx.UpsertImportedSectionAsync(req, ct));
+        Assert.True(created.IsSuccess);
+        var currentNote = created.Value!.Note;
+
+        // Perform 3 consecutive import overwrites + 2 replace-sections (5 destructive writes total)
+        for (var step = 1; step <= 3; step++)
+        {
+            var nextReq = req with
+            {
+                Body = $"## Section\nVersion {step}\n",
+                OccurredAtUtc = now.AddMinutes(step)
+            };
+            var overwrite = await repo.ExecuteInTransactionAsync((tx, ct) => tx.UpsertImportedSectionAsync(nextReq, ct));
+            Assert.True(overwrite.IsSuccess);
+            currentNote = overwrite.Value!.Note;
+        }
+
+        for (var step = 4; step <= 5; step++)
+        {
+            var expectedToken = currentNote.VersionToken;
+            var beforeSummary = AuditContentSummary.FromNote(currentNote);
+            var rev = currentNote.ReplaceBodyWithRevision(
+                newBody: $"## Section\nVersion {step}\n",
+                reason: NoteRevision.ReasonReplaceSection,
+                occurredAtUtc: now.AddMinutes(step));
+            var audit = AuditLogEntry.CreateForReplaceSection(
+                ownerId: owner,
+                actor: "mcp-stdio",
+                targetNoteId: currentNote.Id,
+                noteRevisionId: rev.Id,
+                resultingVersionToken: currentNote.VersionToken,
+                occurredAtUtc: now.AddMinutes(step),
+                beforeSummary: beforeSummary,
+                afterSummary: AuditContentSummary.FromNote(currentNote));
+
+            var replaced = await repo.ExecuteInTransactionAsync(
+                (tx, ct) => tx.ReplaceSectionAsync(currentNote, expectedToken, rev, audit, ct));
+            Assert.True(replaced.IsSuccess);
+            currentNote = replaced.Value!.Note;
+        }
+
+        Assert.Equal(5, currentNote.RevisionCount);
+
+        var revisionsResult = await repo.GetRevisionsAsync(owner, currentNote.Id);
+        Assert.True(revisionsResult.IsSuccess);
+        var revisions = revisionsResult.Value!;
+        Assert.Equal(5, revisions.Count);
+        Assert.Equal([1, 2, 3, 4, 5], revisions.Select(r => r.RevisionNumber).ToArray());
+        Assert.Equal(
+            ["## Section\nVersion 0\n", "## Section\nVersion 1\n", "## Section\nVersion 2\n", "## Section\nVersion 3\n", "## Section\nVersion 4\n"],
+            revisions.Select(r => r.PriorBody).ToArray());
+    }
 }

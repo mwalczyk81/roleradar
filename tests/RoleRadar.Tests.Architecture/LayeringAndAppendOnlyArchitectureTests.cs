@@ -164,6 +164,120 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
             (name.Contains("Revision", StringComparison.OrdinalIgnoreCase) || name.Contains("Audit", StringComparison.OrdinalIgnoreCase)));
     }
 
+    [Fact]
+    public void MongoNoteRepository_MustTouchRevisionsAndAuditCollections_ExclusivelyThrough_AppendOnlyMongoCollection()
+    {
+        // 1. Verify AppendOnlyMongoCollection exposes ONLY insert and find operations (no delete, update, replace, or bulk-write)
+        var wrapperMethods = typeof(AppendOnlyMongoCollection)
+            .GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .Select(m => m.Name)
+            .ToArray();
+
+        Assert.All(wrapperMethods, name =>
+        {
+            Assert.False(name.Contains("Delete", StringComparison.OrdinalIgnoreCase), $"AppendOnlyMongoCollection must not expose {name}");
+            Assert.False(name.Contains("Remove", StringComparison.OrdinalIgnoreCase), $"AppendOnlyMongoCollection must not expose {name}");
+            Assert.False(name.Contains("Update", StringComparison.OrdinalIgnoreCase), $"AppendOnlyMongoCollection must not expose {name}");
+            Assert.False(name.Contains("Replace", StringComparison.OrdinalIgnoreCase), $"AppendOnlyMongoCollection must not expose {name}");
+            Assert.False(name.Contains("Bulk", StringComparison.OrdinalIgnoreCase), $"AppendOnlyMongoCollection must not expose {name}");
+            Assert.False(name.Contains("Drop", StringComparison.OrdinalIgnoreCase), $"AppendOnlyMongoCollection must not expose {name}");
+        });
+
+        // 2. Verify all authored fields and properties on MongoNoteRepository (and its authored nested types) that touch revisions or audits
+        // have type AppendOnlyMongoCollection, and no other IMongoCollection<BsonDocument> member exists besides NotesCollection.
+        var allRepoTypes = new[] { typeof(MongoNoteRepository) }
+            .Concat(typeof(MongoNoteRepository).GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic)
+                .Where(nt => !nt.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), inherit: false)))
+            .ToArray();
+
+        var allFieldsAndProps = allRepoTypes
+            .SelectMany(t => t.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                .Select(f => (DeclaringType: t, MemberName: f.Name, MemberType: f.FieldType))
+                .Concat(t.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                    .Select(p => (DeclaringType: t, MemberName: p.Name, MemberType: p.PropertyType))))
+            .ToArray();
+
+        foreach (var member in allFieldsAndProps)
+        {
+            if (member.MemberName.Contains("Revision", StringComparison.OrdinalIgnoreCase) ||
+                member.MemberName.Contains("Audit", StringComparison.OrdinalIgnoreCase))
+            {
+                Assert.Equal(typeof(AppendOnlyMongoCollection), member.MemberType);
+            }
+
+            if (member.MemberType.IsGenericType &&
+                member.MemberType.GetGenericTypeDefinition().Name.StartsWith("IMongoCollection", StringComparison.Ordinal))
+            {
+                Assert.Equal("NotesCollection", member.MemberName);
+            }
+        }
+
+        // 3. Inspect IL of all methods (excluding constructors) in MongoNoteRepository and its nested types to ensure
+        // IMongoDatabase.GetCollection is only called inside get_NotesCollection, never to obtain raw access to note_revisions or audit_log.
+        var allMethods = allRepoTypes
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))
+            .ToArray();
+
+        foreach (var method in allMethods)
+        {
+            var il = method.GetMethodBody()?.GetILAsByteArray();
+            if (il is null)
+            {
+                continue;
+            }
+
+            var referencedStringLiterals = ExtractUserStringsFromMethodBody(method.Module, il);
+            foreach (var literal in referencedStringLiterals)
+            {
+                Assert.NotEqual(MongoBootstrapAndIndexes.NoteRevisionsCollectionName, literal);
+                Assert.NotEqual(MongoBootstrapAndIndexes.AuditLogCollectionName, literal);
+            }
+        }
+    }
+
+    [Fact]
+    public void DependencyInjection_AddRoleRadarInfrastructure_ResolvesMongoNoteRepository_WithNoFaultInjectionHookSet()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        RoleRadar.Infrastructure.DependencyInjection.AddRoleRadarInfrastructure(
+            services,
+            opts =>
+            {
+                opts.ConnectionString = "mongodb://127.0.0.1:27017/?replicaSet=rs0";
+                opts.DatabaseName = "roleradar_arch_test";
+            });
+
+        using var provider = services.BuildServiceProvider();
+        var repo = Assert.IsType<MongoNoteRepository>(provider.GetRequiredService<INoteRepository>());
+        Assert.False(repo.HasFaultInjectionHook, "DI-built MongoNoteRepository must not have a fault-injection hook set.");
+    }
+
+    private static List<string> ExtractUserStringsFromMethodBody(Module module, byte[] il)
+    {
+        var strings = new List<string>();
+        for (var i = 0; i < il.Length - 4; i++)
+        {
+            // OpCodes.Ldstr == 0x72 followed by 4-byte metadata token (0x70xxxxxx for UserString)
+            if (il[i] == 0x72 && il[i + 4] == 0x70)
+            {
+                var token = BitConverter.ToInt32(il, i + 1);
+                try
+                {
+                    strings.Add(module.ResolveString(token));
+                    i += 4;
+                }
+                catch
+                {
+                    // Not a valid string token at this alignment; continue scanning.
+                }
+            }
+        }
+
+        return strings;
+    }
+
     private static bool ContainsDecoratorInChain(object current, Type expectedOpenGenericDecorator)
     {
         var visited = new HashSet<object>(ReferenceEqualityComparer.Instance);
