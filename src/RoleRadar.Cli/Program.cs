@@ -20,9 +20,6 @@ public static class Program
 
             await using var services = BuildServiceProvider(args, isVerbose: isVerbose);
 
-            // Eagerly resolve IMongoClient to catch invalid connection strings before command dispatch
-            services.GetRequiredService<IMongoClient>();
-
             var rootCommand = new RootCommand("RoleRadar local CLI");
             rootCommand.Add(StatusCommand.Create(services));
             rootCommand.Add(ImportCommand.Create(services));
@@ -30,7 +27,18 @@ public static class Program
             rootCommand.Add(RestoreCommand.Create(services));
             rootCommand.Add(WipeCommand.Create(services));
 
-            return await rootCommand.Parse(args).InvokeAsync(cancellationToken: CancellationToken.None);
+            var parseResult = rootCommand.Parse(args);
+
+            if (parseResult.Errors.Count == 0
+                && parseResult.Action is not System.CommandLine.Help.HelpAction
+                && parseResult.Action?.GetType().Name != "VersionOptionAction"
+                && parseResult.CommandResult.Command != rootCommand)
+            {
+                // Resolve IMongoClient lazily only when a command that needs it runs
+                services.GetRequiredService<IMongoClient>();
+            }
+
+            return await parseResult.InvokeAsync(cancellationToken: CancellationToken.None);
         }
         catch (InvalidOperationException ex) when (ex.Message == RoleRadar.Infrastructure.Mongo.ConnectionStringRedactor.InvalidConnectionStringErrorMessage)
         {
