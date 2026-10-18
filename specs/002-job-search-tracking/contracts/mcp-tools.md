@@ -64,6 +64,32 @@ Every spec-mandated requirement for Feature 002 is mapped to its satisfying MCP 
 
 ---
 
+## MCP Response Envelope Standard
+
+All Feature 002 MCP tools return standard JSON matching Feature 001 note tools:
+
+**Success Envelope**:
+```json
+{
+  "ok": true,
+  "data": { ... }
+}
+```
+
+**Failure Envelope**:
+```json
+{
+  "ok": false,
+  "error": {
+    "code": "ErrorCodeName",
+    "message": "Human-readable description",
+    "metadata": {}
+  }
+}
+```
+
+---
+
 ## Tool 1: `posting_record`
 
 - **Purpose**: Creates, ingests, or explicitly updates a job posting with tiered deduplication (Tiers A–D), duplicate collapsing, signals, notes links, culture summary, score, and resurface policy.
@@ -115,20 +141,23 @@ Every spec-mandated requirement for Feature 002 is mapped to its satisfying MCP 
 - **Output JSON Schema**:
   ```json
   {
-    "status": "created | updated | already_tracked | already_decided | possible_duplicate",
-    "posting": {
-      "id": "0199f2c0-0000-7000-8000-000000000101",
-      "companyId": "0199f2c0-0000-7000-8000-000000000050",
-      "title": "Staff Backend Engineer",
-      "normalizedTitle": "staff backend engineer",
-      "disposition": "lead",
-      "resurfacePolicy": "never",
-      "versionToken": "0199f2c0-0000-7000-8000-000000000102"
-    },
-    "priorReason": null,
-    "canReopen": null,
-    "candidates": [],
-    "differences": []
+    "ok": true,
+    "data": {
+      "status": "created | updated | already_tracked | already_decided | possible_duplicate",
+      "posting": {
+        "id": "0199f2c0-0000-7000-8000-000000000101",
+        "companyId": "0199f2c0-0000-7000-8000-000000000050",
+        "title": "Staff Backend Engineer",
+        "normalizedTitle": "staff backend engineer",
+        "disposition": "lead",
+        "resurfacePolicy": "never",
+        "versionToken": "0199f2c0-0000-7000-8000-000000000102"
+      },
+      "priorReason": null,
+      "canReopen": null,
+      "candidates": [],
+      "differences": []
+    }
   }
   ```
 
@@ -157,15 +186,18 @@ Every spec-mandated requirement for Feature 002 is mapped to its satisfying MCP 
 - **Output JSON Schema**:
   ```json
   {
-    "postingId": "0199f2c0-0000-7000-8000-000000000101",
-    "previousDisposition": "lead",
-    "currentDisposition": "screened_out",
-    "dispositionReason": "Below compensation threshold",
-    "criterionId": "0199f2c0-0000-7000-8000-000000000010",
-    "resurfacePolicy": "never",
-    "decidedAtUtc": "2026-10-17T20:00:00Z",
-    "versionToken": "0199f2c0-0000-7000-8000-000000000103",
-    "updatedAtUtc": "2026-10-17T20:00:00Z"
+    "ok": true,
+    "data": {
+      "postingId": "0199f2c0-0000-7000-8000-000000000101",
+      "previousDisposition": "lead",
+      "currentDisposition": "screened_out",
+      "dispositionReason": "Below compensation threshold",
+      "criterionId": "0199f2c0-0000-7000-8000-000000000010",
+      "resurfacePolicy": "never",
+      "decidedAtUtc": "2026-10-17T20:00:00Z",
+      "versionToken": "0199f2c0-0000-7000-8000-000000000103",
+      "updatedAtUtc": "2026-10-17T20:00:00Z"
+    }
   }
   ```
 
@@ -203,14 +235,18 @@ Every spec-mandated requirement for Feature 002 is mapped to its satisfying MCP 
 - **Output JSON Schema**:
   ```json
   {
-    "company": {
-      "id": "0199f2c0-0000-7000-8000-000000000050",
-      "name": "Acme Corp",
-      "description": "Enterprise cloud security platform; Series D.",
-      "ownershipType": "vc_backed",
-      "status": "target",
-      "versionToken": "0199f2c0-0000-7000-8000-000000000051",
-      "careerSourceCount": 1
+    "ok": true,
+    "data": {
+      "status": "created | updated | already_exists",
+      "company": {
+        "id": "0199f2c0-0000-7000-8000-000000000050",
+        "name": "Acme Corp",
+        "description": "Enterprise cloud security platform; Series D.",
+        "ownershipType": "vc_backed",
+        "status": "target",
+        "versionToken": "0199f2c0-0000-7000-8000-000000000051",
+        "careerSourceCount": 1
+      }
     }
   }
   ```
@@ -342,19 +378,22 @@ Every spec-mandated requirement for Feature 002 is mapped to its satisfying MCP 
 - **Output JSON Schema**:
   ```json
   {
-    "entity": "postings | decided_postings | posting_dedup_lookup | companies | criteria | applications",
-    "page": 1,
-    "pageSize": 50,
-    "totalCount": 142,
-    "items": [
-      {
-        "id": "0199f2c0-0000-7000-8000-000000000101",
-        "title": "Principal Architect",
-        "companyName": "Acme Corp",
-        "disposition": "applied",
-        "ghostLikelihood": "low",
-        "lastVerifiedAtUtc": "2026-10-17T18:00:00Z"
-      }
-    ]
+    "ok": true,
+    "data": {
+      "entity": "postings | decided_postings | posting_dedup_lookup | companies | criteria | applications",
+      "page": 1,
+      "pageSize": 50,
+      "totalCount": 142,
+      "items": [
+        {
+          "id": "0199f2c0-0000-7000-8000-000000000101",
+          "title": "Principal Architect",
+          "companyName": "Acme Corp",
+          "disposition": "applied",
+          "ghostLikelihood": "low",
+          "lastVerifiedAtUtc": "2026-10-17T18:00:00Z"
+        }
+      ]
+    }
   }
   ```

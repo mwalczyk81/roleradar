@@ -25,7 +25,8 @@ public sealed record CompanyRecordSummaryDto(
     int CareerSourceCount);
 
 public sealed record CompanyRecordResultDto(
-    CompanyRecordSummaryDto Company);
+    CompanyRecordSummaryDto Company,
+    string Status = "created");
 
 public sealed record RecordCompanyCommand(
     Guid? Id = null,

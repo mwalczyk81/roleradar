@@ -90,4 +90,31 @@ public sealed class TrackingIndexInitializerContractTests : IClassFixture<Shared
         var searchRunsIndex = searchRunsIndexes.First(i => i["name"].AsString == "ux_search_runs_owner_started");
         Assert.True(searchRunsIndex["unique"].AsBoolean);
     }
+
+    [Fact]
+    public async Task EnsureIndexesAsync_WhenDataViolatesUniqueIndex_ThrowsTrackingIndexValidationExceptionNamingIndexAndRedactingConnectionStrings()
+    {
+        var dupDbName = _fixture.CreateDatabaseName("roleradar_tracking_indexes_dup");
+        var dupDb = _client.GetDatabase(dupDbName);
+        try
+        {
+            var postingsCol = dupDb.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
+            await postingsCol.InsertManyAsync(
+            [
+                new BsonDocument { ["owner_id"] = "owner-1", ["dedup_key_a"] = "tenant|req1" },
+                new BsonDocument { ["owner_id"] = "owner-1", ["dedup_key_a"] = "tenant|req1" }
+            ]);
+
+            var ex = await Assert.ThrowsAsync<TrackingIndexValidationException>(
+                () => TrackingIndexInitializer.EnsureIndexesAsync(dupDb, CancellationToken.None));
+
+            Assert.Contains("ux_postings_owner_dedup_key_a", ex.IndexName);
+            Assert.Contains("ux_postings_owner_dedup_key_a", ex.Message);
+            Assert.DoesNotContain("mongodb://", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            await _client.DropDatabaseAsync(dupDbName);
+        }
+    }
 }

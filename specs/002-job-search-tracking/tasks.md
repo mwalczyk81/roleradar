@@ -380,6 +380,7 @@
 ### Within Each User Story
 
 - Tests are MANDATORY, come first, and MUST fail on assertions (stub types so everything compiles) before implementation begins.
+- DB-enforced invariants (such as partial unique indexes, deduplication races, and concurrent process mutations) must be tested through shipped host processes (e.g. `RoleRadar.Mcp.Stdio` or `RoleRadar.Cli`), not merely in-process fixtures.
 - Domain models and enums are implemented first.
 - Command and query handlers implemented second.
 - MCP tools and CLI commands implemented third, extending the living architecture test file and startup smoke test for each entity.

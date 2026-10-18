@@ -1,3 +1,4 @@
+using MongoDB.Bson;
 using MongoDB.Driver;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Tracking.Commands;
@@ -408,6 +409,54 @@ public sealed class CompanyRecordContractTests : IClassFixture<SharedMongoFixtur
         Assert.Equal("Updated description", stored.Value!.Description);
         Assert.Equal(OwnershipType.PeBacked, stored.Value.OwnershipType);
         Assert.Equal(updateRes.Value.Company.VersionToken, stored.Value.VersionToken);
+    }
+
+    [Fact]
+    public async Task CompanyRecord_ExistingNameWithoutIdOrVersionToken_ReturnsAlreadyExistsWithoutWritesOrAudit()
+    {
+        var clock = new FixedClock(new DateTime(2026, 10, 17, 12, 0, 0, DateTimeKind.Utc));
+        var handler = new RecordCompanyCommandHandler(_context, clock);
+
+        // 1. Create company
+        var createCommand = new RecordCompanyCommand(
+            Name: "Stripe, Inc.",
+            OwnershipType: "private",
+            OwnerId: "owner-1");
+        var createResult = await handler.HandleAsync(createCommand);
+        Assert.True(createResult.IsSuccess);
+        Assert.NotNull(createResult.Value);
+        Assert.Equal("created", createResult.Value.Status);
+
+        var initialCompanyCount = await _database.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName)
+            .CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty);
+
+        // 2. Call with same name (case-insensitive) and NO id or versionToken
+        var reencounterCommand = new RecordCompanyCommand(
+            Name: "  stripe, inc.  ",
+            OwnershipType: "private",
+            OwnerId: "owner-1");
+        var reencounterResult = await handler.HandleAsync(reencounterCommand);
+
+        Assert.True(reencounterResult.IsSuccess);
+        Assert.NotNull(reencounterResult.Value);
+        Assert.Equal("already_exists", reencounterResult.Value.Status);
+        Assert.Equal(createResult.Value.Company.Id, reencounterResult.Value.Company.Id);
+
+        // 3. Assert zero additional writes
+        var finalCompanyCount = await _database.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName)
+            .CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty);
+        Assert.Equal(initialCompanyCount, finalCompanyCount);
+
+        // 4. Calling with explicit MISMATCHED versionToken continues to return StaleVersionToken
+        var wrongTokenCommand = new RecordCompanyCommand(
+            Id: createResult.Value.Company.Id,
+            Name: "Stripe, Inc.",
+            OwnershipType: "private",
+            VersionToken: Guid.NewGuid(),
+            OwnerId: "owner-1");
+        var wrongTokenResult = await handler.HandleAsync(wrongTokenCommand);
+        Assert.False(wrongTokenResult.IsSuccess);
+        Assert.Equal(ErrorCode.StaleVersionToken, wrongTokenResult.Error!.Value.Code);
     }
 
     private sealed class TrackingTransactionContextReal : ITrackingTransactionContext
