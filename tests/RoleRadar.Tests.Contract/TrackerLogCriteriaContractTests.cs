@@ -1,3 +1,4 @@
+using MongoDB.Bson;
 using MongoDB.Driver;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Tracking.Commands;
@@ -37,7 +38,7 @@ public sealed class TrackerLogCriteriaContractTests : IClassFixture<SharedMongoF
         _companyRepo = new MongoCompanyRepository(_client, _database);
         _postingRepo = new MongoPostingRepository(_client, _database);
         _criterionRepo = new MongoCriterionRepository(_client, _database);
-        _context = new TrackingTransactionContextReal(_companyRepo, _postingRepo, _criterionRepo);
+        _context = new TrackingTransactionContextReal(_companyRepo, _postingRepo, _criterionRepo, _database);
     }
 
     public async ValueTask DisposeAsync()
@@ -153,6 +154,23 @@ public sealed class TrackerLogCriteriaContractTests : IClassFixture<SharedMongoF
         var v1Old = v1OldRes.Value!;
         Assert.False(v1Old.IsActive);
         Assert.Equal(DateTimeOffset.Parse("2026-07-01T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture), v1Old.EffectiveTo);
+
+        // Assert audit entries for both initial create and revision
+        var v1Audit = await _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName)
+            .Find(Builders<BsonDocument>.Filter.And(
+                Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(activeCriterion.Id, GuidRepresentation.Standard)),
+                Builders<BsonDocument>.Filter.Eq("operation", "note_create")))
+            .FirstOrDefaultAsync();
+        Assert.NotNull(v1Audit);
+        Assert.Equal(activeCriterion.VersionToken, v1Audit["resulting_version_token"].AsGuid);
+
+        var v2Audit = await _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName)
+            .Find(Builders<BsonDocument>.Filter.And(
+                Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(v2Active.Id, GuidRepresentation.Standard)),
+                Builders<BsonDocument>.Filter.Eq("operation", "note_append")))
+            .FirstOrDefaultAsync();
+        Assert.NotNull(v2Audit);
+        Assert.Equal(v2Active.VersionToken, v2Audit["resulting_version_token"].AsGuid);
     }
 
     [Fact]
@@ -199,6 +217,16 @@ public sealed class TrackerLogCriteriaContractTests : IClassFixture<SharedMongoF
         var activeAfterRes = await _criterionRepo.GetActiveByKeyAsync("owner-1", "commute_time");
         Assert.True(activeAfterRes.IsSuccess);
         Assert.Null(activeAfterRes.Value);
+
+        // Assert audit entry for deactivation
+        var deactAudit = await _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName)
+            .Find(Builders<BsonDocument>.Filter.And(
+                Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(active.Id, GuidRepresentation.Standard)),
+                Builders<BsonDocument>.Filter.Eq("operation", "note_append")))
+            .FirstOrDefaultAsync();
+        Assert.NotNull(deactAudit);
+        var deactStored = (await _criterionRepo.GetByIdAsync("owner-1", active.Id)).Value!;
+        Assert.Equal(deactStored.VersionToken, deactAudit["resulting_version_token"].AsGuid);
     }
 
     [Fact]
@@ -279,14 +307,18 @@ public sealed class TrackerLogCriteriaContractTests : IClassFixture<SharedMongoF
 
     private sealed class TrackingTransactionContextReal : ITrackingTransactionContext
     {
+        private readonly IMongoCollection<BsonDocument> _auditCol;
+
         public TrackingTransactionContextReal(
             ICompanyRepository companyRepo,
             IPostingRepository postingRepo,
-            ICriterionRepository criterionRepo)
+            ICriterionRepository criterionRepo,
+            IMongoDatabase database)
         {
             Companies = companyRepo;
             Postings = postingRepo;
             Criteria = criterionRepo;
+            _auditCol = database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
         }
 
         public ICompanyRepository Companies { get; }
@@ -295,6 +327,21 @@ public sealed class TrackerLogCriteriaContractTests : IClassFixture<SharedMongoF
         public IApplicationRepository Applications => throw new NotImplementedException();
         public IContactRepository Contacts => throw new NotImplementedException();
         public ISearchRunRepository SearchRuns => throw new NotImplementedException();
-        public Task AppendAuditEntryAsync(AuditLogEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
+
+        public Task AppendAuditEntryAsync(AuditLogEntry entry, CancellationToken cancellationToken = default)
+        {
+            var doc = new BsonDocument
+            {
+                ["_id"] = new BsonBinaryData(entry.Id, GuidRepresentation.Standard),
+                ["owner_id"] = entry.OwnerId,
+                ["actor"] = entry.Actor,
+                ["operation"] = entry.Operation,
+                ["target_note_id"] = new BsonBinaryData(entry.TargetNoteId, GuidRepresentation.Standard),
+                ["resulting_version_token"] = new BsonBinaryData(entry.ResultingVersionToken, GuidRepresentation.Standard),
+                ["appended_text"] = entry.AppendedText is not null ? new BsonString(entry.AppendedText) : BsonNull.Value,
+                ["occurred_at"] = new BsonDateTime(entry.OccurredAtUtc)
+            };
+            return _auditCol.InsertOneAsync(doc, cancellationToken: cancellationToken);
+        }
     }
 }
