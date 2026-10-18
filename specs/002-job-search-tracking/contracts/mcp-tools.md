@@ -342,6 +342,7 @@ All Feature 002 MCP tools return standard JSON matching Feature 001 note tools:
   {
     "action": "criterion_revision | criterion_deactivate | search_run",
     "recordId": "0199f2c0-0000-7000-8000-000000000010",
+    "versionToken": "0199f2c0-0000-7000-8000-000000000011",
     "status": "success | already_logged",
     "updatedAtUtc": "2026-10-17T20:30:00Z"
   }

@@ -404,6 +404,8 @@ public sealed class ShippedHostTrackingIntegrationTests
             });
 
             Assert.True(initialResp.GetProperty("ok").GetBoolean());
+            Assert.True(initialResp.GetProperty("data").TryGetProperty("versionToken", out var initialVtProp));
+            Assert.NotEqual(Guid.Empty, initialVtProp.GetGuid());
 
             // Get active criterion to retrieve version token
             var criteriaCol = db.GetCollection<BsonDocument>(TrackingMongoOptions.CriteriaCollectionName);
@@ -413,6 +415,7 @@ public sealed class ShippedHostTrackingIntegrationTests
 
             Assert.NotNull(activeDoc);
             var initialToken = activeDoc["version_token"].AsGuid;
+            Assert.Equal(initialToken, initialVtProp.GetGuid());
 
             // 2. Launch 8 concurrent MCP processes revising the same key with the same expected versionToken
             var barrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -442,6 +445,8 @@ public sealed class ShippedHostTrackingIntegrationTests
                 r.GetProperty("error").GetProperty("code").GetString() == "StaleVersionToken").ToList();
 
             Assert.Single(succeeded);
+            Assert.True(succeeded[0].GetProperty("data").TryGetProperty("versionToken", out var revVtProp));
+            Assert.NotEqual(Guid.Empty, revVtProp.GetGuid());
             Assert.Equal(processCount - 1, staleErrors.Count);
 
             // Assert exactly one active version in MongoDB afterwards

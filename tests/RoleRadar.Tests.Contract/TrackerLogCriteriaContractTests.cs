@@ -74,12 +74,15 @@ public sealed class TrackerLogCriteriaContractTests : IAsyncLifetime
         var v1Result = await handler.HandleAsync(initialCmd);
         Assert.True(v1Result.IsSuccess);
         Assert.Equal("criterion_revision", v1Result.Value!.Action);
+        Assert.NotNull(v1Result.Value!.VersionToken);
+        Assert.NotEqual(Guid.Empty, v1Result.Value!.VersionToken);
 
         var activeCriterionRes = await _criterionRepo.GetActiveByKeyAsync("owner-1", "min_base_salary");
         Assert.True(activeCriterionRes.IsSuccess);
         Assert.NotNull(activeCriterionRes.Value);
         var activeCriterion = activeCriterionRes.Value!;
         Assert.Equal("180000", activeCriterion.Value);
+        Assert.Equal(activeCriterion.VersionToken, v1Result.Value!.VersionToken);
 
         // 2. Attempt revision without version token -> StaleVersionToken
         var noTokenCmd = new TrackerLogCommand(
@@ -138,6 +141,8 @@ public sealed class TrackerLogCriteriaContractTests : IAsyncLifetime
 
         var v2Result = await handler.HandleAsync(v2Cmd);
         Assert.True(v2Result.IsSuccess);
+        Assert.NotNull(v2Result.Value!.VersionToken);
+        Assert.NotEqual(Guid.Empty, v2Result.Value!.VersionToken);
 
         // Check DB state: exactly 1 active version, previous version closed
         var v2ActiveRes = await _criterionRepo.GetActiveByKeyAsync("owner-1", "min_base_salary");
@@ -145,6 +150,7 @@ public sealed class TrackerLogCriteriaContractTests : IAsyncLifetime
         Assert.NotNull(v2ActiveRes.Value);
         var v2Active = v2ActiveRes.Value!;
         Assert.Equal("200000", v2Active.Value);
+        Assert.Equal(v2Active.VersionToken, v2Result.Value!.VersionToken);
         Assert.Equal(DateTimeOffset.Parse("2026-07-01T00:00:00Z", System.Globalization.CultureInfo.InvariantCulture), v2Active.EffectiveFrom);
         Assert.Null(v2Active.EffectiveTo);
 
@@ -213,6 +219,8 @@ public sealed class TrackerLogCriteriaContractTests : IAsyncLifetime
         var deactRes = await handler.HandleAsync(deactCmd);
         Assert.True(deactRes.IsSuccess);
         Assert.Equal("criterion_deactivate", deactRes.Value!.Action);
+        Assert.NotNull(deactRes.Value!.VersionToken);
+        Assert.NotEqual(Guid.Empty, deactRes.Value!.VersionToken);
 
         var activeAfterRes = await _criterionRepo.GetActiveByKeyAsync("owner-1", "commute_time");
         Assert.True(activeAfterRes.IsSuccess);
@@ -227,6 +235,7 @@ public sealed class TrackerLogCriteriaContractTests : IAsyncLifetime
         Assert.NotNull(deactAudit);
         var deactStored = (await _criterionRepo.GetByIdAsync("owner-1", active.Id)).Value!;
         Assert.Equal(deactStored.VersionToken, deactAudit["resulting_version_token"].AsGuid);
+        Assert.Equal(deactStored.VersionToken, deactRes.Value!.VersionToken);
     }
 
     [Fact]
