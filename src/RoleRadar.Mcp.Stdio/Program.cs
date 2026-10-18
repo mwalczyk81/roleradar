@@ -44,7 +44,8 @@ public static class Program
             builder.Services
                 .AddMcpServer()
                 .WithStdioServerTransport()
-                .WithTools<NoteMcpTools>();
+                .WithTools<NoteMcpTools>()
+                .WithTools<TrackingMcpTools>();
 
             var app = builder.Build();
 

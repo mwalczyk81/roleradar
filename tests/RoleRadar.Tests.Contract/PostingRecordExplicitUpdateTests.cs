@@ -1,6 +1,7 @@
 using MongoDB.Driver;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Tracking.Commands;
+using RoleRadar.Domain.Audit;
 using RoleRadar.Domain.Common;
 using RoleRadar.Domain.Tracking;
 using RoleRadar.Infrastructure.Mongo;
@@ -17,6 +18,8 @@ public sealed class PostingRecordExplicitUpdateTests : IClassFixture<SharedMongo
     private MongoClient _client = null!;
     private IMongoDatabase _database = null!;
     private MongoCompanyRepository _companyRepo = null!;
+    private MongoPostingRepository _postingRepo = null!;
+    private TrackingTransactionContextReal _context = null!;
 
     public PostingRecordExplicitUpdateTests(SharedMongoFixture fixture)
     {
@@ -30,6 +33,8 @@ public sealed class PostingRecordExplicitUpdateTests : IClassFixture<SharedMongo
         _database = _client.GetDatabase(_databaseName);
         await TrackingIndexInitializer.EnsureIndexesAsync(_database, CancellationToken.None);
         _companyRepo = new MongoCompanyRepository(_client, _database);
+        _postingRepo = new MongoPostingRepository(_client, _database);
+        _context = new TrackingTransactionContextReal(_companyRepo, _postingRepo);
     }
 
     public async ValueTask DisposeAsync()
@@ -50,13 +55,23 @@ public sealed class PostingRecordExplicitUpdateTests : IClassFixture<SharedMongo
     [Fact]
     public async Task PostingRecord_ExplicitUpdate_MutatesSuppliedFieldsAndRotatesVersionToken()
     {
-        var handler = new RecordPostingCommandHandler(
-            new MongoTrackingTransactionContextMock(_companyRepo),
-            new SystemUtcClock());
+        var company = Company.Create("owner-1", "Update Target Co");
+        await _companyRepo.UpsertCompanyAsync(company);
+
+        var posting = Posting.Create(
+            "owner-1", company.Id, "Original Title",
+            location: "Dallas, TX",
+            remoteType: RemoteType.Onsite,
+            score: 7.0m);
+        await _postingRepo.UpsertPostingAsync(posting);
+
+        var originalToken = posting.VersionToken;
+        var clock = new SystemUtcClock();
+        var handler = new RecordPostingCommandHandler(_context, clock);
 
         var command = new RecordPostingCommand(
-            PostingId: Guid.CreateVersion7(),
-            VersionToken: Guid.CreateVersion7(),
+            PostingId: posting.Id,
+            VersionToken: originalToken,
             Location: "Austin, TX (Remote)",
             RemoteType: "remote",
             Score: 9.2m,
@@ -64,23 +79,58 @@ public sealed class PostingRecordExplicitUpdateTests : IClassFixture<SharedMongo
 
         var result = await handler.HandleAsync(command);
 
-        // Expected to fail before implementation
         Assert.True(result.IsSuccess);
+        Assert.NotNull(result.Value);
+        Assert.Equal("updated", result.Value.Status);
+
+        var updated = await _postingRepo.GetByIdAsync("owner-1", posting.Id);
+        Assert.True(updated.IsSuccess);
+        Assert.NotNull(updated.Value);
+        Assert.Equal("Austin, TX (Remote)", updated.Value.Location);
+        Assert.Equal(RemoteType.Remote, updated.Value.RemoteType);
+        Assert.Equal(9.2m, updated.Value.Score);
+        Assert.NotEqual(originalToken, updated.Value.VersionToken);
     }
 
-    private sealed class MongoTrackingTransactionContextMock : ITrackingTransactionContext
+    [Fact]
+    public async Task PostingRecord_ExplicitUpdate_StaleVersionToken_ReturnsStaleVersionTokenError()
     {
-        public MongoTrackingTransactionContextMock(ICompanyRepository companyRepo)
+        var company = Company.Create("owner-1", "Concurrency Co");
+        await _companyRepo.UpsertCompanyAsync(company);
+
+        var posting = Posting.Create("owner-1", company.Id, "Original Title");
+        await _postingRepo.UpsertPostingAsync(posting);
+
+        var staleToken = Guid.CreateVersion7(); // Different from stored
+        var clock = new SystemUtcClock();
+        var handler = new RecordPostingCommandHandler(_context, clock);
+
+        var command = new RecordPostingCommand(
+            PostingId: posting.Id,
+            VersionToken: staleToken,
+            Location: "New Location",
+            OwnerId: "owner-1");
+
+        var result = await handler.HandleAsync(command);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorCode.StaleVersionToken, result.Error!.Value.Code);
+    }
+
+    private sealed class TrackingTransactionContextReal : ITrackingTransactionContext
+    {
+        public TrackingTransactionContextReal(ICompanyRepository companyRepo, IPostingRepository postingRepo)
         {
             Companies = companyRepo;
+            Postings = postingRepo;
         }
 
         public ICompanyRepository Companies { get; }
-        public IPostingRepository Postings => throw new NotImplementedException();
+        public IPostingRepository Postings { get; }
         public ICriterionRepository Criteria => throw new NotImplementedException();
         public IApplicationRepository Applications => throw new NotImplementedException();
         public IContactRepository Contacts => throw new NotImplementedException();
         public ISearchRunRepository SearchRuns => throw new NotImplementedException();
-        public Task AppendAuditEntryAsync(RoleRadar.Domain.Audit.AuditLogEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task AppendAuditEntryAsync(AuditLogEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

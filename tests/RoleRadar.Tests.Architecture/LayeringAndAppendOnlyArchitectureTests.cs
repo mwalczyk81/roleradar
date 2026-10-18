@@ -97,6 +97,7 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         services.AddSingleton<INoteRepository>(new NoOpNoteRepository());
+        services.AddSingleton<ITrackingTransactionContext>(new NoOpTrackingTransactionContext());
         services.AddRoleRadarApplication();
 
         using var provider = services.BuildServiceProvider();
@@ -107,6 +108,7 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
         testServices.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         testServices.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
         testServices.AddSingleton<INoteRepository>(new NoOpNoteRepository());
+        testServices.AddSingleton<ITrackingTransactionContext>(new NoOpTrackingTransactionContext());
         testServices.AddRoleRadarApplication();
         testServices.AddCommandHandler<SampleArchitectureCommand, string, SampleArchitectureCommandHandler>();
 
@@ -378,5 +380,16 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
 
         public Task<Result<IReadOnlyList<RoleRadar.Domain.Audit.AuditLogEntry>>> GetAuditEntriesAsync(string ownerId, Guid? noteId = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
+    }
+
+    private sealed class NoOpTrackingTransactionContext : ITrackingTransactionContext
+    {
+        public ICompanyRepository Companies => throw new NotSupportedException();
+        public IPostingRepository Postings => throw new NotSupportedException();
+        public ICriterionRepository Criteria => throw new NotSupportedException();
+        public IApplicationRepository Applications => throw new NotSupportedException();
+        public IContactRepository Contacts => throw new NotSupportedException();
+        public ISearchRunRepository SearchRuns => throw new NotSupportedException();
+        public Task AppendAuditEntryAsync(RoleRadar.Domain.Audit.AuditLogEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

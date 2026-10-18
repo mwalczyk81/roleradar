@@ -687,7 +687,7 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
             {
                 opts.ConnectionString = composeConnString;
                 opts.DatabaseName = composeDbName;
-                opts.ReadinessTimeout = TimeSpan.FromSeconds(15);
+                opts.ReadinessTimeout = TimeSpan.FromSeconds(30);
             });
 
             // DO NOT set opts.DumpCommand or opts.RestoreCommand - verify defaults!
@@ -704,7 +704,7 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
                 ProvenanceQualifier: null,
                 Actor: "test-user",
                 OwnerId: "user-default"));
-            Assert.True(createResult.IsSuccess);
+            Assert.True(createResult.IsSuccess, createResult.Error?.Message);
 
             var backupService = provider.GetRequiredService<IBackupArchiveService>();
             var backupFile = Path.Combine(Path.GetTempPath(), $"defaults_test_{Guid.NewGuid():N}.rrbak");

@@ -135,7 +135,8 @@ public sealed class MongoCompanyRepository : ICompanyRepository
 
         try
         {
-            var context = new TrackingTransactionContext(this, _auditLog, session);
+            var postingRepo = new MongoPostingRepository(_client, _database);
+            var context = new MongoTrackingTransactionContext(this, postingRepo, _auditLog, session);
             var result = await work(context, cancellationToken);
 
             if (result.IsSuccess)
@@ -283,63 +284,5 @@ public sealed class MongoCompanyRepository : ICompanyRepository
             isActive,
             id,
             createdAt);
-    }
-
-    private sealed class TrackingTransactionContext : ITrackingTransactionContext
-    {
-        private readonly ICompanyRepository _companies;
-        private readonly IMongoCollection<BsonDocument> _auditCollection;
-        private readonly IClientSessionHandle _session;
-
-        public TrackingTransactionContext(
-            ICompanyRepository companies,
-            IMongoCollection<BsonDocument> auditCollection,
-            IClientSessionHandle session)
-        {
-            _companies = companies;
-            _auditCollection = auditCollection;
-            _session = session;
-        }
-
-        public ICompanyRepository Companies => _companies;
-        public IPostingRepository Postings => throw new NotImplementedException("Postings available in US1");
-        public ICriterionRepository Criteria => throw new NotImplementedException("Criteria available in US3");
-        public IApplicationRepository Applications => throw new NotImplementedException("Applications available in US4");
-        public IContactRepository Contacts => throw new NotImplementedException("Contacts available in US6");
-        public ISearchRunRepository SearchRuns => throw new NotImplementedException("SearchRuns available in US7");
-
-        public async Task AppendAuditEntryAsync(AuditLogEntry entry, CancellationToken cancellationToken = default)
-        {
-            ArgumentNullException.ThrowIfNull(entry);
-
-            var doc = new BsonDocument
-            {
-                ["_id"] = new BsonBinaryData(entry.Id, GuidRepresentation.Standard),
-                ["owner_id"] = entry.OwnerId,
-                ["actor"] = entry.Actor,
-                ["operation"] = entry.Operation,
-                ["target_note_id"] = new BsonBinaryData(entry.TargetNoteId, GuidRepresentation.Standard),
-                ["note_revision_id"] = entry.NoteRevisionId.HasValue
-                    ? new BsonBinaryData(entry.NoteRevisionId.Value, GuidRepresentation.Standard)
-                    : BsonNull.Value,
-                ["appended_text"] = entry.AppendedText is not null ? new BsonString(entry.AppendedText) : BsonNull.Value,
-                ["resulting_version_token"] = new BsonBinaryData(entry.ResultingVersionToken, GuidRepresentation.Standard),
-                ["resolved_default_date"] = entry.ResolvedDefaultDate is not null ? new BsonString(entry.ResolvedDefaultDate) : BsonNull.Value,
-                ["occurred_at"] = new BsonDateTime(entry.OccurredAtUtc),
-                ["before_summary"] = entry.BeforeSummary is not null ? MapSummary(entry.BeforeSummary) : BsonNull.Value,
-                ["after_summary"] = MapSummary(entry.AfterSummary)
-            };
-
-            await _auditCollection.InsertOneAsync(_session, doc, cancellationToken: cancellationToken);
-        }
-
-        private static BsonDocument MapSummary(AuditContentSummary summary) =>
-            new()
-            {
-                ["body_hash"] = summary.BodyHash,
-                ["byte_length"] = summary.ByteLength,
-                ["status"] = summary.Status,
-                ["excerpt"] = summary.Excerpt
-            };
     }
 }

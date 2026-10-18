@@ -34,6 +34,13 @@ public static class DependencyInjection
         services.AddQueryHandler<GetNoteQuery, NoteDetailDto, GetNoteQueryHandler>();
         services.AddQueryHandler<SearchNotesQuery, NoteSearchResponseDto, SearchNotesQueryHandler>();
 
+        // US1 Tracking Commands and Queries
+        services.AddSingleton<ICommandValidator<RoleRadar.Application.Tracking.Commands.RecordPostingCommand>, RoleRadar.Application.Tracking.Commands.RecordPostingCommandValidator>();
+        services.AddSingleton<ICommandValidator<RoleRadar.Application.Tracking.Commands.TransitionPostingCommand>, RoleRadar.Application.Tracking.Commands.TransitionPostingCommandValidator>();
+        services.AddCommandHandler<RoleRadar.Application.Tracking.Commands.RecordPostingCommand, RoleRadar.Application.Tracking.Commands.PostingRecordResultDto, RoleRadar.Application.Tracking.Commands.RecordPostingCommandHandler>();
+        services.AddCommandHandler<RoleRadar.Application.Tracking.Commands.TransitionPostingCommand, RoleRadar.Application.Tracking.Commands.PostingTransitionResultDto, RoleRadar.Application.Tracking.Commands.TransitionPostingCommandHandler>();
+        services.AddQueryHandler<RoleRadar.Application.Tracking.Queries.TrackerQueryRequest, RoleRadar.Application.Tracking.Queries.TrackerQueryResultDto, RoleRadar.Application.Tracking.Queries.TrackerQueryHandler>();
+
         return services;
     }
 

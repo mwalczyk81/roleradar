@@ -100,6 +100,23 @@ public sealed class TrackingArchitectureTests
 
         using var provider = services.BuildServiceProvider();
         var companyRepo = provider.GetService<ICompanyRepository>();
+        var postingRepo = provider.GetService<IPostingRepository>();
         Assert.NotNull(companyRepo);
+        Assert.NotNull(postingRepo);
+    }
+
+    [Fact]
+    public void McpTools_PostingTools_AreExposedOnServer()
+    {
+        var mcpAssembly = typeof(NoteMcpTools).Assembly;
+        var toolNames = mcpAssembly.GetTypes()
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+            .Select(m => m.GetCustomAttribute<McpServerToolAttribute>()?.Name)
+            .Where(name => name is not null)
+            .ToArray();
+
+        Assert.Contains("posting_record", toolNames);
+        Assert.Contains("posting_transition", toolNames);
+        Assert.Contains("tracker_query", toolNames);
     }
 }

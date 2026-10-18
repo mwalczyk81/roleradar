@@ -1,8 +1,31 @@
 using RoleRadar.Application.Abstractions;
-using RoleRadar.Application.Tracking.Commands;
 using RoleRadar.Domain.Common;
+using RoleRadar.Domain.Tracking;
 
 namespace RoleRadar.Application.Tracking.Queries;
+
+public sealed record PostingSummaryItemDto(
+    Guid Id,
+    Guid CompanyId,
+    string Title,
+    string NormalizedTitle,
+    string Disposition,
+    string GhostLikelihood,
+    string ResurfacePolicy,
+    Guid VersionToken,
+    string? Location = null,
+    string? RemoteType = null,
+    decimal? Score = null,
+    DateTimeOffset? LastVerifiedAt = null);
+
+public sealed record DecidedPostingSummaryItemDto(
+    Guid Id,
+    Guid CompanyId,
+    string Title,
+    string Disposition,
+    string? DispositionReason,
+    string ResurfacePolicy,
+    DateTimeOffset? DecidedAtUtc);
 
 public sealed record TrackerQueryResultDto(
     string Entity,
@@ -39,12 +62,212 @@ public sealed class TrackerQueryHandler : IQueryHandler<TrackerQueryRequest, Tra
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
     }
 
-    public Task<Result<TrackerQueryResultDto>> HandleAsync(
+    public async Task<Result<TrackerQueryResultDto>> HandleAsync(
         TrackerQueryRequest query,
         CancellationToken cancellationToken = default)
     {
-        // Stub for test-first phase
-        return Task.FromResult(Result<TrackerQueryResultDto>.Failure(
-            new ResultError(ErrorCode.ValidationError, "TrackerQueryHandler not yet implemented.")));
+        ArgumentNullException.ThrowIfNull(query);
+
+        if (string.IsNullOrWhiteSpace(query.Entity))
+        {
+            return Result<TrackerQueryResultDto>.Failure(ErrorCode.ValidationError, "Entity discriminator is required.");
+        }
+
+        var entity = query.Entity.Trim().ToLowerInvariant();
+        if (entity == "contacts" || entity == "contact")
+        {
+            return Result<TrackerQueryResultDto>.Failure(
+                ErrorCode.ValidationError,
+                "Contacts are accessible exclusively via CLI commands (roleradar contact add|get|redact).");
+        }
+
+        var ownerId = string.IsNullOrWhiteSpace(query.OwnerId)
+            ? OwnerId.Default.Value
+            : new OwnerId(query.OwnerId).Value;
+        var now = _clock.UtcNow;
+
+        // Bounded paging: default 50, max 200, min 1
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize <= 0 ? 50 : query.PageSize, 1, 200);
+
+        return entity switch
+        {
+            "postings" => await HandlePostingsQueryAsync(query, ownerId, page, pageSize, now, cancellationToken),
+            "decided_postings" => await HandleDecidedPostingsQueryAsync(ownerId, page, pageSize, cancellationToken),
+            "posting_dedup_lookup" => await HandleDedupLookupQueryAsync(query, ownerId, cancellationToken),
+            _ => Result<TrackerQueryResultDto>.Failure(
+                ErrorCode.ValidationError,
+                $"Entity discriminator '{query.Entity}' is not supported by tracker_query postings handler.")
+        };
+    }
+
+    private async Task<Result<TrackerQueryResultDto>> HandlePostingsQueryAsync(
+        TrackerQueryRequest query,
+        string ownerId,
+        int page,
+        int pageSize,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        // Single posting lookup by ID
+        if (query.PostingId.HasValue)
+        {
+            var singleResult = await _context.Postings.GetByIdAsync(ownerId, query.PostingId.Value, cancellationToken);
+            if (!singleResult.IsSuccess || singleResult.Value is null)
+            {
+                return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto("postings", 1, pageSize, 0, []));
+            }
+
+            var p = singleResult.Value;
+            var signalsResult = await _context.Postings.GetSignalsAsync(ownerId, p.Id, cancellationToken);
+            var signals = signalsResult.IsSuccess && signalsResult.Value is not null ? signalsResult.Value : [];
+            var ghost = GhostLikelihoodEvaluator.Evaluate(p, signals, now);
+
+            var item = new PostingSummaryItemDto(
+                Id: p.Id,
+                CompanyId: p.CompanyId,
+                Title: p.Title,
+                NormalizedTitle: p.NormalizedTitle,
+                Disposition: p.Disposition.ToSnakeCase(),
+                GhostLikelihood: ghost,
+                ResurfacePolicy: p.ResurfacePolicy.ToSnakeCase(),
+                VersionToken: p.VersionToken,
+                Location: p.Location,
+                RemoteType: p.RemoteType.ToSnakeCase(),
+                Score: p.Score,
+                LastVerifiedAt: p.LastVerifiedAt);
+
+            return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto("postings", 1, pageSize, 1, [item]));
+        }
+
+        // Paged listing with optional disposition and company filters
+        PostingDisposition? dispositionFilter = null;
+        if (!string.IsNullOrWhiteSpace(query.Disposition) &&
+            TrackingEnumExtensions.TryParseDisposition(query.Disposition, out var parsedDisp))
+        {
+            dispositionFilter = parsedDisp;
+        }
+
+        var postingsResult = await _context.Postings.ListPostingsAsync(
+            ownerId, query.CompanyId, dispositionFilter, page, pageSize, cancellationToken);
+        if (!postingsResult.IsSuccess || postingsResult.Value is null)
+        {
+            return Result<TrackerQueryResultDto>.Failure(postingsResult.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to list postings."));
+        }
+
+        var countResult = await _context.Postings.CountPostingsAsync(
+            ownerId, query.CompanyId, dispositionFilter, cancellationToken);
+        var totalCount = countResult.IsSuccess ? countResult.Value : postingsResult.Value.Count;
+
+        var items = new List<object>(postingsResult.Value.Count);
+        foreach (var p in postingsResult.Value)
+        {
+            var sigsResult = await _context.Postings.GetSignalsAsync(ownerId, p.Id, cancellationToken);
+            var sigs = sigsResult.IsSuccess && sigsResult.Value is not null ? sigsResult.Value : [];
+            var ghost = GhostLikelihoodEvaluator.Evaluate(p, sigs, now);
+
+            items.Add(new PostingSummaryItemDto(
+                Id: p.Id,
+                CompanyId: p.CompanyId,
+                Title: p.Title,
+                NormalizedTitle: p.NormalizedTitle,
+                Disposition: p.Disposition.ToSnakeCase(),
+                GhostLikelihood: ghost,
+                ResurfacePolicy: p.ResurfacePolicy.ToSnakeCase(),
+                VersionToken: p.VersionToken,
+                Location: p.Location,
+                RemoteType: p.RemoteType.ToSnakeCase(),
+                Score: p.Score,
+                LastVerifiedAt: p.LastVerifiedAt));
+        }
+
+        return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto("postings", page, pageSize, totalCount, items));
+    }
+
+    private async Task<Result<TrackerQueryResultDto>> HandleDecidedPostingsQueryAsync(
+        string ownerId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var postingsResult = await _context.Postings.ListDecidedPostingsAsync(ownerId, page, pageSize, cancellationToken);
+        if (!postingsResult.IsSuccess || postingsResult.Value is null)
+        {
+            return Result<TrackerQueryResultDto>.Failure(postingsResult.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to list decided postings."));
+        }
+
+        var countResult = await _context.Postings.CountDecidedPostingsAsync(ownerId, cancellationToken);
+        var totalCount = countResult.IsSuccess ? countResult.Value : postingsResult.Value.Count;
+
+        var items = new List<object>(postingsResult.Value.Count);
+        foreach (var p in postingsResult.Value)
+        {
+            items.Add(new DecidedPostingSummaryItemDto(
+                Id: p.Id,
+                CompanyId: p.CompanyId,
+                Title: p.Title,
+                Disposition: p.Disposition.ToSnakeCase(),
+                DispositionReason: p.DispositionReason,
+                ResurfacePolicy: p.ResurfacePolicy.ToSnakeCase(),
+                DecidedAtUtc: p.DecidedAt));
+        }
+
+        return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto("decided_postings", page, pageSize, totalCount, items));
+    }
+
+    private async Task<Result<TrackerQueryResultDto>> HandleDedupLookupQueryAsync(
+        TrackerQueryRequest query,
+        string ownerId,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(query.DedupKey))
+        {
+            return Result<TrackerQueryResultDto>.Failure(ErrorCode.ValidationError, "DedupKey is required for entity 'posting_dedup_lookup'.");
+        }
+
+        var key = query.DedupKey.Trim();
+
+        // 1. Try Tier A
+        var matchA = await _context.Postings.GetByDedupKeyAAsync(ownerId, key, cancellationToken);
+        if (matchA.IsSuccess && matchA.Value is not null)
+        {
+            return BuildSinglePostingResult(matchA.Value);
+        }
+
+        // 2. Try Tier B
+        var normalizedKey = UrlNormalizer.Normalize(key) ?? key;
+        var matchB = await _context.Postings.GetByDedupKeyBAsync(ownerId, normalizedKey, cancellationToken);
+        if (matchB.IsSuccess && matchB.Value is not null)
+        {
+            return BuildSinglePostingResult(matchB.Value);
+        }
+
+        // 3. Try Tier C
+        var matchC = await _context.Postings.GetByDedupKeyCAsync(ownerId, key, cancellationToken);
+        if (matchC.IsSuccess && matchC.Value is not null)
+        {
+            return BuildSinglePostingResult(matchC.Value);
+        }
+
+        return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto("posting_dedup_lookup", 1, 1, 0, []));
+    }
+
+    private Result<TrackerQueryResultDto> BuildSinglePostingResult(Posting p)
+    {
+        var item = new PostingSummaryItemDto(
+            Id: p.Id,
+            CompanyId: p.CompanyId,
+            Title: p.Title,
+            NormalizedTitle: p.NormalizedTitle,
+            Disposition: p.Disposition.ToSnakeCase(),
+            GhostLikelihood: "low",
+            ResurfacePolicy: p.ResurfacePolicy.ToSnakeCase(),
+            VersionToken: p.VersionToken,
+            Location: p.Location,
+            RemoteType: p.RemoteType.ToSnakeCase(),
+            Score: p.Score,
+            LastVerifiedAt: p.LastVerifiedAt);
+
+        return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto("posting_dedup_lookup", 1, 1, 1, [item]));
     }
 }

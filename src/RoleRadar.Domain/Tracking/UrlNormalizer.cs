@@ -31,11 +31,11 @@ public static class UrlNormalizer
         "mkt_tok"
     };
 
-    public static string Normalize(string? url)
+    public static string? Normalize(string? url)
     {
         if (string.IsNullOrWhiteSpace(url))
         {
-            return string.Empty;
+            return null;
         }
 
         var trimmed = url.Trim();
