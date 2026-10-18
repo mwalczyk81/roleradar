@@ -126,18 +126,25 @@ Defines the structure and decision model executed by `ExternalMongoSafetyGuard` 
 ```mermaid
 stateDiagram-v2
     [*] --> CheckOptIn
-    CheckOptIn --> CheckTls: Opt-in present (ROLERADAR_EXTERNAL_TEST_OPT_IN=1)
+    CheckOptIn --> ParseUri: Opt-in present (ROLERADAR_EXTERNAL_TEST_OPT_IN=1)
     CheckOptIn --> AbortOptInMissing: Opt-in missing
 
-    CheckTls --> InspectDatabases: Loopback OR (Remote AND TLS enabled)
-    CheckTls --> AbortTlsMissing: Remote host without TLS
+    ParseUri --> CheckTls: Parse with MongoUrlBuilder
+    ParseUri --> AbortInvalidUri: Invalid URI or conflicting TLS parameters
 
-    InspectDatabases --> AuthorizeExecution: Server has only (system DBs OR rrtest_* DBs)
-    InspectDatabases --> AbortForeignDatabases: Non-system database without rrtest_ prefix found
+    CheckTls --> InspectDatabases: Loopback (127.0.0.0/8, ::1, localhost) OR (Remote with TLS)
+    CheckTls --> AbortTlsMissing: Non-loopback host without TLS (or explicit tls=false)
+
+    InspectDatabases --> CheckListDbPermission: Issue ListDatabaseNamesAsync()
+    CheckListDbPermission --> AbortPermissionMissing: Unauthorized / Lacks listDatabases privilege
+    CheckListDbPermission --> AuthorizeExecution: Server has only (system DBs OR rrtest_* DBs)
+    CheckListDbPermission --> AbortForeignDatabases: Non-system database without rrtest_ prefix found
 
     AuthorizeExecution --> [*]
     AbortOptInMissing --> [*]
+    AbortInvalidUri --> [*]
     AbortTlsMissing --> [*]
+    AbortPermissionMissing --> [*]
     AbortForeignDatabases --> [*]
 ```
 
@@ -146,7 +153,9 @@ stateDiagram-v2
 | Guard Error Code | Condition | Action |
 | :--- | :--- | :--- |
 | `OptInNotSet` | `ROLERADAR_EXTERNAL_TEST_OPT_IN != "1"` | Abort test run; instruct developer to set opt-in variable explicitly. |
-| `TlsRequiredForNonLoopback` | Target host is not `127.0.0.1`, `localhost`, or `::1`, and connection string lacks `tls=true` or `ssl=true`. | Abort test run; reject plaintext remote connections. |
+| `InvalidConnectionUri` | Malformed URI or conflicting TLS settings (e.g. `tls=false&ssl=true`). | Abort test run; refuse invalid connection configurations. |
+| `TlsRequiredForNonLoopback` | Target host is not loopback (`127.0.0.0/8`, `::1`, `localhost`), and lacks valid TLS (`mongodb+srv` or `tls=true`). | Abort test run; reject plaintext remote connections. |
+| `ListDatabasesPermissionMissing` | User account lacks `listDatabases` cluster monitor privilege to verify safety. | Abort test run; emit clear redacted error message instructing user to provide cluster monitor privilege or use dedicated test instance. |
 | `ForeignDatabaseDetected` | Target MongoDB instance contains one or more non-system databases that do not start with `rrtest_`. | Abort test run; log names of invalid database prefixes (sanitized) to prevent running against non-test instances. |
 
 ---

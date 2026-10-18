@@ -10,7 +10,7 @@ GitHub Actions workflows are split across runners based on host virtualization c
 
 ```text
 ├── ubuntu-latest (Linux amd64): Full build, lint, container image tests, compose integration, security scans
-├── ubuntu-24.04-arm64 (Linux arm64 native): Container build and launched-host parity tests (no emulation)
+├── ubuntu-24.04-arm (Linux arm64 native): Container build and launched-host parity tests (no emulation)
 ├── windows-latest: .NET build, format, lint, unit tests, architecture tests, PSScriptAnalyzer, script portability
 └── macos-latest: .NET build, format, lint, unit tests, architecture tests, cross-platform script portability
 ```
@@ -20,7 +20,7 @@ GitHub Actions workflows are split across runners based on host virtualization c
 | Job Name | Runner OS | CPU Arch | Scope |
 | :--- | :--- | :--- | :--- |
 | `ubuntu-build-and-test` | `ubuntu-latest` | `x86_64` | Multi-stage Docker build, hadolint, trivy scan, SBOM, launched-host tests against images, compose integration, coverage gate (>=85%). |
-| `linux-arm64-verify` | `ubuntu-24.04-arm64` | `aarch64` | Native ARM64 multi-stage image build, native launched-host test execution under `docker run --read-only --tmpfs /tmp`, cold-start timing (<3.0s). |
+| `linux-arm64-verify` | `ubuntu-24.04-arm` | `aarch64` | Native ARM64 multi-stage image build, native launched-host test execution under `docker run --read-only --tmpfs /tmp`, cold-start timing (<3.0s). |
 | `windows-verify` | `windows-latest` | `x86_64` | .NET 10 compilation (`-warnaserror`), `dotnet format --verify-no-changes`, unit tests, architecture tests, PSScriptAnalyzer on scripts. |
 | `macos-verify` | `macos-latest` | `arm64` | .NET 10 compilation (`-warnaserror`), `dotnet format --verify-no-changes`, unit tests, architecture tests, Pester script portability tests. |
 

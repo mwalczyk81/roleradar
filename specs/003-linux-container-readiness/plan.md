@@ -14,13 +14,13 @@ This feature is strictly **packaging, CI, and test-infrastructure work**:
 - **Zero new MCP tools** (maintains the exact 12-tool cap established in Feature 002).
 
 Technical highlights:
-1. Multi-stage Dockerfile producing `roleradar-cli` and `roleradar-mcp` (stdio MCP) for `linux/amd64` and `linux/arm64`.
+1. Multi-stage Dockerfile producing `roleradar-cli` and `roleradar-mcp` (stdio MCP) for `linux/amd64` and `linux/arm64` using distroless/chiseled base images (zero shell, zero package manager).
 2. Hardened, tested container runtime configuration (`--read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges`).
-3. Bundled MongoDB 8.0.x Database Tools in the CLI image with volatile RAM-only (`/tmp`) `--config` credential masking (passwords never exposed on argv or in process trees).
+3. Bundled MongoDB Database Tools 100.19.1 in the CLI image with atomic 0600 RAM-only (`/tmp`) `--config` credential masking (passwords never exposed on argv or in process trees) and dpkg status entries for vulnerability scanners.
 4. Docker Compose profiles overlay (`deploy/docker-compose.apps.yml`) with `directConnection=true` and a cross-platform PowerShell wrapper (`scripts/roleradar-docker.ps1`).
-5. External database compatibility mode for `RoleRadar.Tests.Contract` with an isolated, unit-tested safety guard (`ExternalMongoSafetyGuard`) requiring explicit opt-in (`ROLERADAR_EXTERNAL_TEST_OPT_IN=1`), TLS on remote endpoints, prefix isolation (`rrtest_<guid>`), and automatic cleanup on completion or `SIGTERM`.
+5. External database compatibility mode for `RoleRadar.Tests.Contract` with an isolated, unit-tested safety guard (`ExternalMongoSafetyGuard`) requiring explicit opt-in (`ROLERADAR_EXTERNAL_TEST_OPT_IN=1`), driver-parsed TLS on remote endpoints, prefix isolation (`rrtest_<guid>`), and automatic cleanup on completion or `SIGTERM`.
 6. Launched-host test parity executing startup smoke tests, concurrency race tests, contact privacy no-leak scans, and the 12-tool schema contract against container images.
-7. Multi-OS CI matrix: Ubuntu Linux runs the complete suite (including image builds, hadolint, trivy, SBOM, container tests, compose tests, and external database mode); Windows and macOS runners execute build, format, lint, unit, architecture, and script portability tests.
+7. Multi-OS CI matrix: Ubuntu Linux runs the complete suite (including image builds, hadolint, trivy, SBOM, container tests, compose tests, and external database mode); native ARM64 runner (`ubuntu-24.04-arm`) verifies ARM64 image parity; Windows and macOS runners execute build, format, lint, unit, architecture, and script portability tests.
 8. Two Architecture Decision Records: [ADR-0011](../../docs/adr/0011-hosted-mongodb-selection-and-compatibility.md) (Hosted MongoDB Evaluation) and [ADR-0012](../../docs/adr/0012-azure-container-runtime-target.md) (Azure Container Apps vs. AKS).
 
 ---
@@ -30,8 +30,8 @@ Technical highlights:
 **Language/Version**: C# 13 / .NET 10 (`global.json` pinned to SDK `10.0.402`, `<Nullable>enable</Nullable>`, `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`).
 
 **Primary Dependencies**:
-- .NET runtime base images: `mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled` (MCP) and `10.0-noble` (CLI) pinned by digest.
-- MongoDB Database Tools 100.11.0 (`mongodump`, `mongorestore`) pinned by SHA-256 digest per architecture.
+- .NET runtime base images: `mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled` for both MCP and CLI, pinned by multi-arch digest.
+- MongoDB Database Tools 100.19.1 (`mongodump`, `mongorestore`) pinned by SHA-256 digest per architecture with 6 required shared libraries and dpkg status entries extracted from build stage.
 - `Testcontainers.MongoDb` 4.16.0 (ephemeral container integration tests).
 - `ModelContextProtocol` 2.2.0 (stdio JSON-RPC framing).
 - `Geralt` 4.4.0 (XChaCha20-Poly1305 + Argon2id backup encryption).

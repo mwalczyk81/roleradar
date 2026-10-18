@@ -27,17 +27,22 @@ Both images must support `linux/amd64` and `linux/arm64` CPU architectures nativ
 
 #### Decision 1.2: Base Runtime Image Selection and Distroless/Chiseled Posture
 - **Choice**:
-  - For `roleradar-mcp`: `mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled` (or `runtime-deps:10.0-noble-chiseled`), pinned by multi-arch index digest.
-    - Zero shell (`/bin/sh` does not exist).
+  - For both `roleradar-mcp` and `roleradar-cli`: `mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled` (Ubuntu 24.04 noble chiseled distroless base), pinned by multi-arch index digest.
+    - Zero shell (`/bin/sh` and `/bin/bash` do not exist).
     - Zero package manager (`apt`/`dpkg` absent).
     - Non-root user: `app` (UID 1654, GID 1654).
-    - Size: ~35 MB compressed.
-  - For `roleradar-cli`: `mcr.microsoft.com/dotnet/runtime:10.0-noble` (Ubuntu 24.04 noble base), pinned by multi-arch index digest.
-    - Bundles MongoDB Database Tools (`mongodump`, `mongorestore`) which are Go binaries dynamically linked against `libc6` (glibc) and `libresolv`.
-    - Non-root user: `app` (UID 1654, GID 1654).
-    - Package manager present in base layer but strictly uninvoked at build/run time.
-- **Rationale**: `mcp` has no external binary dependencies, so distroless/chiseled provides maximum exploit mitigation. `cli` requires glibc shared library dependencies for MongoDB Database Tools; standard `noble` runtime guarantees compatibility without runtime package installs.
+    - Size: ~35 MB compressed base.
+- **Empirical Dependency Analysis for MongoDB Database Tools (`ldd` / `readelf`)**:
+  - Executing `ldd` against the official `mongodump` and `mongorestore` binaries revealed dynamic linkage to `libc.so.6`, `/lib64/ld-linux-x86-64.so.2`, and `libgssapi_krb5.so.2`.
+  - Transitively, `libgssapi_krb5.so.2` depends on 5 helper libraries: `libkrb5.so.3`, `libk5crypto.so.3`, `libcom_err.so.2`, `libkrb5support.so.0`, and `libkeyutils.so.1`.
+  - Live container verification confirmed that extracting package `libgssapi-krb5-2` in the build stage and copying strictly those 6 shared libraries into `/lib/x86_64-linux-gnu/` (or `/lib/aarch64-linux-gnu/`) in `10.0-noble-chiseled` allows `mongodump` and `mongorestore` to run flawlessly under non-root UID 1654 without needing a package manager, shell, or full standard OS runtime in the final CLI image.
+- **Vulnerability Scanner Package Visibility (dpkg status entries)**:
+  - Container vulnerability scanners (such as Trivy and Syft) parse `/var/lib/dpkg/status` to catalog installed packages and their exact versions for CVE auditing.
+  - When copying the Kerberos libraries from the build stage, the build also copies the corresponding `dpkg` status entries for `libgssapi-krb5-2`, `libkrb5-3`, `libk5crypto3`, `libkrb5support0`, and `libkeyutils1` into `/var/lib/dpkg/status` (or chiseled status slice).
+  - An integration test asserts that the Trivy scan report explicitly lists these Kerberos packages so there are zero unindexed/unmanaged binaries or CVE blind spots.
+- **Rationale**: Eliminating shells and package managers from both runtime images severely reduces the potential attack surface and eliminates entire classes of container escape and vulnerability findings.
 - **Alternatives Considered**:
+  - Standard Ubuntu `10.0-noble` runtime with package manager for CLI: Rejected; research proved that copying the 6 required shared libraries and dpkg status entries into `noble-chiseled` works cleanly, avoiding the presence of apt/dpkg.
   - Alpine Linux (`musl`): Rejected because MongoDB Database Tools are distributed with official glibc builds; running glibc Go binaries on musl via `gcompat` introduces instability and supply chain complexity.
   - Full SDK image at runtime: Rejected; violates minimal privilege and introduces vast attack surfaces.
 
@@ -82,13 +87,17 @@ When the CLI executes `mongodump` or `mongorestore`, passing connection strings 
      ```yaml
      uri: "mongodb://<user>:<password>@<host>:27017/..."
      ```
-  2. The file is written to `/tmp/rr-tools-<uuid>.conf` with `0600` permissions (read/write only by UID 1654).
+  2. The file is created atomically with `0600` permissions (`UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite` via .NET `FileStreamOptions` with `FileMode.CreateNew`) on the RAM-backed `/tmp` mount (`/tmp/rr-tools-<uuid>.conf`). It is **never** created with loose permissions and chmodded after creation.
   3. Because `/tmp` is mounted as a `tmpfs`, the credential file lives strictly in volatile memory and touches no disk blocks.
   4. The tools are invoked with:
      ```bash
      mongodump --config=/tmp/rr-tools-<uuid>.conf --archive ...
      ```
   5. The config file is deleted immediately in a `finally` block upon process exit, with signal handlers (`SIGTERM`, `ProcessExit`) guaranteeing unlinking on unexpected termination.
+- **Verification Invariants & Tests**:
+  - File permissions are verified to be `0600` at the moment of first read before child execution.
+  - Assert that the database password never appears in `argv`, `stdout`, `stderr`, application diagnostic logs, or audit entries.
+  - Assert that no config files remain in `/tmp` after exit, including when the child process is terminated abruptly by `SIGTERM` or on process failure.
 - **Rationale**: Completely prevents credentials from appearing in process argv, diagnostic streams, or persistent storage.
 - **Alternatives Considered**:
   - Direct argv passing: Rejected as an unacceptable security vulnerability.
@@ -100,13 +109,20 @@ When the CLI executes `mongodump` or `mongorestore`, passing connection strings 
 
 ### Decisions
 
-#### Decision 4.1: Pinned Version & Checksum Verification
-- **Choice**: MongoDB Database Tools version **100.11.0** (compatible with MongoDB 8.0.x server wire protocol).
-- **Digests**:
-  - `linux-x86_64`: SHA-256 digest pinned in Dockerfile.
-  - `linux-arm64`: SHA-256 digest pinned in Dockerfile.
-- **Build Enforcement**: The `tools-downloader` stage executes `sha256sum -c` during image build. If the download is corrupted or altered, the build fails immediately.
-- **Rationale**: Guarantees supply chain integrity and prevents unvetted upstream binary drift. Replaces previous assumptions of MongoDB 7.0 baseline.
+#### Decision 4.1: Pinned Version, Official Release Metadata & Update Procedure
+- **Choice**: MongoDB Database Tools version **100.19.1** (compatible with MongoDB 8.0.x server wire protocol).
+- **Official Metadata Source**:
+  - Feeds: `https://downloads.mongodb.org/tools/db/release.json` (for latest release metadata) and `https://downloads.mongodb.org/tools/db/full.json` (for version catalog and package URLs).
+- **Pinned Download URLs & Cryptographic Digests**:
+  - `linux-x86_64` (Ubuntu 24.04 noble):
+    - URL: `https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2404-x86_64-100.19.1.tgz`
+    - SHA-256: `f34b84a67ab96b4ff52571ec5d15e2148d96cb140b1ea9ef8c29ac33c48e3480`
+  - `linux-arm64` (Ubuntu 24.04 noble aarch64):
+    - URL: `https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2404-arm64-100.19.1.tgz`
+    - SHA-256: `ebf518d9a303b36e612e40be106cd0ecc7135dc15d098626f81ac3ee8654a821`
+- **Build Enforcement**: The `tools-downloader` stage executes `sha256sum -c` during image build, re-verifying the digests against `full.json`. If the download is corrupted or altered, the build fails immediately.
+- **Update Procedure**: A scheduled script (`scripts/check-tools-release.ps1` or a quarterly GitHub Actions cron job) reads `full.json` for all historical/available versions and `release.json` for the current latest release. It compares the latest stable 100.x version against the Dockerfile pin and opens an automated Dependabot-style PR/issue if a newer release is published.
+- **Rationale**: Guarantees supply chain integrity, eliminates binary drift, and provides an audited mechanism for staying current.
 
 ---
 
@@ -119,25 +135,39 @@ To evaluate cloud managed databases (MongoDB Atlas on Azure, Azure Cosmos DB for
 
 #### Decision 5.1: Pure, Unit-Tested Safety Guard Component
 - **Choice**: Implement `ExternalMongoSafetyGuard` in the test infrastructure with deterministic rules:
-  1. **Explicit Opt-In**: Requires environment variable `ROLERADAR_EXTERNAL_TEST_OPT_IN=1`. If missing, aborts immediately.
-  2. **TLS Enforcement**: If the connection string host is not loopback (`127.0.0.1`, `localhost`, `::1`), TLS is strictly required (`tls=true` or `ssl=true`). Unencrypted remote connections are rejected.
-  3. **Server Inspection & Prefix Guard**:
+  1. **Explicit Opt-In**: Requires environment variable `ROLERADAR_EXTERNAL_TEST_OPT_IN=1`. If missing, aborts immediately (`OptInNotSet`).
+  2. **Driver-Based URL Parsing & TLS Enforcement**:
+     - Parsed strictly using MongoDB C# driver's URL parser (`new MongoUrl(connectionString)` or `MongoUrlBuilder`), **never** substring checks.
+     - `mongodb+srv://` scheme implies TLS (`UseTls == true`), unless `tls=false` or `ssl=false` is explicitly set.
+     - Any explicit `tls=false` or `ssl=false` is refused for non-loopback hosts.
+     - Conflicting parameters (e.g. `tls=false&ssl=true`) are refused as invalid.
+     - **Loopback Definition**: `127.0.0.0/8` (any IPv4 `127.*`, e.g. `127.0.0.1`, `127.0.0.2`), IPv6 `::1`, and `localhost` (case-insensitive).
+     - **Non-Loopback Definition**: Any remote hostname, IP outside `127.0.0.0/8`, and container bridge hostnames such as `host.docker.internal` (all require TLS).
+  3. **Server Inspection & Permission Guard**:
      - System databases (`admin`, `config`, `local`) are permitted.
+     - Executes `client.ListDatabaseNamesAsync()`. If the user account lacks the `listDatabases` privilege (e.g. `MongoCommandException` / unauthorized), execution is refused with a clear, redacted message:
+       `"External database guard failed: user lacks 'listDatabases' cluster privilege to verify database prefix safety. Provide an account with cluster monitor or listDatabases privileges, or use a dedicated test cluster."`
+       (Zero leakage of hostnames, connection strings, or credentials in error messages).
      - Non-system databases: If ANY database exists whose name does NOT start with `rrtest_`, the runner refuses execution with `ForeignDatabaseDetected`.
   4. **Isolation & Tracking**: Test databases are named `rrtest_<guid:N>`. Every created database is registered in an in-memory `TrackedTestDatabases` tracker.
   5. **Guaranteed Cleanup**: On test completion, test failure, or `SIGTERM`, only tracked `rrtest_<guid:N>` databases are dropped.
   6. **Zero Leaks**: All console outputs, exception messages, and capability reports strip hosts, connection strings, and credentials.
-- **Decision Table**:
+- **Unit Test Table Cases**:
 
-| Scenario | Server Databases | TLS Status | Opt-In Env | Result |
+| Scenario / Connection URI | Host Type | TLS Status | Opt-In Env | Result |
 | :--- | :--- | :--- | :--- | :--- |
-| Empty local server | None | Plaintext | `1` | **Allowed** |
-| Local with system only | `admin`, `local` | Plaintext | `1` | **Allowed** |
-| Local with existing test DBs | `admin`, `rrtest_abc` | Plaintext | `1` | **Allowed** |
-| Remote with TLS | `admin`, `config` | TLS Enabled | `1` | **Allowed** |
-| Remote without TLS | `admin` | Plaintext | `1` | **Rejected** (`TlsRequired`) |
-| Foreign database present | `admin`, `production_db` | TLS Enabled | `1` | **Rejected** (`ForeignDatabaseDetected`) |
-| Missing opt-in env | `admin` | TLS Enabled | (unset) | **Rejected** (`OptInNotSet`) |
+| `mongodb://localhost:27017` | Loopback | Plaintext | `1` | **Allowed** |
+| `mongodb://127.0.0.2:27017` | Loopback (`127.0.0.0/8`) | Plaintext | `1` | **Allowed** |
+| `mongodb://[::1]:27017` | Loopback (`::1`) | Plaintext | `1` | **Allowed** |
+| `mongodb+srv://cluster.example.com/` | Remote (SRV) | Implied TLS | `1` | **Allowed** |
+| `mongodb://remote.example.com:27017/?tls=true` | Remote | Explicit TLS | `1` | **Allowed** |
+| `mongodb+srv://cluster.example.com/?tls=false` | Remote (SRV) | Explicit `tls=false` | `1` | **Rejected** (`TlsRequired`) |
+| `mongodb://host.docker.internal:27017/?tls=false` | Non-loopback | Explicit `tls=false` | `1` | **Rejected** (`TlsRequired`) |
+| `mongodb://remote.example.com:27017` | Remote | Plaintext (default) | `1` | **Rejected** (`TlsRequired`) |
+| `mongodb://remote.example.com:27017/?tls=false&ssl=true` | Remote | Conflicting TLS flags | `1` | **Rejected** (`InvalidUri`) |
+| Remote cluster with account lacking `listDatabases` | Remote (TLS) | Valid TLS | `1` | **Rejected** (`PermissionMissing`) |
+| Remote cluster with non-test DB `production_db` | Remote (TLS) | Valid TLS | `1` | **Rejected** (`ForeignDatabaseDetected`) |
+| Missing opt-in variable | Any | Any | (unset) | **Rejected** (`OptInNotSet`) |
 
 ---
 
@@ -154,7 +184,7 @@ To evaluate cloud managed databases (MongoDB Atlas on Azure, Azure Cosmos DB for
 - **Target**: **< 3.0 seconds** on standard CI runners for both architectures.
 
 #### Decision 6.2: Native ARM64 CI Execution
-- **Choice**: GitHub Actions runs the ARM64 test job on native ARM64 runners (`ubuntu-24.04-arm64` or self-hosted native ARM64 runner), never under QEMU emulation.
+- **Choice**: GitHub Actions runs the ARM64 test job on native ARM64 runners (`ubuntu-24.04-arm`), confirmed against GitHub Actions documentation for public repositories, never under QEMU emulation.
 - **Rationale**: QEMU CPU emulation introduces massive 5x-10x latency penalties, produces false positives in concurrency tests, and invalidates cold-start timing benchmarks.
 
 ---

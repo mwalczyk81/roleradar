@@ -57,3 +57,21 @@ docker run \
 ### 3.2 `roleradar-cli`
 - **Standard Output (`stdout`)**: Command result summaries, structured JSON (when `--json` is supplied), and interactive prompts.
 - **Standard Error (`stderr`)**: Progress notifications, diagnostic logs, and error explanations.
+
+---
+
+## 4. Database Tools Credential Security & Config File Contract
+
+When invoking `mongodump` or `mongorestore`, database authentication credentials must never be exposed on process command lines.
+
+### 4.1 In-Memory Config File Creation
+- **Path**: Located on the RAM-backed `/tmp` tmpfs mount (`/tmp/rr-tools-<uuid>.conf`).
+- **Atomic Mode 0600 (`UnixCreateMode`)**: Created using .NET `FileStreamOptions` with `UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite` and `FileMode.CreateNew`. The file is NEVER created with loose permissions and chmodded after creation.
+- **Cleanup Guarantee**: The config file is deleted immediately in a `finally` block upon command completion. Signal handlers (`SIGTERM`, `ProcessExit`, unhandled exceptions) guarantee deletion even on abnormal termination.
+
+### 4.2 Security Test Invariants
+Tests in `RoleRadar.Tests.Integration/Hosting/ContainerCredentialsSecurityTests.cs` assert the following invariants:
+1. **Mode 0600 on First Read**: Posix file mode is asserted to be exactly `0600` at the instant of first read before child process execution begins.
+2. **Zero Argv Exposure**: Child process `argv` inspected via `/proc/<pid>/cmdline` contains `--config=/tmp/rr-tools-<uuid>.conf` and NEVER contains database passwords, connection URIs, or credentials.
+3. **Zero Output Leaks**: The database password does NOT appear in `stdout`, `stderr`, application diagnostic logs, or audit log entries.
+4. **Zero Persistent Remnants**: No temporary config files remain anywhere under `/tmp` or on disk after process exit, verified under both clean completion, child crash/failure, and abrupt child termination by `SIGTERM`.
