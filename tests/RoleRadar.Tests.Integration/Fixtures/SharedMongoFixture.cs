@@ -12,6 +12,7 @@ public sealed class SharedMongoFixture : IAsyncLifetime
         .Build();
 
     public string ConnectionString { get; private set; } = string.Empty;
+    public string ContainerId => _mongoContainer.Id;
 
     public async ValueTask InitializeAsync()
     {
