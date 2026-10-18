@@ -150,19 +150,54 @@ public sealed class TrackingMcpToolsEnvelopeTests
         Assert.Equal("ValidationError", errorProp.GetProperty("code").GetString());
     }
 
+    [Fact]
+    public async Task ApplicationRecord_SuccessAndFailure_ReturnsStandardEnvelope()
+    {
+        var stubSuccess = new StubCommandHandler<RecordApplicationCommand, ApplicationRecordResultDto>(
+            Result<ApplicationRecordResultDto>.Success(new ApplicationRecordResultDto(
+                ApplicationId: Guid.NewGuid(),
+                PostingId: Guid.NewGuid(),
+                CurrentOutcome: "applied",
+                OverrideApplied: false,
+                EventCount: 1,
+                UpdatedAtUtc: DateTimeOffset.UtcNow)));
+
+        var stubFailure = new StubCommandHandler<RecordApplicationCommand, ApplicationRecordResultDto>(
+            Result<ApplicationRecordResultDto>.Failure(ErrorCode.InvalidTransition, "Cannot apply to posting."));
+
+        var toolsSuccess = CreateTools(recordApplicationHandler: stubSuccess);
+        var toolsFailure = CreateTools(recordApplicationHandler: stubFailure);
+
+        var successJson = await toolsSuccess.ApplicationRecordAsync(postingId: Guid.NewGuid(), action: "create", submittedDate: "2026-10-18");
+        var failureJson = await toolsFailure.ApplicationRecordAsync(postingId: Guid.NewGuid(), action: "create");
+
+        using var successDoc = JsonDocument.Parse(successJson);
+        Assert.True(successDoc.RootElement.TryGetProperty("ok", out var okSuccess));
+        Assert.True(okSuccess.GetBoolean());
+        Assert.True(successDoc.RootElement.TryGetProperty("data", out _));
+
+        using var failDoc = JsonDocument.Parse(failureJson);
+        Assert.True(failDoc.RootElement.TryGetProperty("ok", out var okFail));
+        Assert.False(okFail.GetBoolean());
+        Assert.True(failDoc.RootElement.TryGetProperty("error", out var errorProp));
+        Assert.Equal("InvalidTransition", errorProp.GetProperty("code").GetString());
+    }
+
     private static TrackingMcpTools CreateTools(
         ICommandHandler<RecordPostingCommand, PostingRecordResultDto>? recordPostingHandler = null,
         ICommandHandler<TransitionPostingCommand, PostingTransitionResultDto>? transitionPostingHandler = null,
         ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto>? recordCompanyHandler = null,
         ICommandHandler<TrackerLogCommand, TrackerLogResultDto>? trackerLogHandler = null,
-        IQueryHandler<TrackerQueryRequest, TrackerQueryResultDto>? trackerQueryHandler = null)
+        IQueryHandler<TrackerQueryRequest, TrackerQueryResultDto>? trackerQueryHandler = null,
+        ICommandHandler<RecordApplicationCommand, ApplicationRecordResultDto>? recordApplicationHandler = null)
     {
         return new TrackingMcpTools(
             recordPostingHandler ?? new StubCommandHandler<RecordPostingCommand, PostingRecordResultDto>(Result<PostingRecordResultDto>.Failure(ErrorCode.ValidationError, "")),
             transitionPostingHandler ?? new StubCommandHandler<TransitionPostingCommand, PostingTransitionResultDto>(Result<PostingTransitionResultDto>.Failure(ErrorCode.ValidationError, "")),
             recordCompanyHandler ?? new StubCommandHandler<RecordCompanyCommand, CompanyRecordResultDto>(Result<CompanyRecordResultDto>.Failure(ErrorCode.ValidationError, "")),
             trackerLogHandler ?? new StubCommandHandler<TrackerLogCommand, TrackerLogResultDto>(Result<TrackerLogResultDto>.Failure(ErrorCode.ValidationError, "")),
-            trackerQueryHandler ?? new StubQueryHandler<TrackerQueryRequest, TrackerQueryResultDto>(Result<TrackerQueryResultDto>.Failure(ErrorCode.ValidationError, "")));
+            trackerQueryHandler ?? new StubQueryHandler<TrackerQueryRequest, TrackerQueryResultDto>(Result<TrackerQueryResultDto>.Failure(ErrorCode.ValidationError, "")),
+            recordApplicationHandler ?? new StubCommandHandler<RecordApplicationCommand, ApplicationRecordResultDto>(Result<ApplicationRecordResultDto>.Failure(ErrorCode.ValidationError, "")));
     }
 
     private sealed class StubCommandHandler<TCommand, TResponse> : ICommandHandler<TCommand, TResponse>

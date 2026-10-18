@@ -23,19 +23,22 @@ public sealed class TrackingMcpTools
     private readonly ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto> _recordCompanyHandler;
     private readonly ICommandHandler<TrackerLogCommand, TrackerLogResultDto> _trackerLogHandler;
     private readonly IQueryHandler<TrackerQueryRequest, TrackerQueryResultDto> _trackerQueryHandler;
+    private readonly ICommandHandler<RecordApplicationCommand, ApplicationRecordResultDto> _recordApplicationHandler;
 
     public TrackingMcpTools(
         ICommandHandler<RecordPostingCommand, PostingRecordResultDto> recordPostingHandler,
         ICommandHandler<TransitionPostingCommand, PostingTransitionResultDto> transitionPostingHandler,
         ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto> recordCompanyHandler,
         ICommandHandler<TrackerLogCommand, TrackerLogResultDto> trackerLogHandler,
-        IQueryHandler<TrackerQueryRequest, TrackerQueryResultDto> trackerQueryHandler)
+        IQueryHandler<TrackerQueryRequest, TrackerQueryResultDto> trackerQueryHandler,
+        ICommandHandler<RecordApplicationCommand, ApplicationRecordResultDto> recordApplicationHandler)
     {
         _recordPostingHandler = recordPostingHandler ?? throw new ArgumentNullException(nameof(recordPostingHandler));
         _transitionPostingHandler = transitionPostingHandler ?? throw new ArgumentNullException(nameof(transitionPostingHandler));
         _recordCompanyHandler = recordCompanyHandler ?? throw new ArgumentNullException(nameof(recordCompanyHandler));
         _trackerLogHandler = trackerLogHandler ?? throw new ArgumentNullException(nameof(trackerLogHandler));
         _trackerQueryHandler = trackerQueryHandler ?? throw new ArgumentNullException(nameof(trackerQueryHandler));
+        _recordApplicationHandler = recordApplicationHandler ?? throw new ArgumentNullException(nameof(recordApplicationHandler));
     }
 
     [McpServerTool(Name = "company_record"), Description("Creates or updates a tracked company profile with ownership type, category tags, description, and career sources (ATS endpoints) with upsert by id or natural key without accidental source deletion.")]
@@ -211,6 +214,44 @@ public sealed class TrackingMcpTools
             Notes: notes);
 
         var result = await _trackerLogHandler.HandleAsync(command, cancellationToken);
+        return SerializeResult(result);
+    }
+
+    [McpServerTool(Name = "application_record"), Description("Creates or updates a job application, appends timeline events, records resume variant pointers and desired salary, and supports atomic reopen-and-apply override for decided postings.")]
+    public async Task<string> ApplicationRecordAsync(
+        [Description("Unique posting identifier being applied to.")] Guid postingId,
+        [Description("Application action ('create' or 'append_event').")] string action = "",
+        [Description("Submission date (YYYY-MM-DD, required for 'create').")] string? submittedDate = null,
+        [Description("Desired minimum base salary.")] decimal? desiredSalaryMin = null,
+        [Description("Desired maximum base salary.")] decimal? desiredSalaryMax = null,
+        [Description("Desired salary currency code (default 'USD').")] string? desiredSalaryCurrency = null,
+        [Description("Target start date (YYYY-MM-DD).")] string? targetStartDate = null,
+        [Description("Resume variant ('tailored', 'as_is', 'ic_framed').")] string? resumeVariant = null,
+        [Description("External resume pointer/identifier (file content is strictly forbidden).")] string? resumePointer = null,
+        [Description("Optional referral contact identifier.")] Guid? referralContactId = null,
+        [Description("Submission confirmation reference code.")] string? confirmationCode = null,
+        [Description("Override flag required to apply to screened_out or closed posting.")] bool overrideDecided = false,
+        [Description("Justification required when overrideDecided is true.")] string? overrideReason = null,
+        [Description("Timeline event payload (required if action is 'append_event').")] ApplicationEventInputDto? @event = null,
+        CancellationToken cancellationToken = default)
+    {
+        var command = new RecordApplicationCommand(
+            PostingId: postingId,
+            Action: action,
+            SubmittedDate: submittedDate,
+            DesiredSalaryMin: desiredSalaryMin,
+            DesiredSalaryMax: desiredSalaryMax,
+            DesiredSalaryCurrency: desiredSalaryCurrency,
+            TargetStartDate: targetStartDate,
+            ResumeVariant: resumeVariant,
+            ResumePointer: resumePointer,
+            ReferralContactId: referralContactId,
+            ConfirmationCode: confirmationCode,
+            OverrideDecided: overrideDecided,
+            OverrideReason: overrideReason,
+            Event: @event);
+
+        var result = await _recordApplicationHandler.HandleAsync(command, cancellationToken);
         return SerializeResult(result);
     }
 

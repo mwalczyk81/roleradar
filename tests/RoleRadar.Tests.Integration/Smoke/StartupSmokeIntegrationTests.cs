@@ -104,6 +104,7 @@ public sealed class StartupSmokeIntegrationTests
         Assert.Contains("posting_transition", toolsResponse);
         Assert.Contains("tracker_query", toolsResponse);
         Assert.Contains("tracker_log", toolsResponse);
+        Assert.Contains("application_record", toolsResponse);
     }
 
     private static async Task<(int ExitCode, string Stdout, string Stderr)> RunProcessAsync(

@@ -399,4 +399,85 @@ public static class TrackingEnumExtensions
             default: return false;
         }
     }
+
+    public static string ToSnakeCase(this ResumeVariant variant) => variant switch
+    {
+        ResumeVariant.Tailored => "tailored",
+        ResumeVariant.AsIs => "as_is",
+        ResumeVariant.IcFramed => "ic_framed",
+        _ => variant.ToString().ToLowerInvariant()
+    };
+
+    public static bool TryParseResumeVariant(string? val, out ResumeVariant variant)
+    {
+        variant = ResumeVariant.Tailored;
+        if (string.IsNullOrWhiteSpace(val)) return false;
+        var s = val.Trim().ToLowerInvariant().Replace("-", "_");
+        switch (s)
+        {
+            case "tailored": variant = ResumeVariant.Tailored; return true;
+            case "as_is":
+            case "asis": variant = ResumeVariant.AsIs; return true;
+            case "ic_framed":
+            case "icframed": variant = ResumeVariant.IcFramed; return true;
+            default: return false;
+        }
+    }
+
+    public static string ToSnakeCase(this ApplicationOutcome outcome) => outcome switch
+    {
+        ApplicationOutcome.Applied => "applied",
+        ApplicationOutcome.Rejected => "rejected",
+        ApplicationOutcome.Closed => "closed",
+        _ => outcome.ToString().ToLowerInvariant()
+    };
+
+    public static bool TryParseApplicationOutcome(string? val, out ApplicationOutcome outcome)
+    {
+        outcome = ApplicationOutcome.Applied;
+        if (string.IsNullOrWhiteSpace(val)) return false;
+        var s = val.Trim().ToLowerInvariant().Replace("-", "_");
+        switch (s)
+        {
+            case "applied": outcome = ApplicationOutcome.Applied; return true;
+            case "rejected": outcome = ApplicationOutcome.Rejected; return true;
+            case "closed": outcome = ApplicationOutcome.Closed; return true;
+            default: return false;
+        }
+    }
+
+    public static string ToSnakeCase(this ApplicationEventType eventType) => eventType switch
+    {
+        ApplicationEventType.Applied => "applied",
+        ApplicationEventType.FollowUp => "follow_up",
+        ApplicationEventType.Interview => "interview",
+        ApplicationEventType.Offer => "offer",
+        ApplicationEventType.OfferAccepted => "offer_accepted",
+        ApplicationEventType.OfferDeclined => "offer_declined",
+        ApplicationEventType.Rejected => "rejected",
+        ApplicationEventType.Withdrawn => "withdrawn",
+        _ => eventType.ToString().ToLowerInvariant()
+    };
+
+    public static bool TryParseApplicationEventType(string? val, out ApplicationEventType eventType)
+    {
+        eventType = ApplicationEventType.Applied;
+        if (string.IsNullOrWhiteSpace(val)) return false;
+        var s = val.Trim().ToLowerInvariant().Replace("-", "_");
+        switch (s)
+        {
+            case "applied": eventType = ApplicationEventType.Applied; return true;
+            case "follow_up":
+            case "followup": eventType = ApplicationEventType.FollowUp; return true;
+            case "interview": eventType = ApplicationEventType.Interview; return true;
+            case "offer": eventType = ApplicationEventType.Offer; return true;
+            case "offer_accepted":
+            case "offeraccepted": eventType = ApplicationEventType.OfferAccepted; return true;
+            case "offer_declined":
+            case "offerdeclined": eventType = ApplicationEventType.OfferDeclined; return true;
+            case "rejected": eventType = ApplicationEventType.Rejected; return true;
+            case "withdrawn": eventType = ApplicationEventType.Withdrawn; return true;
+            default: return false;
+        }
+    }
 }

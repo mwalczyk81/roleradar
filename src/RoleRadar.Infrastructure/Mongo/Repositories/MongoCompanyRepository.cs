@@ -165,7 +165,8 @@ public sealed class MongoCompanyRepository : ICompanyRepository
         {
             var postingRepo = new MongoPostingRepository(_client, _database);
             var criterionRepo = new MongoCriterionRepository(_client, _database);
-            var context = new MongoTrackingTransactionContext(this, postingRepo, criterionRepo, _auditLog, session);
+            var applicationRepo = new MongoApplicationRepository(_client, _database);
+            var context = new MongoTrackingTransactionContext(this, postingRepo, criterionRepo, applicationRepo, _auditLog, session);
             var result = await work(context, cancellationToken);
 
             if (result.IsSuccess)

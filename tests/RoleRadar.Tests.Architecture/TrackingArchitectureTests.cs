@@ -102,9 +102,11 @@ public sealed class TrackingArchitectureTests
         var companyRepo = provider.GetService<ICompanyRepository>();
         var postingRepo = provider.GetService<IPostingRepository>();
         var criterionRepo = provider.GetService<ICriterionRepository>();
+        var applicationRepo = provider.GetService<IApplicationRepository>();
         Assert.NotNull(companyRepo);
         Assert.NotNull(postingRepo);
         Assert.NotNull(criterionRepo);
+        Assert.NotNull(applicationRepo);
     }
 
     [Fact]
@@ -122,5 +124,6 @@ public sealed class TrackingArchitectureTests
         Assert.Contains("posting_transition", toolNames);
         Assert.Contains("tracker_query", toolNames);
         Assert.Contains("tracker_log", toolNames);
+        Assert.Contains("application_record", toolNames);
     }
 }

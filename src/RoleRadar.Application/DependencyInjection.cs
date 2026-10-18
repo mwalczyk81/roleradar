@@ -38,10 +38,12 @@ public static class DependencyInjection
         services.AddSingleton<ICommandValidator<RoleRadar.Application.Tracking.Commands.RecordPostingCommand>, RoleRadar.Application.Tracking.Commands.RecordPostingCommandValidator>();
         services.AddSingleton<ICommandValidator<RoleRadar.Application.Tracking.Commands.TransitionPostingCommand>, RoleRadar.Application.Tracking.Commands.TransitionPostingCommandValidator>();
         services.AddSingleton<ICommandValidator<RoleRadar.Application.Tracking.Commands.RecordCompanyCommand>, RoleRadar.Application.Tracking.Commands.RecordCompanyCommandValidator>();
+        services.AddSingleton<ICommandValidator<RoleRadar.Application.Tracking.Commands.RecordApplicationCommand>, RoleRadar.Application.Tracking.Commands.RecordApplicationCommandValidator>();
         services.AddCommandHandler<RoleRadar.Application.Tracking.Commands.RecordPostingCommand, RoleRadar.Application.Tracking.Commands.PostingRecordResultDto, RoleRadar.Application.Tracking.Commands.RecordPostingCommandHandler>();
         services.AddCommandHandler<RoleRadar.Application.Tracking.Commands.TransitionPostingCommand, RoleRadar.Application.Tracking.Commands.PostingTransitionResultDto, RoleRadar.Application.Tracking.Commands.TransitionPostingCommandHandler>();
         services.AddCommandHandler<RoleRadar.Application.Tracking.Commands.RecordCompanyCommand, RoleRadar.Application.Tracking.Commands.CompanyRecordResultDto, RoleRadar.Application.Tracking.Commands.RecordCompanyCommandHandler>();
         services.AddCommandHandler<RoleRadar.Application.Tracking.Commands.TrackerLogCommand, RoleRadar.Application.Tracking.Commands.TrackerLogResultDto, RoleRadar.Application.Tracking.Commands.TrackerLogCommandHandler>();
+        services.AddCommandHandler<RoleRadar.Application.Tracking.Commands.RecordApplicationCommand, RoleRadar.Application.Tracking.Commands.ApplicationRecordResultDto, RoleRadar.Application.Tracking.Commands.RecordApplicationCommandHandler>();
         services.AddQueryHandler<RoleRadar.Application.Tracking.Queries.TrackerQueryRequest, RoleRadar.Application.Tracking.Queries.TrackerQueryResultDto, RoleRadar.Application.Tracking.Queries.TrackerQueryHandler>();
 
         return services;

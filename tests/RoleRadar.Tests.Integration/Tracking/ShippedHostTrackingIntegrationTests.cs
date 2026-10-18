@@ -459,6 +459,95 @@ public sealed class ShippedHostTrackingIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task ShippedMcpHost_ConcurrentApplicationCreateRace_ExactlyOneSucceedsAndOthersFailWithInvalidTransition()
+    {
+        var mcpDllPath = GetMcpDllPath();
+        var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_app_race");
+        var mongoClient = new MongoClient(_sharedMongo.ConnectionString);
+        var db = mongoClient.GetDatabase(uniqueDb);
+
+        const int processCount = 8;
+        var clients = new List<McpProcessClient>();
+
+        try
+        {
+            var env = _sharedMongo.CreateProcessEnvironment(uniqueDb);
+            for (var i = 0; i < processCount; i++)
+            {
+                clients.Add(await McpProcessClient.StartAsync(mcpDllPath, env));
+            }
+
+            // 1. Create company and posting
+            var companyResp = await clients[0].CallToolAsync("company_record", new
+            {
+                name = "App Race Corp",
+                ownershipType = "public",
+                status = "target"
+            });
+            Assert.True(companyResp.GetProperty("ok").GetBoolean());
+            var companyId = companyResp.GetProperty("data").GetProperty("company").GetProperty("id").GetGuid();
+
+            var postingResp = await clients[0].CallToolAsync("posting_record", new
+            {
+                companyId = companyId,
+                title = "Concurrent Application Role",
+                url = "https://jobs.apprace.internal/positions/123"
+            });
+            Assert.True(postingResp.GetProperty("ok").GetBoolean());
+            var postingId = postingResp.GetProperty("data").GetProperty("posting").GetProperty("id").GetGuid();
+
+            // 2. Launch 8 concurrent MCP processes submitting application for the same posting
+            var barrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var tasks = clients.Select((c, idx) => Task.Run(async () =>
+            {
+                await barrier.Task;
+                return await c.CallToolAsync("application_record", new
+                {
+                    postingId = postingId,
+                    action = "create",
+                    submittedDate = "2026-10-18",
+                    resumeVariant = "tailored",
+                    desiredSalaryMin = 180000m,
+                    desiredSalaryMax = 210000m
+                });
+            })).ToArray();
+
+            barrier.SetResult();
+            var results = await Task.WhenAll(tasks);
+
+            var succeeded = results.Where(r =>
+                r.TryGetProperty("ok", out var ok) && ok.GetBoolean()).ToList();
+
+            var invalidTransitionErrors = results.Where(r =>
+                r.TryGetProperty("ok", out var ok) && !ok.GetBoolean() &&
+                r.GetProperty("error").GetProperty("code").GetString() == "InvalidTransition").ToList();
+
+            Assert.Single(succeeded);
+            Assert.Equal(processCount - 1, invalidTransitionErrors.Count);
+
+            // Assert exactly one document in applications
+            var appCol = db.GetCollection<BsonDocument>(TrackingMongoOptions.ApplicationsCollectionName);
+            var apps = await appCol.Find(Builders<BsonDocument>.Filter.Eq("posting_id", new BsonBinaryData(postingId, GuidRepresentation.Standard))).ToListAsync();
+            Assert.Single(apps);
+
+            // Assert posting disposition is applied
+            var postingCol = db.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
+            var postDoc = await postingCol.Find(Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(postingId, GuidRepresentation.Standard))).FirstOrDefaultAsync();
+            Assert.NotNull(postDoc);
+            Assert.Equal("applied", postDoc["disposition"].AsString);
+        }
+        finally
+        {
+            foreach (var client in clients)
+            {
+                await client.DisposeAsync();
+            }
+
+            await mongoClient.DropDatabaseAsync(uniqueDb);
+        }
+    }
+
     private static string GetMcpDllPath()
     {
         var mcpDllPath = typeof(RoleRadar.Mcp.Stdio.Program).Assembly.Location;

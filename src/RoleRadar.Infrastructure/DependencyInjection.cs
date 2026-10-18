@@ -52,6 +52,13 @@ public static class DependencyInjection
             var database = client.GetDatabase(opts.DatabaseName);
             return new RoleRadar.Infrastructure.Mongo.Repositories.MongoCriterionRepository(client, database);
         });
+        services.TryAddScoped<IApplicationRepository>(sp =>
+        {
+            var client = sp.GetRequiredService<IMongoClient>();
+            var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
+            var database = client.GetDatabase(opts.DatabaseName);
+            return new RoleRadar.Infrastructure.Mongo.Repositories.MongoApplicationRepository(client, database);
+        });
         services.TryAddScoped<ITrackingTransactionContext>(sp =>
         {
             var client = sp.GetRequiredService<IMongoClient>();
@@ -60,8 +67,9 @@ public static class DependencyInjection
             var companies = sp.GetRequiredService<ICompanyRepository>();
             var postings = sp.GetRequiredService<IPostingRepository>();
             var criteria = sp.GetRequiredService<ICriterionRepository>();
+            var applications = sp.GetRequiredService<IApplicationRepository>();
             var auditLog = database.GetCollection<MongoDB.Bson.BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
-            return new RoleRadar.Infrastructure.Mongo.Repositories.MongoTrackingTransactionContext(companies, postings, criteria, auditLog);
+            return new RoleRadar.Infrastructure.Mongo.Repositories.MongoTrackingTransactionContext(companies, postings, criteria, applications, auditLog);
         });
         services.AddOptions<RoleRadar.Infrastructure.Backup.BackupOptions>();
         services.TryAddScoped<IBackupArchiveService, RoleRadar.Infrastructure.Backup.SecretStreamBackupArchiveService>();
