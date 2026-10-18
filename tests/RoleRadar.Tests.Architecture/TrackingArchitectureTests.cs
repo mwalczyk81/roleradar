@@ -119,5 +119,6 @@ public sealed class TrackingArchitectureTests
         Assert.Contains("posting_record", toolNames);
         Assert.Contains("posting_transition", toolNames);
         Assert.Contains("tracker_query", toolNames);
+        Assert.Contains("tracker_log", toolNames);
     }
 }

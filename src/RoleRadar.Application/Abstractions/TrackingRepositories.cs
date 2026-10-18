@@ -46,7 +46,11 @@ public interface IPostingRepository
 
 public interface ICriterionRepository
 {
-    // Placeholders for User Story 3
+    Task<Result<Criterion?>> GetActiveByKeyAsync(string ownerId, string key, CancellationToken cancellationToken = default);
+    Task<Result<Criterion?>> GetByIdAsync(string ownerId, Guid id, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<Criterion>>> GetEffectiveAtAsync(string ownerId, DateTimeOffset effectiveDate, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<Criterion>>> ListActiveAsync(string ownerId, CancellationToken cancellationToken = default);
+    Task<Result<bool>> UpsertCriterionAsync(Criterion criterion, CancellationToken cancellationToken = default);
 }
 
 public interface IApplicationRepository

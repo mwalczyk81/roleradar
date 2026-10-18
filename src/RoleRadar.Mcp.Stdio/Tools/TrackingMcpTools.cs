@@ -21,17 +21,20 @@ public sealed class TrackingMcpTools
     private readonly ICommandHandler<RecordPostingCommand, PostingRecordResultDto> _recordPostingHandler;
     private readonly ICommandHandler<TransitionPostingCommand, PostingTransitionResultDto> _transitionPostingHandler;
     private readonly ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto> _recordCompanyHandler;
+    private readonly ICommandHandler<TrackerLogCommand, TrackerLogResultDto> _trackerLogHandler;
     private readonly IQueryHandler<TrackerQueryRequest, TrackerQueryResultDto> _trackerQueryHandler;
 
     public TrackingMcpTools(
         ICommandHandler<RecordPostingCommand, PostingRecordResultDto> recordPostingHandler,
         ICommandHandler<TransitionPostingCommand, PostingTransitionResultDto> transitionPostingHandler,
         ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto> recordCompanyHandler,
+        ICommandHandler<TrackerLogCommand, TrackerLogResultDto> trackerLogHandler,
         IQueryHandler<TrackerQueryRequest, TrackerQueryResultDto> trackerQueryHandler)
     {
         _recordPostingHandler = recordPostingHandler ?? throw new ArgumentNullException(nameof(recordPostingHandler));
         _transitionPostingHandler = transitionPostingHandler ?? throw new ArgumentNullException(nameof(transitionPostingHandler));
         _recordCompanyHandler = recordCompanyHandler ?? throw new ArgumentNullException(nameof(recordCompanyHandler));
+        _trackerLogHandler = trackerLogHandler ?? throw new ArgumentNullException(nameof(trackerLogHandler));
         _trackerQueryHandler = trackerQueryHandler ?? throw new ArgumentNullException(nameof(trackerQueryHandler));
     }
 
@@ -176,6 +179,38 @@ public sealed class TrackingMcpTools
             PageSize: pageSize);
 
         var result = await _trackerQueryHandler.HandleAsync(request, cancellationToken);
+        return SerializeResult(result);
+    }
+
+    [McpServerTool(Name = "tracker_log"), Description("Appends immutable operational tracking records: creates/revises/deactivates screening criteria or logs search run execution batches linked to report notes.")]
+    public async Task<string> TrackerLogAsync(
+        [Description("Action discriminator ('criterion_revision', 'criterion_deactivate', 'search_run').")] string action,
+        [Description("Screening criterion key (max 100 characters).")] string? key = null,
+        [Description("Screening criterion category ('hard_skip', 'weight', 'preference').")] string? category = null,
+        [Description("Screening criterion rule specification or threshold (max 500 characters).")] string? value = null,
+        [Description("Criterion provenance ('stated', 'inferred').")] string? provenance = null,
+        [Description("UTC timestamp when rule becomes effective (ISO 8601).")] string? effectiveFrom = null,
+        [Description("Optimistic concurrency token of the active criterion being superseded or deactivated.")] Guid? versionToken = null,
+        [Description("Start time of search run (ISO 8601).")] string? startedAt = null,
+        [Description("Count of newly discovered postings in search run.")] int? newPostingsCount = null,
+        [Description("Linked narrative report note ID.")] Guid? reportNoteId = null,
+        [Description("Summary notes (max 500 characters).")] string? notes = null,
+        CancellationToken cancellationToken = default)
+    {
+        var command = new TrackerLogCommand(
+            Action: action,
+            Key: key,
+            Category: category,
+            Value: value,
+            Provenance: provenance,
+            EffectiveFrom: effectiveFrom,
+            VersionToken: versionToken,
+            StartedAt: startedAt,
+            NewPostingsCount: newPostingsCount,
+            ReportNoteId: reportNoteId,
+            Notes: notes);
+
+        var result = await _trackerLogHandler.HandleAsync(command, cancellationToken);
         return SerializeResult(result);
     }
 

@@ -154,12 +154,14 @@ public sealed class TrackingMcpToolsEnvelopeTests
         ICommandHandler<RecordPostingCommand, PostingRecordResultDto>? recordPostingHandler = null,
         ICommandHandler<TransitionPostingCommand, PostingTransitionResultDto>? transitionPostingHandler = null,
         ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto>? recordCompanyHandler = null,
+        ICommandHandler<TrackerLogCommand, TrackerLogResultDto>? trackerLogHandler = null,
         IQueryHandler<TrackerQueryRequest, TrackerQueryResultDto>? trackerQueryHandler = null)
     {
         return new TrackingMcpTools(
             recordPostingHandler ?? new StubCommandHandler<RecordPostingCommand, PostingRecordResultDto>(Result<PostingRecordResultDto>.Failure(ErrorCode.ValidationError, "")),
             transitionPostingHandler ?? new StubCommandHandler<TransitionPostingCommand, PostingTransitionResultDto>(Result<PostingTransitionResultDto>.Failure(ErrorCode.ValidationError, "")),
             recordCompanyHandler ?? new StubCommandHandler<RecordCompanyCommand, CompanyRecordResultDto>(Result<CompanyRecordResultDto>.Failure(ErrorCode.ValidationError, "")),
+            trackerLogHandler ?? new StubCommandHandler<TrackerLogCommand, TrackerLogResultDto>(Result<TrackerLogResultDto>.Failure(ErrorCode.ValidationError, "")),
             trackerQueryHandler ?? new StubQueryHandler<TrackerQueryRequest, TrackerQueryResultDto>(Result<TrackerQueryResultDto>.Failure(ErrorCode.ValidationError, "")));
     }
 

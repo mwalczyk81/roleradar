@@ -370,6 +370,95 @@ public sealed class ShippedHostTrackingIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task ShippedMcpHost_ConcurrentCriterionRevisionRace_ExactlyOneSucceedsAndOthersGetStaleVersionToken()
+    {
+        var mcpDllPath = GetMcpDllPath();
+        var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_criterion_race");
+        var mongoClient = new MongoClient(_sharedMongo.ConnectionString);
+        var db = mongoClient.GetDatabase(uniqueDb);
+
+        const int processCount = 8;
+        var clients = new List<McpProcessClient>();
+
+        try
+        {
+            var env = _sharedMongo.CreateProcessEnvironment(uniqueDb);
+            for (var i = 0; i < processCount; i++)
+            {
+                clients.Add(await McpProcessClient.StartAsync(mcpDllPath, env));
+            }
+
+            // 1. Initial criterion creation
+            var initialResp = await clients[0].CallToolAsync("tracker_log", new
+            {
+                action = "criterion_revision",
+                key = "tech_stack_csharp",
+                category = "hard_skip",
+                value = "Must use .NET 10",
+                provenance = "stated",
+                effectiveFrom = "2026-01-01T00:00:00Z"
+            });
+
+            Assert.True(initialResp.GetProperty("ok").GetBoolean());
+
+            // Get active criterion to retrieve version token
+            var criteriaCol = db.GetCollection<BsonDocument>(TrackingMongoOptions.CriteriaCollectionName);
+            var activeDoc = await criteriaCol.Find(Builders<BsonDocument>.Filter.And(
+                Builders<BsonDocument>.Filter.Eq("key", "tech_stack_csharp"),
+                Builders<BsonDocument>.Filter.Eq("is_active", true))).FirstOrDefaultAsync();
+
+            Assert.NotNull(activeDoc);
+            var initialToken = activeDoc["version_token"].AsGuid;
+
+            // 2. Launch 8 concurrent MCP processes revising the same key with the same expected versionToken
+            var barrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var tasks = clients.Select((c, idx) => Task.Run(async () =>
+            {
+                await barrier.Task;
+                return await c.CallToolAsync("tracker_log", new
+                {
+                    action = "criterion_revision",
+                    key = "tech_stack_csharp",
+                    category = "hard_skip",
+                    value = $"Revised by worker {idx}",
+                    provenance = "stated",
+                    effectiveFrom = "2026-06-01T00:00:00Z",
+                    versionToken = initialToken
+                });
+            })).ToArray();
+
+            barrier.SetResult();
+            var results = await Task.WhenAll(tasks);
+
+            var succeeded = results.Where(r =>
+                r.TryGetProperty("ok", out var ok) && ok.GetBoolean()).ToList();
+
+            var staleErrors = results.Where(r =>
+                r.TryGetProperty("ok", out var ok) && !ok.GetBoolean() &&
+                r.GetProperty("error").GetProperty("code").GetString() == "StaleVersionToken").ToList();
+
+            Assert.Single(succeeded);
+            Assert.Equal(processCount - 1, staleErrors.Count);
+
+            // Assert exactly one active version in MongoDB afterwards
+            var activeVersions = await criteriaCol.Find(Builders<BsonDocument>.Filter.And(
+                Builders<BsonDocument>.Filter.Eq("key", "tech_stack_csharp"),
+                Builders<BsonDocument>.Filter.Eq("is_active", true))).ToListAsync();
+
+            Assert.Single(activeVersions);
+        }
+        finally
+        {
+            foreach (var client in clients)
+            {
+                await client.DisposeAsync();
+            }
+
+            await mongoClient.DropDatabaseAsync(uniqueDb);
+        }
+    }
+
     private static string GetMcpDllPath()
     {
         var mcpDllPath = typeof(RoleRadar.Mcp.Stdio.Program).Assembly.Location;
