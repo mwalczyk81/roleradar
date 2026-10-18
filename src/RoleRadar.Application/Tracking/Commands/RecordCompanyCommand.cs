@@ -127,10 +127,40 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
             parsedStatus = ps;
         }
 
-        var isCompanyFieldUpdate = command.Name is not null || command.Description is not null ||
-                                   command.ParentCompany is not null || command.OwnershipType is not null ||
-                                   command.Headquarters is not null || command.CategoryTags is not null ||
-                                   command.Status is not null;
+        var companyFieldNamesChanged = new List<string>();
+        if (existing is not null)
+        {
+            if (!string.IsNullOrWhiteSpace(trimmedName) && !string.Equals(trimmedName, existing.Name, StringComparison.Ordinal))
+            {
+                companyFieldNamesChanged.Add("name");
+            }
+            if (command.Description is not null && !string.Equals(command.Description, existing.Description, StringComparison.Ordinal))
+            {
+                companyFieldNamesChanged.Add("description");
+            }
+            if (command.ParentCompany is not null && !string.Equals(command.ParentCompany, existing.ParentCompany, StringComparison.Ordinal))
+            {
+                companyFieldNamesChanged.Add("parent_company");
+            }
+            if (command.Headquarters is not null && !string.Equals(command.Headquarters, existing.Headquarters, StringComparison.Ordinal))
+            {
+                companyFieldNamesChanged.Add("headquarters");
+            }
+            if (!string.IsNullOrWhiteSpace(command.OwnershipType) && parsedOwnership != existing.OwnershipType)
+            {
+                companyFieldNamesChanged.Add("ownership_type");
+            }
+            if (!string.IsNullOrWhiteSpace(command.Status) && parsedStatus != existing.Status)
+            {
+                companyFieldNamesChanged.Add("status");
+            }
+            if (command.CategoryTags is not null && !command.CategoryTags.SequenceEqual(existing.CategoryTags))
+            {
+                companyFieldNamesChanged.Add("category_tags");
+            }
+        }
+        var hasCompanyFieldChanges = companyFieldNamesChanged.Count > 0;
+        bool companyFieldsUpdated = false;
 
         if (existing is not null)
         {
@@ -150,7 +180,14 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
                     Status: "already_exists"));
             }
 
-            if (isCompanyFieldUpdate)
+            if (command.VersionToken.HasValue && command.VersionToken.Value != existing.VersionToken)
+            {
+                return Result<CompanyRecordResultDto>.Failure(
+                    ErrorCode.StaleVersionToken,
+                    "Company version token mismatch or stale.");
+            }
+
+            if (hasCompanyFieldChanges)
             {
                 // Concurrency check for existing company
                 if (!command.VersionToken.HasValue || command.VersionToken.Value != existing.VersionToken)
@@ -171,7 +208,8 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
                     now: now);
 
                 await _context.Companies.UpsertCompanyAsync(existing, cancellationToken);
-                changedFields = ["name", "status", "version_token"];
+                companyFieldsUpdated = true;
+                changedFields = [.. companyFieldNamesChanged, "version_token"];
             }
 
             company = existing;
@@ -275,28 +313,65 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
             ? totalSourcesRes.Value.Count
             : 0;
 
-        // Append audit log entry
-        var operation = isCreate
-            ? AuditOperation.CompanyCreate
-            : (command.CareerSources is not null && command.CareerSources.Count > 0
-                ? AuditOperation.CareerSourceUpsert
-                : AuditOperation.CompanyUpdate);
+        // Append audit log entries
+        if (isCreate)
+        {
+            var auditSummary = new CompanyAuditSummary(
+                CompanyId: company.Id,
+                ChangedFieldNames: changedFields,
+                Action: AuditOperation.CompanyCreate,
+                Timestamp: now);
 
-        var auditSummary = new CompanyAuditSummary(
-            CompanyId: company.Id,
-            ChangedFieldNames: changedFields,
-            Action: operation,
-            Timestamp: now);
+            await AppendAuditAsync(
+                ownerId,
+                command.Actor,
+                AuditOperation.CompanyCreate,
+                company.Id,
+                company.VersionToken,
+                auditSummary,
+                company,
+                cancellationToken);
+        }
+        else
+        {
+            if (companyFieldsUpdated)
+            {
+                var auditSummary = new CompanyAuditSummary(
+                    CompanyId: company.Id,
+                    ChangedFieldNames: changedFields,
+                    Action: AuditOperation.CompanyUpdate,
+                    Timestamp: now);
 
-        await AppendAuditAsync(
-            ownerId,
-            command.Actor,
-            operation,
-            company.Id,
-            company.VersionToken,
-            auditSummary,
-            company,
-            cancellationToken);
+                await AppendAuditAsync(
+                    ownerId,
+                    command.Actor,
+                    AuditOperation.CompanyUpdate,
+                    company.Id,
+                    company.VersionToken,
+                    auditSummary,
+                    company,
+                    cancellationToken);
+            }
+
+            if (command.CareerSources is not null && command.CareerSources.Count > 0)
+            {
+                var csAuditSummary = new CompanyAuditSummary(
+                    CompanyId: company.Id,
+                    ChangedFieldNames: ["career_sources"],
+                    Action: AuditOperation.CareerSourceUpsert,
+                    Timestamp: now);
+
+                await AppendAuditAsync(
+                    ownerId,
+                    command.Actor,
+                    AuditOperation.CareerSourceUpsert,
+                    company.Id,
+                    company.VersionToken,
+                    csAuditSummary,
+                    company,
+                    cancellationToken);
+            }
+        }
 
         return Result<CompanyRecordResultDto>.Success(new CompanyRecordResultDto(
             Company: new CompanyRecordSummaryDto(
