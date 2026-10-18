@@ -580,4 +580,4 @@ stateDiagram-v2
 3. `screened_out` and `closed` postings return to `lead` only through an explicit `posting_transition` (target: `lead`), which evaluates the **stored** `resurface_policy` (must be `if_reopened`). The `resurfacePolicy` parameter on `posting_transition` sets the policy at decision time (`screened_out` or `closed`).
 4. Whenever a posting enters `screened_out`, `closed`, or `rejected`, `decided_at` is set to the current UTC timestamp.
 5. `rejected` is terminal. Reopening requires an explicit `posting_transition` (target: `lead`) with a mandatory audit reason.
-6. Ingestion paths: Internal batch import (Feature 003) can create postings in any disposition, requiring reason and resurface policy for decided states, and an existing application or integrity warning for `applied`. MCP creation defaults to `lead`.
+6. Ingestion paths: Internal batch import (Feature 004) can create postings in any disposition, requiring reason and resurface policy for decided states, and an existing application or integrity warning for `applied`. MCP creation defaults to `lead`.

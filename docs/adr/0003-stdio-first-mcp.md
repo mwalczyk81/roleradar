@@ -13,7 +13,7 @@ Which transport should Feature 001 use?
 ## Decision Drivers
 
 - **Constitution Principle VI (*stdio Protocol Hygiene*)**: The stdio host must not open or bind any network listener, `stdout` must carry exclusively MCP protocol frames, and all logs must go to `stderr`.
-- **Zero-Auth Local Security**: Operating over `stdio` as a child process inherits the local OS user's boundary without exposing an unauthenticated localhost HTTP port before OIDC/Duende IdentityServer arrives in Feature 004.
+- **Zero-Auth Local Security**: Operating over `stdio` as a child process inherits the local OS user's boundary without exposing an unauthenticated localhost HTTP port before OIDC/Duende IdentityServer arrives in Feature 005.
 
 ## Considered Options
 

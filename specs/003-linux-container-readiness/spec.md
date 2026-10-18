@@ -209,7 +209,7 @@ As a technical lead, I want documented Architecture Decision Records (ADRs) eval
 
 ## Assumptions
 
-- The target deployment model for future HTTP services (004 API/web, 005 MCP over HTTP) will utilize Linux containers in Azure; this feature establishes baseline containerization and hosting readiness without deploying cloud resources.
+- The target deployment model for future HTTP services (005 API/web, 006 MCP over HTTP) will utilize Linux containers in Azure; this feature establishes baseline containerization and hosting readiness without deploying cloud resources.
 - Container execution environments support Open Container Initiative (OCI) image standards and allow mounting ephemeral volumes for temporary file operations when the root filesystem is read-only.
 - Bundled native database tools (`mongodump` and `mongorestore`) maintain protocol compatibility with MongoDB version 7.0 and compatible wire-protocol endpoints.
 - External database compatibility testing requires a reachable database connection string supplied via a secure environment variable during test runs; if not provided, the test suite defaults to local ephemeral Testcontainers.
