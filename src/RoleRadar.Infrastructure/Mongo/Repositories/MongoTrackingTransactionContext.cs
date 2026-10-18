@@ -67,9 +67,10 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
             }
         };
 
-        if (_session is not null)
+        var session = _session ?? MongoNoteRepository.CurrentSession;
+        if (session is not null)
         {
-            await _auditCollection.InsertOneAsync(_session, doc, cancellationToken: cancellationToken);
+            await _auditCollection.InsertOneAsync(session, doc, cancellationToken: cancellationToken);
         }
         else
         {

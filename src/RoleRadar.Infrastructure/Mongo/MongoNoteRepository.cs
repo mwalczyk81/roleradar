@@ -12,6 +12,7 @@ namespace RoleRadar.Infrastructure.Mongo;
 public sealed class MongoNoteRepository : INoteRepository, IDisposable
 {
     private static readonly AsyncLocal<AmbientTransactionScope?> CurrentTransactionScope = new();
+    internal static IClientSessionHandle? CurrentSession => CurrentTransactionScope.Value?.Context.Session;
 
     private readonly IMongoClient _client;
     private readonly IMongoDatabase _database;
@@ -62,7 +63,14 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(work);
-        await EnsureIndexesOnceAsync(cancellationToken);
+        try
+        {
+            await EnsureIndexesOnceAsync(cancellationToken);
+        }
+        catch (RoleRadar.Domain.Tracking.TrackingIndexValidationException ex)
+        {
+            return Result<TResponse>.Failure(ErrorCode.ValidationError, ex.Message);
+        }
 
         // Support ambient transaction re-entrancy when TransactionAndAuditCommandDecorator wraps a handler
         // that itself calls ExecuteInTransactionAsync.
@@ -72,47 +80,80 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             return await work(existingScope.Context, cancellationToken);
         }
 
-        using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
-        var txOptions = new TransactionOptions(
-            readConcern: ReadConcern.Snapshot,
-            writeConcern: WriteConcern.WMajority,
-            readPreference: ReadPreference.Primary);
-
-        Result<TResponse> finalResult = default;
-
-        try
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            await session.WithTransactionAsync(
-                async (sessionHandle, ct) =>
-                {
-                    var context = new MongoNoteTransactionContext(this, sessionHandle);
-                    var scope = new AmbientTransactionScope(context);
-                    CurrentTransactionScope.Value = scope;
-                    try
+            using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
+            var txOptions = new TransactionOptions(
+                readConcern: ReadConcern.Snapshot,
+                writeConcern: WriteConcern.WMajority,
+                readPreference: ReadPreference.Primary);
+
+            Result<TResponse> finalResult = default;
+
+            try
+            {
+                await session.WithTransactionAsync(
+                    async (sessionHandle, ct) =>
                     {
-                        var outcome = await work(context, ct);
-                        finalResult = outcome;
-                        if (!outcome.IsSuccess)
+                        var context = new MongoNoteTransactionContext(this, sessionHandle);
+                        var scope = new AmbientTransactionScope(context);
+                        CurrentTransactionScope.Value = scope;
+                        try
                         {
-                            throw new RollbackOnResultFailureException();
+                            var outcome = await work(context, ct);
+                            finalResult = outcome;
+                            if (!outcome.IsSuccess)
+                            {
+                                throw new RollbackOnResultFailureException();
+                            }
+
+                            return true;
                         }
+                        finally
+                        {
+                            CurrentTransactionScope.Value = null;
+                        }
+                    },
+                    txOptions,
+                    cancellationToken);
 
-                        return true;
-                    }
-                    finally
-                    {
-                        CurrentTransactionScope.Value = null;
-                    }
-                },
-                txOptions,
-                cancellationToken);
-
-            return finalResult;
+                return finalResult;
+            }
+            catch (RollbackOnResultFailureException)
+            {
+                return finalResult;
+            }
+            catch (Exception ex) when (attempt < maxAttempts && IsDuplicateKeyOrWriteConflict(ex))
+            {
+                await Task.Delay(Random.Shared.Next(50, 250), cancellationToken);
+            }
+            catch (RoleRadar.Domain.Tracking.TrackingIndexValidationException ex)
+            {
+                return Result<TResponse>.Failure(ErrorCode.ValidationError, ex.Message);
+            }
         }
-        catch (RollbackOnResultFailureException)
+
+        return Result<TResponse>.Failure(ErrorCode.ValidationError, "Operation failed due to concurrent conflicts.");
+    }
+
+    private static bool IsDuplicateKeyOrWriteConflict(Exception ex)
+    {
+        if (ex is MongoWriteException mwe && mwe.WriteError?.Category == ServerErrorCategory.DuplicateKey)
         {
-            return finalResult;
+            return true;
         }
+
+        if (ex is MongoCommandException mce && (mce.Code == 11000 || mce.Code == 112 || mce.Code == 251 || mce.Message.Contains("E11000", StringComparison.OrdinalIgnoreCase) || mce.Message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) || mce.Message.Contains("WriteConflict", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        var msg = ex.ToString();
+        return msg.Contains("E11000", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("duplicate key", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("WriteConflict", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("TransientTransactionError", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<Result<Note>> GetByIdAsync(
@@ -313,6 +354,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             if (!_indexesInitialized)
             {
                 await MongoBootstrapAndIndexes.EnsureIndexesAsync(_database, cancellationToken);
+                await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
                 _indexesInitialized = true;
             }
         }

@@ -333,6 +333,23 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
                 ownerId, command.CompanyId.Value, normalizedTitle, cancellationToken);
             if (candidatesResult.IsSuccess && candidatesResult.Value is not null && candidatesResult.Value.Count > 0)
             {
+                // Concurrency resolution: if any candidate matches a definitive key (Tier A/B/C), treat as definitive match
+                foreach (var candidate in candidatesResult.Value)
+                {
+                    var candPostingRes = await _context.Postings.GetByIdAsync(ownerId, candidate.Id, cancellationToken);
+                    if (candPostingRes.IsSuccess && candPostingRes.Value is not null)
+                    {
+                        var cand = candPostingRes.Value;
+                        var isMatch = (!string.IsNullOrWhiteSpace(dedupKeyA) && cand.DedupKeyA == dedupKeyA)
+                                   || (!string.IsNullOrWhiteSpace(dedupKeyB) && cand.DedupKeyB == dedupKeyB)
+                                   || (!string.IsNullOrWhiteSpace(dedupKeyC) && cand.DedupKeyC == dedupKeyC);
+                        if (isMatch)
+                        {
+                            return await HandleDedupMatchAsync(cand, command, ownerId, now, cancellationToken);
+                        }
+                    }
+                }
+
                 return Result<PostingRecordResultDto>.Success(new PostingRecordResultDto(
                     Status: "possible_duplicate",
                     Candidates: candidatesResult.Value));

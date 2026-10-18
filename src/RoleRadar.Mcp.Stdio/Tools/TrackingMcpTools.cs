@@ -62,13 +62,7 @@ public sealed class TrackingMcpTools
             VersionToken: versionToken);
 
         var result = await _recordCompanyHandler.HandleAsync(command, cancellationToken);
-        if (!result.IsSuccess)
-        {
-            var err = result.Error!.Value;
-            return JsonSerializer.Serialize(new { error = new { code = err.Code.ToString(), message = err.Message } }, JsonOptions);
-        }
-
-        return JsonSerializer.Serialize(result.Value, JsonOptions);
+        return SerializeResult(result);
     }
 
     [McpServerTool(Name = "posting_record"), Description("Creates, ingests, or explicitly updates a tracked job posting with company, title, URL, ATS identifiers, compensation, location, score, culture rating, screening note link, signals, and resurface policy, enforcing tiered deduplication (tiers A-D).")]
@@ -120,13 +114,7 @@ public sealed class TrackingMcpTools
             DuplicateOfId: duplicateOfId);
 
         var result = await _recordPostingHandler.HandleAsync(command, cancellationToken);
-        if (!result.IsSuccess)
-        {
-            var err = result.Error!.Value;
-            return JsonSerializer.Serialize(new { error = new { code = err.Code.ToString(), message = err.Message } }, JsonOptions);
-        }
-
-        return JsonSerializer.Serialize(result.Value, JsonOptions);
+        return SerializeResult(result);
     }
 
     [McpServerTool(Name = "posting_transition"), Description("Transitions a posting between dispositions (lead, scored, unscored, screened_out, closed, rejected) or reopens a decided posting, validating against the pure domain transition matrix. Note: target 'applied' is disallowed (applications must be created via application_record).")]
@@ -150,13 +138,7 @@ public sealed class TrackingMcpTools
             OverrideReason: overrideReason);
 
         var result = await _transitionPostingHandler.HandleAsync(command, cancellationToken);
-        if (!result.IsSuccess)
-        {
-            var err = result.Error!.Value;
-            return JsonSerializer.Serialize(new { error = new { code = err.Code.ToString(), message = err.Message } }, JsonOptions);
-        }
-
-        return JsonSerializer.Serialize(result.Value, JsonOptions);
+        return SerializeResult(result);
     }
 
     [McpServerTool(Name = "tracker_query"), Description("Unified read-only query tool for job search tracking data (postings, decided_postings, posting_dedup_lookup, companies, criteria, applications) with bounded paging (default 50, max 200).")]
@@ -194,12 +176,34 @@ public sealed class TrackingMcpTools
             PageSize: pageSize);
 
         var result = await _trackerQueryHandler.HandleAsync(request, cancellationToken);
-        if (!result.IsSuccess)
+        return SerializeResult(result);
+    }
+
+    private static string SerializeResult<T>(Result<T> result)
+    {
+        if (result.IsSuccess)
         {
-            var err = result.Error!.Value;
-            return JsonSerializer.Serialize(new { error = new { code = err.Code.ToString(), message = err.Message } }, JsonOptions);
+            return JsonSerializer.Serialize(
+                new
+                {
+                    ok = true,
+                    data = result.Value
+                },
+                JsonOptions);
         }
 
-        return JsonSerializer.Serialize(result.Value, JsonOptions);
+        var error = result.Error!.Value;
+        return JsonSerializer.Serialize(
+            new
+            {
+                ok = false,
+                error = new
+                {
+                    code = error.Code.ToString(),
+                    message = error.Message,
+                    metadata = error.Metadata
+                }
+            },
+            JsonOptions);
     }
 }

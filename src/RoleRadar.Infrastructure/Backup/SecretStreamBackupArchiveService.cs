@@ -701,6 +701,14 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
             // Verify indexes and collection counts
             await MongoBootstrapAndIndexes.EnsureIndexesAsync(db, cancellationToken);
+            try
+            {
+                await TrackingIndexInitializer.EnsureIndexesAsync(db, cancellationToken);
+            }
+            catch (TrackingIndexValidationException ex)
+            {
+                return Result<RestoreArchiveSummaryDto>.Failure(ErrorCode.ValidationError, ex.Message);
+            }
 
             var finalNotes = await notesCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
             var finalRevisions = await revisionsCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
@@ -785,6 +793,8 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
         // Re-create the indexes on empty collections
         await MongoBootstrapAndIndexes.EnsureIndexesAsync(db, cancellationToken);
+        await TrackingIndexInitializer.EnsureIndexesAsync(db, cancellationToken);
+        TrackingIndexInitializer.ResetInitializationState(_mongoOptions.DatabaseName);
 
         var droppedCounts = new Dictionary<string, long>
         {

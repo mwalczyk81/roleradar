@@ -1,12 +1,9 @@
 namespace RoleRadar.Infrastructure.Mongo;
 
-public sealed class TrackingIndexValidationException : Exception
+public class TrackingIndexValidationException : RoleRadar.Domain.Tracking.TrackingIndexValidationException
 {
-    public string IndexName { get; }
-
     public TrackingIndexValidationException(string indexName, string message, Exception? innerException = null)
-        : base(message, innerException)
+        : base(indexName, message, innerException)
     {
-        IndexName = indexName ?? string.Empty;
     }
 }

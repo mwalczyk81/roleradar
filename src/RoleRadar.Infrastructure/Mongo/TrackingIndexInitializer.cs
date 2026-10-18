@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using MongoDB.Bson;
 using MongoDB.Driver;
 
@@ -5,6 +6,49 @@ namespace RoleRadar.Infrastructure.Mongo;
 
 public static class TrackingIndexInitializer
 {
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> DatabaseLocks = new();
+    private static readonly ConcurrentDictionary<string, bool> InitializedDatabases = new();
+
+    public static async Task EnsureIndexesOnceAsync(IMongoDatabase database, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+        var dbName = database.DatabaseNamespace.DatabaseName;
+
+        if (InitializedDatabases.TryGetValue(dbName, out var initialized) && initialized)
+        {
+            return;
+        }
+
+        var gate = DatabaseLocks.GetOrAdd(dbName, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync(cancellationToken);
+        try
+        {
+            if (InitializedDatabases.TryGetValue(dbName, out initialized) && initialized)
+            {
+                return;
+            }
+
+            await EnsureIndexesAsync(database, cancellationToken);
+            InitializedDatabases[dbName] = true;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    public static void ResetInitializationState(string? databaseName = null)
+    {
+        if (databaseName is null)
+        {
+            InitializedDatabases.Clear();
+        }
+        else
+        {
+            InitializedDatabases.TryRemove(databaseName, out _);
+        }
+    }
+
     public static async Task EnsureIndexesAsync(IMongoDatabase database, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(database);
@@ -21,6 +65,68 @@ public static class TrackingIndexInitializer
         await EnsureNoteTrackingIndexesAsync(database, cancellationToken);
     }
 
+    private static async Task CreateIndexesSafeAsync(
+        IMongoCollection<BsonDocument> collection,
+        IEnumerable<CreateIndexModel<BsonDocument>> models,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await collection.Indexes.CreateManyAsync(models, cancellationToken);
+        }
+        catch (Exception ex) when (ex is MongoCommandException or MongoWriteException)
+        {
+            var msg = ex.Message;
+            if (msg.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
+                msg.Contains("E11000", StringComparison.OrdinalIgnoreCase) ||
+                (ex is MongoCommandException cmdEx && cmdEx.Code == 11000))
+            {
+                var indexName = FindOffendingIndexName(models, msg);
+                var redacted = ConnectionStringRedactor.Redact(msg);
+                throw new TrackingIndexValidationException(
+                    indexName,
+                    $"Existing data violates unique index '{indexName}'. Duplicate key conflict during index creation: {redacted}",
+                    ex);
+            }
+
+            throw;
+        }
+    }
+
+    private static string FindOffendingIndexName(IEnumerable<CreateIndexModel<BsonDocument>> models, string errorMessage)
+    {
+        foreach (var model in models)
+        {
+            var name = model.Options?.Name;
+            if (!string.IsNullOrWhiteSpace(name) && errorMessage.Contains(name, StringComparison.OrdinalIgnoreCase))
+            {
+                return name;
+            }
+        }
+
+        var wellKnownUniqueIndexes = new[]
+        {
+            "ux_postings_owner_dedup_key_a",
+            "ux_postings_owner_dedup_key_b",
+            "ux_postings_owner_dedup_key_c",
+            "ux_companies_owner_normalized_name",
+            "ux_career_sources_composite",
+            "ux_criteria_owner_key_active",
+            "ux_applications_owner_posting",
+            "ux_search_runs_owner_started"
+        };
+
+        foreach (var idx in wellKnownUniqueIndexes)
+        {
+            if (errorMessage.Contains(idx, StringComparison.OrdinalIgnoreCase))
+            {
+                return idx;
+            }
+        }
+
+        return models.FirstOrDefault(m => m.Options?.Unique == true)?.Options?.Name ?? "unknown_index";
+    }
+
     private static async Task EnsureCompanyIndexesAsync(IMongoDatabase database, CancellationToken cancellationToken)
     {
         var collection = database.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName);
@@ -33,7 +139,7 @@ public static class TrackingIndexInitializer
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("status"),
                 new CreateIndexOptions { Name = "ix_companies_owner_status" })
         };
-        await collection.Indexes.CreateManyAsync(models, cancellationToken);
+        await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
 
     private static async Task EnsureCareerSourceIndexesAsync(IMongoDatabase database, CancellationToken cancellationToken)
@@ -56,7 +162,7 @@ public static class TrackingIndexInitializer
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("company_id").Ascending("is_active"),
                 new CreateIndexOptions { Name = "ix_career_sources_owner_company_active" })
         };
-        await collection.Indexes.CreateManyAsync(models, cancellationToken);
+        await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
 
     private static async Task EnsurePostingIndexesAsync(IMongoDatabase database, CancellationToken cancellationToken)
@@ -98,7 +204,7 @@ public static class TrackingIndexInitializer
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("company_id").Ascending("disposition"),
                 new CreateIndexOptions { Name = "ix_postings_owner_company_disposition" })
         };
-        await collection.Indexes.CreateManyAsync(models, cancellationToken);
+        await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
 
     private static async Task EnsurePostingSignalIndexesAsync(IMongoDatabase database, CancellationToken cancellationToken)
@@ -110,7 +216,7 @@ public static class TrackingIndexInitializer
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("posting_id").Descending("observed_at"),
                 new CreateIndexOptions { Name = "ix_posting_signals_owner_posting_observed" })
         };
-        await collection.Indexes.CreateManyAsync(models, cancellationToken);
+        await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
 
     private static async Task EnsureCriteriaIndexesAsync(IMongoDatabase database, CancellationToken cancellationToken)
@@ -130,7 +236,7 @@ public static class TrackingIndexInitializer
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("effective_from").Ascending("effective_to"),
                 new CreateIndexOptions { Name = "ix_criteria_owner_effective" })
         };
-        await collection.Indexes.CreateManyAsync(models, cancellationToken);
+        await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
 
     private static async Task EnsureApplicationIndexesAsync(IMongoDatabase database, CancellationToken cancellationToken)
@@ -145,7 +251,7 @@ public static class TrackingIndexInitializer
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("outcome"),
                 new CreateIndexOptions { Name = "ix_applications_owner_outcome" })
         };
-        await collection.Indexes.CreateManyAsync(models, cancellationToken);
+        await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
 
     private static async Task EnsureApplicationEventIndexesAsync(IMongoDatabase database, CancellationToken cancellationToken)
@@ -157,7 +263,7 @@ public static class TrackingIndexInitializer
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("application_id").Ascending("event_date"),
                 new CreateIndexOptions { Name = "ix_application_events_timeline" })
         };
-        await collection.Indexes.CreateManyAsync(models, cancellationToken);
+        await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
 
     private static async Task EnsureContactIndexesAsync(IMongoDatabase database, CancellationToken cancellationToken)
@@ -169,7 +275,7 @@ public static class TrackingIndexInitializer
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("is_redacted"),
                 new CreateIndexOptions { Name = "ix_contacts_owner_redacted" })
         };
-        await collection.Indexes.CreateManyAsync(models, cancellationToken);
+        await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
 
     private static async Task EnsureSearchRunIndexesAsync(IMongoDatabase database, CancellationToken cancellationToken)
@@ -181,7 +287,7 @@ public static class TrackingIndexInitializer
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("started_at"),
                 new CreateIndexOptions { Name = "ux_search_runs_owner_started", Unique = true })
         };
-        await collection.Indexes.CreateManyAsync(models, cancellationToken);
+        await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
 
     private static async Task EnsureNoteTrackingIndexesAsync(IMongoDatabase database, CancellationToken cancellationToken)
@@ -211,6 +317,6 @@ public static class TrackingIndexInitializer
                     PartialFilterExpression = Builders<BsonDocument>.Filter.Type("application_id", BsonType.Binary)
                 })
         };
-        await collection.Indexes.CreateManyAsync(models, cancellationToken);
+        await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
 }

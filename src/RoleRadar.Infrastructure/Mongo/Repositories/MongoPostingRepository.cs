@@ -23,11 +23,15 @@ public sealed class MongoPostingRepository : IPostingRepository
     public async Task<Result<Posting?>> GetByIdAsync(string ownerId, Guid id, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
             Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(id, GuidRepresentation.Standard)));
 
-        var doc = await _postings.Find(filter).FirstOrDefaultAsync(cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var doc = session is not null
+            ? await _postings.Find(session, filter).FirstOrDefaultAsync(cancellationToken)
+            : await _postings.Find(filter).FirstOrDefaultAsync(cancellationToken);
         return Result<Posting?>.Success(doc is null ? null : MapPosting(doc));
     }
 
@@ -35,12 +39,16 @@ public sealed class MongoPostingRepository : IPostingRepository
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         ArgumentException.ThrowIfNullOrWhiteSpace(dedupKeyA);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
 
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
             Builders<BsonDocument>.Filter.Eq("dedup_key_a", dedupKeyA));
 
-        var doc = await _postings.Find(filter).FirstOrDefaultAsync(cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var doc = session is not null
+            ? await _postings.Find(session, filter).FirstOrDefaultAsync(cancellationToken)
+            : await _postings.Find(filter).FirstOrDefaultAsync(cancellationToken);
         return Result<Posting?>.Success(doc is null ? null : MapPosting(doc));
     }
 
@@ -48,12 +56,16 @@ public sealed class MongoPostingRepository : IPostingRepository
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         ArgumentException.ThrowIfNullOrWhiteSpace(dedupKeyB);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
 
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
             Builders<BsonDocument>.Filter.Eq("dedup_key_b", dedupKeyB));
 
-        var doc = await _postings.Find(filter).FirstOrDefaultAsync(cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var doc = session is not null
+            ? await _postings.Find(session, filter).FirstOrDefaultAsync(cancellationToken)
+            : await _postings.Find(filter).FirstOrDefaultAsync(cancellationToken);
         return Result<Posting?>.Success(doc is null ? null : MapPosting(doc));
     }
 
@@ -61,12 +73,16 @@ public sealed class MongoPostingRepository : IPostingRepository
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         ArgumentException.ThrowIfNullOrWhiteSpace(dedupKeyC);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
 
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
             Builders<BsonDocument>.Filter.Eq("dedup_key_c", dedupKeyC));
 
-        var doc = await _postings.Find(filter).FirstOrDefaultAsync(cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var doc = session is not null
+            ? await _postings.Find(session, filter).FirstOrDefaultAsync(cancellationToken)
+            : await _postings.Find(filter).FirstOrDefaultAsync(cancellationToken);
         return Result<Posting?>.Success(doc is null ? null : MapPosting(doc));
     }
 
@@ -78,13 +94,17 @@ public sealed class MongoPostingRepository : IPostingRepository
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         ArgumentException.ThrowIfNullOrWhiteSpace(normalizedTitle);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
 
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
             Builders<BsonDocument>.Filter.Eq("company_id", new BsonBinaryData(companyId, GuidRepresentation.Standard)),
             Builders<BsonDocument>.Filter.Eq("normalized_title", normalizedTitle));
 
-        var docs = await _postings.Find(filter).Limit(20).ToListAsync(cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var docs = session is not null
+            ? await _postings.Find(session, filter).Limit(20).ToListAsync(cancellationToken)
+            : await _postings.Find(filter).Limit(20).ToListAsync(cancellationToken);
 
         var list = new List<PostingCandidate>(docs.Count);
         foreach (var doc in docs)
@@ -112,6 +132,7 @@ public sealed class MongoPostingRepository : IPostingRepository
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
         var filter = Builders<BsonDocument>.Filter.Eq("owner_id", ownerId);
 
         if (companyId.HasValue)
@@ -129,11 +150,18 @@ public sealed class MongoPostingRepository : IPostingRepository
         }
 
         var skip = Math.Max(0, (page - 1) * pageSize);
-        var docs = await _postings.Find(filter)
-            .Sort(Builders<BsonDocument>.Sort.Descending("created_at"))
-            .Skip(skip)
-            .Limit(pageSize)
-            .ToListAsync(cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var docs = session is not null
+            ? await _postings.Find(session, filter)
+                .Sort(Builders<BsonDocument>.Sort.Descending("created_at"))
+                .Skip(skip)
+                .Limit(pageSize)
+                .ToListAsync(cancellationToken)
+            : await _postings.Find(filter)
+                .Sort(Builders<BsonDocument>.Sort.Descending("created_at"))
+                .Skip(skip)
+                .Limit(pageSize)
+                .ToListAsync(cancellationToken);
 
         var list = new List<Posting>(docs.Count);
         foreach (var doc in docs)
@@ -151,17 +179,25 @@ public sealed class MongoPostingRepository : IPostingRepository
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
         var decidedDispositions = new[] { "screened_out", "closed", "rejected" };
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
             Builders<BsonDocument>.Filter.In("disposition", decidedDispositions));
 
         var skip = Math.Max(0, (page - 1) * pageSize);
-        var docs = await _postings.Find(filter)
-            .Sort(Builders<BsonDocument>.Sort.Descending("decided_at"))
-            .Skip(skip)
-            .Limit(pageSize)
-            .ToListAsync(cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var docs = session is not null
+            ? await _postings.Find(session, filter)
+                .Sort(Builders<BsonDocument>.Sort.Descending("decided_at"))
+                .Skip(skip)
+                .Limit(pageSize)
+                .ToListAsync(cancellationToken)
+            : await _postings.Find(filter)
+                .Sort(Builders<BsonDocument>.Sort.Descending("decided_at"))
+                .Skip(skip)
+                .Limit(pageSize)
+                .ToListAsync(cancellationToken);
 
         var list = new List<Posting>(docs.Count);
         foreach (var doc in docs)
@@ -179,6 +215,7 @@ public sealed class MongoPostingRepository : IPostingRepository
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
         var filter = Builders<BsonDocument>.Filter.Eq("owner_id", ownerId);
 
         if (companyId.HasValue)
@@ -195,37 +232,49 @@ public sealed class MongoPostingRepository : IPostingRepository
                 Builders<BsonDocument>.Filter.Eq("disposition", disposition.Value.ToSnakeCase()));
         }
 
-        var count = await _postings.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var count = session is not null
+            ? await _postings.CountDocumentsAsync(session, filter, cancellationToken: cancellationToken)
+            : await _postings.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
         return Result<int>.Success((int)count);
     }
 
     public async Task<Result<int>> CountDecidedPostingsAsync(string ownerId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
         var decidedDispositions = new[] { "screened_out", "closed", "rejected" };
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
             Builders<BsonDocument>.Filter.In("disposition", decidedDispositions));
 
-        var count = await _postings.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var count = session is not null
+            ? await _postings.CountDocumentsAsync(session, filter, cancellationToken: cancellationToken)
+            : await _postings.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
         return Result<int>.Success((int)count);
     }
 
     public async Task<Result<bool>> UpsertPostingAsync(Posting posting, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(posting);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", posting.OwnerId),
             Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(posting.Id, GuidRepresentation.Standard)));
 
         var doc = SerializePosting(posting);
-        var result = await _postings.ReplaceOneAsync(filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var result = session is not null
+            ? await _postings.ReplaceOneAsync(session, filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken)
+            : await _postings.ReplaceOneAsync(filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken);
         return Result<bool>.Success(result.IsAcknowledged);
     }
 
     public async Task<Result<bool>> AppendSignalAsync(PostingSignal signal, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(signal);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
         var doc = new BsonDocument
         {
             ["_id"] = new BsonBinaryData(signal.Id, GuidRepresentation.Standard),
@@ -237,20 +286,31 @@ public sealed class MongoPostingRepository : IPostingRepository
             ["observed_at"] = new BsonDateTime(signal.ObservedAt.UtcDateTime)
         };
 
-        await _signals.InsertOneAsync(doc, cancellationToken: cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        if (session is not null)
+        {
+            await _signals.InsertOneAsync(session, doc, cancellationToken: cancellationToken);
+        }
+        else
+        {
+            await _signals.InsertOneAsync(doc, cancellationToken: cancellationToken);
+        }
+
         return Result<bool>.Success(true);
     }
 
     public async Task<Result<IReadOnlyList<PostingSignal>>> GetSignalsAsync(string ownerId, Guid postingId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
             Builders<BsonDocument>.Filter.Eq("posting_id", new BsonBinaryData(postingId, GuidRepresentation.Standard)));
 
-        var docs = await _signals.Find(filter)
-            .Sort(Builders<BsonDocument>.Sort.Descending("observed_at"))
-            .ToListAsync(cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var docs = session is not null
+            ? await _signals.Find(session, filter).Sort(Builders<BsonDocument>.Sort.Descending("observed_at")).ToListAsync(cancellationToken)
+            : await _signals.Find(filter).Sort(Builders<BsonDocument>.Sort.Descending("observed_at")).ToListAsync(cancellationToken);
 
         var list = new List<PostingSignal>(docs.Count);
         foreach (var doc in docs)

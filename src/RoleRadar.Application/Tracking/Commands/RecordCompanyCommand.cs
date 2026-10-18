@@ -120,6 +120,22 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
 
         if (existing is not null)
         {
+            if (!command.Id.HasValue && !command.VersionToken.HasValue)
+            {
+                var existingSources = await _context.Companies.GetCareerSourcesAsync(ownerId, existing.Id, includeInactive: true, cancellationToken);
+                var sourceCount = existingSources.IsSuccess && existingSources.Value is not null ? existingSources.Value.Count : 0;
+                return Result<CompanyRecordResultDto>.Success(new CompanyRecordResultDto(
+                    Company: new CompanyRecordSummaryDto(
+                        Id: existing.Id,
+                        Name: existing.Name,
+                        Description: existing.Description,
+                        OwnershipType: existing.OwnershipType.ToSnakeCase(),
+                        Status: existing.Status.ToSnakeCase(),
+                        VersionToken: existing.VersionToken,
+                        CareerSourceCount: sourceCount),
+                    Status: "already_exists"));
+            }
+
             // Concurrency check for existing company
             if (!command.VersionToken.HasValue || command.VersionToken.Value != existing.VersionToken)
             {
@@ -265,7 +281,8 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
                 OwnershipType: company.OwnershipType.ToSnakeCase(),
                 Status: company.Status.ToSnakeCase(),
                 VersionToken: company.VersionToken,
-                CareerSourceCount: totalCount)));
+                CareerSourceCount: totalCount),
+            Status: isCreate ? "created" : "updated"));
     }
 
     private Task AppendAuditAsync(

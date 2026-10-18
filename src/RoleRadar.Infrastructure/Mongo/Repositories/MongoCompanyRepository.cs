@@ -26,11 +26,15 @@ public sealed class MongoCompanyRepository : ICompanyRepository
     public async Task<Result<Company?>> GetByIdAsync(string ownerId, Guid id, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
             Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(id, GuidRepresentation.Standard)));
 
-        var doc = await _companies.Find(filter).FirstOrDefaultAsync(cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var doc = session is not null
+            ? await _companies.Find(session, filter).FirstOrDefaultAsync(cancellationToken)
+            : await _companies.Find(filter).FirstOrDefaultAsync(cancellationToken);
         return Result<Company?>.Success(doc is null ? null : MapCompany(doc));
     }
 
@@ -38,18 +42,23 @@ public sealed class MongoCompanyRepository : ICompanyRepository
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         ArgumentException.ThrowIfNullOrWhiteSpace(normalizedName);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
 
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
             Builders<BsonDocument>.Filter.Eq("normalized_name", normalizedName.Trim().ToLowerInvariant()));
 
-        var doc = await _companies.Find(filter).FirstOrDefaultAsync(cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var doc = session is not null
+            ? await _companies.Find(session, filter).FirstOrDefaultAsync(cancellationToken)
+            : await _companies.Find(filter).FirstOrDefaultAsync(cancellationToken);
         return Result<Company?>.Success(doc is null ? null : MapCompany(doc));
     }
 
     public async Task<Result<IReadOnlyList<Company>>> ListAsync(string ownerId, CompanyStatus? status = null, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
         var filter = Builders<BsonDocument>.Filter.Eq("owner_id", ownerId);
         if (status.HasValue)
         {
@@ -58,7 +67,10 @@ public sealed class MongoCompanyRepository : ICompanyRepository
                 Builders<BsonDocument>.Filter.Eq("status", status.Value.ToString().ToLowerInvariant()));
         }
 
-        var docs = await _companies.Find(filter).ToListAsync(cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var docs = session is not null
+            ? await _companies.Find(session, filter).ToListAsync(cancellationToken)
+            : await _companies.Find(filter).ToListAsync(cancellationToken);
         var list = docs.Select(MapCompany).ToArray();
         return Result<IReadOnlyList<Company>>.Success(list);
     }
@@ -66,6 +78,7 @@ public sealed class MongoCompanyRepository : ICompanyRepository
     public async Task<Result<IReadOnlyList<CareerSource>>> GetCareerSourcesAsync(string ownerId, Guid companyId, bool includeInactive = false, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
             Builders<BsonDocument>.Filter.Eq("company_id", new BsonBinaryData(companyId, GuidRepresentation.Standard)));
@@ -77,7 +90,10 @@ public sealed class MongoCompanyRepository : ICompanyRepository
                 Builders<BsonDocument>.Filter.Eq("is_active", true));
         }
 
-        var docs = await _careerSources.Find(filter).ToListAsync(cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var docs = session is not null
+            ? await _careerSources.Find(session, filter).ToListAsync(cancellationToken)
+            : await _careerSources.Find(filter).ToListAsync(cancellationToken);
         var list = docs.Select(MapCareerSource).ToArray();
         return Result<IReadOnlyList<CareerSource>>.Success(list);
     }
@@ -86,6 +102,7 @@ public sealed class MongoCompanyRepository : ICompanyRepository
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         ArgumentException.ThrowIfNullOrWhiteSpace(atsType);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
 
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
@@ -94,33 +111,44 @@ public sealed class MongoCompanyRepository : ICompanyRepository
             Builders<BsonDocument>.Filter.Eq("tenant", tenant?.Trim()),
             Builders<BsonDocument>.Filter.Eq("slug", slug?.Trim()));
 
-        var doc = await _careerSources.Find(filter).FirstOrDefaultAsync(cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var doc = session is not null
+            ? await _careerSources.Find(session, filter).FirstOrDefaultAsync(cancellationToken)
+            : await _careerSources.Find(filter).FirstOrDefaultAsync(cancellationToken);
         return Result<CareerSource?>.Success(doc is null ? null : MapCareerSource(doc));
     }
 
     public async Task<Result<bool>> UpsertCompanyAsync(Company company, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(company);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
 
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", company.OwnerId),
             Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(company.Id, GuidRepresentation.Standard)));
 
         var doc = SerializeCompany(company);
-        var result = await _companies.ReplaceOneAsync(filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var result = session is not null
+            ? await _companies.ReplaceOneAsync(session, filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken)
+            : await _companies.ReplaceOneAsync(filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken);
         return Result<bool>.Success(result.IsAcknowledged);
     }
 
     public async Task<Result<bool>> UpsertCareerSourceAsync(CareerSource careerSource, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(careerSource);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
 
         var filter = Builders<BsonDocument>.Filter.And(
             Builders<BsonDocument>.Filter.Eq("owner_id", careerSource.OwnerId),
             Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(careerSource.Id, GuidRepresentation.Standard)));
 
         var doc = SerializeCareerSource(careerSource);
-        var result = await _careerSources.ReplaceOneAsync(filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken);
+        var session = MongoNoteRepository.CurrentSession;
+        var result = session is not null
+            ? await _careerSources.ReplaceOneAsync(session, filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken)
+            : await _careerSources.ReplaceOneAsync(filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken);
         return Result<bool>.Success(result.IsAcknowledged);
     }
 
