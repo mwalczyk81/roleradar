@@ -68,6 +68,34 @@ public sealed record CriterionSummaryItemDto(
     Guid VersionToken,
     DateTimeOffset CreatedAt);
 
+public sealed record ApplicationEventSummaryItemDto(
+    Guid Id,
+    Guid ApplicationId,
+    string EventType,
+    string EventDate,
+    string? EventSource,
+    string? Notes,
+    DateTimeOffset CreatedAt);
+
+public sealed record ApplicationSummaryItemDto(
+    Guid Id,
+    Guid PostingId,
+    string SubmittedDate,
+    decimal? DesiredSalaryMin,
+    decimal? DesiredSalaryMax,
+    string DesiredSalaryCurrency,
+    string? TargetStartDate,
+    string ResumeVariant,
+    string? ResumePointer,
+    Guid? ReferralContactId,
+    string? ConfirmationCode,
+    string Outcome,
+    string? OutcomeReason,
+    Guid VersionToken,
+    IReadOnlyList<ApplicationEventSummaryItemDto> Events,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
 public sealed record TrackerQueryResultDto(
     string Entity,
     int Page,
@@ -140,6 +168,7 @@ public sealed class TrackerQueryHandler : IQueryHandler<TrackerQueryRequest, Tra
                 "posting_dedup_lookup" => await HandleDedupLookupQueryAsync(query, ownerId, cancellationToken),
                 "companies" => await HandleCompaniesQueryAsync(query, ownerId, page, pageSize, now, cancellationToken),
                 "criteria" => await HandleCriteriaQueryAsync(query, ownerId, page, pageSize, cancellationToken),
+                "applications" => await HandleApplicationsQueryAsync(query, ownerId, page, pageSize, cancellationToken),
                 _ => Result<TrackerQueryResultDto>.Failure(
                     ErrorCode.ValidationError,
                     $"Entity discriminator '{query.Entity}' is not supported by tracker_query postings handler.")
@@ -471,6 +500,85 @@ public sealed class TrackerQueryHandler : IQueryHandler<TrackerQueryRequest, Tra
 
         return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto(
             Entity: "criteria",
+            Page: page,
+            PageSize: pageSize,
+            TotalCount: totalCount,
+            Items: items));
+    }
+
+    private async Task<Result<TrackerQueryResultDto>> HandleApplicationsQueryAsync(
+        TrackerQueryRequest query,
+        string ownerId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        string? outcomeFilter = null;
+        if (!string.IsNullOrWhiteSpace(query.Status))
+        {
+            outcomeFilter = query.Status.Trim();
+        }
+        else if (!string.IsNullOrWhiteSpace(query.Disposition))
+        {
+            outcomeFilter = query.Disposition.Trim();
+        }
+
+        var listResult = await _context.Applications.ListApplicationsAsync(
+            ownerId,
+            outcomeFilter,
+            page,
+            pageSize,
+            cancellationToken);
+
+        if (!listResult.IsSuccess || listResult.Value is null)
+        {
+            return Result<TrackerQueryResultDto>.Failure(listResult.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to list applications."));
+        }
+
+        var countResult = await _context.Applications.CountApplicationsAsync(
+            ownerId,
+            outcomeFilter,
+            cancellationToken);
+
+        var totalCount = countResult.IsSuccess ? countResult.Value : listResult.Value.Count;
+
+        var items = new List<object>(listResult.Value.Count);
+        foreach (var app in listResult.Value)
+        {
+            var eventsResult = await _context.Applications.GetEventsAsync(ownerId, app.Id, cancellationToken);
+            var events = eventsResult.IsSuccess && eventsResult.Value is not null
+                ? eventsResult.Value.Select(e => new ApplicationEventSummaryItemDto(
+                    Id: e.Id,
+                    ApplicationId: e.ApplicationId,
+                    EventType: e.EventType.ToSnakeCase(),
+                    EventDate: e.EventDate,
+                    EventSource: e.EventSource,
+                    Notes: e.Notes,
+                    CreatedAt: e.CreatedAt)).ToArray()
+                : [];
+
+            items.Add(new ApplicationSummaryItemDto(
+                Id: app.Id,
+                PostingId: app.PostingId,
+                SubmittedDate: app.SubmittedDate,
+                DesiredSalaryMin: app.DesiredSalary.Min,
+                DesiredSalaryMax: app.DesiredSalary.Max,
+                DesiredSalaryCurrency: app.DesiredSalary.Currency,
+                TargetStartDate: app.TargetStartDate,
+                ResumeVariant: app.ResumeVariant.ToSnakeCase(),
+                ResumePointer: app.ResumePointer,
+                ReferralContactId: app.ReferralContactId,
+                ConfirmationCode: app.ConfirmationCode,
+                Outcome: app.Outcome.ToSnakeCase(),
+                OutcomeReason: app.OutcomeReason,
+                VersionToken: app.VersionToken,
+                Events: events,
+                CreatedAt: app.CreatedAt,
+                UpdatedAt: app.UpdatedAt));
+        }
+
+        return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto(
+            Entity: "applications",
             Page: page,
             PageSize: pageSize,
             TotalCount: totalCount,

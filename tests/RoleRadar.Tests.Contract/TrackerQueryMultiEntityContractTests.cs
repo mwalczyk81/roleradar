@@ -137,8 +137,10 @@ public sealed class TrackerQueryMultiEntityContractTests : IAsyncLifetime
         Assert.Equal(210000, appItem.GetProperty("desiredSalaryMax").GetDecimal());
 
         var events = appItem.GetProperty("events");
-        Assert.Equal(1, events.GetArrayLength());
-        Assert.Equal("interview", events[0].GetProperty("eventType").GetString());
+        Assert.Equal(2, events.GetArrayLength());
+        var eventTypes = events.EnumerateArray().Select(e => e.GetProperty("eventType").GetString()!).ToList();
+        Assert.Contains("applied", eventTypes);
+        Assert.Contains("interview", eventTypes);
 
         // 5. Query with status filter
         var queryApplied = await mcpClient.CallToolAsync("tracker_query", new
