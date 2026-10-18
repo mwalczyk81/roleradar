@@ -135,6 +135,11 @@ public sealed class RecordPostingCommandValidator : ICommandValidator<RecordPost
             return new ResultError(ErrorCode.ValidationError, $"Url cannot exceed {Posting.MaxUrlLength} characters.");
         }
 
+        if (command.Score.HasValue && (command.Score.Value < 0.0m || command.Score.Value > 10.0m))
+        {
+            return new ResultError(ErrorCode.ValidationError, "Score must be between 0.0 and 10.0.");
+        }
+
         if (command.Signals is not null)
         {
             foreach (var sig in command.Signals)
