@@ -123,7 +123,7 @@ Call `posting_record` providing `postingId` and current `versionToken`:
 }
 ```
 
-Verify result: Returns `status: "updated"`. Modifies only supplied fields (`location`, `remote_type`, `score`). `version_token` rotates. Audit log entry summary records `fields: ["location", "remote_type", "score"]`. Passing an outdated `versionToken` returns `ErrorCode.Conflict` (`ConcurrencyConflict`).
+Verify result: Returns `status: "updated"`. Modifies only supplied fields (`location`, `remote_type`, `score`). `version_token` rotates. Audit log entry summary records `fields: ["location", "remote_type", "score"]`. Passing an outdated `versionToken` returns `ErrorCode.StaleVersionToken`.
 
 #### 5. Test Tier D Advisory Match
 Submit a role with no requisition ID and a matching normalized title for the same company:
@@ -222,7 +222,7 @@ Append an event to an application whose posting has reached a terminal or decide
    ```
 2. Attempt revision without `versionToken`:
    - Call `tracker_log` with `action: "criterion_revision"`, `key: "min_base_salary"`, `value: "200000"`, `effectiveFrom: "2026-07-01T00:00:00Z"`, omitting `versionToken`.
-   - Verify result: Rejected with `ErrorCode.Conflict` (`ConcurrencyConflict`).
+   - Verify result: Rejected with `ErrorCode.StaleVersionToken`.
 3. Attempt revision with non-sequenced `effectiveFrom`:
    - Call `tracker_log` with `effectiveFrom: "2025-12-01T00:00:00Z"` and valid `versionToken`.
    - Verify result: Rejected with `ErrorCode.Validation` (`effectiveFrom` must be strictly later than current active version's `effective_from`).

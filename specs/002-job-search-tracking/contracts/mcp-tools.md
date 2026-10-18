@@ -281,7 +281,7 @@ Every spec-mandated requirement for Feature 002 is mapped to its satisfying MCP 
     - `value` (`string`, optional, max 500 chars): Rule specification text or threshold (required for revision).
     - `provenance` (`string`, optional): `"stated"` or `"inferred"` (required for revision).
     - `effectiveFrom` (`string`, optional, ISO 8601 UTC timestamp): Timestamp when rule becomes active (required for revision; MUST be later than active version's `effective_from`).
-    - `versionToken` (`Guid`, optional): Current version token of the active criterion being superseded or deactivated. (Mandatory if active criterion exists; omission returns `ConcurrencyConflict`).
+    - `versionToken` (`Guid`, optional): Current version token of the active criterion being superseded or deactivated. (Mandatory if active criterion exists; omission returns `ErrorCode.StaleVersionToken`).
   - **Search Run Parameters** (when `action == "search_run"`):
     - `startedAt` (`string`, required, ISO 8601 UTC timestamp): Start time of the search sweep.
     - `newPostingsCount` (`int`, required, >= 0): Count of newly discovered postings.
@@ -289,12 +289,12 @@ Every spec-mandated requirement for Feature 002 is mapped to its satisfying MCP 
     - `notes` (`string`, optional, max 500 chars): Summary notes.
 - **Behavior**:
   - `"criterion_revision"`:
-    - Locates active version of `key`. If exists and `versionToken` is null or mismatched, returns `ErrorCode.Conflict` (`ConcurrencyConflict`).
+    - Locates active version of `key`. If exists and `versionToken` is null or mismatched, returns `ErrorCode.StaleVersionToken`.
     - Validates that `effectiveFrom` is strictly later than the active version's `effective_from`; returns `ErrorCode.ValidationError` otherwise.
     - Atomically sets active version's `effective_to = effectiveFrom` and `is_active = false`.
     - Inserts new criterion version with `is_active = true`, `effective_from = effectiveFrom`, `effective_to = null`. Emits `audit_log` entry.
   - `"criterion_deactivate"`:
-    - Locates active version of `key`. If `versionToken` is null or mismatched, returns `ErrorCode.Conflict` (`ConcurrencyConflict`).
+    - Locates active version of `key`. If `versionToken` is null or mismatched, returns `ErrorCode.StaleVersionToken`.
     - Closes active version by setting `effective_to = UtcNow` and `is_active = false`. No replacement version is inserted. Emits `audit_log` entry.
   - `"search_run"`:
     - Enforces unique index on `(owner_id, started_at)`.
