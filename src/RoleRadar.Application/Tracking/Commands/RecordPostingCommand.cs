@@ -321,7 +321,7 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
         if (changedFields.Count > 0)
         {
             var summary = new PostingAuditSummary(posting.Id, changedFields, Timestamp: now);
-            await AppendAuditAsync(ownerId, command.Actor, "posting_update", posting.Id, posting.VersionToken, summary, cancellationToken);
+            await AppendAuditAsync(ownerId, command.Actor, AuditOperation.PostingUpdate, posting.Id, posting.VersionToken, summary, cancellationToken);
         }
 
         return Result<PostingRecordResultDto>.Success(new PostingRecordResultDto(
@@ -505,7 +505,7 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
         }
 
         var auditSummary = new PostingAuditSummary(newPosting.Id, ["title", "company_id", "disposition"], Timestamp: now);
-        await AppendAuditAsync(ownerId, command.Actor, "posting_create", newPosting.Id, newPosting.VersionToken, auditSummary, cancellationToken);
+        await AppendAuditAsync(ownerId, command.Actor, AuditOperation.PostingCreate, newPosting.Id, newPosting.VersionToken, auditSummary, cancellationToken);
 
         return Result<PostingRecordResultDto>.Success(new PostingRecordResultDto(
             Status: "created",
@@ -606,7 +606,7 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
             if (appendedSignals)
             {
                 var auditSummary = new PostingAuditSummary(stored.Id, ["signals"], Timestamp: now);
-                await AppendAuditAsync(ownerId, command.Actor, "posting_signal", stored.Id, stored.VersionToken, auditSummary, cancellationToken);
+                await AppendAuditAsync(ownerId, command.Actor, AuditOperation.PostingSignalAppend, stored.Id, stored.VersionToken, auditSummary, cancellationToken);
             }
         }
 
@@ -620,7 +620,7 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
             await _context.Postings.UpsertPostingAsync(stored, cancellationToken);
 
             var auditSummary = new PostingAuditSummary(stored.Id, ["last_verified_at"], Timestamp: now);
-            await AppendAuditAsync(ownerId, command.Actor, "posting_verify", stored.Id, stored.VersionToken, auditSummary, cancellationToken);
+            await AppendAuditAsync(ownerId, command.Actor, AuditOperation.PostingVerifiedBump, stored.Id, stored.VersionToken, auditSummary, cancellationToken);
         }
 
         return Result<PostingRecordResultDto>.Success(new PostingRecordResultDto(
@@ -666,31 +666,24 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
         PostingAuditSummary summary,
         CancellationToken cancellationToken)
     {
-        var isCreate = operation == "posting_create";
-        var beforeSummary = isCreate
-            ? null
-            : new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: 0,
-                status: "prior",
-                excerpt: string.Empty);
+        var isCreate = operation == AuditOperation.PostingCreate;
+        var details = AuditDetails.ForEntity(
+            changedFields: summary.ChangedFieldNames,
+            before: isCreate ? null : new Dictionary<string, object?>(),
+            after: new Dictionary<string, object?>
+            {
+                ["changed_field_count"] = summary.ChangedFieldNames.Count
+            });
 
-        var entry = AuditLogEntry.Create(
+        var entry = AuditLogEntry.CreateForTracking(
             ownerId: ownerId,
             actor: actor,
-            operation: isCreate ? AuditOperation.NoteCreate : AuditOperation.NoteAppend,
-            targetNoteId: postingId,
-            noteRevisionId: null,
-            appendedText: isCreate ? null : string.Join(",", summary.ChangedFieldNames),
+            operation: operation,
+            entityType: "posting",
+            entityId: postingId,
             resultingVersionToken: versionToken,
-            resolvedDefaultDate: null,
             occurredAtUtc: summary.Timestamp.UtcDateTime,
-            beforeSummary: beforeSummary,
-            afterSummary: new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: summary.ChangedFieldNames.Count,
-                status: operation,
-                excerpt: string.Join(",", summary.ChangedFieldNames)));
+            details: details);
 
         return _context.AppendAuditEntryAsync(entry, cancellationToken);
     }

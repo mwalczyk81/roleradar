@@ -261,26 +261,26 @@ public sealed class RecordApplicationCommandHandler : ICommandHandler<RecordAppl
         await ctx.Applications.UpsertApplicationAsync(application, cancellationToken);
         await ctx.Applications.AppendEventAsync(initialEvent, cancellationToken);
 
-        var auditEntry = AuditLogEntry.Create(
+        var details = AuditDetails.ForEntity(
+            changedFields: ["posting_id", "submitted_date", "resume_variant", "outcome"],
+            before: null,
+            after: new Dictionary<string, object?>
+            {
+                ["posting_id"] = posting.Id,
+                ["submitted_date"] = command.SubmittedDate,
+                ["outcome"] = application.Outcome.ToSnakeCase(),
+                ["override_applied"] = isOverride
+            });
+
+        var auditEntry = AuditLogEntry.CreateForTracking(
             ownerId: ownerId,
             actor: command.Actor,
-            operation: AuditOperation.NoteAppend,
-            targetNoteId: posting.Id,
-            noteRevisionId: null,
-            appendedText: isOverride ? $"reopen_and_apply: prior={priorDisposition}, reason={command.OverrideReason}" : "apply",
+            operation: AuditOperation.ApplicationCreate,
+            entityType: "application",
+            entityId: application.Id,
             resultingVersionToken: application.VersionToken,
-            resolvedDefaultDate: null,
             occurredAtUtc: now.UtcDateTime,
-            beforeSummary: new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: 0,
-                status: "prior",
-                excerpt: priorDisposition),
-            afterSummary: new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: 7,
-                status: "applied",
-                excerpt: isOverride ? $"override: {command.OverrideReason}" : "applied"));
+            details: details);
 
         await ctx.AppendAuditEntryAsync(auditEntry, cancellationToken);
 
@@ -359,26 +359,20 @@ public sealed class RecordApplicationCommandHandler : ICommandHandler<RecordAppl
         var eventsRes = await ctx.Applications.GetEventsAsync(ownerId, app.Id, cancellationToken);
         var eventCount = eventsRes.IsSuccess ? eventsRes.Value!.Count : 1;
 
-        var auditEntry = AuditLogEntry.Create(
+        var details = AuditDetails.ForEntity(
+            changedFields: ["outcome"],
+            before: new Dictionary<string, object?> { ["outcome"] = app.Outcome.ToSnakeCase() },
+            after: new Dictionary<string, object?> { ["event_type"] = eventType.ToSnakeCase(), ["event_date"] = command.Event.EventDate });
+
+        var auditEntry = AuditLogEntry.CreateForTracking(
             ownerId: ownerId,
             actor: command.Actor,
-            operation: AuditOperation.NoteAppend,
-            targetNoteId: app.Id,
-            noteRevisionId: null,
-            appendedText: $"event:{eventType.ToSnakeCase()}",
+            operation: AuditOperation.ApplicationEventAppend,
+            entityType: "application",
+            entityId: app.Id,
             resultingVersionToken: app.VersionToken,
-            resolvedDefaultDate: null,
             occurredAtUtc: now.UtcDateTime,
-            beforeSummary: new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: 0,
-                status: "prior",
-                excerpt: app.Outcome.ToSnakeCase()),
-            afterSummary: new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: 6,
-                status: "app_event",
-                excerpt: $"{eventType.ToSnakeCase()}:{command.Event.Notes}"));
+            details: details);
 
         await ctx.AppendAuditEntryAsync(auditEntry, cancellationToken);
 

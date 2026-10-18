@@ -95,8 +95,10 @@ public sealed class TrackerLogSearchRunContractTests : IAsyncLifetime
         Assert.Equal("Weekly target sweep covering 12 target companies.", doc["notes"].AsString);
 
         // Verify audit log entry
-        var auditDoc = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(result.Value.RecordId, GuidRepresentation.Standard))).FirstOrDefaultAsync();
+        var auditDoc = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("entity_id", new BsonBinaryData(result.Value.RecordId, GuidRepresentation.Standard))).FirstOrDefaultAsync();
         Assert.NotNull(auditDoc);
+        Assert.Equal("search_run", auditDoc["entity_type"].AsString);
+        Assert.Equal("search_run_log", auditDoc["operation"].AsString);
     }
 
     [Fact]

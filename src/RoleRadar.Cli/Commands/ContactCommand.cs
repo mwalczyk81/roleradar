@@ -107,7 +107,7 @@ public static class ContactCommand
     {
         var cmd = new Command("get", "Get contact details by contact ID strictly");
 
-        var idOption = new Option<Guid>("--id") { Description = "Contact binary GUID identifier", Required = true };
+        var idOption = new Option<string>("--id") { Description = "Contact binary GUID identifier", Required = true };
         var jsonOption = new Option<bool>("--json") { Description = "Emit structured JSON output" };
 
         cmd.Add(idOption);
@@ -115,8 +115,22 @@ public static class ContactCommand
 
         cmd.SetAction(async (ParseResult parseResult, CancellationToken ct) =>
         {
-            var id = parseResult.GetValue(idOption);
+            var rawId = parseResult.GetValue(idOption);
             var json = parseResult.GetValue(jsonOption);
+
+            if (string.IsNullOrWhiteSpace(rawId) || !Guid.TryParse(rawId, out var id))
+            {
+                const string msg = "Error: Invalid contact id: Must be a valid GUID.";
+                if (json)
+                {
+                    Console.WriteLine(JsonSerializer.Serialize(new { ok = false, error = new { code = "ValidationError", message = msg } }, JsonOpts));
+                }
+                else
+                {
+                    Console.Error.WriteLine(msg);
+                }
+                return 1;
+            }
 
             using var scope = services.CreateScope();
             var handler = scope.ServiceProvider.GetRequiredService<IQueryHandler<GetContactQuery, ContactDto?>>();
@@ -162,8 +176,8 @@ public static class ContactCommand
     {
         var cmd = new Command("redact", "Redact all personal fields from a contact record");
 
-        var idOption = new Option<Guid>("--id") { Description = "Contact binary GUID identifier", Required = true };
-        var versionTokenOption = new Option<Guid?>("--version-token") { Description = "Optimistic concurrency version token" };
+        var idOption = new Option<string>("--id") { Description = "Contact binary GUID identifier", Required = true };
+        var versionTokenOption = new Option<string?>("--version-token") { Description = "Optimistic concurrency version token" };
         var forceOption = new Option<bool>("--force") { Description = "Bypass interactive confirmation" };
         var jsonOption = new Option<bool>("--json") { Description = "Emit structured JSON output" };
 
@@ -174,9 +188,42 @@ public static class ContactCommand
 
         cmd.SetAction(async (ParseResult parseResult, CancellationToken ct) =>
         {
-            var id = parseResult.GetValue(idOption);
-            var versionToken = parseResult.GetValue(versionTokenOption);
+            var rawId = parseResult.GetValue(idOption);
+            var rawVersionToken = parseResult.GetValue(versionTokenOption);
             var json = parseResult.GetValue(jsonOption);
+
+            if (string.IsNullOrWhiteSpace(rawId) || !Guid.TryParse(rawId, out var id))
+            {
+                const string msg = "Error: Invalid contact id: Must be a valid GUID.";
+                if (json)
+                {
+                    Console.WriteLine(JsonSerializer.Serialize(new { ok = false, error = new { code = "ValidationError", message = msg } }, JsonOpts));
+                }
+                else
+                {
+                    Console.Error.WriteLine(msg);
+                }
+                return 2;
+            }
+
+            Guid? versionToken = null;
+            if (!string.IsNullOrWhiteSpace(rawVersionToken))
+            {
+                if (!Guid.TryParse(rawVersionToken, out var parsedToken))
+                {
+                    const string msg = "Error: Invalid version token: Must be a valid GUID.";
+                    if (json)
+                    {
+                        Console.WriteLine(JsonSerializer.Serialize(new { ok = false, error = new { code = "ValidationError", message = msg } }, JsonOpts));
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine(msg);
+                    }
+                    return 2;
+                }
+                versionToken = parsedToken;
+            }
 
             using var scope = services.CreateScope();
             var handler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RedactContactCommand, ContactRedactResultDto>>();

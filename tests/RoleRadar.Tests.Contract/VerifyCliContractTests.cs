@@ -241,7 +241,7 @@ public sealed class VerifyCliContractTests : IAsyncLifetime
         var root = doc.RootElement;
         Assert.True(root.GetProperty("ok").GetBoolean());
         var data = root.GetProperty("data");
-        Assert.Equal(9, data.GetProperty("anomalyCount").GetInt32()); // All 8 distinct kinds present (one note has 3 dangling fields + 1 unlinked applied + 5 other kinds = 9 total)
+        Assert.Equal(10, data.GetProperty("anomalyCount").GetInt32()); // All 8 distinct kinds present (one note has 3 dangling fields + 2 unlinked applied postings + 5 other kinds = 10 total)
 
         var anomalyKinds = new HashSet<string>();
         foreach (var el in data.GetProperty("anomalies").EnumerateArray())

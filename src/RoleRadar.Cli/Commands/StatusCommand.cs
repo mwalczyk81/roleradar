@@ -78,7 +78,6 @@ public static class StatusCommand
                         criteriaCount,
                         applicationsCount,
                         signalsCount,
-                        postingSignalsCount = signalsCount,
                         searchRunsCount,
                         contactsCount
                     };

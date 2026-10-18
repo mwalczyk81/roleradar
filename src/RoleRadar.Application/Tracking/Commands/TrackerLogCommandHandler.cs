@@ -121,13 +121,13 @@ public sealed class TrackerLogCommandHandler : ICommandHandler<TrackerLogCommand
             var auditSummary = new CriterionAuditSummary(
                 CriterionId: newCriterion.Id,
                 Key: newCriterion.Key,
-                Action: "criterion_create",
+                Action: AuditOperation.CriterionRevision,
                 Timestamp: now);
 
             await AppendAuditAsync(
                 ownerId,
                 "system",
-                "criterion_create",
+                AuditOperation.CriterionRevision,
                 newCriterion.Id,
                 newCriterion.VersionToken,
                 auditSummary,
@@ -186,7 +186,7 @@ public sealed class TrackerLogCommandHandler : ICommandHandler<TrackerLogCommand
         await AppendAuditAsync(
             ownerId,
             "system",
-            "criterion_revision",
+            AuditOperation.CriterionRevision,
             replacement.Id,
             replacement.VersionToken,
             revisionAuditSummary,
@@ -258,7 +258,7 @@ public sealed class TrackerLogCommandHandler : ICommandHandler<TrackerLogCommand
         await AppendAuditAsync(
             ownerId,
             "system",
-            "criterion_deactivate",
+            AuditOperation.CriterionDeactivate,
             currentActive.Id,
             currentActive.VersionToken,
             auditSummary,
@@ -281,31 +281,20 @@ public sealed class TrackerLogCommandHandler : ICommandHandler<TrackerLogCommand
         CriterionAuditSummary summary,
         CancellationToken cancellationToken)
     {
-        var isCreate = operation == "criterion_create";
-        var beforeSummary = isCreate
-            ? null
-            : new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: 0,
-                status: "prior",
-                excerpt: string.Empty);
+        var details = AuditDetails.ForEntity(
+            changedFields: [summary.Key, summary.Action],
+            before: null,
+            after: new Dictionary<string, object?> { ["key"] = summary.Key, ["action"] = summary.Action });
 
-        var entry = AuditLogEntry.Create(
+        var entry = AuditLogEntry.CreateForTracking(
             ownerId: ownerId,
             actor: actor,
-            operation: isCreate ? AuditOperation.NoteCreate : AuditOperation.NoteAppend,
-            targetNoteId: criterionId,
-            noteRevisionId: null,
-            appendedText: isCreate ? null : summary.Key,
+            operation: operation,
+            entityType: "criterion",
+            entityId: criterionId,
             resultingVersionToken: versionToken,
-            resolvedDefaultDate: null,
             occurredAtUtc: summary.Timestamp.UtcDateTime,
-            beforeSummary: beforeSummary,
-            afterSummary: new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: summary.Key.Length,
-                status: operation,
-                excerpt: $"{summary.Key}:{summary.Action}"));
+            details: details);
 
         return _context.AppendAuditEntryAsync(entry, cancellationToken);
     }
@@ -374,22 +363,25 @@ public sealed class TrackerLogCommandHandler : ICommandHandler<TrackerLogCommand
             return Result<TrackerLogResultDto>.Failure(upsertRes.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to persist search run."));
         }
 
-        var auditEntry = AuditLogEntry.Create(
+        var details = AuditDetails.ForEntity(
+            changedFields: ["started_at", "new_postings_count"],
+            before: null,
+            after: new Dictionary<string, object?>
+            {
+                ["started_at"] = startedAtUtc.ToString("O"),
+                ["new_postings_count"] = searchRun.NewPostingsCount,
+                ["notes"] = searchRun.Notes
+            });
+
+        var auditEntry = AuditLogEntry.CreateForTracking(
             ownerId: ownerId,
             actor: "mcp-user",
-            operation: AuditOperation.NoteCreate,
-            targetNoteId: searchRun.Id,
-            noteRevisionId: null,
-            appendedText: null,
-            resultingVersionToken: Guid.NewGuid(),
-            resolvedDefaultDate: null,
-            beforeSummary: null,
-            afterSummary: new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: searchRun.NewPostingsCount,
-                status: "success",
-                excerpt: searchRun.Notes is not null ? (searchRun.Notes.Length > 80 ? searchRun.Notes[..80] : searchRun.Notes) : "search_run"),
-            occurredAtUtc: now.UtcDateTime);
+            operation: AuditOperation.SearchRunLog,
+            entityType: "search_run",
+            entityId: searchRun.Id,
+            resultingVersionToken: searchRun.Id,
+            occurredAtUtc: now.UtcDateTime,
+            details: details);
 
         await _context.AppendAuditEntryAsync(auditEntry, cancellationToken);
 

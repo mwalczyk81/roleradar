@@ -122,28 +122,16 @@ public sealed class AddContactCommandHandler : ICommandHandler<AddContactCommand
         changedFields.Add("relationship");
         if (contact.Notes is not null) changedFields.Add("notes");
 
-        var auditSummary = new ContactAuditContentSummary(
-            ContactId: contact.Id,
-            ChangedFieldNames: changedFields,
-            IsRedacted: false,
-            Timestamp: now);
-
-        var auditEntry = AuditLogEntry.Create(
+        var details = AuditDetails.ForContact(contact.Id, changedFields);
+        var auditEntry = AuditLogEntry.CreateForTracking(
             ownerId: ownerId,
             actor: command.Actor ?? "cli-user",
-            operation: "contact_add",
-            targetNoteId: contact.Id,
-            noteRevisionId: null,
-            appendedText: string.Join(",", changedFields),
+            operation: AuditOperation.ContactAdd,
+            entityType: "contact",
+            entityId: contact.Id,
             resultingVersionToken: contact.VersionToken,
-            resolvedDefaultDate: null,
             occurredAtUtc: now,
-            beforeSummary: null,
-            afterSummary: new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: changedFields.Count,
-                status: "contact_add",
-                excerpt: string.Empty));
+            details: details);
 
         await _context.AppendAuditEntryAsync(auditEntry, cancellationToken);
 
@@ -216,26 +204,16 @@ public sealed class RedactContactCommandHandler : ICommandHandler<RedactContactC
 
         // Audit entry: operation "contact_redact", changed fields only, zero names/notes
         var changedFields = new[] { "name", "role", "company_affiliation", "company_id", "relationship", "notes", "is_redacted" };
-        var auditEntry = AuditLogEntry.Create(
+        var details = AuditDetails.ForContact(contact.Id, changedFields);
+        var auditEntry = AuditLogEntry.CreateForTracking(
             ownerId: ownerId,
             actor: command.Actor ?? "cli-user",
-            operation: "contact_redact",
-            targetNoteId: contact.Id,
-            noteRevisionId: null,
-            appendedText: string.Join(",", changedFields),
+            operation: AuditOperation.ContactRedact,
+            entityType: "contact",
+            entityId: contact.Id,
             resultingVersionToken: contact.VersionToken,
-            resolvedDefaultDate: null,
             occurredAtUtc: now,
-            beforeSummary: new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: 0,
-                status: "prior",
-                excerpt: string.Empty),
-            afterSummary: new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: changedFields.Length,
-                status: "contact_redact",
-                excerpt: string.Empty));
+            details: details);
 
         await _context.AppendAuditEntryAsync(auditEntry, cancellationToken);
 

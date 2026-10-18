@@ -59,12 +59,29 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        if (string.IsNullOrWhiteSpace(command.Name))
+        var ownerId = string.IsNullOrWhiteSpace(command.OwnerId)
+            ? OwnerId.Default.Value
+            : new OwnerId(command.OwnerId).Value;
+
+        var now = _clock.UtcNow;
+
+        // Lookup existing company by ID or Normalized Name
+        Company? existing = null;
+        if (command.Id.HasValue)
+        {
+            var byIdResult = await _context.Companies.GetByIdAsync(ownerId, command.Id.Value, cancellationToken);
+            if (byIdResult.IsSuccess && byIdResult.Value is not null)
+            {
+                existing = byIdResult.Value;
+            }
+        }
+
+        var trimmedName = string.IsNullOrWhiteSpace(command.Name) ? existing?.Name : command.Name.Trim();
+        if (string.IsNullOrWhiteSpace(trimmedName))
         {
             return Result<CompanyRecordResultDto>.Failure(ErrorCode.ValidationError, "Company name is required.");
         }
 
-        var trimmedName = command.Name.Trim();
         if (trimmedName.Length > 150)
         {
             return Result<CompanyRecordResultDto>.Failure(ErrorCode.ValidationError, "Company name cannot exceed 150 characters.");
@@ -85,23 +102,6 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
             return Result<CompanyRecordResultDto>.Failure(ErrorCode.ValidationError, "Headquarters cannot exceed 150 characters.");
         }
 
-        var ownerId = string.IsNullOrWhiteSpace(command.OwnerId)
-            ? OwnerId.Default.Value
-            : new OwnerId(command.OwnerId).Value;
-
-        var now = _clock.UtcNow;
-
-        // Lookup existing company by ID or Normalized Name
-        Company? existing = null;
-        if (command.Id.HasValue)
-        {
-            var byIdResult = await _context.Companies.GetByIdAsync(ownerId, command.Id.Value, cancellationToken);
-            if (byIdResult.IsSuccess && byIdResult.Value is not null)
-            {
-                existing = byIdResult.Value;
-            }
-        }
-
         if (existing is null)
         {
             var byNameResult = await _context.Companies.GetByNormalizedNameAsync(ownerId, trimmedName.ToLowerInvariant(), cancellationToken);
@@ -115,8 +115,22 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
         bool isCreate;
         List<string> changedFields = [];
 
-        _ = TrackingEnumExtensions.TryParseOwnershipType(command.OwnershipType, out var parsedOwnership);
-        _ = TrackingEnumExtensions.TryParseCompanyStatus(command.Status, out var parsedStatus);
+        var parsedOwnership = existing?.OwnershipType ?? OwnershipType.Unknown;
+        if (!string.IsNullOrWhiteSpace(command.OwnershipType) && TrackingEnumExtensions.TryParseOwnershipType(command.OwnershipType, out var po))
+        {
+            parsedOwnership = po;
+        }
+
+        var parsedStatus = existing?.Status ?? CompanyStatus.Target;
+        if (!string.IsNullOrWhiteSpace(command.Status) && TrackingEnumExtensions.TryParseCompanyStatus(command.Status, out var ps))
+        {
+            parsedStatus = ps;
+        }
+
+        var isCompanyFieldUpdate = command.Name is not null || command.Description is not null ||
+                                   command.ParentCompany is not null || command.OwnershipType is not null ||
+                                   command.Headquarters is not null || command.CategoryTags is not null ||
+                                   command.Status is not null;
 
         if (existing is not null)
         {
@@ -136,28 +150,32 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
                     Status: "already_exists"));
             }
 
-            // Concurrency check for existing company
-            if (!command.VersionToken.HasValue || command.VersionToken.Value != existing.VersionToken)
+            if (isCompanyFieldUpdate)
             {
-                return Result<CompanyRecordResultDto>.Failure(
-                    ErrorCode.StaleVersionToken,
-                    "Company version token mismatch or stale.");
+                // Concurrency check for existing company
+                if (!command.VersionToken.HasValue || command.VersionToken.Value != existing.VersionToken)
+                {
+                    return Result<CompanyRecordResultDto>.Failure(
+                        ErrorCode.StaleVersionToken,
+                        "Company version token mismatch or stale.");
+                }
+
+                existing.Update(
+                    name: trimmedName,
+                    description: command.Description ?? existing.Description,
+                    parentCompany: command.ParentCompany ?? existing.ParentCompany,
+                    ownershipType: parsedOwnership,
+                    headquarters: command.Headquarters ?? existing.Headquarters,
+                    categoryTags: command.CategoryTags ?? existing.CategoryTags,
+                    status: parsedStatus,
+                    now: now);
+
+                await _context.Companies.UpsertCompanyAsync(existing, cancellationToken);
+                changedFields = ["name", "status", "version_token"];
             }
 
-            existing.Update(
-                name: trimmedName,
-                description: command.Description,
-                parentCompany: command.ParentCompany,
-                ownershipType: parsedOwnership,
-                headquarters: command.Headquarters,
-                categoryTags: command.CategoryTags,
-                status: parsedStatus,
-                now: now);
-
-            await _context.Companies.UpsertCompanyAsync(existing, cancellationToken);
             company = existing;
             isCreate = false;
-            changedFields = ["name", "status", "version_token"];
         }
         else
         {
@@ -258,19 +276,26 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
             : 0;
 
         // Append audit log entry
+        var operation = isCreate
+            ? AuditOperation.CompanyCreate
+            : (command.CareerSources is not null && command.CareerSources.Count > 0
+                ? AuditOperation.CareerSourceUpsert
+                : AuditOperation.CompanyUpdate);
+
         var auditSummary = new CompanyAuditSummary(
             CompanyId: company.Id,
             ChangedFieldNames: changedFields,
-            Action: isCreate ? "company_create" : "company_update",
+            Action: operation,
             Timestamp: now);
 
         await AppendAuditAsync(
             ownerId,
             command.Actor,
-            isCreate ? "company_create" : "company_update",
+            operation,
             company.Id,
             company.VersionToken,
             auditSummary,
+            company,
             cancellationToken);
 
         return Result<CompanyRecordResultDto>.Success(new CompanyRecordResultDto(
@@ -292,33 +317,31 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
         Guid companyId,
         Guid versionToken,
         CompanyAuditSummary summary,
+        Company company,
         CancellationToken cancellationToken)
     {
-        var isCreate = operation == "company_create";
-        var beforeSummary = isCreate
-            ? null
-            : new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: 0,
-                status: "prior",
-                excerpt: string.Empty);
+        var isCreate = operation == AuditOperation.CompanyCreate;
+        var afterDict = new Dictionary<string, object?>
+        {
+            ["name"] = company.Name,
+            ["status"] = company.Status.ToSnakeCase(),
+            ["ownership_type"] = company.OwnershipType.ToSnakeCase()
+        };
 
-        var entry = AuditLogEntry.Create(
+        var details = AuditDetails.ForEntity(
+            changedFields: summary.ChangedFieldNames,
+            before: isCreate ? null : new Dictionary<string, object?>(),
+            after: afterDict);
+
+        var entry = AuditLogEntry.CreateForTracking(
             ownerId: ownerId,
             actor: actor,
-            operation: isCreate ? AuditOperation.NoteCreate : AuditOperation.NoteAppend,
-            targetNoteId: companyId,
-            noteRevisionId: null,
-            appendedText: isCreate ? null : string.Join(",", summary.ChangedFieldNames),
+            operation: operation,
+            entityType: "company",
+            entityId: companyId,
             resultingVersionToken: versionToken,
-            resolvedDefaultDate: null,
             occurredAtUtc: summary.Timestamp.UtcDateTime,
-            beforeSummary: beforeSummary,
-            afterSummary: new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: summary.ChangedFieldNames.Count,
-                status: operation,
-                excerpt: string.Join(",", summary.ChangedFieldNames)));
+            details: details);
 
         return _context.AppendAuditEntryAsync(entry, cancellationToken);
     }

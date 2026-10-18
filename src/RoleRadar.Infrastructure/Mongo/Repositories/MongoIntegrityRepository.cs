@@ -21,7 +21,7 @@ public sealed class MongoIntegrityRepository : IIntegrityRepository
 
         var filter = string.IsNullOrWhiteSpace(ownerId)
             ? Builders<BsonDocument>.Filter.Empty
-            : Builders<BsonDocument>.Filter.Eq("owner_id", ownerId);
+            : Builders<BsonDocument>.Filter.Eq(TrackingBsonFieldNames.Common.OwnerId, ownerId);
 
         var companiesCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName);
         var postingsCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
@@ -32,33 +32,33 @@ public sealed class MongoIntegrityRepository : IIntegrityRepository
 
         // 1. Fetch Companies
         var companiesDocs = await companiesCol.Find(filter)
-            .Project(Builders<BsonDocument>.Projection.Include("_id"))
+            .Project(Builders<BsonDocument>.Projection.Include(TrackingBsonFieldNames.Companies.Id))
             .ToListAsync(cancellationToken);
         var companyIds = new HashSet<Guid>();
         foreach (var doc in companiesDocs)
         {
-            var id = ExtractGuid(doc["_id"]);
+            var id = ExtractGuid(doc[TrackingBsonFieldNames.Companies.Id]);
             if (id.HasValue) companyIds.Add(id.Value);
         }
 
         // 2. Fetch Postings
         var postingsDocs = await postingsCol.Find(filter)
             .Project(Builders<BsonDocument>.Projection
-                .Include("_id")
-                .Include("company_id")
-                .Include("disposition")
-                .Include("duplicate_of"))
+                .Include(TrackingBsonFieldNames.Postings.Id)
+                .Include(TrackingBsonFieldNames.Postings.CompanyId)
+                .Include(TrackingBsonFieldNames.Postings.Disposition)
+                .Include(TrackingBsonFieldNames.Postings.DuplicateOfId))
             .ToListAsync(cancellationToken);
 
         var postingIds = new HashSet<Guid>();
         var appliedPostingIds = new HashSet<Guid>();
         foreach (var doc in postingsDocs)
         {
-            var id = ExtractGuid(doc["_id"]);
+            var id = ExtractGuid(doc[TrackingBsonFieldNames.Postings.Id]);
             if (id.HasValue)
             {
                 postingIds.Add(id.Value);
-                if (doc.TryGetValue("disposition", out var dispVal) && !dispVal.IsBsonNull &&
+                if (doc.TryGetValue(TrackingBsonFieldNames.Postings.Disposition, out var dispVal) && !dispVal.IsBsonNull &&
                     string.Equals(dispVal.AsString, "applied", StringComparison.OrdinalIgnoreCase))
                 {
                     appliedPostingIds.Add(id.Value);
@@ -69,61 +69,61 @@ public sealed class MongoIntegrityRepository : IIntegrityRepository
         // 3. Fetch Applications
         var appsDocs = await applicationsCol.Find(filter)
             .Project(Builders<BsonDocument>.Projection
-                .Include("_id")
-                .Include("posting_id"))
+                .Include(TrackingBsonFieldNames.Applications.Id)
+                .Include(TrackingBsonFieldNames.Applications.PostingId))
             .ToListAsync(cancellationToken);
 
         var applicationIds = new HashSet<Guid>();
         var appPostingIds = new HashSet<Guid>();
         foreach (var doc in appsDocs)
         {
-            var id = ExtractGuid(doc["_id"]);
+            var id = ExtractGuid(doc[TrackingBsonFieldNames.Applications.Id]);
             if (id.HasValue) applicationIds.Add(id.Value);
 
-            var pId = ExtractGuid(doc.TryGetValue("posting_id", out var pv) ? pv : null);
+            var pId = ExtractGuid(doc.TryGetValue(TrackingBsonFieldNames.Applications.PostingId, out var pv) ? pv : null);
             if (pId.HasValue) appPostingIds.Add(pId.Value);
         }
 
         // 4. Fetch Notes
         var notesDocs = await notesCol.Find(filter)
             .Project(Builders<BsonDocument>.Projection
-                .Include("_id")
-                .Include("company_id")
-                .Include("posting_id")
-                .Include("application_id"))
+                .Include(TrackingBsonFieldNames.Notes.Id)
+                .Include(TrackingBsonFieldNames.Notes.CompanyId)
+                .Include(TrackingBsonFieldNames.Notes.PostingId)
+                .Include(TrackingBsonFieldNames.Notes.ApplicationId))
             .ToListAsync(cancellationToken);
 
         var noteIds = new HashSet<Guid>();
         foreach (var doc in notesDocs)
         {
-            var id = ExtractGuid(doc["_id"]);
+            var id = ExtractGuid(doc[TrackingBsonFieldNames.Notes.Id]);
             if (id.HasValue) noteIds.Add(id.Value);
         }
 
         // 5. Fetch Signals
         var signalsDocs = await signalsCol.Find(filter)
             .Project(Builders<BsonDocument>.Projection
-                .Include("_id")
-                .Include("posting_id"))
+                .Include(TrackingBsonFieldNames.Signals.Id)
+                .Include(TrackingBsonFieldNames.Signals.PostingId))
             .ToListAsync(cancellationToken);
 
         // 6. Fetch SearchRuns
         var searchRunsDocs = await searchRunsCol.Find(filter)
             .Project(Builders<BsonDocument>.Projection
-                .Include("_id")
-                .Include("report_note_id"))
+                .Include(TrackingBsonFieldNames.SearchRuns.Id)
+                .Include(TrackingBsonFieldNames.SearchRuns.ReportNoteId))
             .ToListAsync(cancellationToken);
 
         var anomalies = new List<IntegrityAnomalyDto>();
 
         // Anomaly Check 1: Postings with dangling company_id
-        // Anomaly Check 4: Postings with dangling duplicate_of
+        // Anomaly Check 4: Postings with dangling duplicate_of_id
         foreach (var doc in postingsDocs)
         {
-            var postingId = ExtractGuid(doc["_id"]);
+            var postingId = ExtractGuid(doc[TrackingBsonFieldNames.Postings.Id]);
             if (!postingId.HasValue) continue;
 
-            var companyId = ExtractGuid(doc.TryGetValue("company_id", out var cv) ? cv : null);
+            var companyId = ExtractGuid(doc.TryGetValue(TrackingBsonFieldNames.Postings.CompanyId, out var cv) ? cv : null);
             if (companyId.HasValue && !companyIds.Contains(companyId.Value))
             {
                 anomalies.Add(new IntegrityAnomalyDto(
@@ -133,7 +133,7 @@ public sealed class MongoIntegrityRepository : IIntegrityRepository
                     companyId.Value));
             }
 
-            var duplicateOf = ExtractGuid(doc.TryGetValue("duplicate_of", out var dv) ? dv : null);
+            var duplicateOf = ExtractGuid(doc.TryGetValue(TrackingBsonFieldNames.Postings.DuplicateOfId, out var dv) ? dv : null);
             if (duplicateOf.HasValue && !postingIds.Contains(duplicateOf.Value))
             {
                 anomalies.Add(new IntegrityAnomalyDto(
@@ -147,10 +147,10 @@ public sealed class MongoIntegrityRepository : IIntegrityRepository
         // Anomaly Check 2: Applications with dangling posting_id
         foreach (var doc in appsDocs)
         {
-            var appId = ExtractGuid(doc["_id"]);
+            var appId = ExtractGuid(doc[TrackingBsonFieldNames.Applications.Id]);
             if (!appId.HasValue) continue;
 
-            var postingId = ExtractGuid(doc.TryGetValue("posting_id", out var pv) ? pv : null);
+            var postingId = ExtractGuid(doc.TryGetValue(TrackingBsonFieldNames.Applications.PostingId, out var pv) ? pv : null);
             if (postingId.HasValue && !postingIds.Contains(postingId.Value))
             {
                 anomalies.Add(new IntegrityAnomalyDto(
@@ -164,10 +164,10 @@ public sealed class MongoIntegrityRepository : IIntegrityRepository
         // Anomaly Check 3: Posting signals with dangling posting_id
         foreach (var doc in signalsDocs)
         {
-            var signalId = ExtractGuid(doc["_id"]);
+            var signalId = ExtractGuid(doc[TrackingBsonFieldNames.Signals.Id]);
             if (!signalId.HasValue) continue;
 
-            var postingId = ExtractGuid(doc.TryGetValue("posting_id", out var pv) ? pv : null);
+            var postingId = ExtractGuid(doc.TryGetValue(TrackingBsonFieldNames.Signals.PostingId, out var pv) ? pv : null);
             if (postingId.HasValue && !postingIds.Contains(postingId.Value))
             {
                 anomalies.Add(new IntegrityAnomalyDto(
@@ -181,10 +181,10 @@ public sealed class MongoIntegrityRepository : IIntegrityRepository
         // Anomaly Check 5: Notes with dangling company_id, posting_id, or application_id
         foreach (var doc in notesDocs)
         {
-            var noteId = ExtractGuid(doc["_id"]);
+            var noteId = ExtractGuid(doc[TrackingBsonFieldNames.Notes.Id]);
             if (!noteId.HasValue) continue;
 
-            var cId = ExtractGuid(doc.TryGetValue("company_id", out var cv) ? cv : null);
+            var cId = ExtractGuid(doc.TryGetValue(TrackingBsonFieldNames.Notes.CompanyId, out var cv) ? cv : null);
             if (cId.HasValue && !companyIds.Contains(cId.Value))
             {
                 anomalies.Add(new IntegrityAnomalyDto(
@@ -194,7 +194,7 @@ public sealed class MongoIntegrityRepository : IIntegrityRepository
                     cId.Value));
             }
 
-            var pId = ExtractGuid(doc.TryGetValue("posting_id", out var pv) ? pv : null);
+            var pId = ExtractGuid(doc.TryGetValue(TrackingBsonFieldNames.Notes.PostingId, out var pv) ? pv : null);
             if (pId.HasValue && !postingIds.Contains(pId.Value))
             {
                 anomalies.Add(new IntegrityAnomalyDto(
@@ -204,7 +204,7 @@ public sealed class MongoIntegrityRepository : IIntegrityRepository
                     pId.Value));
             }
 
-            var aId = ExtractGuid(doc.TryGetValue("application_id", out var av) ? av : null);
+            var aId = ExtractGuid(doc.TryGetValue(TrackingBsonFieldNames.Notes.ApplicationId, out var av) ? av : null);
             if (aId.HasValue && !applicationIds.Contains(aId.Value))
             {
                 anomalies.Add(new IntegrityAnomalyDto(
@@ -218,10 +218,10 @@ public sealed class MongoIntegrityRepository : IIntegrityRepository
         // Anomaly Check 6: Search runs with dangling report_note_id
         foreach (var doc in searchRunsDocs)
         {
-            var runId = ExtractGuid(doc["_id"]);
+            var runId = ExtractGuid(doc[TrackingBsonFieldNames.SearchRuns.Id]);
             if (!runId.HasValue) continue;
 
-            var reportNoteId = ExtractGuid(doc.TryGetValue("report_note_id", out var rv) ? rv : null);
+            var reportNoteId = ExtractGuid(doc.TryGetValue(TrackingBsonFieldNames.SearchRuns.ReportNoteId, out var rv) ? rv : null);
             if (reportNoteId.HasValue && !noteIds.Contains(reportNoteId.Value))
             {
                 anomalies.Add(new IntegrityAnomalyDto(

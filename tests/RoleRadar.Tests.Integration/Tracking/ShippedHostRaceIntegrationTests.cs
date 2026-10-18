@@ -66,7 +66,7 @@ public sealed class ShippedHostRaceIntegrationTests
             Assert.Equal("concurrent race tech llc", storedCompanies[0]["normalized_name"].AsString);
 
             // Assert exactly one audit entry for company creation
-            var createAudits = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("after_summary.status", "company_create")).ToListAsync();
+            var createAudits = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("operation", "company_create")).ToListAsync();
             Assert.Single(createAudits);
 
             // Assert responses: exactly 1 "created", N-1 "already_exists"
@@ -161,8 +161,8 @@ public sealed class ShippedHostRaceIntegrationTests
                 Assert.Equal(processCount - 1, alreadyTrackedA.Count);
 
                 var auditsA = await auditCol.Find(Builders<BsonDocument>.Filter.And(
-                    Builders<BsonDocument>.Filter.Eq("after_summary.status", "posting_create"),
-                    Builders<BsonDocument>.Filter.Eq("target_note_id", tierAPostings[0]["_id"]))).ToListAsync();
+                    Builders<BsonDocument>.Filter.Eq("operation", "posting_create"),
+                    Builders<BsonDocument>.Filter.Eq("entity_id", tierAPostings[0]["_id"]))).ToListAsync();
                 Assert.Single(auditsA);
             }
 
@@ -198,8 +198,8 @@ public sealed class ShippedHostRaceIntegrationTests
                 Assert.Equal(processCount - 1, alreadyTrackedB.Count);
 
                 var auditsB = await auditCol.Find(Builders<BsonDocument>.Filter.And(
-                    Builders<BsonDocument>.Filter.Eq("after_summary.status", "posting_create"),
-                    Builders<BsonDocument>.Filter.Eq("target_note_id", tierBPostings[0]["_id"]))).ToListAsync();
+                    Builders<BsonDocument>.Filter.Eq("operation", "posting_create"),
+                    Builders<BsonDocument>.Filter.Eq("entity_id", tierBPostings[0]["_id"]))).ToListAsync();
                 Assert.Single(auditsB);
             }
 
@@ -236,8 +236,8 @@ public sealed class ShippedHostRaceIntegrationTests
                 Assert.True(alreadyTrackedC.Count == processCount - 1, $"Statuses: {string.Join(", ", statuses)}");
 
                 var auditsC = await auditCol.Find(Builders<BsonDocument>.Filter.And(
-                    Builders<BsonDocument>.Filter.Eq("after_summary.status", "posting_create"),
-                    Builders<BsonDocument>.Filter.Eq("target_note_id", tierCPostings[0]["_id"]))).ToListAsync();
+                    Builders<BsonDocument>.Filter.Eq("operation", "posting_create"),
+                    Builders<BsonDocument>.Filter.Eq("entity_id", tierCPostings[0]["_id"]))).ToListAsync();
                 Assert.Single(auditsC);
             }
         }
@@ -505,7 +505,7 @@ public sealed class ShippedHostRaceIntegrationTests
             var runId = Guid.Parse(runIdStr);
 
             var auditCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
-            var auditCount = await auditCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(runId, GuidRepresentation.Standard)));
+            var auditCount = await auditCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("entity_id", new BsonBinaryData(runId, GuidRepresentation.Standard)));
             Assert.Equal(1, auditCount);
         }
         finally

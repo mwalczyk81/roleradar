@@ -174,12 +174,15 @@ public sealed class PostingCompHighPriorityContractTests : IAsyncLifetime
         // Verify audit log has comp_high_priority in changed field names
         var auditEntry = await _database.GetCollection<BsonDocument>("audit_log")
             .Find(Builders<BsonDocument>.Filter.And(
-                Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(originalPosting.Id, GuidRepresentation.Standard)),
-                Builders<BsonDocument>.Filter.Eq("operation", "note_append")))
+                Builders<BsonDocument>.Filter.Eq("entity_id", new BsonBinaryData(originalPosting.Id, GuidRepresentation.Standard)),
+                Builders<BsonDocument>.Filter.Eq("operation", "posting_update")))
             .FirstOrDefaultAsync();
 
         Assert.NotNull(auditEntry);
-        Assert.Contains("comp_high_priority", auditEntry["appended_text"].AsString);
+        Assert.Equal("posting", auditEntry["entity_type"].AsString);
+        Assert.True(auditEntry.Contains("details"));
+        var changedFields = auditEntry["details"]["changed_fields"].AsBsonArray.Select(b => b.AsString);
+        Assert.Contains("comp_high_priority", changedFields);
     }
 
     [Fact]

@@ -167,7 +167,7 @@ public sealed class TransitionPostingCommandHandler : ICommandHandler<Transition
             Reason: reason,
             Timestamp: now);
 
-        await AppendAuditAsync(ownerId, command.Actor, "posting_transition", posting.Id, posting.VersionToken, auditSummary, cancellationToken);
+        await AppendAuditAsync(ownerId, command.Actor, AuditOperation.PostingTransition, posting.Id, posting.VersionToken, auditSummary, cancellationToken);
 
         return Result<PostingTransitionResultDto>.Success(new PostingTransitionResultDto(
             PostingId: posting.Id,
@@ -190,28 +190,20 @@ public sealed class TransitionPostingCommandHandler : ICommandHandler<Transition
         PostingAuditSummary summary,
         CancellationToken cancellationToken)
     {
-        var beforeSummary = new AuditContentSummary(
-            bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-            byteLength: 0,
-            status: "prior",
-            excerpt: summary.PriorDisposition ?? string.Empty);
+        var details = AuditDetails.ForEntity(
+            changedFields: summary.ChangedFieldNames,
+            before: new Dictionary<string, object?> { ["disposition"] = summary.PriorDisposition },
+            after: new Dictionary<string, object?> { ["disposition"] = summary.NewDisposition, ["reason"] = summary.Reason });
 
-        var entry = AuditLogEntry.Create(
+        var entry = AuditLogEntry.CreateForTracking(
             ownerId: ownerId,
             actor: actor,
-            operation: AuditOperation.NoteAppend,
-            targetNoteId: postingId,
-            noteRevisionId: null,
-            appendedText: $"{summary.PriorDisposition}->{summary.NewDisposition}",
+            operation: operation,
+            entityType: "posting",
+            entityId: postingId,
             resultingVersionToken: versionToken,
-            resolvedDefaultDate: null,
             occurredAtUtc: summary.Timestamp.UtcDateTime,
-            beforeSummary: beforeSummary,
-            afterSummary: new AuditContentSummary(
-                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
-                byteLength: 4,
-                status: operation,
-                excerpt: summary.Reason ?? $"{summary.PriorDisposition}->{summary.NewDisposition}"));
+            details: details);
 
         return _context.AppendAuditEntryAsync(entry, cancellationToken);
     }

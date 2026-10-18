@@ -530,6 +530,8 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             { "owner_id", entry.OwnerId },
             { "actor", entry.Actor },
             { "operation", entry.Operation },
+            { "entity_type", entry.EntityType ?? "note" },
+            { "entity_id", new BsonBinaryData(entry.EntityId != Guid.Empty ? entry.EntityId : entry.TargetNoteId, GuidRepresentation.Standard) },
             { "target_note_id", new BsonBinaryData(entry.TargetNoteId, GuidRepresentation.Standard) },
             {
                 "note_revision_id",
@@ -547,7 +549,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
                     ? MapSummaryToDocument(entry.BeforeSummary)
                     : BsonNull.Value
             },
-            { "after_summary", MapSummaryToDocument(entry.AfterSummary) }
+            { "after_summary", entry.AfterSummary is not null ? MapSummaryToDocument(entry.AfterSummary) : BsonNull.Value }
         };
 
     private static BsonDocument MapSummaryToDocument(AuditContentSummary summary) =>
@@ -566,13 +568,26 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             doc["status"].AsString,
             doc["excerpt"].AsString);
 
-    private static AuditLogEntry MapDocumentToAudit(BsonDocument doc) =>
-        AuditLogEntry.Rehydrate(
+    private static AuditLogEntry MapDocumentToAudit(BsonDocument doc)
+    {
+        var targetNoteId = doc.TryGetValue("target_note_id", out var targetNoteVal) && !targetNoteVal.IsBsonNull
+            ? targetNoteVal.AsBsonBinaryData.ToGuid(GuidRepresentation.Standard)
+            : Guid.Empty;
+
+        var entityType = doc.TryGetValue("entity_type", out var entityTypeVal) && !entityTypeVal.IsBsonNull
+            ? entityTypeVal.AsString
+            : "note";
+
+        var entityId = doc.TryGetValue("entity_id", out var entityIdVal) && !entityIdVal.IsBsonNull
+            ? entityIdVal.AsBsonBinaryData.ToGuid(GuidRepresentation.Standard)
+            : (targetNoteId != Guid.Empty ? targetNoteId : doc["_id"].AsBsonBinaryData.ToGuid(GuidRepresentation.Standard));
+
+        return AuditLogEntry.Rehydrate(
             id: doc["_id"].AsBsonBinaryData.ToGuid(GuidRepresentation.Standard),
             ownerId: doc["owner_id"].AsString,
             actor: doc["actor"].AsString,
             operation: doc["operation"].AsString,
-            targetNoteId: doc["target_note_id"].AsBsonBinaryData.ToGuid(GuidRepresentation.Standard),
+            targetNoteId: targetNoteId,
             noteRevisionId: doc.TryGetValue("note_revision_id", out var revVal) && !revVal.IsBsonNull
                 ? revVal.AsBsonBinaryData.ToGuid(GuidRepresentation.Standard)
                 : null,
@@ -587,7 +602,12 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             beforeSummary: doc.TryGetValue("before_summary", out var beforeVal) && !beforeVal.IsBsonNull
                 ? MapDocumentToSummary(beforeVal.AsBsonDocument)
                 : null,
-            afterSummary: MapDocumentToSummary(doc["after_summary"].AsBsonDocument));
+            afterSummary: doc.TryGetValue("after_summary", out var afterVal) && !afterVal.IsBsonNull
+                ? MapDocumentToSummary(afterVal.AsBsonDocument)
+                : null,
+            entityType: entityType,
+            entityId: entityId);
+    }
 
     private sealed class AmbientTransactionScope(MongoNoteTransactionContext context)
     {

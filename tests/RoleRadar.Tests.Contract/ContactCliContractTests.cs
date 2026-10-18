@@ -88,10 +88,11 @@ public sealed class ContactCliContractTests : IAsyncLifetime
 
         // 3. Inspect audit_log collection: must have operation contact_add, summary with field names only, zero names or notes
         var auditCol = _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
-        var audit = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(contactId, GuidRepresentation.Standard))).FirstOrDefaultAsync();
+        var audit = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("entity_id", new BsonBinaryData(contactId, GuidRepresentation.Standard))).FirstOrDefaultAsync();
         Assert.NotNull(audit);
+        Assert.Equal("contact", audit["entity_type"].AsString);
         Assert.Equal("contact_add", audit["operation"].AsString);
-        var afterSummary = audit["after_summary"].AsBsonDocument;
+        Assert.True(audit.Contains("details"));
         var auditRaw = audit.ToJson();
         Assert.DoesNotContain("Jane", auditRaw, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Acme", auditRaw, StringComparison.OrdinalIgnoreCase);
@@ -183,16 +184,17 @@ public sealed class ContactCliContractTests : IAsyncLifetime
         // 5. Assert audit entry contains zero PII
         var auditCol = _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
         var redactAudit = await auditCol.Find(Builders<BsonDocument>.Filter.And(
-            Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(Guid.Parse(contactId), GuidRepresentation.Standard)),
+            Builders<BsonDocument>.Filter.Eq("entity_id", new BsonBinaryData(Guid.Parse(contactId), GuidRepresentation.Standard)),
             Builders<BsonDocument>.Filter.Eq("operation", "contact_redact"))).FirstOrDefaultAsync();
         Assert.NotNull(redactAudit);
+        Assert.Equal("contact", redactAudit["entity_type"].AsString);
         var redactAuditRaw = redactAudit.ToJson();
         Assert.DoesNotContain("Sensitive", redactAuditRaw, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Stealth", redactAuditRaw, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("salary", redactAuditRaw, StringComparison.OrdinalIgnoreCase);
 
         // 6. Redacting an already-redacted contact is idempotent (writes nothing, writes no audit entry)
-        var auditCountBefore = await auditCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(Guid.Parse(contactId), GuidRepresentation.Standard)));
+        var auditCountBefore = await auditCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("entity_id", new BsonBinaryData(Guid.Parse(contactId), GuidRepresentation.Standard)));
         var (idemCode, idemStdout, _) = await RunCliAsync(
             cliDllPath,
             $"contact redact --id {contactId} --force --json",
@@ -202,7 +204,7 @@ public sealed class ContactCliContractTests : IAsyncLifetime
         Assert.True(idemDoc.RootElement.GetProperty("ok").GetBoolean());
         Assert.Equal("already_redacted", idemDoc.RootElement.GetProperty("data").GetProperty("status").GetString());
 
-        var auditCountAfter = await auditCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(Guid.Parse(contactId), GuidRepresentation.Standard)));
+        var auditCountAfter = await auditCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("entity_id", new BsonBinaryData(Guid.Parse(contactId), GuidRepresentation.Standard)));
         Assert.Equal(auditCountBefore, auditCountAfter);
     }
 

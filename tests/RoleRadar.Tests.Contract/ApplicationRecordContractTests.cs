@@ -104,7 +104,9 @@ public sealed class ApplicationRecordContractTests : IAsyncLifetime
 
         // Verify audit entry exists
         var auditCol = _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
-        var auditEntries = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(posting.Id, GuidRepresentation.Standard))).ToListAsync();
+        var auditEntries = await auditCol.Find(Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("entity_type", "application"),
+            Builders<BsonDocument>.Filter.Eq("operation", "application_create"))).ToListAsync();
         Assert.NotEmpty(auditEntries);
     }
 
@@ -187,7 +189,9 @@ public sealed class ApplicationRecordContractTests : IAsyncLifetime
 
         // Verify audit entry captures previous disposition and override justification
         var auditCol = _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
-        var auditDoc = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(posting.Id, GuidRepresentation.Standard))).FirstOrDefaultAsync();
+        var auditDoc = await auditCol.Find(Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("entity_type", "application"),
+            Builders<BsonDocument>.Filter.Eq("operation", "application_create"))).FirstOrDefaultAsync();
         Assert.NotNull(auditDoc);
     }
 
@@ -408,7 +412,8 @@ public sealed class ApplicationRecordContractTests : IAsyncLifetime
                 ["owner_id"] = entry.OwnerId,
                 ["actor"] = entry.Actor,
                 ["operation"] = entry.Operation,
-                ["target_note_id"] = new BsonBinaryData(entry.TargetNoteId, GuidRepresentation.Standard),
+                ["entity_type"] = entry.EntityType,
+                ["entity_id"] = new BsonBinaryData(entry.EntityId, GuidRepresentation.Standard),
                 ["resulting_version_token"] = new BsonBinaryData(entry.ResultingVersionToken, GuidRepresentation.Standard),
                 ["occurred_at"] = new BsonDateTime(entry.OccurredAtUtc)
             };

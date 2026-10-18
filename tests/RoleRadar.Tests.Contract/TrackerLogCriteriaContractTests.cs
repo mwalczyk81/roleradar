@@ -163,18 +163,20 @@ public sealed class TrackerLogCriteriaContractTests : IAsyncLifetime
         // Assert audit entries for both initial create and revision
         var v1Audit = await _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName)
             .Find(Builders<BsonDocument>.Filter.And(
-                Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(activeCriterion.Id, GuidRepresentation.Standard)),
-                Builders<BsonDocument>.Filter.Eq("operation", "note_create")))
+                Builders<BsonDocument>.Filter.Eq("entity_id", new BsonBinaryData(activeCriterion.Id, GuidRepresentation.Standard)),
+                Builders<BsonDocument>.Filter.Eq("operation", "criterion_revision")))
             .FirstOrDefaultAsync();
         Assert.NotNull(v1Audit);
+        Assert.Equal("criterion", v1Audit["entity_type"].AsString);
         Assert.Equal(activeCriterion.VersionToken, v1Audit["resulting_version_token"].AsGuid);
 
         var v2Audit = await _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName)
             .Find(Builders<BsonDocument>.Filter.And(
-                Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(v2Active.Id, GuidRepresentation.Standard)),
-                Builders<BsonDocument>.Filter.Eq("operation", "note_append")))
+                Builders<BsonDocument>.Filter.Eq("entity_id", new BsonBinaryData(v2Active.Id, GuidRepresentation.Standard)),
+                Builders<BsonDocument>.Filter.Eq("operation", "criterion_revision")))
             .FirstOrDefaultAsync();
         Assert.NotNull(v2Audit);
+        Assert.Equal("criterion", v2Audit["entity_type"].AsString);
         Assert.Equal(v2Active.VersionToken, v2Audit["resulting_version_token"].AsGuid);
     }
 
@@ -228,10 +230,11 @@ public sealed class TrackerLogCriteriaContractTests : IAsyncLifetime
         // Assert audit entry for deactivation
         var deactAudit = await _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName)
             .Find(Builders<BsonDocument>.Filter.And(
-                Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(active.Id, GuidRepresentation.Standard)),
-                Builders<BsonDocument>.Filter.Eq("operation", "note_append")))
+                Builders<BsonDocument>.Filter.Eq("entity_id", new BsonBinaryData(active.Id, GuidRepresentation.Standard)),
+                Builders<BsonDocument>.Filter.Eq("operation", "criterion_deactivate")))
             .FirstOrDefaultAsync();
         Assert.NotNull(deactAudit);
+        Assert.Equal("criterion", deactAudit["entity_type"].AsString);
         var deactStored = (await _criterionRepo.GetByIdAsync("owner-1", active.Id)).Value!;
         Assert.Equal(deactStored.VersionToken, deactAudit["resulting_version_token"].AsGuid);
         Assert.Equal(deactStored.VersionToken, deactRes.Value!.VersionToken);
@@ -344,9 +347,9 @@ public sealed class TrackerLogCriteriaContractTests : IAsyncLifetime
                 ["owner_id"] = entry.OwnerId,
                 ["actor"] = entry.Actor,
                 ["operation"] = entry.Operation,
-                ["target_note_id"] = new BsonBinaryData(entry.TargetNoteId, GuidRepresentation.Standard),
+                ["entity_type"] = entry.EntityType,
+                ["entity_id"] = new BsonBinaryData(entry.EntityId, GuidRepresentation.Standard),
                 ["resulting_version_token"] = new BsonBinaryData(entry.ResultingVersionToken, GuidRepresentation.Standard),
-                ["appended_text"] = entry.AppendedText is not null ? new BsonString(entry.AppendedText) : BsonNull.Value,
                 ["occurred_at"] = new BsonDateTime(entry.OccurredAtUtc)
             };
             return _auditCol.InsertOneAsync(doc, cancellationToken: cancellationToken);

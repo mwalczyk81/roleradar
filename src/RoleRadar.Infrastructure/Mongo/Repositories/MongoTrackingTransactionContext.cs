@@ -72,35 +72,20 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
 
         var doc = new BsonDocument
         {
-            ["_id"] = new BsonBinaryData(entry.Id, GuidRepresentation.Standard),
-            ["owner_id"] = entry.OwnerId,
-            ["actor"] = entry.Actor,
-            ["operation"] = entry.Operation,
-            ["target_note_id"] = new BsonBinaryData(entry.TargetNoteId, GuidRepresentation.Standard),
-            ["note_revision_id"] = entry.NoteRevisionId.HasValue
-                ? new BsonBinaryData(entry.NoteRevisionId.Value, GuidRepresentation.Standard)
-                : BsonNull.Value,
-            ["appended_text"] = entry.AppendedText is not null ? new BsonString(entry.AppendedText) : BsonNull.Value,
-            ["resulting_version_token"] = new BsonBinaryData(entry.ResultingVersionToken, GuidRepresentation.Standard),
-            ["resolved_default_date"] = entry.ResolvedDefaultDate is not null ? new BsonString(entry.ResolvedDefaultDate) : BsonNull.Value,
-            ["occurred_at"] = new BsonDateTime(entry.OccurredAtUtc),
-            ["before_summary"] = entry.BeforeSummary is not null
-                ? new BsonDocument
-                {
-                    ["body_hash"] = entry.BeforeSummary.BodyHash,
-                    ["byte_length"] = entry.BeforeSummary.ByteLength,
-                    ["status"] = entry.BeforeSummary.Status,
-                    ["excerpt"] = entry.BeforeSummary.Excerpt
-                }
-                : BsonNull.Value,
-            ["after_summary"] = new BsonDocument
-            {
-                ["body_hash"] = entry.AfterSummary.BodyHash,
-                ["byte_length"] = entry.AfterSummary.ByteLength,
-                ["status"] = entry.AfterSummary.Status,
-                ["excerpt"] = entry.AfterSummary.Excerpt
-            }
+            [TrackingBsonFieldNames.AuditLog.Id] = new BsonBinaryData(entry.Id, GuidRepresentation.Standard),
+            [TrackingBsonFieldNames.AuditLog.OwnerId] = entry.OwnerId,
+            [TrackingBsonFieldNames.AuditLog.Actor] = entry.Actor,
+            [TrackingBsonFieldNames.AuditLog.Operation] = entry.Operation,
+            [TrackingBsonFieldNames.AuditLog.EntityType] = entry.EntityType,
+            [TrackingBsonFieldNames.AuditLog.EntityId] = new BsonBinaryData(entry.EntityId, GuidRepresentation.Standard),
+            [TrackingBsonFieldNames.AuditLog.ResultingVersionToken] = new BsonBinaryData(entry.ResultingVersionToken, GuidRepresentation.Standard),
+            [TrackingBsonFieldNames.AuditLog.OccurredAt] = new BsonDateTime(entry.OccurredAtUtc),
         };
+
+        if (entry.Details is not null)
+        {
+            doc[TrackingBsonFieldNames.AuditLog.Details] = MapDetailsToBson(entry.Details);
+        }
 
         var session = _session ?? MongoNoteRepository.CurrentSession;
         if (session is not null)
@@ -112,4 +97,56 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
             await _auditCollection.InsertOneAsync(doc, cancellationToken: cancellationToken);
         }
     }
+
+    private static BsonDocument MapDetailsToBson(AuditDetails details)
+    {
+        var doc = new BsonDocument
+        {
+            ["changed_fields"] = new BsonArray(details.ChangedFields)
+        };
+
+        if (details.ContactId.HasValue)
+        {
+            doc["contact_id"] = new BsonBinaryData(details.ContactId.Value, GuidRepresentation.Standard);
+        }
+
+        if (details.Before is not null && details.Before.Count > 0)
+        {
+            var beforeDoc = new BsonDocument();
+            foreach (var (k, v) in details.Before)
+            {
+                beforeDoc[k] = MapValueToBson(v);
+            }
+            doc["before"] = beforeDoc;
+        }
+
+        if (details.After is not null && details.After.Count > 0)
+        {
+            var afterDoc = new BsonDocument();
+            foreach (var (k, v) in details.After)
+            {
+                afterDoc[k] = MapValueToBson(v);
+            }
+            doc["after"] = afterDoc;
+        }
+
+        return doc;
+    }
+
+    private static BsonValue MapValueToBson(object? value) =>
+        value switch
+        {
+            null => BsonNull.Value,
+            string s => new BsonString(s),
+            bool b => new BsonBoolean(b),
+            int i => new BsonInt32(i),
+            long l => new BsonInt64(l),
+            decimal d => new BsonDecimal128(d),
+            double dbl => new BsonDouble(dbl),
+            Guid g => new BsonBinaryData(g, GuidRepresentation.Standard),
+            DateTime dt => new BsonDateTime(dt),
+            DateTimeOffset dto => new BsonDateTime(dto.UtcDateTime),
+            IEnumerable<string> strSeq => new BsonArray(strSeq),
+            _ => new BsonString(value.ToString() ?? string.Empty)
+        };
 }

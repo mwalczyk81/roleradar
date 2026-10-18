@@ -77,10 +77,12 @@ public sealed class AuditSchemaAndOperationsContractTests : IAsyncLifetime
         var compUpRes = await mcpClient.CallToolAsync("company_record", new
         {
             id = companyIdStr,
+            name = "Audit Test Corp",
             versionToken = companyTokenStr,
             description = "Updated corp description"
         });
-        Assert.True(compUpRes.GetProperty("ok").GetBoolean());
+        Assert.True(compUpRes.GetProperty("ok").GetBoolean(), compUpRes.ToString());
+        var updatedCompanyToken = compUpRes.GetProperty("data").GetProperty("company").GetProperty("versionToken").GetString()!;
 
         var compUpdateAudit = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("operation", "company_update")).FirstOrDefaultAsync();
         Assert.NotNull(compUpdateAudit);
@@ -91,12 +93,14 @@ public sealed class AuditSchemaAndOperationsContractTests : IAsyncLifetime
         var csRes = await mcpClient.CallToolAsync("company_record", new
         {
             id = companyIdStr,
+            name = "Audit Test Corp",
+            versionToken = updatedCompanyToken,
             careerSources = new[]
             {
                 new { atsType = "greenhouse", tenant = "auditcorp", isActive = true }
             }
         });
-        Assert.True(csRes.GetProperty("ok").GetBoolean());
+        Assert.True(csRes.GetProperty("ok").GetBoolean(), csRes.ToString());
 
         var csAudit = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("operation", "career_source_upsert")).FirstOrDefaultAsync();
         Assert.NotNull(csAudit);
@@ -213,11 +217,12 @@ public sealed class AuditSchemaAndOperationsContractTests : IAsyncLifetime
         var appRes = await mcpClient.CallToolAsync("application_record", new
         {
             postingId = appPostIdStr,
+            action = "create",
             submittedDate = "2026-10-18",
-            resumeVariant = "v1"
+            resumeVariant = "tailored"
         });
-        Assert.True(appRes.GetProperty("ok").GetBoolean());
-        var appIdStr = appRes.GetProperty("data").GetProperty("application").GetProperty("id").GetString()!;
+        Assert.True(appRes.GetProperty("ok").GetBoolean(), appRes.ToString());
+        var appIdStr = appRes.GetProperty("data").GetProperty("applicationId").GetString()!;
         var appId = Guid.Parse(appIdStr);
 
         var appCreateAudit = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("operation", "application_create")).FirstOrDefaultAsync();
@@ -228,15 +233,16 @@ public sealed class AuditSchemaAndOperationsContractTests : IAsyncLifetime
         // 10. application_event_append
         var appEventRes = await mcpClient.CallToolAsync("application_record", new
         {
-            applicationId = appIdStr,
+            postingId = appPostIdStr,
+            action = "append_event",
             @event = new
             {
-                eventType = "interviewing",
+                eventType = "interview",
                 eventDate = "2026-10-19",
                 notes = "Initial screening call"
             }
         });
-        Assert.True(appEventRes.GetProperty("ok").GetBoolean());
+        Assert.True(appEventRes.GetProperty("ok").GetBoolean(), appEventRes.ToString());
 
         var appEventAudit = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("operation", "application_event_append")).FirstOrDefaultAsync();
         Assert.NotNull(appEventAudit);
@@ -529,7 +535,14 @@ public sealed class AuditSchemaAndOperationsContractTests : IAsyncLifetime
             var text = content[0].GetProperty("text").GetString();
             Assert.NotNull(text);
 
-            return JsonDocument.Parse(text).RootElement.Clone();
+            try
+            {
+                return JsonDocument.Parse(text).RootElement.Clone();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to parse tool result JSON text: '{text}'. Error: {ex.Message}. ResponseLine: {responseLine}. Stderr: {GetStderr()}", ex);
+            }
         }
 
         public async ValueTask DisposeAsync()
