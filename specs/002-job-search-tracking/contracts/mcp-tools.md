@@ -72,7 +72,7 @@ Every spec-mandated requirement for Feature 002 is mapped to its satisfying MCP 
 - **Input Parameters**:
   - `postingId` (`Guid`, optional): When provided with `versionToken`, activates explicit update mode on the existing posting.
   - `versionToken` (`Guid`, optional): Concurrency token required when `postingId` is provided for update mode.
-  - `companyId` (`Guid`, required for create/ingest; optional for update): Target company ID.
+  - `companyId` (`Guid`, required for create/ingest; optional for update): Target company ID. Validates that the company exists in `companies`; returns `ErrorCode.ValidationError` if the company is not found.
   - `title` (`string`, required for create/ingest; optional for update, 1..200 chars): Job posting title.
   - `url` (`string`, optional, max 1000 chars): Primary job posting URL (normalized automatically).
   - `sourceKind` (`string`, required for create/ingest; optional for update): `"ats"` or `"aggregator"`.
@@ -98,19 +98,20 @@ Every spec-mandated requirement for Feature 002 is mapped to its satisfying MCP 
     - `deadlineDate` (`string`, optional, YYYY-MM-DD): Target deadline date (when `signalType == "deadline"`).
 - **Behavior & Modes**:
   - **Explicit Update Mode** (`postingId` provided):
-    - Requires matching `versionToken`; if `versionToken` does not match stored document, returns typed `ErrorCode.Conflict` (`ConcurrencyConflict`).
+    - Requires matching `versionToken`; if `versionToken` does not match stored document, returns typed `ErrorCode.StaleVersionToken`.
     - Modifies **only** the supplied fields; unsupplied fields remain unchanged.
     - Audit entry records the list of changed field names and the posting ID in its summary.
   - **Ingest / Deduplication Match Mode** (no `postingId` provided):
     - Evaluates Tier A (`atsTenant` + `requisitionId`), Tier B (`normalizedUrl`), and Tier C (`companyId` + `requisitionId`).
     - On a dedup match (Tiers A–C): **fields other than `last_verified_at` are NEVER changed**. If supplied field values differ from stored ones (e.g. different compensation or remote type), the system does NOT mutate them; instead, it returns them in a `differences` list (`field`, `storedValue`, `suppliedValue`).
-    - If active (`lead`, `scored`, `applied`, `unscored`) and re-encountered on a different UTC date: updates `last_verified_at` as a real write, generating an audit entry with a one-field summary (`last_verified_at`), and returns `AlreadyTracked`.
-    - If re-encountered on the same UTC day with identical state: returns `AlreadyTracked` with zero writes and zero audit entries.
-    - If decided (`screened_out`, `closed`, `rejected`): returns `AlreadyDecided` with `canReopen` indicator and prior reason; mutates nothing.
-    - Tier D (`companyId` + `normalizedTitle`): Queries non-unique advisory index. Returns `PossibleDuplicate` candidate list with current dispositions and reasons; never mutates records.
+    - `already_tracked`, `already_decided`, and `possible_duplicate` are returned as SUCCESSFUL (`Result.Success`) outcomes with a status field, ensuring the transaction decorator commits any modifications:
+      - If active (`lead`, `scored`, `applied`, `unscored`) and re-encountered on a different UTC date: updates `last_verified_at` as a real write, generating an audit entry with a one-field summary (`last_verified_at`), and returns `status: "already_tracked"` (commits).
+      - If re-encountered on the same UTC day with identical state: returns `status: "already_tracked"` with zero writes and zero audit entries.
+      - If decided (`screened_out`, `closed`, `rejected`): returns `status: "already_decided"` with `canReopen` indicator and prior reason; mutates nothing.
+      - Tier D (`companyId` + `normalizedTitle`): Queries non-unique advisory index. Returns `status: "possible_duplicate"` with candidate list of dispositions and reasons; never mutates records.
   - **New Posting Creation Mode**:
-    - Created defaulting to `lead` disposition. Emits audit entry.
-  - **Duplicate Chain Collapsing**: If `duplicateOfId` points to posting B, which points to posting C, collapses `duplicateOfId` directly to C. Self-referencing duplicate returns `ValidationError`.
+    - Created defaulting to `lead` disposition. Emits audit entry and returns `status: "created"`.
+  - **Duplicate Chain Collapsing**: If `duplicateOfId` points to posting B, which points to posting C, collapses `duplicateOfId` directly to C. Self-referencing duplicate returns `ErrorCode.ValidationError`.
 - **Output JSON Schema**:
   ```json
   {

@@ -125,7 +125,7 @@ src/
 │   ├── Notes/                       # Note aggregate (extended with binary GUID company_id, posting_id, application_id)
 │   └── Audit/                       # AuditLogEntry, ContactAuditContentSummary
 ├── RoleRadar.Application/
-│   ├── Abstractions/                # ITrackingRepository, ICommandHandler, IQueryHandler, Result<T>, ErrorCode
+│   ├── Abstractions/                # IPostingRepository, ICompanyRepository, ICriterionRepository, IApplicationRepository, IContactRepository, ISearchRunRepository, ITrackingTransactionContext, ICommandHandler, IQueryHandler, Result<T>, ErrorCode
 │   ├── Tracking/
 │   │   ├── Commands/                # RecordPosting, TransitionPosting, RecordCompany, RecordApplication, TrackerLog, ContactCommands
 │   │   └── Queries/                 # TrackerQueryHandler (postings, decided, posting_dedup_lookup, companies, criteria, applications)
@@ -133,7 +133,7 @@ src/
 │   └── DependencyInjection.cs       # Registers handlers and wraps commands with TransactionAndAuditCommandDecorator
 ├── RoleRadar.Infrastructure/
 │   ├── Mongo/
-│   │   ├── MongoTrackingRepository.cs # MongoDB implementation of ITrackingRepository
+│   │   ├── Repositories/            # Mongo implementations of IPostingRepository, ICompanyRepository, etc.
 │   │   ├── TrackingIndexInitializer.cs# Partial unique indexes for dedup_key_a/b/c & active criteria & career_sources & search_runs
 │   │   └── TrackingMongoOptions.cs  # Collection names and configuration
 ├── RoleRadar.Mcp.Stdio/
@@ -159,24 +159,30 @@ tests/
 │   ├── LayeringTests.cs                       # NetArchTest inward dependency verification
 │   ├── NoDeleteMethodsRuleTests.cs            # Reflection test: no delete/remove methods on repositories
 │   ├── McpToolSurfaceTests.cs                 # Asserts tool cap <= 12 and zero delete tools
-│   └── McpZeroContactExposureTests.cs         # Asserts no MCP tool/parameter/description references contact data
+│   ├── McpZeroContactExposureTests.cs         # Asserts no MCP tool/parameter/description references contact data
+│   └── TrackingArchitectureTests.cs           # Living architecture test file: tool counts, no-delete, contact isolation, decorator coverage
 ├── RoleRadar.Tests.Contract/
 │   ├── TrackingRepositoryContractTests.cs     # MongoDB replica set contract tests
 │   ├── PartialUniqueIndexTests.cs             # Tier A/B/C dedup key collisions and parallel race handling
-│   ├── PostingRecordExplicitUpdateTests.cs    # Explicit update mode: partial mutation, versionToken, ConcurrencyConflict
+│   ├── PostingRecordExplicitUpdateTests.cs    # Explicit update mode: partial mutation, versionToken, StaleVersionToken
 │   ├── PostingRecordDifferencesListTests.cs   # Ingest mode dedup match: differences list, no field mutation
 │   ├── CareerSourceUpsertTests.cs             # Upsert by id / composite key, is_active flag retirement/reactivation
 │   ├── CriterionDeactivateTests.cs            # Deactivate active criterion without replacement, audit summary
 │   ├── SearchRunDuplicateTests.cs             # Unique index on (owner_id, started_at), returns already_logged
 │   └── DecidedPostingEventNonMutationTests.cs # Append event to decided/terminal posting preserves disposition
 └── RoleRadar.Tests.Integration/
-    ├── DeduplicationIntegrationTests.cs       # Parallel duplicate submission test
-    ├── ReopenAndApplyOverrideTests.cs         # Atomic reopen-and-apply transaction test
-    ├── CriteriaPointInTimeTests.cs            # Historical effective date query tests
-    ├── ContactCliPrivacyTests.cs              # Redaction, audit summary verification, and no-leak test
-    ├── IntegrityVerificationTests.cs          # Dangling pointer detection tests
-    ├── Benchmark5000PostingsTests.cs          # 5,000-posting dataset latency benchmark (<100ms/<200ms)
-    └── BackupRestoreTrackingTests.cs          # Backup and restore round-trip across all 9 collections
+    ├── Smoke/
+    │   └── StartupSmokeIntegrationTests.cs    # Process-based startup smoke test launching CLI and MCP DLLs with default config
+    ├── Tracking/
+    │   ├── DeduplicationIntegrationTests.cs   # Parallel duplicate submission test
+    │   ├── ReopenAndApplyOverrideTests.cs     # Atomic reopen-and-apply transaction test
+    │   ├── CriteriaPointInTimeTests.cs        # Historical effective date query tests
+    │   ├── ContactCliPrivacyTests.cs          # Redaction, audit summary verification, and no-leak test
+    │   ├── IntegrityVerificationTests.cs      # Dangling pointer detection tests
+    │   └── Benchmark5000PostingsTests.cs      # 5,000-posting dataset latency benchmark (<100ms/<200ms)
+    └── Backup/
+        ├── TrackingBackupRestoreRoundTripTests.cs # Round-trip across all 9 collections & restore non-empty guard
+        └── Legacy001RestoreCompatibilityTests.cs  # Restores 001-format archive into 002 build, idempotent indexes, pre-002 notes link deserialization
 ```
 
 **Structure Decision**: Maintains the clean 5-project solution under `src/` and 4 test projects under `tests/`, expanding `Domain`, `Application`, and `Infrastructure` with tracking aggregates, computed deduplication keys, and queries while reusing the existing MongoDB infrastructure, transaction decorator, and streaming backup pipeline.

@@ -46,16 +46,30 @@ Chosen option: **Option 1 — Strictly Reuse and Extend Feature 001 Patterns**.
    - Every Feature 002 use case is implemented as an explicit `ICommandHandler` or `IQueryHandler`.
    - Architecture tests enforce that 100% of command handler registrations are wrapped by `TransactionAndAuditCommandDecorator` and `LoggingCommandDecorator`.
    - Any write operation, including updating `last_verified_at` across UTC days, is executed as an audited write through `TransactionAndAuditCommandDecorator`. Zero unaudited writes exist anywhere.
-2. **Typed Failures**:
-   - `ErrorCode` is expanded to include domain outcomes:
-     - `ErrorCode.NotFound`
-     - `ErrorCode.AlreadyDecided` (posting in a decided terminal state with resurface policy `never` or `if_reopened` with `can_reopen` indicator)
-     - `ErrorCode.AlreadyTracked` (posting actively tracked in `lead`, `scored`, `applied`, `unscored`)
-     - `ErrorCode.PossibleDuplicate` (advisory Tier D candidate matches)
+2. **Typed Outcomes vs Failures**:
+   - `ErrorCode` is expanded to include genuinely new failure codes:
      - `ErrorCode.InvalidTransition` (disallowed state transition, e.g. attempting to transition to `applied` via `posting_transition` or applying to decided posting without override)
-     - `ErrorCode.Conflict` / `ConcurrencyConflict` (optimistic version token mismatch)
-     - `ErrorCode.ValidationError` (input bounds and schema violations)
+   - Existing error codes are strictly reused:
+     - `ErrorCode.StaleVersionToken` is reused for ALL optimistic concurrency, missing, or mismatched version token cases (no redundant `ConcurrencyConflict` code).
+     - `ErrorCode.NotFound` and `ErrorCode.ValidationError`.
+   - Domain outcomes representing legitimate operational results (`already_decided`, `already_tracked`, and `possible_duplicate`) are returned as SUCCESSFUL results (`Result<T>.Success(...)`) carrying a status discriminator:
+     - `already_tracked` on a subsequent UTC day bumps `last_verified_at` and generates an audit entry; because the command returns success, `TransactionAndAuditCommandDecorator` commits the transaction to MongoDB rather than rolling it back.
+     - `already_decided` returns the existing posting, prior reason, and `can_reopen` indicator without mutation.
+     - `possible_duplicate` returns candidate postings for advisory review without mutating records.
 3. **Append-Only Event Streams**:
    - `AppendOnlyMongoCollection<T>` is used directly for immutable audit streams, `application_events`, `posting_signals`, and `search_runs`.
 4. **Paging & Size Limits**:
    - Queries enforce default limit 50, maximum limit 200 items, and response byte caps, matching `note_search` and `note_get`.
+
+### Follow-Up Decision: Aggregate-Group Repository Ports (Constitution Principle IV)
+
+Rather than defining a single monolithic `ITrackingRepository` spanning all 9 collections, the repository layer is partitioned into focused, aggregate-group repository ports:
+
+- `IPostingRepository`: Manages `postings` and `posting_signals` aggregates, computed deduplication keys, and in-place ATS upgrades.
+- `ICompanyRepository`: Manages `companies` and `career_sources`, including source upserts and `is_active` lifecycle.
+- `ICriterionRepository`: Manages `criteria` temporal versioning and point-in-time queries.
+- `IApplicationRepository`: Manages `applications` and `application_events` timeline streams.
+- `IContactRepository`: Manages `contacts` (isolated CLI-only storage with privacy redaction).
+- `ISearchRunRepository`: Manages `search_runs` execution logging and deduplication.
+
+All aggregate-group repositories share a single, unified `ITrackingTransactionContext` (`IClientSessionHandle`), preserving multi-document ACID transactional boundaries across aggregate operations (e.g. creating an application while updating posting disposition and inserting an audit entry) while adhering to Constitution Principle IV (Named Seams Only) and Interface Segregation, eliminating god-interfaces and isolating aggregate test seams.

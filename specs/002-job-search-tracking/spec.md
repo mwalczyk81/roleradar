@@ -21,8 +21,7 @@
 - Q: How do notes associate with structured entities? → A: Notes may optionally link to a company, posting, or application by ID. Existing notes remain valid without links. The integrity check reports notes pointing to missing target entities.
 - Q: What are the temporal formats, culture attributes, score bounds, and deadline fields for postings? → A: `culture_level` is an enum (`stable`, `moderate`, `high_risk`, `unknown`) plus optional `culture_summary` (max 500 chars). `score` is a number validated `0..10`. `posted_at` is optional. Date-only fields: `posted`, `closed`, `applied`, `deadline`. UTC timestamps: `first_seen`, `last_verified`, and system times. Posting signals of type `deadline` carry an optional `deadline` date.
 - Q: How are list and search operations constrained for MCP and weekly batch performance? → A: All list/search tools are paged and bounded (default 50, max 200 items; response size cap). A compact decided-postings query returns only keys, dispositions, reasons, and resurface policy for fast screening.
-- Q: What is the storage engine architectural assumption? → A: Structured storage uses the project's existing datastore ecosystem; the specific engine is decided during implementation planning.
-- Q: What typed operational failures must the system explicitly define? → A: `NotFound`, `AlreadyDecided`, `AlreadyTracked`, `PossibleDuplicate`, `InvalidTransition`, `ConcurrencyConflict`, `ValidationError`.
+- Q: What typed operational outcomes must the system explicitly define? → A: Failures returning typed ErrorCode: NotFound, InvalidTransition, StaleVersionToken (covering concurrency conflict), and ValidationError. Typed domain outcomes returning successful results with a status discriminator: already_decided, already_tracked, and possible_duplicate (because the transaction decorator commits on success, and the last_verified_at bump must commit).
 - Q: What remains out of scope for Feature 002? → A: Importing legacy export data (Feature 003), scoring algorithms, career site scraping/crawling, UI, authentication, and hosted MCP.
 - Q: From which posting dispositions can an application be created? → A: Application creation is permitted directly from `lead`, `unscored`, and `scored`, transitioning the posting to `applied`.
 - Q: How does the application override flag operate on decided or closed postings? → A: Creating an application with the override flag for a `screened_out` or `closed` posting executes reopen-and-apply as ONE audited transaction, moving the posting directly to `applied` regardless of resurface policy. The audit entry records the override flag, previous disposition, and previous resurface policy.
@@ -281,14 +280,16 @@ As the job-search owner, I want to record periodic search run executions (start 
 - **FR-041**: Every record across all entities MUST include an `owner_id` attribute.
 - **FR-042**: Every write operation (create, update, transition, redact) across all entities MUST write an append-only audit entry in the same transaction capturing actor, command name, and before/after summaries.
 - **FR-043**: System MUST NOT provide any hard-delete operations or tools; removal or deactivation of entities is represented exclusively through inactive, closed, superseded, archived, or redacted states.
-- **FR-044**: System MUST explicitly return expected operational failures as typed result objects:
-  - `NotFound`: Requested entity does not exist.
-  - `AlreadyDecided`: Posting already in a decided terminal state with resurface policy `never`.
-  - `AlreadyTracked`: Posting is already actively tracked in the system.
-  - `PossibleDuplicate`: Candidate postings identified by fuzzy title/company matching.
-  - `InvalidTransition`: Disallowed state transition attempt.
-  - `ConcurrencyConflict`: Optimistic concurrency version mismatch.
-  - `ValidationError`: Input violates structural constraints or length bounds.
+- **FR-044**: System MUST explicitly return typed result outcomes:
+  - Failures returning an `ErrorCode`:
+    - `NotFound`: Requested entity does not exist.
+    - `InvalidTransition`: Disallowed state transition attempt.
+    - `StaleVersionToken`: Optimistic concurrency version mismatch or missing token.
+    - `ValidationError`: Input violates structural constraints or length bounds.
+  - Successful operational outcomes carrying a status discriminator (`status: "created" | "already_tracked" | "already_decided" | "possible_duplicate"`):
+    - `AlreadyDecided`: Posting already in a decided terminal state with resurface policy `never` (or `if_reopened` without override).
+    - `AlreadyTracked`: Posting is already actively tracked; commits `last_verified_at` bump and audit entry if on a different UTC day.
+    - `PossibleDuplicate`: Candidate postings identified by fuzzy title/company matching without mutating data.
 - **FR-045**: All new entities MUST be completely covered by the existing encrypted backup, wipe, and restore mechanisms, including restore verification guards.
 - **FR-046**: All test suites, seed fixtures, and documentation MUST use strictly fictional data with zero real names or organizations.
 
