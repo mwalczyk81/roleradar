@@ -611,7 +611,7 @@ public sealed class ShippedHostTrackingIntegrationTests
                 sourceKind = "ats",
                 atsTenant = "signalscorp",
                 requisitionId = "req-ghost-1",
-                signals = new[]
+                signals = new object[]
                 {
                     new
                     {
@@ -644,7 +644,7 @@ public sealed class ShippedHostTrackingIntegrationTests
                 entity = "postings"
             });
             Assert.True(queryRes.GetProperty("ok").GetBoolean());
-            var postingsList = queryRes.GetProperty("data").GetProperty("postings").EnumerateArray().ToList();
+            var postingsList = queryRes.GetProperty("data").GetProperty("items").EnumerateArray().ToList();
             var matchedPosting = postingsList.FirstOrDefault(p => p.GetProperty("id").GetString() == postingId);
             Assert.True(matchedPosting.ValueKind != JsonValueKind.Undefined);
             var ghost = matchedPosting.GetProperty("ghostLikelihood").GetString();

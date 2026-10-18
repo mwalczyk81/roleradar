@@ -95,6 +95,7 @@ public sealed class TrackingMcpTools
         [Description("Linked narrative screening note identifier.")] Guid? screeningNoteId = null,
         [Description("Pointer to canonical posting if this is a duplicate.")] Guid? duplicateOfId = null,
         [Description("Optional flag indicating whether compensation is high priority (null = not judged).")] bool? compHighPriority = null,
+        [Description("Observed signals (e.g. repost, no_salary, parallel_posting, gone, phantom, deadline).")] SignalInputDto[]? signals = null,
         CancellationToken cancellationToken = default)
     {
         var command = new RecordPostingCommand(
@@ -119,6 +120,7 @@ public sealed class TrackingMcpTools
             ResurfacePolicy: resurfacePolicy,
             ScreeningNoteId: screeningNoteId,
             DuplicateOfId: duplicateOfId,
+            Signals: signals,
             CompHighPriority: compHighPriority);
 
         var result = await _recordPostingHandler.HandleAsync(command, cancellationToken);

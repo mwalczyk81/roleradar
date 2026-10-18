@@ -90,6 +90,27 @@ public sealed class RecordPostingCommandValidator : ICommandValidator<RecordPost
                 return new ResultError(ErrorCode.ValidationError, "Score must be between 0.0 and 10.0.");
             }
 
+            if (command.Signals is not null)
+            {
+                foreach (var sig in command.Signals)
+                {
+                    if (sig is null)
+                    {
+                        return new ResultError(ErrorCode.ValidationError, "Signal item cannot be null.");
+                    }
+
+                    if (!TrackingEnumExtensions.TryParseSignalType(sig.SignalType, out _))
+                    {
+                        return new ResultError(ErrorCode.ValidationError, $"Invalid signalType '{sig.SignalType}'.");
+                    }
+
+                    if (string.IsNullOrWhiteSpace(sig.Evidence) || sig.Evidence.Trim().Length > 500)
+                    {
+                        return new ResultError(ErrorCode.ValidationError, "Signal evidence is required and cannot exceed 500 characters.");
+                    }
+                }
+            }
+
             return null;
         }
 
@@ -114,9 +135,25 @@ public sealed class RecordPostingCommandValidator : ICommandValidator<RecordPost
             return new ResultError(ErrorCode.ValidationError, $"Url cannot exceed {Posting.MaxUrlLength} characters.");
         }
 
-        if (command.Score.HasValue && (command.Score.Value < 0.0m || command.Score.Value > 10.0m))
+        if (command.Signals is not null)
         {
-            return new ResultError(ErrorCode.ValidationError, "Score must be between 0.0 and 10.0.");
+            foreach (var sig in command.Signals)
+            {
+                if (sig is null)
+                {
+                    return new ResultError(ErrorCode.ValidationError, "Signal item cannot be null.");
+                }
+
+                if (!TrackingEnumExtensions.TryParseSignalType(sig.SignalType, out _))
+                {
+                    return new ResultError(ErrorCode.ValidationError, $"Invalid signalType '{sig.SignalType}'.");
+                }
+
+                if (string.IsNullOrWhiteSpace(sig.Evidence) || sig.Evidence.Trim().Length > 500)
+                {
+                    return new ResultError(ErrorCode.ValidationError, "Signal evidence is required and cannot exceed 500 characters.");
+                }
+            }
         }
 
         return null;
@@ -521,7 +558,54 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
             differences.Add(new PostingDifference("comp_high_priority", stored.CompHighPriority, command.CompHighPriority.Value));
         }
 
-        // 3. UTC date comparison for last_verified_at bump
+        // 3. Append any newly observed signals not already recorded today with identical type and evidence
+        var appendedSignals = false;
+        if (command.Signals is not null && command.Signals.Count > 0)
+        {
+            var existingSignalsResult = await _context.Postings.GetSignalsAsync(ownerId, stored.Id, cancellationToken);
+            var existingSignals = (existingSignalsResult.IsSuccess && existingSignalsResult.Value is not null)
+                ? existingSignalsResult.Value
+                : Array.Empty<PostingSignal>();
+
+            foreach (var sig in command.Signals)
+            {
+                if (TrackingEnumExtensions.TryParseSignalType(sig.SignalType, out var st))
+                {
+                    var observedAt = !string.IsNullOrWhiteSpace(sig.ObservedAt) && DateTimeOffset.TryParse(sig.ObservedAt, out var obs)
+                        ? obs
+                        : now;
+                    var sigUtcDate = DateOnly.FromDateTime(observedAt.UtcDateTime);
+
+                    // Duplicate check: same signalType, same evidence, same UTC day
+                    var alreadyPresent = existingSignals.Any(e =>
+                        e.SignalType == st &&
+                        string.Equals(e.Evidence?.Trim(), sig.Evidence?.Trim(), StringComparison.Ordinal) &&
+                        DateOnly.FromDateTime(e.ObservedAt.UtcDateTime) == sigUtcDate);
+
+                    if (!alreadyPresent)
+                    {
+                        var signalEntity = new PostingSignal(
+                            id: Guid.CreateVersion7(),
+                            ownerId: ownerId,
+                            postingId: stored.Id,
+                            signalType: st,
+                            evidence: sig.Evidence.Trim(),
+                            observedAt: observedAt,
+                            deadlineDate: sig.DeadlineDate);
+                        await _context.Postings.AppendSignalAsync(signalEntity, cancellationToken);
+                        appendedSignals = true;
+                    }
+                }
+            }
+
+            if (appendedSignals)
+            {
+                var auditSummary = new PostingAuditSummary(stored.Id, ["signals"], Timestamp: now);
+                await AppendAuditAsync(ownerId, command.Actor, "posting_signal", stored.Id, stored.VersionToken, auditSummary, cancellationToken);
+            }
+        }
+
+        // 4. UTC date comparison for last_verified_at bump
         var storedUtcDate = DateOnly.FromDateTime(stored.LastVerifiedAt.UtcDateTime);
         var currentUtcDate = DateOnly.FromDateTime(now.UtcDateTime);
 
