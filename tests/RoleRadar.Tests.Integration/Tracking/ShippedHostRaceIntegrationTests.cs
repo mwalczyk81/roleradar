@@ -445,4 +445,77 @@ public sealed class ShippedHostRaceIntegrationTests
             await mongoClient.DropDatabaseAsync(uniqueDb);
         }
     }
+
+    [Fact]
+    [Trait("Category", "Slow")]
+    public async Task ShippedMcpHost_ConcurrentSearchRunRace_ExactlyOneCreatedSevenAlreadyLoggedAndOneAuditEntry()
+    {
+        var mcpDllPath = McpHostLocator.GetMcpDllPath();
+        var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_searchrun_race");
+        var mongoClient = new MongoClient(_sharedMongo.ConnectionString);
+        var db = mongoClient.GetDatabase(uniqueDb);
+
+        const int processCount = 8;
+        var clients = new List<McpProcessClient>();
+
+        try
+        {
+            var env = _sharedMongo.CreateProcessEnvironment(uniqueDb);
+            for (var i = 0; i < processCount; i++)
+            {
+                clients.Add(await McpProcessClient.StartAsync(mcpDllPath, env));
+            }
+
+            var startedAt = "2026-10-18T16:00:00Z";
+            var barrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var tasks = clients.Select((c, idx) => Task.Run(async () =>
+            {
+                await barrier.Task;
+                return await c.CallToolAsync("tracker_log", new
+                {
+                    action = "search_run",
+                    startedAt = startedAt,
+                    newPostingsCount = 10,
+                    notes = $"Race worker {idx}"
+                });
+            })).ToArray();
+
+            barrier.SetResult();
+            var results = await Task.WhenAll(tasks);
+
+            var created = results.Where(r =>
+                r.TryGetProperty("ok", out var ok) && ok.GetBoolean() &&
+                r.GetProperty("data").GetProperty("status").GetString() == "success").ToList();
+
+            var alreadyLogged = results.Where(r =>
+                r.TryGetProperty("ok", out var ok) && ok.GetBoolean() &&
+                r.GetProperty("data").GetProperty("status").GetString() == "already_logged").ToList();
+
+            Assert.Single(created);
+            Assert.Equal(processCount - 1, alreadyLogged.Count);
+
+            // Assert exactly one record in search_runs collection
+            var searchRunsCol = db.GetCollection<BsonDocument>(TrackingMongoOptions.SearchRunsCollectionName);
+            var count = await searchRunsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
+            Assert.Equal(1, count);
+
+            // Assert exactly one audit log entry for this search run
+            var runIdStr = created[0].GetProperty("data").GetProperty("recordId").GetString();
+            Assert.NotNull(runIdStr);
+            var runId = Guid.Parse(runIdStr);
+
+            var auditCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
+            var auditCount = await auditCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Eq("target_note_id", new BsonBinaryData(runId, GuidRepresentation.Standard)));
+            Assert.Equal(1, auditCount);
+        }
+        finally
+        {
+            foreach (var client in clients)
+            {
+                await client.DisposeAsync();
+            }
+
+            await mongoClient.DropDatabaseAsync(uniqueDb);
+        }
+    }
 }
