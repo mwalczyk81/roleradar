@@ -127,6 +127,8 @@ public sealed class StatusCliContractTests : IAsyncLifetime
         Assert.True(data.TryGetProperty("postingsCount", out var pCount) && pCount.GetInt32() >= 1);
         Assert.True(data.TryGetProperty("contactsCount", out var ctCount) && ctCount.GetInt32() >= 1);
         Assert.True(data.TryGetProperty("searchRunsCount", out var sCount) && sCount.GetInt32() >= 1);
+        Assert.True(data.TryGetProperty("signalsCount", out var sigCount) && sigCount.GetInt32() >= 0);
+        Assert.False(data.TryGetProperty("postingSignalsCount", out _), "postingSignalsCount must be removed to avoid duplicate field in status --json");
 
         // 2. Run roleradar status (text mode)
         var (textCode, textStdout, textStderr) = await RunCliAsync(cliDllPath, "status", env);

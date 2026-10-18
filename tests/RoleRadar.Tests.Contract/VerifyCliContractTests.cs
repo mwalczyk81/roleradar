@@ -2,7 +2,10 @@ using System.Diagnostics;
 using System.Text.Json;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using RoleRadar.Application.Tracking.Commands;
+using RoleRadar.Domain.Common;
 using RoleRadar.Infrastructure.Mongo;
+using RoleRadar.Infrastructure.Mongo.Repositories;
 using RoleRadar.Tests.Contract.Fixtures;
 using Xunit;
 
@@ -104,122 +107,165 @@ public sealed class VerifyCliContractTests : IAsyncLifetime
         var cliDllPath = GetCliDllPath();
         var env = _fixture.CreateProcessEnvironment(_databaseName);
 
-        // Seed anomalies:
-        // 1. Posting referencing dangling company
-        var danglingCompanyId = Guid.NewGuid();
-        var postingWithDanglingCompanyId = Guid.NewGuid();
-        var postingsCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
-        await postingsCol.InsertOneAsync(new BsonDocument
-        {
-            ["_id"] = new BsonBinaryData(postingWithDanglingCompanyId, GuidRepresentation.Standard),
-            ["owner_id"] = "owner-1",
-            ["company_id"] = new BsonBinaryData(danglingCompanyId, GuidRepresentation.Standard),
-            ["title"] = "Role With Missing Company",
-            ["url"] = "https://example.com/jobs/2",
-            ["normalized_url"] = "https://example.com/jobs/2",
-            ["source_kind"] = "ats",
-            ["disposition"] = "lead",
-            ["resurface_policy"] = "never",
-            ["culture_risk_level"] = "stable",
-            ["first_seen_at"] = new BsonDateTime(DateTime.UtcNow),
-            ["last_verified_at"] = new BsonDateTime(DateTime.UtcNow),
-            ["version_token"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
-            ["created_at"] = new BsonDateTime(DateTime.UtcNow),
-            ["updated_at"] = new BsonDateTime(DateTime.UtcNow)
-        });
+        // 1. Seed valid baseline data through real handlers & repositories
+        var companyRepo = new MongoCompanyRepository(_client, _database);
+        var postingRepo = new MongoPostingRepository(_client, _database);
+        var criterionRepo = new MongoCriterionRepository(_client, _database);
+        var appRepo = new MongoApplicationRepository(_client, _database);
+        var contactRepo = new MongoContactRepository(_client, _database);
+        var searchRunRepo = new MongoSearchRunRepository(_client, _database);
+        var auditCol = _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
+        var context = new MongoTrackingTransactionContext(companyRepo, postingRepo, criterionRepo, appRepo, contactRepo, searchRunRepo, auditCol);
+        var clock = SystemUtcClock.Instance;
 
-        // 2. Application referencing dangling posting
-        var danglingPostingId = Guid.NewGuid();
-        var applicationsCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.ApplicationsCollectionName);
-        await applicationsCol.InsertOneAsync(new BsonDocument
-        {
-            ["_id"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
-            ["owner_id"] = "owner-1",
-            ["posting_id"] = new BsonBinaryData(danglingPostingId, GuidRepresentation.Standard),
-            ["status"] = "applied",
-            ["submitted_date"] = "2026-10-18",
-            ["resume_variant"] = "standard",
-            ["version_token"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
-            ["created_at"] = new BsonDateTime(DateTime.UtcNow),
-            ["updated_at"] = new BsonDateTime(DateTime.UtcNow)
-        });
+        // Seed clean company
+        var companyHandler = new RecordCompanyCommandHandler(context, clock);
+        var companyRes = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: "Baseline Integrity Tech", OwnershipType: "public", OwnerId: "owner-1"));
+        Assert.True(companyRes.IsSuccess);
+        var companyId = companyRes.Value!.Company.Id;
 
-        // 3. Posting with duplicate_of referencing non-existent posting
-        var danglingDupPostingId = Guid.NewGuid();
-        await postingsCol.InsertOneAsync(new BsonDocument
-        {
-            ["_id"] = new BsonBinaryData(danglingDupPostingId, GuidRepresentation.Standard),
-            ["owner_id"] = "owner-1",
-            ["company_id"] = new BsonBinaryData(danglingCompanyId, GuidRepresentation.Standard),
-            ["title"] = "Duplicate Role",
-            ["url"] = "https://example.com/jobs/3",
-            ["normalized_url"] = "https://example.com/jobs/3",
-            ["source_kind"] = "ats",
-            ["disposition"] = "screened_out",
-            ["disposition_reason"] = "duplicate",
-            ["duplicate_of"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
-            ["resurface_policy"] = "never",
-            ["culture_risk_level"] = "stable",
-            ["first_seen_at"] = new BsonDateTime(DateTime.UtcNow),
-            ["last_verified_at"] = new BsonDateTime(DateTime.UtcNow),
-            ["version_token"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
-            ["created_at"] = new BsonDateTime(DateTime.UtcNow),
-            ["updated_at"] = new BsonDateTime(DateTime.UtcNow)
-        });
+        // Seed root posting
+        var postingHandler = new RecordPostingCommandHandler(context, clock);
+        var rootPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Root Engineer", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-ROOT", OwnerId: "owner-1"));
+        Assert.True(rootPostingRes.IsSuccess);
+        var rootPostingId = rootPostingRes.Value!.Posting!.Id;
 
-        // 4. Applied posting without an application record
-        var appliedWithoutAppPostingId = Guid.NewGuid();
-        await postingsCol.InsertOneAsync(new BsonDocument
-        {
-            ["_id"] = new BsonBinaryData(appliedWithoutAppPostingId, GuidRepresentation.Standard),
-            ["owner_id"] = "owner-1",
-            ["company_id"] = new BsonBinaryData(danglingCompanyId, GuidRepresentation.Standard),
-            ["title"] = "Applied Role Without Application Record",
-            ["url"] = "https://example.com/jobs/4",
-            ["normalized_url"] = "https://example.com/jobs/4",
-            ["source_kind"] = "ats",
-            ["disposition"] = "applied",
-            ["resurface_policy"] = "never",
-            ["culture_risk_level"] = "stable",
-            ["first_seen_at"] = new BsonDateTime(DateTime.UtcNow),
-            ["last_verified_at"] = new BsonDateTime(DateTime.UtcNow),
-            ["version_token"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
-            ["created_at"] = new BsonDateTime(DateTime.UtcNow),
-            ["updated_at"] = new BsonDateTime(DateTime.UtcNow)
-        });
+        // Seed duplicate posting referencing root
+        var dupPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Duplicate Engineer", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-DUP", DuplicateOfId: rootPostingId, OwnerId: "owner-1"));
+        Assert.True(dupPostingRes.IsSuccess);
+        var dupPostingId = dupPostingRes.Value!.Posting!.Id;
 
-        // 5. Note referencing non-existent company
+        // Seed posting to be applied
+        var appliedPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Applied Engineer", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-APP", OwnerId: "owner-1"));
+        Assert.True(appliedPostingRes.IsSuccess);
+        var appliedPostingId = appliedPostingRes.Value!.Posting!.Id;
+
+        // Seed application
+        var appHandler = new RecordApplicationCommandHandler(context, clock);
+        var appRes = await appHandler.HandleAsync(new RecordApplicationCommand(PostingId: appliedPostingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: "tailored", OwnerId: "owner-1"));
+        Assert.True(appRes.IsSuccess, $"Failed to create application: {appRes.Error?.Code} - {appRes.Error?.Message}");
+        var applicationId = appRes.Value!.ApplicationId;
+
+        // Seed posting with signal
+        var signalPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Signal Engineer", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-SIG", Signals: new[] { new SignalInputDto("gone", "404", "2026-10-18T10:00:00Z") }, OwnerId: "owner-1"));
+        Assert.True(signalPostingRes.IsSuccess);
+        var signalPostingId = signalPostingRes.Value!.Posting!.Id;
+
+        // Seed note referencing company, posting, and application
+        var noteId = Guid.NewGuid();
         var notesCol = _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NotesCollectionName);
         await notesCol.InsertOneAsync(new BsonDocument
         {
-            ["_id"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
+            ["_id"] = new BsonBinaryData(noteId, GuidRepresentation.Standard),
             ["owner_id"] = "owner-1",
-            ["title"] = "Narrative Note With Dangling Link",
-            ["company_id"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
+            ["title"] = "Clean Linked Note",
+            ["body"] = "Note body",
+            ["area"] = "tech",
             ["status"] = "active",
-            ["current_body"] = "Body text",
+            ["company_id"] = new BsonBinaryData(companyId, GuidRepresentation.Standard),
+            ["posting_id"] = new BsonBinaryData(rootPostingId, GuidRepresentation.Standard),
+            ["application_id"] = new BsonBinaryData(applicationId, GuidRepresentation.Standard),
             ["version_token"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
             ["created_at"] = new BsonDateTime(DateTime.UtcNow),
             ["updated_at"] = new BsonDateTime(DateTime.UtcNow)
         });
 
-        var countPostingsBefore = await postingsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
-        var countAppsBefore = await applicationsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
+        // Seed search run referencing the note
+        var trackerLogHandler = new TrackerLogCommandHandler(context, clock);
+        var searchRunRes = await trackerLogHandler.HandleAsync(new TrackerLogCommand(Action: "search_run", StartedAt: "2026-10-18T09:00:00Z", NewPostingsCount: 1, ReportNoteId: noteId, Notes: "Sweep report", OwnerId: "owner-1"));
+        Assert.True(searchRunRes.IsSuccess);
+        var searchRunId = searchRunRes.Value!.RecordId;
 
+        // Seed applied posting WITHOUT application
+        var danglingAppPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Unlinked Applied Posting", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-NO-APP", OwnerId: "owner-1"));
+        Assert.True(danglingAppPostingRes.IsSuccess);
+        var unlinkedAppliedPostingId = danglingAppPostingRes.Value!.Posting!.Id;
+        // Mark disposition as applied directly on posting
+        var postingsCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
+        await postingsCol.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(unlinkedAppliedPostingId, GuidRepresentation.Standard)),
+            Builders<BsonDocument>.Update.Set("disposition", "applied"));
+
+        // Now mutate REAL stored fields to trigger all 8 anomaly kinds:
+        var nonExistentGuid = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard);
+
+        // Anomaly 1: dangling_company_on_posting (break company_id on root posting)
+        await postingsCol.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(rootPostingId, GuidRepresentation.Standard)),
+            Builders<BsonDocument>.Update.Set("company_id", nonExistentGuid));
+
+        // Anomaly 2: dangling_duplicate_of_on_posting (break duplicate_of_id on dup posting)
+        await postingsCol.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(dupPostingId, GuidRepresentation.Standard)),
+            Builders<BsonDocument>.Update.Set("duplicate_of_id", nonExistentGuid));
+
+        // Anomaly 3: dangling_posting_on_application (break posting_id on application)
+        var appsCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.ApplicationsCollectionName);
+        await appsCol.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(applicationId, GuidRepresentation.Standard)),
+            Builders<BsonDocument>.Update.Set("posting_id", nonExistentGuid));
+
+        // Anomaly 4: dangling_posting_on_signal (break posting_id on signal)
+        var signalsCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.PostingSignalsCollectionName);
+        await signalsCol.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("posting_id", new BsonBinaryData(signalPostingId, GuidRepresentation.Standard)),
+            Builders<BsonDocument>.Update.Set("posting_id", nonExistentGuid));
+
+        // Anomaly 5, 6, 7: dangling_company_on_note, dangling_posting_on_note, dangling_application_on_note
+        await notesCol.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(noteId, GuidRepresentation.Standard)),
+            Builders<BsonDocument>.Update
+                .Set("company_id", nonExistentGuid)
+                .Set("posting_id", nonExistentGuid)
+                .Set("application_id", nonExistentGuid));
+
+        // Anomaly 8: dangling_report_note_on_search_run (break report_note_id on search run)
+        var searchRunsCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.SearchRunsCollectionName);
+        await searchRunsCol.UpdateOneAsync(
+            Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(searchRunId, GuidRepresentation.Standard)),
+            Builders<BsonDocument>.Update.Set("report_note_id", nonExistentGuid));
+
+        // Snapshot counts before CLI run
+        var countPostingsBefore = await postingsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
+        var countAppsBefore = await appsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
+        var countSignalsBefore = await signalsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
+        var countNotesBefore = await notesCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
+        var countRunsBefore = await searchRunsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
+
+        // Run launched CLI
         var (exitCode, stdout, stderr) = await RunCliAsync(cliDllPath, "verify --json", env);
-        Assert.NotEqual(0, exitCode);
+        Assert.Equal(1, exitCode);
+        Assert.DoesNotContain("Unhandled exception", stderr, StringComparison.OrdinalIgnoreCase);
 
         using var doc = JsonDocument.Parse(stdout);
         var root = doc.RootElement;
         Assert.True(root.GetProperty("ok").GetBoolean());
         var data = root.GetProperty("data");
-        Assert.True(data.GetProperty("anomalyCount").GetInt32() > 0);
+        Assert.Equal(9, data.GetProperty("anomalyCount").GetInt32()); // All 8 distinct kinds present (one note has 3 dangling fields + 1 unlinked applied + 5 other kinds = 9 total)
+
+        var anomalyKinds = new HashSet<string>();
+        foreach (var el in data.GetProperty("anomalies").EnumerateArray())
+        {
+            anomalyKinds.Add(el.GetProperty("kind").GetString()!);
+        }
+
+        // Assert every one of the 8 anomaly kinds is detected
+        Assert.Contains("dangling_company_on_posting", anomalyKinds);
+        Assert.Contains("dangling_duplicate_of_on_posting", anomalyKinds);
+        Assert.Contains("dangling_posting_on_application", anomalyKinds);
+        Assert.Contains("dangling_posting_on_signal", anomalyKinds);
+        Assert.Contains("dangling_company_on_note", anomalyKinds);
+        Assert.Contains("dangling_posting_on_note", anomalyKinds);
+        Assert.Contains("dangling_application_on_note", anomalyKinds);
+        Assert.Contains("dangling_report_note_on_search_run", anomalyKinds);
+        Assert.Contains("applied_posting_without_application", anomalyKinds);
 
         // Assert read-only guarantee: zero documents mutated or deleted
-        var countPostingsAfter = await postingsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
-        var countAppsAfter = await applicationsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
-        Assert.Equal(countPostingsBefore, countPostingsAfter);
-        Assert.Equal(countAppsBefore, countAppsAfter);
+        Assert.Equal(countPostingsBefore, await postingsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty));
+        Assert.Equal(countAppsBefore, await appsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty));
+        Assert.Equal(countSignalsBefore, await signalsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty));
+        Assert.Equal(countNotesBefore, await notesCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty));
+        Assert.Equal(countRunsBefore, await searchRunsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty));
     }
 
     private static string GetCliDllPath()

@@ -206,6 +206,38 @@ public sealed class ContactCliContractTests : IAsyncLifetime
         Assert.Equal(auditCountBefore, auditCountAfter);
     }
 
+    [Fact]
+    public async Task Contact_GetAndRedact_WhenIdIsNotGuid_EmitsGenericErrorWithoutEchoingInput()
+    {
+        var cliDllPath = GetCliDllPath();
+        var env = _fixture.CreateProcessEnvironment(_databaseName);
+        const string maliciousInput = "SensitivePersonNameNotAGuid";
+
+        // 1. contact get with invalid id
+        var (getCode, getStdout, getStderr) = await RunCliAsync(
+            cliDllPath,
+            $"contact get --id {maliciousInput}",
+            env);
+
+        Assert.NotEqual(0, getCode);
+        Assert.DoesNotContain(maliciousInput, getStdout, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(maliciousInput, getStderr, StringComparison.OrdinalIgnoreCase);
+        var combinedGetError = getStdout + getStderr;
+        Assert.Contains("Must be a valid GUID", combinedGetError, StringComparison.OrdinalIgnoreCase);
+
+        // 2. contact redact with invalid id
+        var (redactCode, redactStdout, redactStderr) = await RunCliAsync(
+            cliDllPath,
+            $"contact redact --id {maliciousInput} --force",
+            env);
+
+        Assert.NotEqual(0, redactCode);
+        Assert.DoesNotContain(maliciousInput, redactStdout, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(maliciousInput, redactStderr, StringComparison.OrdinalIgnoreCase);
+        var combinedRedactError = redactStdout + redactStderr;
+        Assert.Contains("Must be a valid GUID", combinedRedactError, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string GetCliDllPath()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "RoleRadar.Cli.dll");

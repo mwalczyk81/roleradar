@@ -129,4 +129,95 @@ public sealed class TrackingArchitectureTests
         Assert.Contains("tracker_log", toolNames);
         Assert.Contains("application_record", toolNames);
     }
+
+    [Fact]
+    public void TrackingHandlers_MustNotCallNoteAuditFactoryMethods()
+    {
+        var appAssembly = typeof(RoleRadar.Application.Tracking.Commands.RecordCompanyCommand).Assembly;
+        var trackingTypes = appAssembly.GetTypes()
+            .Where(t => t.Namespace is not null && t.Namespace.StartsWith("RoleRadar.Application.Tracking", StringComparison.Ordinal))
+            .ToArray();
+
+        var noteFactoryNames = new HashSet<string>
+        {
+            "Create",
+            "CreateForCreate",
+            "CreateForAppend",
+            "CreateForReplaceSection",
+            "CreateForArchive",
+            "CreateForImportCreate",
+            "CreateForImportOverwrite"
+        };
+
+        foreach (var type in trackingTypes)
+        {
+            var methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
+            foreach (var m in methods)
+            {
+                var body = m.GetMethodBody();
+                if (body is null) continue;
+
+                // Check method calls in IL instructions
+                var il = body.GetILAsByteArray();
+                if (il is null) continue;
+
+                // Also check through reflection tokens if method calls exist
+                // A clean way using NetArchTest or reflection:
+                // Verify that no method in type invokes AuditLogEntry note factory methods
+            }
+        }
+
+        var trackingMethods = trackingTypes
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly)
+                .Concat(t.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic).SelectMany(nt => nt.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static | BindingFlags.DeclaredOnly))))
+            .ToArray();
+
+        var failingCallers = new List<string>();
+
+        foreach (var tm in trackingMethods)
+        {
+            MethodBody? body;
+            try
+            {
+                body = tm.GetMethodBody();
+            }
+            catch
+            {
+                continue;
+            }
+            if (body is null) continue;
+            var il = body.GetILAsByteArray();
+            if (il is null) continue;
+
+            var module = tm.Module;
+            for (int i = 0; i < il.Length; i++)
+            {
+                // Call (0x28), Callvirt (0x6F), newobj (0x73)
+                if (il[i] is 0x28 or 0x6F or 0x73)
+                {
+                    if (i + 4 < il.Length)
+                    {
+                        int token = BitConverter.ToInt32(il, i + 1);
+                        try
+                        {
+                            var resolvedMethod = module.ResolveMethod(token);
+                            if (resolvedMethod is not null &&
+                                resolvedMethod.DeclaringType == typeof(RoleRadar.Domain.Audit.AuditLogEntry) &&
+                                noteFactoryNames.Contains(resolvedMethod.Name))
+                            {
+                                failingCallers.Add($"{tm.DeclaringType?.Name}.{tm.Name} -> {resolvedMethod.Name}");
+                            }
+                        }
+                        catch
+                        {
+                            // Ignored if token cannot be resolved
+                        }
+                    }
+                }
+            }
+        }
+
+        Assert.True(failingCallers.Count == 0,
+            $"Tracking handlers directly call forbidden note audit methods:\n{string.Join("\n", failingCallers.Distinct())}\nNon-note entities must use dedicated tracking audit operations.");
+    }
 }
