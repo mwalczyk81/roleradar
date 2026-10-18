@@ -560,6 +560,146 @@ public sealed class ShippedHostTrackingIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task ShippedMcpHost_PostingRecord_Signals_ValidatesPersistsAndAffectsGhostLikelihood()
+    {
+        var mcpDllPath = GetMcpDllPath();
+        var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_shipped_signals");
+        var env = _sharedMongo.CreateProcessEnvironment(uniqueDb);
+        var mongoClient = new MongoClient(_sharedMongo.ConnectionString);
+
+        await using var client = await McpProcessClient.StartAsync(mcpDllPath, env);
+
+        try
+        {
+            // 1. Create company
+            var compRes = await client.CallToolAsync("company_record", new
+            {
+                name = "Signals Shipped Host Corp"
+            });
+            Assert.True(compRes.GetProperty("ok").GetBoolean());
+            var companyId = compRes.GetProperty("data").GetProperty("company").GetProperty("id").GetString();
+
+            // 2. Reject invalid signalType with ValidationError and writes nothing
+            var invalidSignalRes = await client.CallToolAsync("posting_record", new
+            {
+                companyId = companyId,
+                title = "Invalid Signal Title",
+                sourceKind = "ats",
+                signals = new[]
+                {
+                    new
+                    {
+                        signalType = "bogus_signal_type",
+                        evidence = "Bogus evidence"
+                    }
+                }
+            });
+            Assert.False(invalidSignalRes.GetProperty("ok").GetBoolean());
+            Assert.Equal("ValidationError", invalidSignalRes.GetProperty("error").GetProperty("code").GetString());
+
+            var db = mongoClient.GetDatabase(uniqueDb);
+            var signalsCol = db.GetCollection<BsonDocument>(TrackingMongoOptions.PostingSignalsCollectionName);
+            var initialSignalCount = await signalsCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty);
+            Assert.Equal(0, initialSignalCount);
+
+            // 3. Create posting with valid signals (gone + phantom + passed deadline => high or critical ghostLikelihood)
+            var createRes = await client.CallToolAsync("posting_record", new
+            {
+                companyId = companyId,
+                title = "Senior Platform Lead",
+                sourceKind = "ats",
+                atsTenant = "signalscorp",
+                requisitionId = "req-ghost-1",
+                signals = new[]
+                {
+                    new
+                    {
+                        signalType = "gone",
+                        evidence = "404 Not Found on career site"
+                    },
+                    new
+                    {
+                        signalType = "phantom",
+                        evidence = "Headcount cancelled on quarterly earnings call"
+                    },
+                    new
+                    {
+                        signalType = "deadline",
+                        evidence = "Application window expired",
+                        deadlineDate = "2026-01-01"
+                    }
+                }
+            });
+            Assert.True(createRes.GetProperty("ok").GetBoolean());
+            var postingId = createRes.GetProperty("data").GetProperty("posting").GetProperty("id").GetString();
+
+            // Assert posting_signals collection has the documents
+            var signalsInDb = await signalsCol.Find(FilterDefinition<BsonDocument>.Empty).ToListAsync();
+            Assert.Equal(3, signalsInDb.Count);
+
+            // Assert ghostLikelihood in tracker_query reflects them (high or critical)
+            var queryRes = await client.CallToolAsync("tracker_query", new
+            {
+                entity = "postings"
+            });
+            Assert.True(queryRes.GetProperty("ok").GetBoolean());
+            var postingsList = queryRes.GetProperty("data").GetProperty("postings").EnumerateArray().ToList();
+            var matchedPosting = postingsList.FirstOrDefault(p => p.GetProperty("id").GetString() == postingId);
+            Assert.True(matchedPosting.ValueKind != JsonValueKind.Undefined);
+            var ghost = matchedPosting.GetProperty("ghostLikelihood").GetString();
+            Assert.True(ghost == "high" || ghost == "critical", $"Expected ghostLikelihood to be high or critical, got: {ghost}");
+
+            // 4. Dedup match appends signals and audits
+            var dedupRes = await client.CallToolAsync("posting_record", new
+            {
+                companyId = companyId,
+                title = "Senior Platform Lead",
+                atsTenant = "signalscorp",
+                requisitionId = "req-ghost-1",
+                signals = new[]
+                {
+                    new
+                    {
+                        signalType = "repost",
+                        evidence = "Re-opened after internal review"
+                    }
+                }
+            });
+            Assert.True(dedupRes.GetProperty("ok").GetBoolean());
+            Assert.Equal("already_tracked", dedupRes.GetProperty("data").GetProperty("status").GetString());
+
+            var signalsAfterDedup = await signalsCol.Find(FilterDefinition<BsonDocument>.Empty).ToListAsync();
+            Assert.Equal(4, signalsAfterDedup.Count);
+
+            // 5. Identical resubmission same day appends nothing
+            var resubmitRes = await client.CallToolAsync("posting_record", new
+            {
+                companyId = companyId,
+                title = "Senior Platform Lead",
+                atsTenant = "signalscorp",
+                requisitionId = "req-ghost-1",
+                signals = new[]
+                {
+                    new
+                    {
+                        signalType = "repost",
+                        evidence = "Re-opened after internal review"
+                    }
+                }
+            });
+            Assert.True(resubmitRes.GetProperty("ok").GetBoolean());
+            Assert.Equal("already_tracked", resubmitRes.GetProperty("data").GetProperty("status").GetString());
+
+            var signalsAfterResubmit = await signalsCol.Find(FilterDefinition<BsonDocument>.Empty).ToListAsync();
+            Assert.Equal(4, signalsAfterResubmit.Count);
+        }
+        finally
+        {
+            await mongoClient.DropDatabaseAsync(uniqueDb);
+        }
+    }
+
     private static string GetMcpDllPath()
     {
         var mcpDllPath = typeof(Mcp.Stdio.Program).Assembly.Location;
