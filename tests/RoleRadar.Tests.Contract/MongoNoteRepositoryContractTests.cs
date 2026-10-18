@@ -11,7 +11,7 @@ using Xunit;
 
 namespace RoleRadar.Tests.Contract;
 
-public sealed class MongoNoteRepositoryContractTests : IClassFixture<SharedMongoFixture>, IAsyncLifetime
+public sealed class MongoNoteRepositoryContractTests : IAsyncLifetime
 {
     private readonly SharedMongoFixture _sharedMongo;
     private MongoClient _client = null!;

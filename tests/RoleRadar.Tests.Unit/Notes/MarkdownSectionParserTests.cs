@@ -1,4 +1,3 @@
-using RoleRadar.Application.Abstractions;
 using RoleRadar.Domain.Notes;
 using Xunit;
 

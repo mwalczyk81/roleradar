@@ -40,6 +40,12 @@ public sealed class Note
 
     public DateTime UpdatedAtUtc { get; private set; }
 
+    public Guid? CompanyId { get; private set; }
+
+    public Guid? PostingId { get; private set; }
+
+    public Guid? ApplicationId { get; private set; }
+
     /// <summary>
     /// Detects whether an imported note's body has been modified since its last import write.
     /// Compares CurrentBodyHash against ImportMetadata.LastImportedBodyHash only (excluding Provenance.Date).
@@ -62,7 +68,10 @@ public sealed class Note
         Guid versionToken,
         int revisionCount,
         DateTime createdAtUtc,
-        DateTime updatedAtUtc)
+        DateTime updatedAtUtc,
+        Guid? companyId = null,
+        Guid? postingId = null,
+        Guid? applicationId = null)
     {
         Id = id;
         OwnerId = ownerId;
@@ -78,6 +87,9 @@ public sealed class Note
         RevisionCount = revisionCount;
         CreatedAtUtc = EnsureUtc(createdAtUtc);
         UpdatedAtUtc = EnsureUtc(updatedAtUtc);
+        CompanyId = companyId;
+        PostingId = postingId;
+        ApplicationId = applicationId;
     }
 
     public static Note Create(
@@ -87,7 +99,10 @@ public sealed class Note
         IEnumerable<string>? tags,
         string area,
         ProvenanceMarker provenance,
-        DateTime createdAtUtc)
+        DateTime createdAtUtc,
+        Guid? companyId = null,
+        Guid? postingId = null,
+        Guid? applicationId = null)
     {
         var validOwner = new OwnerId(ownerId).Value;
         var normalizedTitle = NormalizeTitle(title);
@@ -111,7 +126,10 @@ public sealed class Note
             versionToken: Guid.CreateVersion7(),
             revisionCount: 0,
             createdAtUtc: utcNow,
-            updatedAtUtc: utcNow);
+            updatedAtUtc: utcNow,
+            companyId: companyId,
+            postingId: postingId,
+            applicationId: applicationId);
     }
 
     public static Note CreateImported(
@@ -170,7 +188,10 @@ public sealed class Note
         Guid versionToken,
         int revisionCount,
         DateTime createdAtUtc,
-        DateTime updatedAtUtc) =>
+        DateTime updatedAtUtc,
+        Guid? companyId = null,
+        Guid? postingId = null,
+        Guid? applicationId = null) =>
         new(
             id,
             ownerId,
@@ -185,7 +206,10 @@ public sealed class Note
             versionToken,
             revisionCount,
             createdAtUtc,
-            updatedAtUtc);
+            updatedAtUtc,
+            companyId,
+            postingId,
+            applicationId);
 
     /// <summary>
     /// Appends text to the note body without creating a full-body revision snapshot or incrementing RevisionCount.

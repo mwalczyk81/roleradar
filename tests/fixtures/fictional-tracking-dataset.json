@@ -1,0 +1,326 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "Fictional tracking dataset for RoleRadar testing suites per FR-046. All entities and names are completely fictional.",
+  "companies": [
+    {
+      "id": "0192e401-0000-7000-8000-000000000001",
+      "owner_id": "owner-1",
+      "name": "Acme Software Corp",
+      "normalized_name": "acme software corp",
+      "description": "Enterprise cloud compliance and infrastructure software; VC-backed Series B; HQ in Austin.",
+      "parent_company": "Acme Holdings LLC",
+      "ownership_type": "vc_backed",
+      "headquarters": "Austin, TX",
+      "category_tags": ["cloud", "infrastructure", "security"],
+      "status": "target",
+      "last_checked_at": "2026-10-17T12:00:00Z",
+      "last_check_result": "2 active .NET senior positions found",
+      "version_token": "0192e401-0000-7000-8000-000000000002"
+    },
+    {
+      "id": "0192e401-0000-7000-8000-000000000003",
+      "owner_id": "owner-1",
+      "name": "OctaneCorp Systems",
+      "normalized_name": "octanecorp systems",
+      "description": "High-throughput telemetry and distributed stream processing platform; public company.",
+      "parent_company": null,
+      "ownership_type": "public",
+      "headquarters": "Seattle, WA",
+      "category_tags": ["streaming", "data", "platform"],
+      "status": "target",
+      "last_checked_at": "2026-10-16T18:00:00Z",
+      "last_check_result": "1 lead discovered",
+      "version_token": "0192e401-0000-7000-8000-000000000004"
+    },
+    {
+      "id": "0192e401-0000-7000-8000-000000000005",
+      "owner_id": "owner-1",
+      "name": "Zenith Dynamics",
+      "normalized_name": "zenith dynamics",
+      "description": "Healthcare logistics and automation consultancy; private equity backed.",
+      "parent_company": "Zenith Group",
+      "ownership_type": "pe_backed",
+      "headquarters": "Chicago, IL",
+      "category_tags": ["healthcare", "logistics"],
+      "status": "watch",
+      "last_checked_at": null,
+      "last_check_result": null,
+      "version_token": "0192e401-0000-7000-8000-000000000006"
+    }
+  ],
+  "career_sources": [
+    {
+      "id": "0192e401-0000-7000-8000-000000000010",
+      "owner_id": "owner-1",
+      "company_id": "0192e401-0000-7000-8000-000000000001",
+      "ats_type": "Greenhouse",
+      "tenant": "acmesoftware",
+      "slug": "acme-careers",
+      "fetch_method": "api",
+      "notes": "Greenhouse public API boards.greenhouse.io/v1/boards/acmesoftware/jobs",
+      "is_active": true,
+      "version_token": "0192e401-0000-7000-8000-000000000011"
+    },
+    {
+      "id": "0192e401-0000-7000-8000-000000000012",
+      "owner_id": "owner-1",
+      "company_id": "0192e401-0000-7000-8000-000000000003",
+      "ats_type": "Workday",
+      "tenant": "octanecorp",
+      "slug": "careers",
+      "fetch_method": "browser",
+      "notes": "Workday single-page application requiring JavaScript rendering",
+      "is_active": true,
+      "version_token": "0192e401-0000-7000-8000-000000000013"
+    },
+    {
+      "id": "0192e401-0000-7000-8000-000000000014",
+      "owner_id": "owner-1",
+      "company_id": "0192e401-0000-7000-8000-000000000005",
+      "ats_type": "Lever",
+      "tenant": "zenithdynamics",
+      "slug": "jobs",
+      "fetch_method": "api",
+      "notes": "Retired source after company migrated careers portal",
+      "is_active": false,
+      "version_token": "0192e401-0000-7000-8000-000000000015"
+    }
+  ],
+  "postings": [
+    {
+      "id": "0192e401-0000-7000-8000-000000000020",
+      "owner_id": "owner-1",
+      "company_id": "0192e401-0000-7000-8000-000000000001",
+      "title": "Staff Backend Engineer",
+      "normalized_title": "staff backend engineer",
+      "original_url": "https://boards.greenhouse.io/acmesoftware/jobs/4012948002?gh_src=linkedin",
+      "normalized_url": "https://boards.greenhouse.io/acmesoftware/jobs/4012948002",
+      "source_kind": "ats",
+      "ats_tenant": "acmesoftware",
+      "requisition_id": "4012948002",
+      "dedup_key_a": "acmesoftware|4012948002",
+      "dedup_key_b": "https://boards.greenhouse.io/acmesoftware/jobs/4012948002",
+      "dedup_key_c": null,
+      "location": "Austin, TX (Hybrid)",
+      "remote_type": "hybrid",
+      "compensation": {
+        "min": 175000,
+        "max": 205000,
+        "currency": "USD",
+        "text": "$175,000 - $205,000 + equity + 401(k) match"
+      },
+      "posted_date": "2026-10-15",
+      "first_seen_at": "2026-10-16T14:30:00Z",
+      "last_verified_at": "2026-10-17T09:00:00Z",
+      "closed_date": null,
+      "score": 8.5,
+      "culture_level": "stable",
+      "culture_summary": "High engineering autonomy, transparent roadmap, strong tenure.",
+      "disposition": "scored",
+      "disposition_reason": "Matches staff backend tech stack criterion; compensation meets preference.",
+      "disposition_criterion_id": "0192e401-0000-7000-8000-000000000040",
+      "resurface_policy": "never",
+      "decided_at": "2026-10-17T09:00:00Z",
+      "duplicate_of_id": null,
+      "screening_note_id": null,
+      "version_token": "0192e401-0000-7000-8000-000000000021"
+    },
+    {
+      "id": "0192e401-0000-7000-8000-000000000022",
+      "owner_id": "owner-1",
+      "company_id": "0192e401-0000-7000-8000-000000000003",
+      "title": "Principal Distributed Systems Engineer",
+      "normalized_title": "principal distributed systems engineer",
+      "original_url": "https://jobs.octanecorp.internal/positions/pde-9011?utm_campaign=dev",
+      "normalized_url": "https://jobs.octanecorp.internal/positions/pde-9011",
+      "source_kind": "ats",
+      "ats_tenant": null,
+      "requisition_id": "REQ-OCT-9011",
+      "dedup_key_a": null,
+      "dedup_key_b": "https://jobs.octanecorp.internal/positions/pde-9011",
+      "dedup_key_c": "0192e401-0000-7000-8000-000000000003|REQ-OCT-9011",
+      "location": "Remote - US",
+      "remote_type": "remote",
+      "compensation": {
+        "min": 195000,
+        "max": 230000,
+        "currency": "USD",
+        "text": "$195k - $230k base"
+      },
+      "posted_date": "2026-10-10",
+      "first_seen_at": "2026-10-12T10:00:00Z",
+      "last_verified_at": "2026-10-12T10:00:00Z",
+      "closed_date": null,
+      "score": 9.0,
+      "culture_level": "moderate",
+      "culture_summary": "Fast-paced environment, high bar for distributed consensus.",
+      "disposition": "lead",
+      "disposition_reason": null,
+      "disposition_criterion_id": null,
+      "resurface_policy": "never",
+      "decided_at": null,
+      "duplicate_of_id": null,
+      "screening_note_id": null,
+      "version_token": "0192e401-0000-7000-8000-000000000023"
+    },
+    {
+      "id": "0192e401-0000-7000-8000-000000000024",
+      "owner_id": "owner-1",
+      "company_id": "0192e401-0000-7000-8000-000000000005",
+      "title": "Senior Cloud Infrastructure Engineer",
+      "normalized_title": "senior cloud infrastructure engineer",
+      "original_url": null,
+      "normalized_url": null,
+      "source_kind": "aggregator",
+      "ats_tenant": null,
+      "requisition_id": null,
+      "dedup_key_a": null,
+      "dedup_key_b": null,
+      "dedup_key_c": null,
+      "location": "Chicago, IL (Onsite)",
+      "remote_type": "onsite",
+      "compensation": null,
+      "posted_date": "2026-09-01",
+      "first_seen_at": "2026-09-05T08:00:00Z",
+      "last_verified_at": "2026-09-10T08:00:00Z",
+      "closed_date": "2026-09-15",
+      "score": 2.0,
+      "culture_level": "unknown",
+      "culture_summary": null,
+      "disposition": "screened_out",
+      "disposition_reason": "Onsite mandate violates remote work criterion.",
+      "disposition_criterion_id": "0192e401-0000-7000-8000-000000000041",
+      "resurface_policy": "never",
+      "decided_at": "2026-09-10T08:00:00Z",
+      "duplicate_of_id": null,
+      "screening_note_id": null,
+      "version_token": "0192e401-0000-7000-8000-000000000025"
+    }
+  ],
+  "posting_signals": [
+    {
+      "id": "0192e401-0000-7000-8000-000000000030",
+      "owner_id": "owner-1",
+      "posting_id": "0192e401-0000-7000-8000-000000000020",
+      "signal_type": "deadline",
+      "evidence": "Job posting description specifies final applications accepted by 2026-11-01.",
+      "deadline_date": "2026-11-01",
+      "observed_at": "2026-10-16T14:35:00Z"
+    },
+    {
+      "id": "0192e401-0000-7000-8000-000000000031",
+      "owner_id": "owner-1",
+      "posting_id": "0192e401-0000-7000-8000-000000000024",
+      "signal_type": "gone",
+      "evidence": "404 HTTP status code returned from career board link during check.",
+      "deadline_date": null,
+      "observed_at": "2026-09-15T08:00:00Z"
+    }
+  ],
+  "criteria": [
+    {
+      "id": "0192e401-0000-7000-8000-000000000040",
+      "owner_id": "owner-1",
+      "key": "min_base_salary",
+      "category": "hard_skip",
+      "value": "170000",
+      "effective_from": "2026-10-01T00:00:00Z",
+      "effective_to": null,
+      "provenance": "stated",
+      "is_active": true,
+      "version_token": "0192e401-0000-7000-8000-000000000041"
+    },
+    {
+      "id": "0192e401-0000-7000-8000-000000000041",
+      "owner_id": "owner-1",
+      "key": "remote_required",
+      "category": "hard_skip",
+      "value": "Must offer remote or hybrid with <= 1 day/week office",
+      "effective_from": "2026-09-01T00:00:00Z",
+      "effective_to": null,
+      "provenance": "stated",
+      "is_active": true,
+      "version_token": "0192e401-0000-7000-8000-000000000042"
+    },
+    {
+      "id": "0192e401-0000-7000-8000-000000000043",
+      "owner_id": "owner-1",
+      "key": "min_base_salary",
+      "category": "hard_skip",
+      "value": "160000",
+      "effective_from": "2026-06-01T00:00:00Z",
+      "effective_to": "2026-10-01T00:00:00Z",
+      "provenance": "stated",
+      "is_active": false,
+      "version_token": "0192e401-0000-7000-8000-000000000044"
+    }
+  ],
+  "applications": [
+    {
+      "id": "0192e401-0000-7000-8000-000000000050",
+      "owner_id": "owner-1",
+      "posting_id": "0192e401-0000-7000-8000-000000000020",
+      "submitted_date": "2026-10-17",
+      "desired_salary": {
+        "min": 185000,
+        "max": 200000,
+        "currency": "USD"
+      },
+      "target_start_date": "2026-12-01",
+      "resume_variant": "tailored",
+      "resume_pointer": "local://resumes/acme-backend-2026.pdf",
+      "referral_contact_id": "0192e401-0000-7000-8000-000000000060",
+      "confirmation_code": "APP-ACM-89412",
+      "outcome": "applied",
+      "outcome_reason": null,
+      "version_token": "0192e401-0000-7000-8000-000000000051"
+    }
+  ],
+  "application_events": [
+    {
+      "id": "0192e401-0000-7000-8000-000000000055",
+      "owner_id": "owner-1",
+      "application_id": "0192e401-0000-7000-8000-000000000050",
+      "event_date": "2026-10-17",
+      "event_type": "applied",
+      "event_source": "greenhouse_portal",
+      "notes": "Submitted application via referral portal link"
+    }
+  ],
+  "contacts": [
+    {
+      "id": "0192e401-0000-7000-8000-000000000060",
+      "owner_id": "owner-1",
+      "name": "Alex Mercer",
+      "role": "Staff Engineering Manager",
+      "company_affiliation": "Acme Software Corp",
+      "company_id": "0192e401-0000-7000-8000-000000000001",
+      "relationship": "referral",
+      "notes": "Former colleague from open source project collaboration",
+      "is_redacted": false,
+      "version_token": "0192e401-0000-7000-8000-000000000061"
+    },
+    {
+      "id": "0192e401-0000-7000-8000-000000000062",
+      "owner_id": "owner-1",
+      "name": "[REDACTED]",
+      "role": null,
+      "company_affiliation": null,
+      "company_id": null,
+      "relationship": "redacted",
+      "notes": null,
+      "is_redacted": true,
+      "version_token": "0192e401-0000-7000-8000-000000000063"
+    }
+  ],
+  "search_runs": [
+    {
+      "id": "0192e401-0000-7000-8000-000000000070",
+      "owner_id": "owner-1",
+      "started_at": "2026-10-17T08:00:00Z",
+      "new_postings_count": 2,
+      "report_note_id": null,
+      "notes": "Weekly target sweep covering Acme Software and OctaneCorp"
+    }
+  ]
+}

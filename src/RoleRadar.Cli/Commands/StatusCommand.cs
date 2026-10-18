@@ -1,7 +1,11 @@
 using System.CommandLine;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using MongoDB.Bson;
+using MongoDB.Driver;
 using RoleRadar.Application.Abstractions;
+using RoleRadar.Infrastructure.Mongo;
 
 namespace RoleRadar.Cli.Commands;
 
@@ -38,10 +42,54 @@ public static class StatusCommand
             if (readinessResult.IsSuccess && readinessResult.Value is not null)
             {
                 var status = readinessResult.Value;
+
+                var client = scope.ServiceProvider.GetService<IMongoClient>();
+                var mongoOpts = scope.ServiceProvider.GetService<IOptions<MongoOptions>>();
+                long companiesCount = 0;
+                long postingsCount = 0;
+                long criteriaCount = 0;
+                long applicationsCount = 0;
+                long signalsCount = 0;
+                long searchRunsCount = 0;
+                long contactsCount = 0;
+
+                if (client is not null && mongoOpts is not null)
+                {
+                    var db = client.GetDatabase(mongoOpts.Value.DatabaseName);
+                    companiesCount = await db.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName).CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty, cancellationToken: ct);
+                    postingsCount = await db.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName).CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty, cancellationToken: ct);
+                    criteriaCount = await db.GetCollection<BsonDocument>(TrackingMongoOptions.CriteriaCollectionName).CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty, cancellationToken: ct);
+                    applicationsCount = await db.GetCollection<BsonDocument>(TrackingMongoOptions.ApplicationsCollectionName).CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty, cancellationToken: ct);
+                    signalsCount = await db.GetCollection<BsonDocument>(TrackingMongoOptions.PostingSignalsCollectionName).CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty, cancellationToken: ct);
+                    searchRunsCount = await db.GetCollection<BsonDocument>(TrackingMongoOptions.SearchRunsCollectionName).CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty, cancellationToken: ct);
+                    contactsCount = await db.GetCollection<BsonDocument>(TrackingMongoOptions.ContactsCollectionName).CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty, cancellationToken: ct);
+                }
+
                 if (json)
                 {
-                    var jsonStr = JsonSerializer.Serialize(status, JsonOpts);
-                    Console.WriteLine(jsonStr);
+                    var data = new
+                    {
+                        isReady = status.IsReady,
+                        endpoint = status.Endpoint,
+                        replicaSet = status.ReplicaSet,
+                        latencyMs = status.LatencyMs,
+                        companiesCount,
+                        postingsCount,
+                        criteriaCount,
+                        applicationsCount,
+                        signalsCount,
+                        searchRunsCount,
+                        contactsCount
+                    };
+
+                    var root = new
+                    {
+                        isReady = status.IsReady,
+                        ok = true,
+                        data
+                    };
+
+                    Console.WriteLine(JsonSerializer.Serialize(root, JsonOpts));
                     return 0;
                 }
 
@@ -49,6 +97,13 @@ public static class StatusCommand
                 Console.WriteLine($"Endpoint:        {status.Endpoint}");
                 Console.WriteLine($"Replica Set:     {status.ReplicaSet}");
                 Console.WriteLine($"Latency:         {status.LatencyMs:F2} ms");
+                Console.WriteLine($"Companies:       {companiesCount}");
+                Console.WriteLine($"Postings:        {postingsCount}");
+                Console.WriteLine($"Criteria:        {criteriaCount}");
+                Console.WriteLine($"Applications:    {applicationsCount}");
+                Console.WriteLine($"Signals:         {signalsCount}");
+                Console.WriteLine($"Search Runs:     {searchRunsCount}");
+                Console.WriteLine($"Contacts:        {contactsCount}");
                 return 0;
             }
 
@@ -58,6 +113,7 @@ public static class StatusCommand
                 var errorObj = new
                 {
                     isReady = false,
+                    ok = false,
                     code = error.Code.ToString(),
                     message = error.Message,
                     metadata = error.Metadata

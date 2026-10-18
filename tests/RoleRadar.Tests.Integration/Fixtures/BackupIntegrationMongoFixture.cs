@@ -8,6 +8,8 @@ public sealed class BackupIntegrationMongoFixture : IAsyncLifetime
 {
     private readonly MongoDbContainer _container = new MongoDbBuilder("mongo:8.0.34")
         .WithReplicaSet("rs0")
+        .WithTmpfsMount("/data/db")
+        .WithTmpfsMount("/data/configdb")
         .Build();
 
     public string ConnectionString => _container.GetConnectionString();
@@ -36,5 +38,22 @@ public sealed class BackupIntegrationMongoFixture : IAsyncLifetime
                 await client.DropDatabaseAsync(dbName);
             }
         }
+    }
+
+    public IReadOnlyDictionary<string, string> CreateProcessEnvironment(string databaseName)
+    {
+        var mongoUrl = new MongoUrl(ConnectionString);
+        var authPart = (!string.IsNullOrEmpty(mongoUrl.Username) && !string.IsNullOrEmpty(mongoUrl.Password))
+            ? $"{mongoUrl.Username}:{mongoUrl.Password}@"
+            : string.Empty;
+        var internalUri = $"mongodb://{authPart}localhost:27017/?replicaSet=rs0&authSource=admin";
+
+        return new Dictionary<string, string>
+        {
+            ["ROLERADAR_MONGO_CONNECTION_STRING"] = ConnectionString,
+            ["ROLERADAR_MONGO_DATABASE"] = databaseName,
+            ["ROLERADAR_BACKUP_DUMP_COMMAND"] = $"docker exec -i {_container.Id} mongodump --uri=\"{internalUri}\" --archive --gzip --oplog",
+            ["ROLERADAR_BACKUP_RESTORE_COMMAND"] = $"docker exec -i {_container.Id} mongorestore --uri=\"{internalUri}\" --archive --gzip --nsInclude \"<db>.*\""
+        };
     }
 }

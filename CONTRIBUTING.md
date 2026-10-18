@@ -35,3 +35,23 @@ dotnet build RoleRadar.sln -c Release -warnaserror
 dotnet test RoleRadar.sln -c Release --collect:"XPlat Code Coverage"
 pre-commit run --all-files
 ```
+
+### Fast Test Loop
+
+During local development, you can run the fast test loop (`Architecture`, `Unit`, and `Contract` test suites, omitting `Integration` tests):
+
+```powershell
+pwsh ./scripts/test-fast.ps1
+```
+
+Or run all tests with:
+
+```powershell
+pwsh ./scripts/test-all.ps1
+```
+
+Continuous Integration (CI) always runs the complete test suite across all projects:
+
+```powershell
+dotnet test RoleRadar.sln -c Release
+```

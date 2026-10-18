@@ -1,4 +1,3 @@
-using System.Text;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Domain.Common;
 using RoleRadar.Domain.Notes;

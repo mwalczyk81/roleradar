@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using FsCheck;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
@@ -621,7 +620,11 @@ public sealed class SecretStreamBackupCryptoTests
         public override int Read(byte[] buffer, int offset, int count)
         {
             var remaining = _totalLength - _position;
-            if (remaining <= 0) return 0;
+            if (remaining <= 0)
+            {
+                return 0;
+            }
+
             var toRead = (int)Math.Min(count, remaining);
             for (var i = 0; i < toRead; i++)
             {
@@ -634,7 +637,11 @@ public sealed class SecretStreamBackupCryptoTests
         public override int Read(Span<byte> buffer)
         {
             var remaining = _totalLength - _position;
-            if (remaining <= 0) return 0;
+            if (remaining <= 0)
+            {
+                return 0;
+            }
+
             var toRead = (int)Math.Min(buffer.Length, remaining);
             for (var i = 0; i < toRead; i++)
             {
@@ -710,7 +717,11 @@ public sealed class SecretStreamBackupCryptoTests
         public override int Read(byte[] buffer, int offset, int count)
         {
             var remaining = _data.Length - _position;
-            if (remaining <= 0) return 0;
+            if (remaining <= 0)
+            {
+                return 0;
+            }
+
             var toRead = Math.Min(count, remaining);
             Buffer.BlockCopy(_data, _position, buffer, offset, toRead);
             _position += toRead;
@@ -720,7 +731,11 @@ public sealed class SecretStreamBackupCryptoTests
         public override int Read(Span<byte> buffer)
         {
             var remaining = _data.Length - _position;
-            if (remaining <= 0) return 0;
+            if (remaining <= 0)
+            {
+                return 0;
+            }
+
             var toRead = Math.Min(buffer.Length, remaining);
             _data.AsSpan(_position, toRead).CopyTo(buffer);
             _position += toRead;
@@ -740,9 +755,19 @@ public sealed class SecretStreamBackupCryptoTests
         public override void Flush() { }
         public override long Seek(long offset, SeekOrigin origin)
         {
-            if (origin == SeekOrigin.Begin) _position = (int)offset;
-            else if (origin == SeekOrigin.Current) _position += (int)offset;
-            else if (origin == SeekOrigin.End) _position = _data.Length + (int)offset;
+            if (origin == SeekOrigin.Begin)
+            {
+                _position = (int)offset;
+            }
+            else if (origin == SeekOrigin.Current)
+            {
+                _position += (int)offset;
+            }
+            else if (origin == SeekOrigin.End)
+            {
+                _position = _data.Length + (int)offset;
+            }
+
             return _position;
         }
         public override void SetLength(long value) => throw new NotSupportedException();

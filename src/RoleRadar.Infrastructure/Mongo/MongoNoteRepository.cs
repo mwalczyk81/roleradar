@@ -12,6 +12,7 @@ namespace RoleRadar.Infrastructure.Mongo;
 public sealed class MongoNoteRepository : INoteRepository, IDisposable
 {
     private static readonly AsyncLocal<AmbientTransactionScope?> CurrentTransactionScope = new();
+    internal static IClientSessionHandle? CurrentSession => CurrentTransactionScope.Value?.Context.Session;
 
     private readonly IMongoClient _client;
     private readonly IMongoDatabase _database;
@@ -62,7 +63,14 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(work);
-        await EnsureIndexesOnceAsync(cancellationToken);
+        try
+        {
+            await EnsureIndexesOnceAsync(cancellationToken);
+        }
+        catch (Domain.Tracking.TrackingIndexValidationException ex)
+        {
+            return Result<TResponse>.Failure(ErrorCode.ValidationError, ex.Message);
+        }
 
         // Support ambient transaction re-entrancy when TransactionAndAuditCommandDecorator wraps a handler
         // that itself calls ExecuteInTransactionAsync.
@@ -72,47 +80,80 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             return await work(existingScope.Context, cancellationToken);
         }
 
-        using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
-        var txOptions = new TransactionOptions(
-            readConcern: ReadConcern.Snapshot,
-            writeConcern: WriteConcern.WMajority,
-            readPreference: ReadPreference.Primary);
-
-        Result<TResponse> finalResult = default;
-
-        try
+        const int maxAttempts = 5;
+        for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
-            await session.WithTransactionAsync(
-                async (sessionHandle, ct) =>
-                {
-                    var context = new MongoNoteTransactionContext(this, sessionHandle);
-                    var scope = new AmbientTransactionScope(context);
-                    CurrentTransactionScope.Value = scope;
-                    try
+            using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
+            var txOptions = new TransactionOptions(
+                readConcern: ReadConcern.Snapshot,
+                writeConcern: WriteConcern.WMajority,
+                readPreference: ReadPreference.Primary);
+
+            Result<TResponse> finalResult = default;
+
+            try
+            {
+                await session.WithTransactionAsync(
+                    async (sessionHandle, ct) =>
                     {
-                        var outcome = await work(context, ct);
-                        finalResult = outcome;
-                        if (!outcome.IsSuccess)
+                        var context = new MongoNoteTransactionContext(this, sessionHandle);
+                        var scope = new AmbientTransactionScope(context);
+                        CurrentTransactionScope.Value = scope;
+                        try
                         {
-                            throw new RollbackOnResultFailureException();
+                            var outcome = await work(context, ct);
+                            finalResult = outcome;
+                            if (!outcome.IsSuccess)
+                            {
+                                throw new RollbackOnResultFailureException();
+                            }
+
+                            return true;
                         }
+                        finally
+                        {
+                            CurrentTransactionScope.Value = null;
+                        }
+                    },
+                    txOptions,
+                    cancellationToken);
 
-                        return true;
-                    }
-                    finally
-                    {
-                        CurrentTransactionScope.Value = null;
-                    }
-                },
-                txOptions,
-                cancellationToken);
-
-            return finalResult;
+                return finalResult;
+            }
+            catch (RollbackOnResultFailureException)
+            {
+                return finalResult;
+            }
+            catch (Exception ex) when (attempt < maxAttempts && IsDuplicateKeyOrWriteConflict(ex))
+            {
+                await Task.Delay(Random.Shared.Next(50, 250), cancellationToken);
+            }
+            catch (Domain.Tracking.TrackingIndexValidationException ex)
+            {
+                return Result<TResponse>.Failure(ErrorCode.ValidationError, ex.Message);
+            }
         }
-        catch (RollbackOnResultFailureException)
+
+        return Result<TResponse>.Failure(ErrorCode.ValidationError, "Operation failed due to concurrent conflicts.");
+    }
+
+    private static bool IsDuplicateKeyOrWriteConflict(Exception ex)
+    {
+        if (ex is MongoWriteException mwe && mwe.WriteError?.Category == ServerErrorCategory.DuplicateKey)
         {
-            return finalResult;
+            return true;
         }
+
+        if (ex is MongoCommandException mce && (mce.Code == 11000 || mce.Code == 112 || mce.Code == 251 || mce.Message.Contains("E11000", StringComparison.OrdinalIgnoreCase) || mce.Message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) || mce.Message.Contains("WriteConflict", StringComparison.OrdinalIgnoreCase)))
+        {
+            return true;
+        }
+
+        var msg = ex.ToString();
+        return msg.Contains("E11000", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("duplicate key", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("WriteConflict", StringComparison.OrdinalIgnoreCase)
+            || msg.Contains("TransientTransactionError", StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<Result<Note>> GetByIdAsync(
@@ -313,6 +354,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             if (!_indexesInitialized)
             {
                 await MongoBootstrapAndIndexes.EnsureIndexesAsync(_database, cancellationToken);
+                await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
                 _indexesInitialized = true;
             }
         }
@@ -393,13 +435,16 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             { "version_token", new BsonBinaryData(note.VersionToken, GuidRepresentation.Standard) },
             { "revision_count", note.RevisionCount },
             { "created_at", new BsonDateTime(note.CreatedAtUtc) },
-            { "updated_at", new BsonDateTime(note.UpdatedAtUtc) }
+            { "updated_at", new BsonDateTime(note.UpdatedAtUtc) },
+            { "company_id", note.CompanyId.HasValue ? new BsonBinaryData(note.CompanyId.Value, GuidRepresentation.Standard) : BsonNull.Value },
+            { "posting_id", note.PostingId.HasValue ? new BsonBinaryData(note.PostingId.Value, GuidRepresentation.Standard) : BsonNull.Value },
+            { "application_id", note.ApplicationId.HasValue ? new BsonBinaryData(note.ApplicationId.Value, GuidRepresentation.Standard) : BsonNull.Value }
         };
 
         return doc;
     }
 
-    private static Note MapDocumentToNote(BsonDocument doc)
+    internal static Note MapDocumentToNote(BsonDocument doc)
     {
         var provDoc = doc["provenance"].AsBsonDocument;
         var provenance = new ProvenanceMarker(
@@ -411,16 +456,33 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
         if (doc.TryGetValue("import_metadata", out var importVal) && !importVal.IsBsonNull)
         {
             var metaDoc = importVal.AsBsonDocument;
+            var sectionOrder = metaDoc.TryGetValue("section_order_index", out var secOrdVal) && !secOrdVal.IsBsonNull
+                ? secOrdVal.AsInt32
+                : (metaDoc.TryGetValue("occurrence_index", out var occVal) && !occVal.IsBsonNull ? occVal.AsInt32 : 1);
+            var lastImportedHash = metaDoc.TryGetValue("last_imported_body_hash", out var libhVal) && !libhVal.IsBsonNull
+                ? libhVal.AsString
+                : doc["current_body_hash"].AsString;
+
             importMeta = NoteImportMetadata.Rehydrate(
                 metaDoc["import_key"].AsString,
                 metaDoc["source_file_id"].AsString,
                 metaDoc["heading_path"].AsString,
                 metaDoc["occurrence_index"].AsInt32,
-                metaDoc["section_order_index"].AsInt32,
-                metaDoc["last_imported_body_hash"].AsString);
+                sectionOrder,
+                lastImportedHash);
         }
 
         var tags = doc["tags"].AsBsonArray.Select(t => t.AsString).ToArray();
+
+        Guid? companyId = doc.TryGetValue("company_id", out var cVal) && !cVal.IsBsonNull && cVal.IsBsonBinaryData
+            ? cVal.AsBsonBinaryData.ToGuid(GuidRepresentation.Standard)
+            : null;
+        Guid? postingId = doc.TryGetValue("posting_id", out var pVal) && !pVal.IsBsonNull && pVal.IsBsonBinaryData
+            ? pVal.AsBsonBinaryData.ToGuid(GuidRepresentation.Standard)
+            : null;
+        Guid? applicationId = doc.TryGetValue("application_id", out var aVal) && !aVal.IsBsonNull && aVal.IsBsonBinaryData
+            ? aVal.AsBsonBinaryData.ToGuid(GuidRepresentation.Standard)
+            : null;
 
         return Note.Rehydrate(
             id: doc["_id"].AsBsonBinaryData.ToGuid(GuidRepresentation.Standard),
@@ -436,7 +498,10 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             versionToken: doc["version_token"].AsBsonBinaryData.ToGuid(GuidRepresentation.Standard),
             revisionCount: doc["revision_count"].AsInt32,
             createdAtUtc: doc["created_at"].ToUniversalTime(),
-            updatedAtUtc: doc["updated_at"].ToUniversalTime());
+            updatedAtUtc: doc["updated_at"].ToUniversalTime(),
+            companyId: companyId,
+            postingId: postingId,
+            applicationId: applicationId);
     }
 
     private static BsonDocument MapRevisionToDocument(NoteRevision revision) =>
@@ -472,6 +537,8 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             { "owner_id", entry.OwnerId },
             { "actor", entry.Actor },
             { "operation", entry.Operation },
+            { "entity_type", entry.EntityType ?? "note" },
+            { "entity_id", new BsonBinaryData(entry.EntityId != Guid.Empty ? entry.EntityId : entry.TargetNoteId, GuidRepresentation.Standard) },
             { "target_note_id", new BsonBinaryData(entry.TargetNoteId, GuidRepresentation.Standard) },
             {
                 "note_revision_id",
@@ -489,7 +556,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
                     ? MapSummaryToDocument(entry.BeforeSummary)
                     : BsonNull.Value
             },
-            { "after_summary", MapSummaryToDocument(entry.AfterSummary) }
+            { "after_summary", entry.AfterSummary is not null ? MapSummaryToDocument(entry.AfterSummary) : BsonNull.Value }
         };
 
     private static BsonDocument MapSummaryToDocument(AuditContentSummary summary) =>
@@ -508,13 +575,26 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             doc["status"].AsString,
             doc["excerpt"].AsString);
 
-    private static AuditLogEntry MapDocumentToAudit(BsonDocument doc) =>
-        AuditLogEntry.Rehydrate(
+    private static AuditLogEntry MapDocumentToAudit(BsonDocument doc)
+    {
+        var targetNoteId = doc.TryGetValue("target_note_id", out var targetNoteVal) && !targetNoteVal.IsBsonNull
+            ? targetNoteVal.AsBsonBinaryData.ToGuid(GuidRepresentation.Standard)
+            : Guid.Empty;
+
+        var entityType = doc.TryGetValue("entity_type", out var entityTypeVal) && !entityTypeVal.IsBsonNull
+            ? entityTypeVal.AsString
+            : "note";
+
+        var entityId = doc.TryGetValue("entity_id", out var entityIdVal) && !entityIdVal.IsBsonNull
+            ? entityIdVal.AsBsonBinaryData.ToGuid(GuidRepresentation.Standard)
+            : (targetNoteId != Guid.Empty ? targetNoteId : doc["_id"].AsBsonBinaryData.ToGuid(GuidRepresentation.Standard));
+
+        return AuditLogEntry.Rehydrate(
             id: doc["_id"].AsBsonBinaryData.ToGuid(GuidRepresentation.Standard),
             ownerId: doc["owner_id"].AsString,
             actor: doc["actor"].AsString,
             operation: doc["operation"].AsString,
-            targetNoteId: doc["target_note_id"].AsBsonBinaryData.ToGuid(GuidRepresentation.Standard),
+            targetNoteId: targetNoteId,
             noteRevisionId: doc.TryGetValue("note_revision_id", out var revVal) && !revVal.IsBsonNull
                 ? revVal.AsBsonBinaryData.ToGuid(GuidRepresentation.Standard)
                 : null,
@@ -529,7 +609,12 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             beforeSummary: doc.TryGetValue("before_summary", out var beforeVal) && !beforeVal.IsBsonNull
                 ? MapDocumentToSummary(beforeVal.AsBsonDocument)
                 : null,
-            afterSummary: MapDocumentToSummary(doc["after_summary"].AsBsonDocument));
+            afterSummary: doc.TryGetValue("after_summary", out var afterVal) && !afterVal.IsBsonNull
+                ? MapDocumentToSummary(afterVal.AsBsonDocument)
+                : null,
+            entityType: entityType,
+            entityId: entityId);
+    }
 
     private sealed class AmbientTransactionScope(MongoNoteTransactionContext context)
     {

@@ -12,6 +12,10 @@ public sealed class AuditLogEntry
 
     public string Operation { get; }
 
+    public string EntityType { get; }
+
+    public Guid EntityId { get; }
+
     public Guid TargetNoteId { get; }
 
     public Guid? NoteRevisionId { get; }
@@ -26,13 +30,17 @@ public sealed class AuditLogEntry
 
     public AuditContentSummary? BeforeSummary { get; }
 
-    public AuditContentSummary AfterSummary { get; }
+    public AuditContentSummary? AfterSummary { get; }
+
+    public AuditDetails? Details { get; }
 
     private AuditLogEntry(
         Guid id,
         string ownerId,
         string actor,
         string operation,
+        string entityType,
+        Guid entityId,
         Guid targetNoteId,
         Guid? noteRevisionId,
         string? appendedText,
@@ -40,12 +48,15 @@ public sealed class AuditLogEntry
         string? resolvedDefaultDate,
         DateTime occurredAtUtc,
         AuditContentSummary? beforeSummary,
-        AuditContentSummary afterSummary)
+        AuditContentSummary? afterSummary,
+        AuditDetails? details)
     {
         Id = id;
         OwnerId = ownerId;
         Actor = actor;
         Operation = operation;
+        EntityType = entityType;
+        EntityId = entityId;
         TargetNoteId = targetNoteId;
         NoteRevisionId = noteRevisionId;
         AppendedText = appendedText;
@@ -54,6 +65,7 @@ public sealed class AuditLogEntry
         OccurredAtUtc = EnsureUtc(occurredAtUtc);
         BeforeSummary = beforeSummary;
         AfterSummary = afterSummary;
+        Details = details;
     }
 
     public static AuditLogEntry Create(
@@ -103,10 +115,10 @@ public sealed class AuditLogEntry
             throw new ArgumentException($"Operation '{operation}' must not specify a NoteRevisionId.", nameof(noteRevisionId));
         }
 
-        var isAppendOperation = operation == AuditOperation.NoteAppend;
+        var isAppendOperation = operation is AuditOperation.NoteAppend or AuditOperation.ContactAdd or AuditOperation.ContactRedact;
         if (isAppendOperation && string.IsNullOrEmpty(appendedText))
         {
-            throw new ArgumentException("Operation 'note_append' requires non-empty AppendedText.", nameof(appendedText));
+            throw new ArgumentException($"Operation '{operation}' requires non-empty AppendedText.", nameof(appendedText));
         }
 
         if (!isAppendOperation && appendedText is not null)
@@ -125,7 +137,7 @@ public sealed class AuditLogEntry
             throw new ArgumentException($"Operation '{operation}' must not specify ResolvedDefaultDate.", nameof(resolvedDefaultDate));
         }
 
-        var isCreateOperation = operation is AuditOperation.NoteCreate or AuditOperation.ImportCreate;
+        var isCreateOperation = operation is AuditOperation.NoteCreate or AuditOperation.ImportCreate or AuditOperation.ContactAdd;
         if (isCreateOperation && beforeSummary is not null)
         {
             throw new ArgumentException($"Operation '{operation}' must have null BeforeSummary.", nameof(beforeSummary));
@@ -141,6 +153,8 @@ public sealed class AuditLogEntry
             ownerId: validOwner,
             actor: actor.Trim(),
             operation: operation,
+            entityType: "note",
+            entityId: targetNoteId,
             targetNoteId: targetNoteId,
             noteRevisionId: noteRevisionId,
             appendedText: appendedText,
@@ -148,7 +162,64 @@ public sealed class AuditLogEntry
             resolvedDefaultDate: resolvedDefaultDate?.Trim(),
             occurredAtUtc: EnsureUtc(occurredAtUtc),
             beforeSummary: beforeSummary,
-            afterSummary: afterSummary);
+            afterSummary: afterSummary,
+            details: null);
+    }
+
+    public static AuditLogEntry CreateForTracking(
+        string ownerId,
+        string actor,
+        string operation,
+        string entityType,
+        Guid entityId,
+        Guid resultingVersionToken,
+        DateTime occurredAtUtc,
+        AuditDetails details)
+    {
+        var validOwner = new OwnerId(ownerId).Value;
+        if (string.IsNullOrWhiteSpace(actor))
+        {
+            throw new ArgumentException("Actor identity is required.", nameof(actor));
+        }
+
+        if (!AuditOperation.IsValid(operation))
+        {
+            throw new ArgumentException($"Invalid audit operation '{operation}'.", nameof(operation));
+        }
+
+        if (string.IsNullOrWhiteSpace(entityType))
+        {
+            throw new ArgumentException("EntityType is required.", nameof(entityType));
+        }
+
+        if (entityId == Guid.Empty)
+        {
+            throw new ArgumentException("Entity identifier cannot be empty.", nameof(entityId));
+        }
+
+        if (resultingVersionToken == Guid.Empty)
+        {
+            throw new ArgumentException("Resulting version token cannot be empty.", nameof(resultingVersionToken));
+        }
+
+        ArgumentNullException.ThrowIfNull(details);
+
+        return new AuditLogEntry(
+            id: Guid.CreateVersion7(),
+            ownerId: validOwner,
+            actor: actor.Trim(),
+            operation: operation,
+            entityType: entityType.Trim().ToLowerInvariant(),
+            entityId: entityId,
+            targetNoteId: Guid.Empty,
+            noteRevisionId: null,
+            appendedText: null,
+            resultingVersionToken: resultingVersionToken,
+            resolvedDefaultDate: null,
+            occurredAtUtc: EnsureUtc(occurredAtUtc),
+            beforeSummary: null,
+            afterSummary: null,
+            details: details);
     }
 
     public static AuditLogEntry CreateForCreate(
@@ -226,12 +297,17 @@ public sealed class AuditLogEntry
         string? resolvedDefaultDate,
         DateTime occurredAtUtc,
         AuditContentSummary? beforeSummary,
-        AuditContentSummary afterSummary) =>
+        AuditContentSummary? afterSummary,
+        string? entityType = null,
+        Guid? entityId = null,
+        AuditDetails? details = null) =>
         new(
             id,
             ownerId,
             actor,
             operation,
+            entityType ?? "note",
+            entityId ?? (targetNoteId != Guid.Empty ? targetNoteId : id),
             targetNoteId,
             noteRevisionId,
             appendedText,
@@ -239,7 +315,8 @@ public sealed class AuditLogEntry
             resolvedDefaultDate,
             occurredAtUtc,
             beforeSummary,
-            afterSummary);
+            afterSummary,
+            details);
 
     private static DateTime EnsureUtc(DateTime value) =>
         value.Kind == DateTimeKind.Utc ? value : DateTime.SpecifyKind(value, DateTimeKind.Utc);

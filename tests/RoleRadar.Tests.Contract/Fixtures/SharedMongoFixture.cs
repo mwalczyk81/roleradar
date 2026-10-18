@@ -1,5 +1,9 @@
+using MongoDB.Driver;
+using RoleRadar.Infrastructure.Mongo;
 using Testcontainers.MongoDb;
 using Xunit;
+
+[assembly: AssemblyFixture(typeof(RoleRadar.Tests.Contract.Fixtures.SharedMongoFixture))]
 
 namespace RoleRadar.Tests.Contract.Fixtures;
 
@@ -7,6 +11,8 @@ public sealed class SharedMongoFixture : IAsyncLifetime
 {
     private readonly MongoDbContainer _mongoContainer = new MongoDbBuilder("mongo:8.0.34")
         .WithReplicaSet("rs0")
+        .WithTmpfsMount("/data/db")
+        .WithTmpfsMount("/data/configdb")
         .Build();
 
     public string ConnectionString { get; private set; } = string.Empty;
@@ -20,5 +26,40 @@ public sealed class SharedMongoFixture : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         await _mongoContainer.DisposeAsync();
+    }
+
+    public string CreateDatabaseName(string prefix = "roleradar_contract") =>
+        $"{prefix}_{Guid.CreateVersion7():N}";
+
+    public MongoOptions CreateOptions(string? databaseName = null) => new()
+    {
+        ConnectionString = ConnectionString,
+        DatabaseName = databaseName ?? CreateDatabaseName(),
+        ReadinessTimeout = TimeSpan.FromSeconds(5)
+    };
+
+    public IReadOnlyDictionary<string, string> CreateProcessEnvironment(string? databaseName = null) =>
+        new Dictionary<string, string>
+        {
+            ["ROLERADAR_MONGO_CONNECTION_STRING"] = ConnectionString,
+            ["ROLERADAR_MONGO_DATABASE"] = databaseName ?? CreateDatabaseName()
+        };
+
+    public async Task<IMongoDatabase> CreateDatabaseAsync(string prefix = "roleradar_contract")
+    {
+        var options = CreateOptions(CreateDatabaseName(prefix));
+        var client = new MongoClient(options.ConnectionString);
+        return client.GetDatabase(options.DatabaseName);
+    }
+
+    public async Task DropDatabaseAsync(string databaseName)
+    {
+        if (string.IsNullOrWhiteSpace(databaseName))
+        {
+            return;
+        }
+
+        var client = new MongoClient(ConnectionString);
+        await client.DropDatabaseAsync(databaseName);
     }
 }

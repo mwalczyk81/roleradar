@@ -11,17 +11,14 @@ using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Notes.Commands;
 using RoleRadar.Application.Notes.Queries;
 using RoleRadar.Domain.Common;
-using RoleRadar.Domain.Notes;
 using RoleRadar.Infrastructure;
 using RoleRadar.Infrastructure.Mongo;
 using RoleRadar.Mcp.Stdio.Tools;
 using RoleRadar.Tests.Integration.Fixtures;
-using Testcontainers.MongoDb;
 using Xunit;
 
 namespace RoleRadar.Tests.Integration.Notes;
 
-[Collection(SharedMongoCollectionDefinition.Name)]
 public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
 {
     private readonly SharedMongoFixture _sharedMongo;
@@ -466,7 +463,7 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
                     FormatDiagnosticMessage($"Expected JSON-RPC 2.0 frame on stdout, but received: {line}"));
             }
 
-            // Verify tools/list exposes the US1 tools (and <= 8 tools total)
+            // Verify tools/list exposes the US1 tools (and <= 12 tools total per Feature 002)
             using var toolsJson = JsonDocument.Parse(secondStdoutLine!);
             var toolsArray = toolsJson.RootElement.GetProperty("result").GetProperty("tools");
             var toolNames = toolsArray.EnumerateArray()
@@ -474,8 +471,8 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
                 .ToArray();
 
             Assert.True(
-                toolNames.Length <= 8,
-                FormatDiagnosticMessage($"Expected at most 8 MCP tools, found {toolNames.Length}."));
+                toolNames.Length <= 12,
+                FormatDiagnosticMessage($"Expected at most 12 MCP tools, found {toolNames.Length}."));
             Assert.True(toolNames.Contains("note_create"), FormatDiagnosticMessage("Missing 'note_create' tool."));
             Assert.True(toolNames.Contains("note_get"), FormatDiagnosticMessage("Missing 'note_get' tool."));
             Assert.True(toolNames.Contains("note_append"), FormatDiagnosticMessage("Missing 'note_append' tool."));
