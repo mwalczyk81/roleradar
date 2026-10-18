@@ -1,0 +1,259 @@
+using MongoDB.Bson;
+using MongoDB.Driver;
+using RoleRadar.Application.Abstractions;
+using RoleRadar.Application.Integrity;
+
+namespace RoleRadar.Infrastructure.Mongo.Repositories;
+
+public sealed class MongoIntegrityRepository : IIntegrityRepository
+{
+    private readonly IMongoDatabase _database;
+
+    public MongoIntegrityRepository(IMongoClient client, IMongoDatabase database)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        _database = database ?? throw new ArgumentNullException(nameof(database));
+    }
+
+    public async Task<Result<VerifyIntegrityResultDto>> VerifyIntegrityAsync(string? ownerId = null, CancellationToken cancellationToken = default)
+    {
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
+
+        var filter = string.IsNullOrWhiteSpace(ownerId)
+            ? Builders<BsonDocument>.Filter.Empty
+            : Builders<BsonDocument>.Filter.Eq("owner_id", ownerId);
+
+        var companiesCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName);
+        var postingsCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
+        var applicationsCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.ApplicationsCollectionName);
+        var signalsCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.PostingSignalsCollectionName);
+        var notesCol = _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NotesCollectionName);
+        var searchRunsCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.SearchRunsCollectionName);
+
+        // 1. Fetch Companies
+        var companiesDocs = await companiesCol.Find(filter)
+            .Project(Builders<BsonDocument>.Projection.Include("_id"))
+            .ToListAsync(cancellationToken);
+        var companyIds = new HashSet<Guid>();
+        foreach (var doc in companiesDocs)
+        {
+            var id = ExtractGuid(doc["_id"]);
+            if (id.HasValue) companyIds.Add(id.Value);
+        }
+
+        // 2. Fetch Postings
+        var postingsDocs = await postingsCol.Find(filter)
+            .Project(Builders<BsonDocument>.Projection
+                .Include("_id")
+                .Include("company_id")
+                .Include("disposition")
+                .Include("duplicate_of"))
+            .ToListAsync(cancellationToken);
+
+        var postingIds = new HashSet<Guid>();
+        var appliedPostingIds = new HashSet<Guid>();
+        foreach (var doc in postingsDocs)
+        {
+            var id = ExtractGuid(doc["_id"]);
+            if (id.HasValue)
+            {
+                postingIds.Add(id.Value);
+                if (doc.TryGetValue("disposition", out var dispVal) && !dispVal.IsBsonNull &&
+                    string.Equals(dispVal.AsString, "applied", StringComparison.OrdinalIgnoreCase))
+                {
+                    appliedPostingIds.Add(id.Value);
+                }
+            }
+        }
+
+        // 3. Fetch Applications
+        var appsDocs = await applicationsCol.Find(filter)
+            .Project(Builders<BsonDocument>.Projection
+                .Include("_id")
+                .Include("posting_id"))
+            .ToListAsync(cancellationToken);
+
+        var applicationIds = new HashSet<Guid>();
+        var appPostingIds = new HashSet<Guid>();
+        foreach (var doc in appsDocs)
+        {
+            var id = ExtractGuid(doc["_id"]);
+            if (id.HasValue) applicationIds.Add(id.Value);
+
+            var pId = ExtractGuid(doc.TryGetValue("posting_id", out var pv) ? pv : null);
+            if (pId.HasValue) appPostingIds.Add(pId.Value);
+        }
+
+        // 4. Fetch Notes
+        var notesDocs = await notesCol.Find(filter)
+            .Project(Builders<BsonDocument>.Projection
+                .Include("_id")
+                .Include("company_id")
+                .Include("posting_id")
+                .Include("application_id"))
+            .ToListAsync(cancellationToken);
+
+        var noteIds = new HashSet<Guid>();
+        foreach (var doc in notesDocs)
+        {
+            var id = ExtractGuid(doc["_id"]);
+            if (id.HasValue) noteIds.Add(id.Value);
+        }
+
+        // 5. Fetch Signals
+        var signalsDocs = await signalsCol.Find(filter)
+            .Project(Builders<BsonDocument>.Projection
+                .Include("_id")
+                .Include("posting_id"))
+            .ToListAsync(cancellationToken);
+
+        // 6. Fetch SearchRuns
+        var searchRunsDocs = await searchRunsCol.Find(filter)
+            .Project(Builders<BsonDocument>.Projection
+                .Include("_id")
+                .Include("report_note_id"))
+            .ToListAsync(cancellationToken);
+
+        var anomalies = new List<IntegrityAnomalyDto>();
+
+        // Anomaly Check 1: Postings with dangling company_id
+        // Anomaly Check 4: Postings with dangling duplicate_of
+        foreach (var doc in postingsDocs)
+        {
+            var postingId = ExtractGuid(doc["_id"]);
+            if (!postingId.HasValue) continue;
+
+            var companyId = ExtractGuid(doc.TryGetValue("company_id", out var cv) ? cv : null);
+            if (companyId.HasValue && !companyIds.Contains(companyId.Value))
+            {
+                anomalies.Add(new IntegrityAnomalyDto(
+                    "dangling_company_on_posting",
+                    "Posting references non-existent company.",
+                    postingId.Value,
+                    companyId.Value));
+            }
+
+            var duplicateOf = ExtractGuid(doc.TryGetValue("duplicate_of", out var dv) ? dv : null);
+            if (duplicateOf.HasValue && !postingIds.Contains(duplicateOf.Value))
+            {
+                anomalies.Add(new IntegrityAnomalyDto(
+                    "dangling_duplicate_of_on_posting",
+                    "Posting duplicate_of references non-existent posting.",
+                    postingId.Value,
+                    duplicateOf.Value));
+            }
+        }
+
+        // Anomaly Check 2: Applications with dangling posting_id
+        foreach (var doc in appsDocs)
+        {
+            var appId = ExtractGuid(doc["_id"]);
+            if (!appId.HasValue) continue;
+
+            var postingId = ExtractGuid(doc.TryGetValue("posting_id", out var pv) ? pv : null);
+            if (postingId.HasValue && !postingIds.Contains(postingId.Value))
+            {
+                anomalies.Add(new IntegrityAnomalyDto(
+                    "dangling_posting_on_application",
+                    "Application references non-existent posting.",
+                    appId.Value,
+                    postingId.Value));
+            }
+        }
+
+        // Anomaly Check 3: Posting signals with dangling posting_id
+        foreach (var doc in signalsDocs)
+        {
+            var signalId = ExtractGuid(doc["_id"]);
+            if (!signalId.HasValue) continue;
+
+            var postingId = ExtractGuid(doc.TryGetValue("posting_id", out var pv) ? pv : null);
+            if (postingId.HasValue && !postingIds.Contains(postingId.Value))
+            {
+                anomalies.Add(new IntegrityAnomalyDto(
+                    "dangling_posting_on_signal",
+                    "Posting signal references non-existent posting.",
+                    signalId.Value,
+                    postingId.Value));
+            }
+        }
+
+        // Anomaly Check 5: Notes with dangling company_id, posting_id, or application_id
+        foreach (var doc in notesDocs)
+        {
+            var noteId = ExtractGuid(doc["_id"]);
+            if (!noteId.HasValue) continue;
+
+            var cId = ExtractGuid(doc.TryGetValue("company_id", out var cv) ? cv : null);
+            if (cId.HasValue && !companyIds.Contains(cId.Value))
+            {
+                anomalies.Add(new IntegrityAnomalyDto(
+                    "dangling_company_on_note",
+                    "Note references non-existent company.",
+                    noteId.Value,
+                    cId.Value));
+            }
+
+            var pId = ExtractGuid(doc.TryGetValue("posting_id", out var pv) ? pv : null);
+            if (pId.HasValue && !postingIds.Contains(pId.Value))
+            {
+                anomalies.Add(new IntegrityAnomalyDto(
+                    "dangling_posting_on_note",
+                    "Note references non-existent posting.",
+                    noteId.Value,
+                    pId.Value));
+            }
+
+            var aId = ExtractGuid(doc.TryGetValue("application_id", out var av) ? av : null);
+            if (aId.HasValue && !applicationIds.Contains(aId.Value))
+            {
+                anomalies.Add(new IntegrityAnomalyDto(
+                    "dangling_application_on_note",
+                    "Note references non-existent application.",
+                    noteId.Value,
+                    aId.Value));
+            }
+        }
+
+        // Anomaly Check 6: Search runs with dangling report_note_id
+        foreach (var doc in searchRunsDocs)
+        {
+            var runId = ExtractGuid(doc["_id"]);
+            if (!runId.HasValue) continue;
+
+            var reportNoteId = ExtractGuid(doc.TryGetValue("report_note_id", out var rv) ? rv : null);
+            if (reportNoteId.HasValue && !noteIds.Contains(reportNoteId.Value))
+            {
+                anomalies.Add(new IntegrityAnomalyDto(
+                    "dangling_report_note_on_search_run",
+                    "Search run references non-existent report note.",
+                    runId.Value,
+                    reportNoteId.Value));
+            }
+        }
+
+        // Anomaly Check 7: Applied postings without matching application record
+        foreach (var appliedPostingId in appliedPostingIds)
+        {
+            if (!appPostingIds.Contains(appliedPostingId))
+            {
+                anomalies.Add(new IntegrityAnomalyDto(
+                    "applied_posting_without_application",
+                    "Posting has applied disposition but no matching application record exists.",
+                    appliedPostingId,
+                    null));
+            }
+        }
+
+        return Result<VerifyIntegrityResultDto>.Success(new VerifyIntegrityResultDto(anomalies.Count, anomalies));
+    }
+
+    private static Guid? ExtractGuid(BsonValue? val)
+    {
+        if (val is null || val.IsBsonNull) return null;
+        if (val.IsBsonBinaryData) return val.AsBsonBinaryData.ToGuid(GuidRepresentation.Standard);
+        if (val.IsGuid) return val.AsGuid;
+        if (val.IsString && Guid.TryParse(val.AsString, out var g)) return g;
+        return null;
+    }
+}

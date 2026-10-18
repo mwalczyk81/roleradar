@@ -188,7 +188,10 @@ public sealed class Note
         Guid versionToken,
         int revisionCount,
         DateTime createdAtUtc,
-        DateTime updatedAtUtc) =>
+        DateTime updatedAtUtc,
+        Guid? companyId = null,
+        Guid? postingId = null,
+        Guid? applicationId = null) =>
         new(
             id,
             ownerId,
@@ -203,7 +206,10 @@ public sealed class Note
             versionToken,
             revisionCount,
             createdAtUtc,
-            updatedAtUtc);
+            updatedAtUtc,
+            companyId,
+            postingId,
+            applicationId);
 
     /// <summary>
     /// Appends text to the note body without creating a full-body revision snapshot or incrementing RevisionCount.

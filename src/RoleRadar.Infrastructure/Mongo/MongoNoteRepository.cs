@@ -435,13 +435,16 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             { "version_token", new BsonBinaryData(note.VersionToken, GuidRepresentation.Standard) },
             { "revision_count", note.RevisionCount },
             { "created_at", new BsonDateTime(note.CreatedAtUtc) },
-            { "updated_at", new BsonDateTime(note.UpdatedAtUtc) }
+            { "updated_at", new BsonDateTime(note.UpdatedAtUtc) },
+            { "company_id", note.CompanyId.HasValue ? new BsonBinaryData(note.CompanyId.Value, GuidRepresentation.Standard) : BsonNull.Value },
+            { "posting_id", note.PostingId.HasValue ? new BsonBinaryData(note.PostingId.Value, GuidRepresentation.Standard) : BsonNull.Value },
+            { "application_id", note.ApplicationId.HasValue ? new BsonBinaryData(note.ApplicationId.Value, GuidRepresentation.Standard) : BsonNull.Value }
         };
 
         return doc;
     }
 
-    private static Note MapDocumentToNote(BsonDocument doc)
+    internal static Note MapDocumentToNote(BsonDocument doc)
     {
         var provDoc = doc["provenance"].AsBsonDocument;
         var provenance = new ProvenanceMarker(
@@ -464,6 +467,16 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
 
         var tags = doc["tags"].AsBsonArray.Select(t => t.AsString).ToArray();
 
+        Guid? companyId = doc.TryGetValue("company_id", out var cVal) && !cVal.IsBsonNull && cVal.IsBsonBinaryData
+            ? cVal.AsBsonBinaryData.ToGuid(GuidRepresentation.Standard)
+            : null;
+        Guid? postingId = doc.TryGetValue("posting_id", out var pVal) && !pVal.IsBsonNull && pVal.IsBsonBinaryData
+            ? pVal.AsBsonBinaryData.ToGuid(GuidRepresentation.Standard)
+            : null;
+        Guid? applicationId = doc.TryGetValue("application_id", out var aVal) && !aVal.IsBsonNull && aVal.IsBsonBinaryData
+            ? aVal.AsBsonBinaryData.ToGuid(GuidRepresentation.Standard)
+            : null;
+
         return Note.Rehydrate(
             id: doc["_id"].AsBsonBinaryData.ToGuid(GuidRepresentation.Standard),
             ownerId: doc["owner_id"].AsString,
@@ -478,7 +491,10 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             versionToken: doc["version_token"].AsBsonBinaryData.ToGuid(GuidRepresentation.Standard),
             revisionCount: doc["revision_count"].AsInt32,
             createdAtUtc: doc["created_at"].ToUniversalTime(),
-            updatedAtUtc: doc["updated_at"].ToUniversalTime());
+            updatedAtUtc: doc["updated_at"].ToUniversalTime(),
+            companyId: companyId,
+            postingId: postingId,
+            applicationId: applicationId);
     }
 
     private static BsonDocument MapRevisionToDocument(NoteRevision revision) =>

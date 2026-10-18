@@ -48,6 +48,7 @@ public static class DependencyInjection
         services.AddCommandHandler<Tracking.Commands.RedactContactCommand, Tracking.Commands.ContactRedactResultDto, Tracking.Commands.RedactContactCommandHandler>();
         services.AddQueryHandler<Tracking.Queries.TrackerQueryRequest, Tracking.Queries.TrackerQueryResultDto, Tracking.Queries.TrackerQueryHandler>();
         services.AddQueryHandler<Tracking.Queries.GetContactQuery, Tracking.Queries.ContactDto?, Tracking.Queries.GetContactQueryHandler>();
+        services.AddQueryHandler<Integrity.VerifyIntegrityQuery, Integrity.VerifyIntegrityResultDto, Integrity.VerifyIntegrityQueryHandler>();
 
         return services;
     }

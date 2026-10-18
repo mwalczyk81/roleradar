@@ -49,17 +49,17 @@ public sealed class NoteLinkExtensionTests
             ["area"] = "notes",
             ["provenance"] = new BsonDocument
             {
-                ["source"] = "manual",
+                ["kind"] = "stated",
                 ["date"] = "2026-09-01"
             },
-            ["status"] = "Active",
+            ["status"] = "active",
             ["version_token"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
             ["revision_count"] = 0,
-            ["created_at_utc"] = new BsonDateTime(DateTime.UtcNow),
-            ["updated_at_utc"] = new BsonDateTime(DateTime.UtcNow)
+            ["created_at"] = new BsonDateTime(DateTime.UtcNow),
+            ["updated_at"] = new BsonDateTime(DateTime.UtcNow)
         };
 
-        var note = BsonSerializer.Deserialize<Note>(doc);
+        var note = RoleRadar.Infrastructure.Mongo.MongoNoteRepository.MapDocumentToNote(doc);
         Assert.NotNull(note);
         Assert.Equal("Legacy 001 Note", note.Title);
         Assert.Null(note.CompanyId);

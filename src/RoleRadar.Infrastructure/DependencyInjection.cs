@@ -66,6 +66,13 @@ public static class DependencyInjection
             var database = client.GetDatabase(opts.DatabaseName);
             return new Mongo.Repositories.MongoContactRepository(client, database);
         });
+        services.TryAddScoped<ISearchRunRepository>(sp =>
+        {
+            var client = sp.GetRequiredService<IMongoClient>();
+            var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
+            var database = client.GetDatabase(opts.DatabaseName);
+            return new Mongo.Repositories.MongoSearchRunRepository(client, database);
+        });
         services.TryAddScoped<ITrackingTransactionContext>(sp =>
         {
             var client = sp.GetRequiredService<IMongoClient>();
@@ -76,11 +83,19 @@ public static class DependencyInjection
             var criteria = sp.GetRequiredService<ICriterionRepository>();
             var applications = sp.GetRequiredService<IApplicationRepository>();
             var contacts = sp.GetRequiredService<IContactRepository>();
+            var searchRuns = sp.GetRequiredService<ISearchRunRepository>();
             var auditLog = database.GetCollection<MongoDB.Bson.BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
-            return new Mongo.Repositories.MongoTrackingTransactionContext(companies, postings, criteria, applications, contacts, auditLog);
+            return new Mongo.Repositories.MongoTrackingTransactionContext(companies, postings, criteria, applications, contacts, searchRuns, auditLog);
         });
         services.AddOptions<Backup.BackupOptions>();
         services.TryAddScoped<IBackupArchiveService, Backup.SecretStreamBackupArchiveService>();
+        services.TryAddScoped<RoleRadar.Application.Integrity.IIntegrityRepository>(sp =>
+        {
+            var client = sp.GetRequiredService<IMongoClient>();
+            var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
+            var database = client.GetDatabase(opts.DatabaseName);
+            return new Mongo.Repositories.MongoIntegrityRepository(client, database);
+        });
 
         return services;
     }

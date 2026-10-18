@@ -35,7 +35,7 @@ public sealed class TrackerLogCommandHandler : ICommandHandler<TrackerLogCommand
         {
             "criterion_revision" => await HandleCriterionRevisionAsync(command, ownerId, now, cancellationToken),
             "criterion_deactivate" => await HandleCriterionDeactivateAsync(command, ownerId, now, cancellationToken),
-            "search_run" => Result<TrackerLogResultDto>.Failure(ErrorCode.ValidationError, "Action 'search_run' will be implemented in US7."),
+            "search_run" => await HandleSearchRunAsync(command, ownerId, now, cancellationToken),
             _ => Result<TrackerLogResultDto>.Failure(
                 ErrorCode.ValidationError,
                 $"Action '{command.Action}' is not supported by tracker_log.")
@@ -308,5 +308,95 @@ public sealed class TrackerLogCommandHandler : ICommandHandler<TrackerLogCommand
                 excerpt: $"{summary.Key}:{summary.Action}"));
 
         return _context.AppendAuditEntryAsync(entry, cancellationToken);
+    }
+
+    private async Task<Result<TrackerLogResultDto>> HandleSearchRunAsync(
+        TrackerLogCommand command,
+        string ownerId,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(command.StartedAt) ||
+            !DateTimeOffset.TryParse(command.StartedAt, System.Globalization.CultureInfo.InvariantCulture, out var startedAt))
+        {
+            return Result<TrackerLogResultDto>.Failure(
+                ErrorCode.ValidationError,
+                "StartedAt is required for search_run (ISO 8601).");
+        }
+
+        if (!command.NewPostingsCount.HasValue || command.NewPostingsCount.Value < 0)
+        {
+            return Result<TrackerLogResultDto>.Failure(
+                ErrorCode.ValidationError,
+                "NewPostingsCount must be >= 0.");
+        }
+
+        if (command.Notes is not null && command.Notes.Length > SearchRun.MaxNotesLength)
+        {
+            return Result<TrackerLogResultDto>.Failure(
+                ErrorCode.ValidationError,
+                $"Notes cannot exceed {SearchRun.MaxNotesLength} characters.");
+        }
+
+        var startedAtUtc = startedAt.ToUniversalTime();
+
+        var existingRes = await _context.SearchRuns.GetByStartedAtAsync(ownerId, startedAtUtc, cancellationToken);
+        if (existingRes.IsSuccess && existingRes.Value is not null)
+        {
+            return Result<TrackerLogResultDto>.Success(new TrackerLogResultDto(
+                Action: "search_run",
+                RecordId: existingRes.Value.Id,
+                Status: "already_logged",
+                UpdatedAtUtc: existingRes.Value.CreatedAt));
+        }
+
+        var searchRun = SearchRun.Create(
+            ownerId: ownerId,
+            startedAt: startedAtUtc,
+            newPostingsCount: command.NewPostingsCount.Value,
+            reportNoteId: command.ReportNoteId,
+            notes: command.Notes,
+            createdAt: now);
+
+        var upsertRes = await _context.SearchRuns.UpsertSearchRunAsync(searchRun, cancellationToken);
+        if (!upsertRes.IsSuccess)
+        {
+            var raceExisting = await _context.SearchRuns.GetByStartedAtAsync(ownerId, startedAtUtc, cancellationToken);
+            if (raceExisting.IsSuccess && raceExisting.Value is not null)
+            {
+                return Result<TrackerLogResultDto>.Success(new TrackerLogResultDto(
+                    Action: "search_run",
+                    RecordId: raceExisting.Value.Id,
+                    Status: "already_logged",
+                    UpdatedAtUtc: raceExisting.Value.CreatedAt));
+            }
+
+            return Result<TrackerLogResultDto>.Failure(upsertRes.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to persist search run."));
+        }
+
+        var auditEntry = AuditLogEntry.Create(
+            ownerId: ownerId,
+            actor: "mcp-user",
+            operation: AuditOperation.NoteCreate,
+            targetNoteId: searchRun.Id,
+            noteRevisionId: null,
+            appendedText: null,
+            resultingVersionToken: Guid.NewGuid(),
+            resolvedDefaultDate: null,
+            beforeSummary: null,
+            afterSummary: new AuditContentSummary(
+                bodyHash: "0000000000000000000000000000000000000000000000000000000000000000",
+                byteLength: searchRun.NewPostingsCount,
+                status: "success",
+                excerpt: searchRun.Notes is not null ? (searchRun.Notes.Length > 80 ? searchRun.Notes[..80] : searchRun.Notes) : "search_run"),
+            occurredAtUtc: now.UtcDateTime);
+
+        await _context.AppendAuditEntryAsync(auditEntry, cancellationToken);
+
+        return Result<TrackerLogResultDto>.Success(new TrackerLogResultDto(
+            Action: "search_run",
+            RecordId: searchRun.Id,
+            Status: "success",
+            UpdatedAtUtc: searchRun.CreatedAt));
     }
 }

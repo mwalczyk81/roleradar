@@ -62,6 +62,15 @@ public sealed class StartupSmokeIntegrationTests
         Assert.Equal(0, contactRedactCode);
         Assert.DoesNotContain("Unhandled exception", contactRedactErr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("redacted", contactRedactOut);
+
+        // Also smoke test verify command
+        var (verifyCode, verifyOut, verifyErr) = await RunProcessAsync(
+            "dotnet",
+            $"\"{cliDllPath}\" verify --json",
+            env);
+        Assert.Equal(0, verifyCode);
+        Assert.DoesNotContain("Unhandled exception", verifyErr, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("\"anomalyCount\": 0", verifyOut);
     }
 
     [Fact]
