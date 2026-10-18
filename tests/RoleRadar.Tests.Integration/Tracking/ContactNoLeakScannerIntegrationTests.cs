@@ -4,7 +4,6 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using RoleRadar.Infrastructure.Mongo;
 using RoleRadar.Tests.Integration.Fixtures;
-using RoleRadar.Tests.Integration.Tracking;
 using Xunit;
 
 namespace RoleRadar.Tests.Integration.Tracking;

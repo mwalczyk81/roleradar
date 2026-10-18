@@ -1,7 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
 using RoleRadar.Application.Abstractions;
-using RoleRadar.Domain.Common;
 using RoleRadar.Domain.Tracking;
 
 namespace RoleRadar.Infrastructure.Mongo.Repositories;

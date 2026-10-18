@@ -3,7 +3,6 @@ using MongoDB.Driver;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Tracking.Commands;
 using RoleRadar.Application.Tracking.Queries;
-using RoleRadar.Domain.Audit;
 using RoleRadar.Domain.Common;
 using RoleRadar.Domain.Tracking;
 using RoleRadar.Infrastructure.Mongo;

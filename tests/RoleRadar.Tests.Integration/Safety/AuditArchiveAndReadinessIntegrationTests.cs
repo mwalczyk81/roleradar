@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,9 +9,7 @@ using RoleRadar.Application.Notes.Commands;
 using RoleRadar.Application.Notes.Queries;
 using RoleRadar.Domain.Audit;
 using RoleRadar.Domain.Common;
-using RoleRadar.Domain.Notes;
 using RoleRadar.Infrastructure;
-using RoleRadar.Infrastructure.Mongo;
 using RoleRadar.Mcp.Stdio.Tools;
 using RoleRadar.Tests.Integration.Fixtures;
 using Xunit;

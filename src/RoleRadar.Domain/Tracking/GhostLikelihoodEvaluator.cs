@@ -1,5 +1,3 @@
-using RoleRadar.Domain.Tracking;
-
 namespace RoleRadar.Domain.Tracking;
 
 public static class GhostLikelihoodEvaluator

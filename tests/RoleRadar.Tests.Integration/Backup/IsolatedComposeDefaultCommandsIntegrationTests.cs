@@ -10,7 +10,6 @@ using RoleRadar.Application;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Notes.Commands;
 using RoleRadar.Cli.Commands;
-using RoleRadar.Domain.Notes;
 using RoleRadar.Infrastructure;
 using RoleRadar.Infrastructure.Backup;
 using RoleRadar.Infrastructure.Mongo;

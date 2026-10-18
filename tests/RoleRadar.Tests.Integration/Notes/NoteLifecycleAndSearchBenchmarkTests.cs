@@ -11,12 +11,10 @@ using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Notes.Commands;
 using RoleRadar.Application.Notes.Queries;
 using RoleRadar.Domain.Common;
-using RoleRadar.Domain.Notes;
 using RoleRadar.Infrastructure;
 using RoleRadar.Infrastructure.Mongo;
 using RoleRadar.Mcp.Stdio.Tools;
 using RoleRadar.Tests.Integration.Fixtures;
-using Testcontainers.MongoDb;
 using Xunit;
 
 namespace RoleRadar.Tests.Integration.Notes;

@@ -9,9 +9,7 @@ using RoleRadar.Application.Import.Commands;
 using RoleRadar.Domain.Common;
 using RoleRadar.Domain.Notes;
 using RoleRadar.Infrastructure;
-using RoleRadar.Infrastructure.Mongo;
 using RoleRadar.Tests.Integration.Fixtures;
-using Testcontainers.MongoDb;
 using Xunit;
 
 namespace RoleRadar.Tests.Integration.Import;

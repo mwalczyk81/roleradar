@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using FsCheck;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;

@@ -1,7 +1,5 @@
 using System.Diagnostics;
 using System.Globalization;
-using System.Net;
-using System.Net.Sockets;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -11,7 +9,6 @@ using RoleRadar.Application;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Notes.Commands;
 using RoleRadar.Cli.Commands;
-using RoleRadar.Domain.Notes;
 using RoleRadar.Infrastructure;
 using RoleRadar.Infrastructure.Backup;
 using RoleRadar.Infrastructure.Mongo;

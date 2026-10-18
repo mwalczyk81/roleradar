@@ -2,7 +2,6 @@ using System.Text.Json;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Tracking.Commands;
 using RoleRadar.Application.Tracking.Queries;
-using RoleRadar.Domain.Common;
 using RoleRadar.Mcp.Stdio.Tools;
 using Xunit;
 

@@ -12,8 +12,29 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
     private readonly ICriterionRepository _criteria;
     private readonly IApplicationRepository _applications;
     private readonly IContactRepository? _contacts;
+    private readonly ISearchRunRepository? _searchRuns;
     private readonly IMongoCollection<BsonDocument> _auditCollection;
     private readonly IClientSessionHandle? _session;
+
+    public MongoTrackingTransactionContext(
+        ICompanyRepository companies,
+        IPostingRepository postings,
+        ICriterionRepository criteria,
+        IApplicationRepository applications,
+        IContactRepository? contacts,
+        ISearchRunRepository? searchRuns,
+        IMongoCollection<BsonDocument> auditCollection,
+        IClientSessionHandle? session = null)
+    {
+        _companies = companies ?? throw new ArgumentNullException(nameof(companies));
+        _postings = postings ?? throw new ArgumentNullException(nameof(postings));
+        _criteria = criteria ?? throw new ArgumentNullException(nameof(criteria));
+        _applications = applications ?? throw new ArgumentNullException(nameof(applications));
+        _contacts = contacts;
+        _searchRuns = searchRuns;
+        _auditCollection = auditCollection ?? throw new ArgumentNullException(nameof(auditCollection));
+        _session = session;
+    }
 
     public MongoTrackingTransactionContext(
         ICompanyRepository companies,
@@ -23,14 +44,8 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
         IContactRepository contacts,
         IMongoCollection<BsonDocument> auditCollection,
         IClientSessionHandle? session = null)
+        : this(companies, postings, criteria, applications, contacts, null, auditCollection, session)
     {
-        _companies = companies ?? throw new ArgumentNullException(nameof(companies));
-        _postings = postings ?? throw new ArgumentNullException(nameof(postings));
-        _criteria = criteria ?? throw new ArgumentNullException(nameof(criteria));
-        _applications = applications ?? throw new ArgumentNullException(nameof(applications));
-        _contacts = contacts ?? throw new ArgumentNullException(nameof(contacts));
-        _auditCollection = auditCollection ?? throw new ArgumentNullException(nameof(auditCollection));
-        _session = session;
     }
 
     public MongoTrackingTransactionContext(
@@ -40,14 +55,8 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
         IApplicationRepository applications,
         IMongoCollection<BsonDocument> auditCollection,
         IClientSessionHandle? session = null)
+        : this(companies, postings, criteria, applications, null, null, auditCollection, session)
     {
-        _companies = companies ?? throw new ArgumentNullException(nameof(companies));
-        _postings = postings ?? throw new ArgumentNullException(nameof(postings));
-        _criteria = criteria ?? throw new ArgumentNullException(nameof(criteria));
-        _applications = applications ?? throw new ArgumentNullException(nameof(applications));
-        _contacts = null;
-        _auditCollection = auditCollection ?? throw new ArgumentNullException(nameof(auditCollection));
-        _session = session;
     }
 
     public ICompanyRepository Companies => _companies;
@@ -55,7 +64,7 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
     public ICriterionRepository Criteria => _criteria;
     public IApplicationRepository Applications => _applications;
     public IContactRepository Contacts => _contacts ?? throw new InvalidOperationException("Contact repository not configured in this transaction context.");
-    public ISearchRunRepository SearchRuns => throw new NotImplementedException("SearchRuns available in US7");
+    public ISearchRunRepository SearchRuns => _searchRuns ?? throw new InvalidOperationException("SearchRun repository not configured in this transaction context.");
 
     public async Task AppendAuditEntryAsync(AuditLogEntry entry, CancellationToken cancellationToken = default)
     {

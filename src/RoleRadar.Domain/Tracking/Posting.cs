@@ -1,5 +1,3 @@
-using RoleRadar.Domain.Audit;
-
 namespace RoleRadar.Domain.Tracking;
 
 public sealed record PostingDifference(

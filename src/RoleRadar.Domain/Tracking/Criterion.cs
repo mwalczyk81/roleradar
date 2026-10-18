@@ -1,5 +1,3 @@
-using RoleRadar.Domain.Common;
-
 namespace RoleRadar.Domain.Tracking;
 
 public sealed class Criterion

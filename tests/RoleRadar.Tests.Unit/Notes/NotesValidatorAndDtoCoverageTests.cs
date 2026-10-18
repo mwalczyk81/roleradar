@@ -3,7 +3,6 @@ using RoleRadar.Application.Import.Commands;
 using RoleRadar.Application.Notes.Commands;
 using RoleRadar.Application.Notes.Queries;
 using RoleRadar.Domain.Audit;
-using RoleRadar.Domain.Common;
 using RoleRadar.Domain.Notes;
 using Xunit;
 

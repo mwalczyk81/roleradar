@@ -73,5 +73,9 @@ public interface IContactRepository
 
 public interface ISearchRunRepository
 {
-    // Placeholders for User Story 7
+    Task<Result<Domain.Tracking.SearchRun?>> GetByIdAsync(string ownerId, Guid id, CancellationToken cancellationToken = default);
+    Task<Result<Domain.Tracking.SearchRun?>> GetByStartedAtAsync(string ownerId, DateTimeOffset startedAt, CancellationToken cancellationToken = default);
+    Task<Result<bool>> UpsertSearchRunAsync(Domain.Tracking.SearchRun searchRun, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<Domain.Tracking.SearchRun>>> ListSearchRunsAsync(string ownerId, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default);
+    Task<Result<int>> CountSearchRunsAsync(string ownerId, CancellationToken cancellationToken = default);
 }
