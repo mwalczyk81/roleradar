@@ -147,12 +147,12 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T031 [P] [US3] Write failing contract test `TrackerLogCriteriaContractTests.cs` for tool `tracker_log` covering action `criterion_revision` (strict `effectiveFrom` sequencing validation, closing active version, rotating version token), `ErrorCode.StaleVersionToken` on missing/mismatched version token, and action `criterion_deactivate` (closing active version without replacement) in `tests/RoleRadar.Tests.Contract/TrackerLogCriteriaContractTests.cs` (expected to fail before implementation)
-- [ ] T032 [P] [US3] Write failing unit tests for `Criterion` point-in-time validity and date sequencing in `tests/RoleRadar.Tests.Unit/Tracking/CriterionVersionValidationTests.cs` (expected to fail before implementation)
+- [x] T031 [P] [US3] Write failing contract test `TrackerLogCriteriaContractTests.cs` for tool `tracker_log` covering action `criterion_revision` (strict `effectiveFrom` sequencing validation, closing active version, rotating version token), `ErrorCode.StaleVersionToken` on missing/mismatched version token, and action `criterion_deactivate` (closing active version without replacement) in `tests/RoleRadar.Tests.Contract/TrackerLogCriteriaContractTests.cs` (expected to fail before implementation)
+- [x] T032 [P] [US3] Write failing unit tests for `Criterion` point-in-time validity and date sequencing in `tests/RoleRadar.Tests.Unit/Tracking/CriterionVersionValidationTests.cs` (expected to fail before implementation)
 
 ### Implementation for User Story 3
 
-- [ ] T033 [P] [US3] Implement `Criterion` aggregate root in `src/RoleRadar.Domain/Tracking/Criterion.cs` and `MongoCriterionRepository` implementing `ICriterionRepository` in `src/RoleRadar.Infrastructure/Mongo/Repositories/MongoCriterionRepository.cs`, enforcing `data-model.md` constraints verbatim:
+- [x] T033 [P] [US3] Implement `Criterion` aggregate root in `src/RoleRadar.Domain/Tracking/Criterion.cs` and `MongoCriterionRepository` implementing `ICriterionRepository` in `src/RoleRadar.Infrastructure/Mongo/Repositories/MongoCriterionRepository.cs`, enforcing `data-model.md` constraints verbatim:
   - `_id`: Required binary subtype 4 GUID
   - `owner_id`: Required string
   - `key`: Required string, max 100 chars
@@ -163,8 +163,8 @@
   - `provenance`: String enum (`stated`, `inferred`)
   - `is_active`: Required boolean
   - `version_token`: Required binary subtype 4 GUID
-- [ ] T034 [P] [US3] Implement `LogCriterionRevisionCommand`, `DeactivateCriterionCommand`, and handlers in `src/RoleRadar.Application/Tracking/Commands/CriterionCommands.cs` (enforcing strict `effectiveFrom` validation, closing active record, requiring `versionToken` when active exists) (depends on T031, T032 failing first and T033)
-- [ ] T035 [US3] Implement `tracker_log` tool actions `criterion_revision` and `criterion_deactivate` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs`, register handlers wrapped by `TransactionAndAuditCommandDecorator` in `src/RoleRadar.Application/DependencyInjection.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for criteria logging (depends on T031 failing first and T034)
+- [x] T034 [P] [US3] Implement `LogCriterionRevisionCommand`, `DeactivateCriterionCommand`, and handlers in `src/RoleRadar.Application/Tracking/Commands/CriterionCommands.cs` (enforcing strict `effectiveFrom` validation, closing active record, requiring `versionToken` when active exists) (depends on T031, T032 failing first and T033)
+- [x] T035 [US3] Implement `tracker_log` tool actions `criterion_revision` and `criterion_deactivate` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs`, register handlers wrapped by `TransactionAndAuditCommandDecorator` in `src/RoleRadar.Application/DependencyInjection.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for criteria logging (depends on T031 failing first and T034)
 
 **Checkpoint**: User Story 3 is complete and independently verified by `TrackerLogCriteriaContractTests` and `CriterionVersionValidationTests`.  
 *Commit*: `feat(criteria): implement immutable criteria revisioning and deactivation in tracker_log`
@@ -181,12 +181,12 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T036 [P] [US4] Write failing contract test `ApplicationRecordContractTests.cs` for tool `application_record` covering application creation from `lead`, `unscored`, and `scored` (moving posting to `applied`), atomic reopen-and-apply override on `screened_out`/`closed` posting in ONE audited transaction, rejection without override flag (`ErrorCode.InvalidTransition`), action `append_event` with 8 event types, and appending events to already decided/terminal postings without mutating disposition in `tests/RoleRadar.Tests.Contract/ApplicationRecordContractTests.cs` (expected to fail before implementation)
-- [ ] T037 [P] [US4] Write failing unit tests for `Application` and `ApplicationEvent` domain invariants, numeric salary validation (`min >= 0`, `max >= min`), resume variant pointers (forbidding raw resume text), and outcome synchronization in `tests/RoleRadar.Tests.Unit/Tracking/ApplicationDomainTests.cs` (expected to fail before implementation)
+- [x] T036 [P] [US4] Write failing contract test `ApplicationRecordContractTests.cs` for tool `application_record` covering application creation from `lead`, `unscored`, and `scored` (moving posting to `applied`), atomic reopen-and-apply override on `screened_out`/`closed` posting in ONE audited transaction, rejection without override flag (`ErrorCode.InvalidTransition`), action `append_event` with 8 event types, and appending events to already decided/terminal postings without mutating disposition in `tests/RoleRadar.Tests.Contract/ApplicationRecordContractTests.cs` (expected to fail before implementation)
+- [x] T037 [P] [US4] Write failing unit tests for `Application` and `ApplicationEvent` domain invariants, numeric salary validation (`min >= 0`, `max >= min`), resume variant pointers (forbidding raw resume text), and outcome synchronization in `tests/RoleRadar.Tests.Unit/Tracking/ApplicationDomainTests.cs` (expected to fail before implementation)
 
 ### Implementation for User Story 4
 
-- [ ] T038 [P] [US4] Implement `Application` aggregate root and `ApplicationEvent` entity in `src/RoleRadar.Domain/Tracking/Application.cs` and `src/RoleRadar.Domain/Tracking/ApplicationEvent.cs`, and `MongoApplicationRepository` implementing `IApplicationRepository` in `src/RoleRadar.Infrastructure/Mongo/Repositories/MongoApplicationRepository.cs`, enforcing `data-model.md` constraints verbatim:
+- [x] T038 [P] [US4] Implement `Application` aggregate root and `ApplicationEvent` entity in `src/RoleRadar.Domain/Tracking/Application.cs` and `src/RoleRadar.Domain/Tracking/ApplicationEvent.cs`, and `MongoApplicationRepository` implementing `IApplicationRepository` in `src/RoleRadar.Infrastructure/Mongo/Repositories/MongoApplicationRepository.cs`, enforcing `data-model.md` constraints verbatim:
   - `Application._id`: Required binary subtype 4 GUID
   - `Application.owner_id`: Required string
   - `Application.posting_id`: Required binary subtype 4 GUID reference to `postings`
@@ -207,8 +207,8 @@
   - `ApplicationEvent.event_type`: Required string enum (`applied`, `follow_up`, `interview`, `offer`, `offer_accepted`, `offer_declined`, `rejected`, `withdrawn`), with `offer` non-terminal
   - `ApplicationEvent.event_source`: Optional string, max 100 chars
   - `ApplicationEvent.notes`: Optional string, max 500 chars
-- [ ] T039 [P] [US4] Implement `RecordApplicationCommand`, `AppendApplicationEventCommand`, and handlers in `src/RoleRadar.Application/Tracking/Commands/ApplicationCommands.cs` (reopen-and-apply atomic override, disposition synchronization, accepting events on terminal postings) (depends on T036, T037 failing first and T038)
-- [ ] T040 [US4] Implement MCP tool `application_record` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs`, register handlers wrapped by `TransactionAndAuditCommandDecorator` in `src/RoleRadar.Application/DependencyInjection.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for applications (depends on T036 failing first and T039)
+- [x] T039 [P] [US4] Implement `RecordApplicationCommand`, `AppendApplicationEventCommand`, and handlers in `src/RoleRadar.Application/Tracking/Commands/ApplicationCommands.cs` (reopen-and-apply atomic override, disposition synchronization, accepting events on terminal postings) (depends on T036, T037 failing first and T038)
+- [x] T040 [US4] Implement MCP tool `application_record` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs`, register handlers wrapped by `TransactionAndAuditCommandDecorator` in `src/RoleRadar.Application/DependencyInjection.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for applications (depends on T036 failing first and T039)
 
 **Checkpoint**: User Story 4 is complete and independently verified by `ApplicationRecordContractTests` and `ApplicationDomainTests`.  
 *Commit*: `feat(applications): implement application_record with atomic reopen-and-apply and timeline events`

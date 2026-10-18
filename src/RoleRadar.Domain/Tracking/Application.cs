@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace RoleRadar.Domain.Tracking;
 
 public sealed class Application
@@ -38,22 +40,95 @@ public sealed class Application
         Guid? versionToken = null,
         DateTimeOffset? now = null)
     {
-        // Stub implementation for test-first phase - intentionally does not validate invariants
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        if (postingId == Guid.Empty)
+        {
+            throw new ArgumentException("Posting ID cannot be empty.", nameof(postingId));
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(submittedDate);
+        if (!DateOnly.TryParseExact(submittedDate.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new ArgumentException($"Submitted date must be in YYYY-MM-DD format: '{submittedDate}'.", nameof(submittedDate));
+        }
+
+        string? validatedTargetStartDate = null;
+        if (!string.IsNullOrWhiteSpace(targetStartDate))
+        {
+            if (!DateOnly.TryParseExact(targetStartDate.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+            {
+                throw new ArgumentException($"Target start date must be in YYYY-MM-DD format: '{targetStartDate}'.", nameof(targetStartDate));
+            }
+            validatedTargetStartDate = targetStartDate.Trim();
+        }
+
+        var salary = desiredSalary ?? new DesiredSalary();
+        if (salary.Min.HasValue && salary.Min.Value < 0)
+        {
+            throw new ArgumentException("Desired salary minimum must be >= 0.", nameof(desiredSalary));
+        }
+
+        if (salary.Min.HasValue && salary.Max.HasValue && salary.Max.Value < salary.Min.Value)
+        {
+            throw new ArgumentException("Desired salary maximum must be greater than or equal to minimum.", nameof(desiredSalary));
+        }
+
+        if (string.IsNullOrWhiteSpace(salary.Currency) || salary.Currency.Trim().Length != 3)
+        {
+            throw new ArgumentException("Desired salary currency must be a 3-character currency code.", nameof(desiredSalary));
+        }
+
+        string? validatedResumePointer = null;
+        if (resumePointer is not null)
+        {
+            if (resumePointer.Length > MaxResumePointerLength)
+            {
+                throw new ArgumentException($"Resume pointer cannot exceed {MaxResumePointerLength} characters.", nameof(resumePointer));
+            }
+
+            if (resumePointer.Contains('\r') || resumePointer.Contains('\n'))
+            {
+                throw new ArgumentException("Resume pointer cannot contain newline characters or raw resume document content.", nameof(resumePointer));
+            }
+
+            validatedResumePointer = resumePointer.Trim();
+        }
+
+        string? validatedConfirmationCode = null;
+        if (confirmationCode is not null)
+        {
+            if (confirmationCode.Length > MaxConfirmationCodeLength)
+            {
+                throw new ArgumentException($"Confirmation code cannot exceed {MaxConfirmationCodeLength} characters.", nameof(confirmationCode));
+            }
+            validatedConfirmationCode = confirmationCode.Trim();
+        }
+
+        string? validatedOutcomeReason = null;
+        if (outcomeReason is not null)
+        {
+            if (outcomeReason.Length > MaxOutcomeReasonLength)
+            {
+                throw new ArgumentException($"Outcome reason cannot exceed {MaxOutcomeReasonLength} characters.", nameof(outcomeReason));
+            }
+            validatedOutcomeReason = outcomeReason.Trim();
+        }
+
         var ts = now ?? DateTimeOffset.UtcNow;
         return new Application
         {
             Id = id ?? Guid.CreateVersion7(),
-            OwnerId = ownerId ?? string.Empty,
+            OwnerId = ownerId.Trim(),
             PostingId = postingId,
-            SubmittedDate = submittedDate ?? string.Empty,
-            DesiredSalary = desiredSalary ?? new(),
-            TargetStartDate = targetStartDate,
+            SubmittedDate = submittedDate.Trim(),
+            DesiredSalary = salary,
+            TargetStartDate = validatedTargetStartDate,
             ResumeVariant = resumeVariant,
-            ResumePointer = resumePointer,
+            ResumePointer = validatedResumePointer,
             ReferralContactId = referralContactId,
-            ConfirmationCode = confirmationCode,
+            ConfirmationCode = validatedConfirmationCode,
             Outcome = outcome,
-            OutcomeReason = outcomeReason,
+            OutcomeReason = validatedOutcomeReason,
             VersionToken = versionToken ?? Guid.CreateVersion7(),
             CreatedAt = ts,
             UpdatedAt = ts
@@ -99,6 +174,36 @@ public sealed class Application
 
     public void ApplyEvent(ApplicationEventType eventType, string? notes, DateTimeOffset timestamp)
     {
-        // Stub - does not mutate outcome
+        var trimmedNotes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+        if (trimmedNotes is not null && trimmedNotes.Length > MaxOutcomeReasonLength)
+        {
+            trimmedNotes = trimmedNotes[..MaxOutcomeReasonLength];
+        }
+
+        switch (eventType)
+        {
+            case ApplicationEventType.Offer:
+            case ApplicationEventType.Applied:
+            case ApplicationEventType.FollowUp:
+            case ApplicationEventType.Interview:
+                // Non-terminal events: outcome remains unchanged
+                break;
+
+            case ApplicationEventType.Rejected:
+                Outcome = ApplicationOutcome.Rejected;
+                OutcomeReason = trimmedNotes;
+                UpdatedAt = timestamp;
+                VersionToken = Guid.CreateVersion7();
+                break;
+
+            case ApplicationEventType.OfferAccepted:
+            case ApplicationEventType.OfferDeclined:
+            case ApplicationEventType.Withdrawn:
+                Outcome = ApplicationOutcome.Closed;
+                OutcomeReason = trimmedNotes;
+                UpdatedAt = timestamp;
+                VersionToken = Guid.CreateVersion7();
+                break;
+        }
     }
 }

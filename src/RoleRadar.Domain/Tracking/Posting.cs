@@ -341,6 +341,33 @@ public sealed class Posting
         VersionToken = Guid.CreateVersion7();
     }
 
+    public void TransitionToApplied(DateTimeOffset timestamp)
+    {
+        Disposition = PostingDisposition.Applied;
+        DecidedAt = null;
+        UpdatedAt = timestamp;
+        VersionToken = Guid.CreateVersion7();
+    }
+
+    public void SynchronizeFromApplicationEvent(
+        PostingDisposition terminalDisposition,
+        string? reason,
+        DateTimeOffset timestamp)
+    {
+        Disposition = terminalDisposition;
+        if (!string.IsNullOrWhiteSpace(reason))
+        {
+            var trimmed = reason.Trim();
+            DispositionReason = trimmed.Length > MaxDispositionReasonLength
+                ? trimmed[..MaxDispositionReasonLength]
+                : trimmed;
+        }
+
+        DecidedAt = timestamp;
+        UpdatedAt = timestamp;
+        VersionToken = Guid.CreateVersion7();
+    }
+
     public List<string> ApplyExplicitUpdate(
         Guid? companyId,
         string? title,

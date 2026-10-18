@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace RoleRadar.Domain.Tracking;
 
 public sealed class ApplicationEvent
@@ -24,17 +26,48 @@ public sealed class ApplicationEvent
         Guid? id = null,
         DateTimeOffset? now = null)
     {
-        // Stub implementation for test-first phase - intentionally does not validate invariants
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        if (applicationId == Guid.Empty)
+        {
+            throw new ArgumentException("Application ID cannot be empty.", nameof(applicationId));
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(eventDate);
+        if (!DateOnly.TryParseExact(eventDate.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+        {
+            throw new ArgumentException($"Event date must be in YYYY-MM-DD format: '{eventDate}'.", nameof(eventDate));
+        }
+
+        string? validatedEventSource = null;
+        if (eventSource is not null)
+        {
+            if (eventSource.Length > MaxEventSourceLength)
+            {
+                throw new ArgumentException($"Event source cannot exceed {MaxEventSourceLength} characters.", nameof(eventSource));
+            }
+            validatedEventSource = eventSource.Trim();
+        }
+
+        string? validatedNotes = null;
+        if (notes is not null)
+        {
+            if (notes.Length > MaxNotesLength)
+            {
+                throw new ArgumentException($"Notes cannot exceed {MaxNotesLength} characters.", nameof(notes));
+            }
+            validatedNotes = notes.Trim();
+        }
+
         var ts = now ?? DateTimeOffset.UtcNow;
         return new ApplicationEvent
         {
             Id = id ?? Guid.CreateVersion7(),
-            OwnerId = ownerId ?? string.Empty,
+            OwnerId = ownerId.Trim(),
             ApplicationId = applicationId,
-            EventDate = eventDate ?? string.Empty,
+            EventDate = eventDate.Trim(),
             EventType = eventType,
-            EventSource = eventSource,
-            Notes = notes,
+            EventSource = validatedEventSource,
+            Notes = validatedNotes,
             CreatedAt = ts
         };
     }

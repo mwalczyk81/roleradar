@@ -485,17 +485,20 @@ public sealed class ShippedHostTrackingIntegrationTests
                 ownershipType = "public",
                 status = "target"
             });
-            Assert.True(companyResp.GetProperty("ok").GetBoolean());
-            var companyId = companyResp.GetProperty("data").GetProperty("company").GetProperty("id").GetGuid();
+            Assert.True(companyResp.GetProperty("ok").GetBoolean(), $"company_record failed: {companyResp}");
+            var companyIdStr = companyResp.GetProperty("data").GetProperty("company").GetProperty("id").GetString();
+            Assert.NotNull(companyIdStr);
 
             var postingResp = await clients[0].CallToolAsync("posting_record", new
             {
-                companyId = companyId,
+                companyId = companyIdStr,
                 title = "Concurrent Application Role",
                 url = "https://jobs.apprace.internal/positions/123"
             });
-            Assert.True(postingResp.GetProperty("ok").GetBoolean());
-            var postingId = postingResp.GetProperty("data").GetProperty("posting").GetProperty("id").GetGuid();
+            Assert.True(postingResp.GetProperty("ok").GetBoolean(), $"posting_record failed: {postingResp}");
+            var postingIdStr = postingResp.GetProperty("data").GetProperty("posting").GetProperty("id").GetString();
+            Assert.NotNull(postingIdStr);
+            var postingId = Guid.Parse(postingIdStr);
 
             // 2. Launch 8 concurrent MCP processes submitting application for the same posting
             var barrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -523,6 +526,11 @@ public sealed class ShippedHostTrackingIntegrationTests
                 r.TryGetProperty("ok", out var ok) && !ok.GetBoolean() &&
                 r.GetProperty("error").GetProperty("code").GetString() == "InvalidTransition").ToList();
 
+            if (succeeded.Count != 1)
+            {
+                var summary = string.Join("\n", results.Select((r, idx) => $"[{idx}] {r}"));
+                Assert.Fail($"Expected 1 succeeded, got {succeeded.Count}. Process results:\n{summary}");
+            }
             Assert.Single(succeeded);
             Assert.Equal(processCount - 1, invalidTransitionErrors.Count);
 

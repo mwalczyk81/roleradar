@@ -46,13 +46,13 @@ public sealed class ApplicationDomainTests
     }
 
     [Theory]
-    [InlineData(-1000, 200000, "USD")]
-    [InlineData(220000, 200000, "USD")]
-    [InlineData(180000, 200000, "US")]
-    [InlineData(180000, 200000, "USDT")]
-    public void Create_InvalidDesiredSalary_ThrowsArgumentException(decimal? min, decimal? max, string currency)
+    [InlineData(-1000.0, 200000.0, "USD")]
+    [InlineData(220000.0, 200000.0, "USD")]
+    [InlineData(180000.0, 200000.0, "US")]
+    [InlineData(180000.0, 200000.0, "USDT")]
+    public void Create_InvalidDesiredSalary_ThrowsArgumentException(double min, double max, string currency)
     {
-        var salary = new DesiredSalary(min, max, currency);
+        var salary = new DesiredSalary((decimal)min, (decimal)max, currency);
         Assert.Throws<ArgumentException>(() => ApplicationEntity.Create(
             ownerId: "owner-1",
             postingId: Guid.NewGuid(),
