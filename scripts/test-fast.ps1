@@ -23,7 +23,7 @@ try {
     $testArgs += @("-c", $Configuration)
 
     foreach ($proj in $projects) {
-        Write-Host "==> Running $proj..." -ForegroundColor Cyan
+        Write-Output "==> Running $proj..."
         dotnet @testArgs $proj
         if ($LASTEXITCODE -ne 0) {
             Write-Error "Tests failed in $proj with exit code $LASTEXITCODE"
@@ -31,7 +31,7 @@ try {
         }
     }
 
-    Write-Host "==> Fast test loop completed successfully!" -ForegroundColor Green
+    Write-Output "==> Fast test loop completed successfully!"
 }
 finally {
     Pop-Location

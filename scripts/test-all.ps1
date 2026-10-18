@@ -15,14 +15,14 @@ try {
         $testArgs += "--no-build"
     }
 
-    Write-Host "==> Running all tests for RoleRadar.sln..." -ForegroundColor Cyan
+    Write-Output "==> Running all tests for RoleRadar.sln..."
     dotnet @testArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Test suite failed with exit code $LASTEXITCODE"
         exit $LASTEXITCODE
     }
 
-    Write-Host "==> All tests completed successfully!" -ForegroundColor Green
+    Write-Output "==> All tests completed successfully!"
 }
 finally {
     Pop-Location

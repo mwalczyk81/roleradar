@@ -42,7 +42,7 @@ foreach ($m in $specMatches) {
     [void]$specReqs.Add($m.Groups[1].Value.ToUpperInvariant())
 }
 
-Write-Host "Discovered $($specReqs.Count) requirements in $SpecPath"
+Write-Output "Discovered $($specReqs.Count) requirements in $SpecPath"
 
 if ($specReqs.Count -ne 48) {
     Write-Error "Expected exactly 48 requirements in spec.md, but found $($specReqs.Count)."
@@ -60,7 +60,7 @@ foreach ($m in $matrixMatches) {
     $matrixReqs[$reqId] = $status
 }
 
-Write-Host "Discovered $($matrixReqs.Count) mapped requirements in $ContractPath"
+Write-Output "Discovered $($matrixReqs.Count) mapped requirements in $ContractPath"
 
 $failures = [System.Collections.Generic.List[string]]::new()
 
@@ -77,7 +77,7 @@ foreach ($req in $specReqs) {
 }
 
 if ($VerifyCodeOnDisk) {
-    Write-Host "Verifying code on disk..."
+    Write-Output "Verifying code on disk..."
     $trackingToolsFile = Join-Path $repoRoot "src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs"
     if (-not (Test-Path -LiteralPath $trackingToolsFile -PathType Leaf)) {
         $failures.Add("TrackingMcpTools.cs does not exist on disk: $trackingToolsFile")
@@ -102,20 +102,20 @@ if ($VerifyCodeOnDisk) {
     }
 }
 
-Write-Host ""
-Write-Host "================ Traceability Verification Summary ================"
-Write-Host "Total Spec Requirements:   $($specReqs.Count)"
-Write-Host "Matrix Mapped Count:       $($matrixReqs.Count)"
-Write-Host "Failures / Discrepancies:  $($failures.Count)"
+Write-Output ""
+Write-Output "================ Traceability Verification Summary ================"
+Write-Output "Total Spec Requirements:   $($specReqs.Count)"
+Write-Output "Matrix Mapped Count:       $($matrixReqs.Count)"
+Write-Output "Failures / Discrepancies:  $($failures.Count)"
 
 if ($failures.Count -gt 0) {
-    Write-Host ""
-    Write-Host "Failures:" -ForegroundColor Red
+    Write-Output ""
+    Write-Output "Failures:"
     foreach ($f in $failures) {
-        Write-Host "  - $f" -ForegroundColor Red
+        Write-Output "  - $f"
     }
     exit 1
 }
 
-Write-Host "Traceability matrix verified: 48 of 48 requirements present with status PASS." -ForegroundColor Green
+Write-Output "Traceability matrix verified: 48 of 48 requirements present with status PASS."
 exit 0
