@@ -95,10 +95,11 @@ public static class ContainerTestHarness
         string[] arguments,
         IDictionary<string, string>? environment = null,
         string? stdinInput = null,
-        int timeoutSeconds = 30)
+        int timeoutSeconds = 30,
+        IEnumerable<string>? volumes = null)
     {
         await EnsureImagesBuiltAsync();
-        return await RunRawAsync(ResolveCliImage(), arguments, environment, stdinInput, timeoutSeconds);
+        return await RunRawAsync(ResolveCliImage(), arguments, environment, stdinInput, timeoutSeconds, volumes: volumes);
     }
 
     public static async Task<ContainerExecutionResult> RunMcpAsync(
@@ -116,7 +117,8 @@ public static class ContainerTestHarness
         IDictionary<string, string>? environment = null,
         string? stdinInput = null,
         int timeoutSeconds = 30,
-        string? entrypoint = null)
+        string? entrypoint = null,
+        IEnumerable<string>? volumes = null)
     {
         var runArgs = new StringBuilder("run --rm -i ");
         runArgs.Append("--read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop ALL --security-opt no-new-privileges ");
@@ -124,6 +126,14 @@ public static class ContainerTestHarness
         if (!string.IsNullOrEmpty(entrypoint))
         {
             runArgs.Append(System.Globalization.CultureInfo.InvariantCulture, $"--entrypoint {entrypoint} ");
+        }
+
+        if (volumes is not null)
+        {
+            foreach (var vol in volumes)
+            {
+                runArgs.Append(System.Globalization.CultureInfo.InvariantCulture, $"-v \"{vol}\" ");
+            }
         }
 
         if (environment is not null)
