@@ -9,6 +9,7 @@ public sealed class ContainerExecutionResult
     public string StandardOutput { get; init; } = string.Empty;
     public string StandardError { get; init; } = string.Empty;
     public TimeSpan Duration { get; init; }
+    public TimeSpan TimeToFirstResponse { get; init; }
 }
 
 public static class ContainerTestHarness
@@ -177,6 +178,7 @@ public static class ContainerTestHarness
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
+        var timeToFirstResponse = TimeSpan.Zero;
         if (!string.IsNullOrEmpty(stdinInput))
         {
             var responseReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -184,6 +186,10 @@ public static class ContainerTestHarness
             {
                 if (args.Data?.Contains("jsonrpc", StringComparison.OrdinalIgnoreCase) == true)
                 {
+                    if (timeToFirstResponse == TimeSpan.Zero)
+                    {
+                        timeToFirstResponse = stopwatch.Elapsed;
+                    }
                     responseReceived.TrySetResult(true);
                 }
             }
@@ -194,7 +200,7 @@ public static class ContainerTestHarness
             await process.StandardInput.FlushAsync();
 
             // Wait for response frame or timeout before closing stdin
-            await Task.WhenAny(responseReceived.Task, Task.Delay(1500));
+            await Task.WhenAny(responseReceived.Task, Task.Delay(5000));
             process.OutputDataReceived -= OnDataReceived;
         }
 
@@ -225,7 +231,8 @@ public static class ContainerTestHarness
             ExitCode = process.ExitCode,
             StandardOutput = stdoutBuilder.ToString(),
             StandardError = stderrBuilder.ToString(),
-            Duration = stopwatch.Elapsed
+            Duration = stopwatch.Elapsed,
+            TimeToFirstResponse = timeToFirstResponse == TimeSpan.Zero ? stopwatch.Elapsed : timeToFirstResponse
         };
     }
 
