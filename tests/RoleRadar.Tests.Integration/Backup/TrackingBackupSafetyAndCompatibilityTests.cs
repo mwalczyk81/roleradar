@@ -186,9 +186,9 @@ public sealed class TrackingBackupSafetyAndCompatibilityTests : IClassFixture<Ba
         {
             ["_id"] = new BsonBinaryData(noteId, GuidRepresentation.Standard),
             ["owner_id"] = "legacy-owner",
-            ["title"] = "Legacy 001 Architectural Note",
-            ["body"] = "Legacy note content written by 001 build without tracking references.",
-            ["current_body_hash"] = Sha256Hasher.ComputeLowerHex("Legacy note content written by 001 build without tracking references."),
+            ["title"] = "Legacy Heading",
+            ["body"] = "## Legacy Heading\nLegacy note content written by 001 build without tracking references.\n",
+            ["current_body_hash"] = Sha256Hasher.ComputeLowerHex("## Legacy Heading\nLegacy note content written by 001 build without tracking references.\n"),
             ["tags"] = new BsonArray { "legacy", "001" },
             ["area"] = "architecture",
             ["provenance"] = new BsonDocument
@@ -200,8 +200,10 @@ public sealed class TrackingBackupSafetyAndCompatibilityTests : IClassFixture<Ba
             {
                 ["source_file_id"] = "legacy-file.md",
                 ["heading_path"] = "## Legacy Heading",
-                ["occurrence_index"] = 1,
-                ["import_key"] = "legacy-file.md## Legacy Heading#1"
+                ["occurrence_index"] = 0,
+                ["section_order_index"] = 1,
+                ["last_imported_body_hash"] = Sha256Hasher.ComputeLowerHex("## Legacy Heading\nLegacy note content written by 001 build without tracking references.\n"),
+                ["import_key"] = "legacy-file.md### Legacy Heading#0"
             },
             ["status"] = "active",
             ["version_token"] = new BsonBinaryData(noteVersion, GuidRepresentation.Standard),
@@ -268,7 +270,7 @@ public sealed class TrackingBackupSafetyAndCompatibilityTests : IClassFixture<Ba
             var testMarkdownFile = Path.Combine(tempDir, "legacy-file.md");
             try
             {
-                await File.WriteAllTextAsync(testMarkdownFile, "## Legacy Heading\nLegacy note content written by 001 build without tracking references.");
+                await File.WriteAllTextAsync(testMarkdownFile, "## Legacy Heading\nLegacy note content written by 001 build without tracking references.\n");
                 var importHandler = provider.GetRequiredService<ICommandHandler<ImportMarkdownCommand, ImportMarkdownSummaryDto>>();
                 var dryRunOutcome = await importHandler.HandleAsync(new ImportMarkdownCommand(
                     FilePaths: [testMarkdownFile],
@@ -277,7 +279,7 @@ public sealed class TrackingBackupSafetyAndCompatibilityTests : IClassFixture<Ba
 
                 Assert.True(dryRunOutcome.IsSuccess);
                 var summary = dryRunOutcome.Value!;
-                Assert.Equal(1, summary.UnchangedCount);
+                Assert.True(summary.UnchangedCount == 1, $"Expected UnchangedCount == 1, but got: FilesProcessed={summary.FilesProcessed}, Created={summary.CreatedCount}, Updated={summary.UpdatedCount}, Unchanged={summary.UnchangedCount}, Conflicts={summary.ConflictCount}, Orphans={summary.OrphanCount}, ConflictsList=[{string.Join(", ", summary.Conflicts.Select(c => $"{c.ImportKey}: {c.Reason}"))}]");
                 Assert.Equal(0, summary.CreatedCount);
                 Assert.Equal(0, summary.UpdatedCount);
             }

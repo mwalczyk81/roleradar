@@ -1,6 +1,7 @@
 using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
 using RoleRadar.Application.Abstractions;
+using RoleRadar.Infrastructure.Mongo;
 
 namespace RoleRadar.Cli.Commands;
 
@@ -40,12 +41,21 @@ public static class WipeCommand
             }
 
             var summary = outcome.Value;
-            var notes = summary.DroppedCounts.GetValueOrDefault("notes", 0);
-            var revisions = summary.DroppedCounts.GetValueOrDefault("note_revisions", 0);
-            var audits = summary.DroppedCounts.GetValueOrDefault("audit_log", 0);
+            var notes = summary.DroppedCounts.GetValueOrDefault(MongoBootstrapAndIndexes.NotesCollectionName, 0);
+            var revisions = summary.DroppedCounts.GetValueOrDefault(MongoBootstrapAndIndexes.NoteRevisionsCollectionName, 0);
+            var audits = summary.DroppedCounts.GetValueOrDefault(MongoBootstrapAndIndexes.AuditLogCollectionName, 0);
+            var companies = summary.DroppedCounts.GetValueOrDefault(TrackingMongoOptions.CompaniesCollectionName, 0);
+            var sources = summary.DroppedCounts.GetValueOrDefault(TrackingMongoOptions.CareerSourcesCollectionName, 0);
+            var postings = summary.DroppedCounts.GetValueOrDefault(TrackingMongoOptions.PostingsCollectionName, 0);
+            var signals = summary.DroppedCounts.GetValueOrDefault(TrackingMongoOptions.PostingSignalsCollectionName, 0);
+            var criteria = summary.DroppedCounts.GetValueOrDefault(TrackingMongoOptions.CriteriaCollectionName, 0);
+            var applications = summary.DroppedCounts.GetValueOrDefault(TrackingMongoOptions.ApplicationsCollectionName, 0);
+            var appEvents = summary.DroppedCounts.GetValueOrDefault(TrackingMongoOptions.ApplicationEventsCollectionName, 0);
+            var contacts = summary.DroppedCounts.GetValueOrDefault(TrackingMongoOptions.ContactsCollectionName, 0);
+            var searchRuns = summary.DroppedCounts.GetValueOrDefault(TrackingMongoOptions.SearchRunsCollectionName, 0);
 
             Console.WriteLine("Wipe completed successfully.");
-            Console.WriteLine($"Dropped records: {notes} notes, {revisions} revisions, {audits} audit entries.");
+            Console.WriteLine($"Dropped records: {notes} notes, {revisions} revisions, {audits} audit entries, {companies} companies, {sources} career sources, {postings} postings, {signals} signals, {criteria} criteria, {applications} applications, {appEvents} application events, {contacts} contacts, {searchRuns} search runs.");
             return 0;
         });
 

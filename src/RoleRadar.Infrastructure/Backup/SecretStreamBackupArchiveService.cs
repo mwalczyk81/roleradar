@@ -598,21 +598,38 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         ArgumentException.ThrowIfNullOrWhiteSpace(backupFilePath);
         ArgumentException.ThrowIfNullOrWhiteSpace(passphrase);
 
-        // Check if database contains data
+        // Check if database contains data across all 12 collections
         var db = _mongoClient.GetDatabase(_mongoOptions.DatabaseName);
-        var notesCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NotesCollectionName);
-        var revisionsCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NoteRevisionsCollectionName);
-        var auditCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
 
-        var existingNotes = await notesCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
-        var existingRevisions = await revisionsCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
-        var existingAudits = await auditCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
-
-        if ((existingNotes > 0 || existingRevisions > 0 || existingAudits > 0) && !forceOverwrite)
+        var allCollectionNames = new[]
         {
-            return Result<RestoreArchiveSummaryDto>.Failure(
-                ErrorCode.ValidationError,
-                "Datastore is non-empty. Use --force-overwrite to drop existing collections before restoring.");
+            MongoBootstrapAndIndexes.NotesCollectionName,
+            MongoBootstrapAndIndexes.NoteRevisionsCollectionName,
+            MongoBootstrapAndIndexes.AuditLogCollectionName,
+            TrackingMongoOptions.CompaniesCollectionName,
+            TrackingMongoOptions.CareerSourcesCollectionName,
+            TrackingMongoOptions.PostingsCollectionName,
+            TrackingMongoOptions.PostingSignalsCollectionName,
+            TrackingMongoOptions.CriteriaCollectionName,
+            TrackingMongoOptions.ApplicationsCollectionName,
+            TrackingMongoOptions.ApplicationEventsCollectionName,
+            TrackingMongoOptions.ContactsCollectionName,
+            TrackingMongoOptions.SearchRunsCollectionName
+        };
+
+        if (!forceOverwrite)
+        {
+            foreach (var colName in allCollectionNames)
+            {
+                var col = db.GetCollection<BsonDocument>(colName);
+                var count = await col.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+                if (count > 0)
+                {
+                    return Result<RestoreArchiveSummaryDto>.Failure(
+                        ErrorCode.ValidationError,
+                        "Datastore is non-empty. Use --force-overwrite to drop existing collections before restoring.");
+                }
+            }
         }
 
         if (!File.Exists(backupFilePath))
@@ -715,7 +732,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                 }
             }
 
-            // Verify indexes and collection counts
+            // Verify indexes and collection counts across all 12 collections
             await MongoBootstrapAndIndexes.EnsureIndexesAsync(db, cancellationToken);
             try
             {
@@ -726,16 +743,12 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                 return Result<RestoreArchiveSummaryDto>.Failure(ErrorCode.ValidationError, ex.Message);
             }
 
-            var finalNotes = await notesCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
-            var finalRevisions = await revisionsCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
-            var finalAudits = await auditCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
-
-            var counts = new Dictionary<string, long>
+            var counts = new Dictionary<string, long>();
+            foreach (var colName in allCollectionNames)
             {
-                [MongoBootstrapAndIndexes.NotesCollectionName] = finalNotes,
-                [MongoBootstrapAndIndexes.NoteRevisionsCollectionName] = finalRevisions,
-                [MongoBootstrapAndIndexes.AuditLogCollectionName] = finalAudits
-            };
+                var col = db.GetCollection<BsonDocument>(colName);
+                counts[colName] = await col.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+            }
 
             return Result<RestoreArchiveSummaryDto>.Success(
                 new RestoreArchiveSummaryDto(backupFilePath, counts, DateTime.UtcNow));
@@ -796,13 +809,29 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         }
 
         var db = _mongoClient.GetDatabase(_mongoOptions.DatabaseName);
-        var notesCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NotesCollectionName);
-        var revisionsCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NoteRevisionsCollectionName);
-        var auditCol = db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
 
-        var notesCount = await notesCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
-        var revisionsCount = await revisionsCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
-        var auditCount = await auditCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+        var allCollectionNames = new[]
+        {
+            MongoBootstrapAndIndexes.NotesCollectionName,
+            MongoBootstrapAndIndexes.NoteRevisionsCollectionName,
+            MongoBootstrapAndIndexes.AuditLogCollectionName,
+            TrackingMongoOptions.CompaniesCollectionName,
+            TrackingMongoOptions.CareerSourcesCollectionName,
+            TrackingMongoOptions.PostingsCollectionName,
+            TrackingMongoOptions.PostingSignalsCollectionName,
+            TrackingMongoOptions.CriteriaCollectionName,
+            TrackingMongoOptions.ApplicationsCollectionName,
+            TrackingMongoOptions.ApplicationEventsCollectionName,
+            TrackingMongoOptions.ContactsCollectionName,
+            TrackingMongoOptions.SearchRunsCollectionName
+        };
+
+        var droppedCounts = new Dictionary<string, long>();
+        foreach (var colName in allCollectionNames)
+        {
+            var col = db.GetCollection<BsonDocument>(colName);
+            droppedCounts[colName] = await col.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+        }
 
         // Drop the database
         await _mongoClient.DropDatabaseAsync(_mongoOptions.DatabaseName, cancellationToken);
@@ -811,13 +840,6 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         await MongoBootstrapAndIndexes.EnsureIndexesAsync(db, cancellationToken);
         await TrackingIndexInitializer.EnsureIndexesAsync(db, cancellationToken);
         TrackingIndexInitializer.ResetInitializationState(_mongoOptions.DatabaseName);
-
-        var droppedCounts = new Dictionary<string, long>
-        {
-            [MongoBootstrapAndIndexes.NotesCollectionName] = notesCount,
-            [MongoBootstrapAndIndexes.NoteRevisionsCollectionName] = revisionsCount,
-            [MongoBootstrapAndIndexes.AuditLogCollectionName] = auditCount
-        };
 
         return Result<WipeSummaryDto>.Success(
             new WipeSummaryDto(droppedCounts, DateTime.UtcNow));

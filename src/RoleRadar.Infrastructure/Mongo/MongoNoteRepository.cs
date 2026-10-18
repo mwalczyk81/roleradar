@@ -456,13 +456,20 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
         if (doc.TryGetValue("import_metadata", out var importVal) && !importVal.IsBsonNull)
         {
             var metaDoc = importVal.AsBsonDocument;
+            var sectionOrder = metaDoc.TryGetValue("section_order_index", out var secOrdVal) && !secOrdVal.IsBsonNull
+                ? secOrdVal.AsInt32
+                : (metaDoc.TryGetValue("occurrence_index", out var occVal) && !occVal.IsBsonNull ? occVal.AsInt32 : 1);
+            var lastImportedHash = metaDoc.TryGetValue("last_imported_body_hash", out var libhVal) && !libhVal.IsBsonNull
+                ? libhVal.AsString
+                : doc["current_body_hash"].AsString;
+
             importMeta = NoteImportMetadata.Rehydrate(
                 metaDoc["import_key"].AsString,
                 metaDoc["source_file_id"].AsString,
                 metaDoc["heading_path"].AsString,
                 metaDoc["occurrence_index"].AsInt32,
-                metaDoc["section_order_index"].AsInt32,
-                metaDoc["last_imported_body_hash"].AsString);
+                sectionOrder,
+                lastImportedHash);
         }
 
         var tags = doc["tags"].AsBsonArray.Select(t => t.AsString).ToArray();

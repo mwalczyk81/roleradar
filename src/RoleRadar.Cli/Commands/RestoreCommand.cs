@@ -2,6 +2,7 @@ using System.CommandLine;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using RoleRadar.Application.Abstractions;
+using RoleRadar.Infrastructure.Mongo;
 
 namespace RoleRadar.Cli.Commands;
 
@@ -98,12 +99,21 @@ public static class RestoreCommand
             }
 
             var summary = outcome.Value;
-            var notes = summary.RestoredCounts.GetValueOrDefault("notes", 0);
-            var revisions = summary.RestoredCounts.GetValueOrDefault("note_revisions", 0);
-            var audits = summary.RestoredCounts.GetValueOrDefault("audit_log", 0);
+            var notes = summary.RestoredCounts.GetValueOrDefault(MongoBootstrapAndIndexes.NotesCollectionName, 0);
+            var revisions = summary.RestoredCounts.GetValueOrDefault(MongoBootstrapAndIndexes.NoteRevisionsCollectionName, 0);
+            var audits = summary.RestoredCounts.GetValueOrDefault(MongoBootstrapAndIndexes.AuditLogCollectionName, 0);
+            var companies = summary.RestoredCounts.GetValueOrDefault(TrackingMongoOptions.CompaniesCollectionName, 0);
+            var sources = summary.RestoredCounts.GetValueOrDefault(TrackingMongoOptions.CareerSourcesCollectionName, 0);
+            var postings = summary.RestoredCounts.GetValueOrDefault(TrackingMongoOptions.PostingsCollectionName, 0);
+            var signals = summary.RestoredCounts.GetValueOrDefault(TrackingMongoOptions.PostingSignalsCollectionName, 0);
+            var criteria = summary.RestoredCounts.GetValueOrDefault(TrackingMongoOptions.CriteriaCollectionName, 0);
+            var applications = summary.RestoredCounts.GetValueOrDefault(TrackingMongoOptions.ApplicationsCollectionName, 0);
+            var appEvents = summary.RestoredCounts.GetValueOrDefault(TrackingMongoOptions.ApplicationEventsCollectionName, 0);
+            var contacts = summary.RestoredCounts.GetValueOrDefault(TrackingMongoOptions.ContactsCollectionName, 0);
+            var searchRuns = summary.RestoredCounts.GetValueOrDefault(TrackingMongoOptions.SearchRunsCollectionName, 0);
 
             Console.WriteLine($"Restore completed: {summary.ArchivePath}");
-            Console.WriteLine($"Restored counts: {notes} notes, {revisions} revisions, {audits} audit entries.");
+            Console.WriteLine($"Restored counts: {notes} notes, {revisions} revisions, {audits} audit entries, {companies} companies, {sources} career sources, {postings} postings, {signals} signals, {criteria} criteria, {applications} applications, {appEvents} application events, {contacts} contacts, {searchRuns} search runs.");
             return 0;
         });
 
