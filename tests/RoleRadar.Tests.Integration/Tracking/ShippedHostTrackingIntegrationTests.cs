@@ -763,6 +763,41 @@ public sealed class ShippedHostTrackingIntegrationTests
         Assert.True(discrepancies.Count == 0, $"Schema contract discrepancies found:\n{string.Join("\n", discrepancies)}");
     }
 
+    [Fact]
+    public async Task ShippedMcpHost_ToolInvocation_WithUnknownArguments_ReturnsValidationError()
+    {
+        var mcpDllPath = GetMcpDllPath();
+        var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_unknown_args_test");
+        var env = _sharedMongo.CreateProcessEnvironment(uniqueDb);
+
+        await using var client = await McpProcessClient.StartAsync(mcpDllPath, env);
+
+        var allTools = new[]
+        {
+            "note_create", "note_get", "note_append", "note_replace_section", "note_search", "note_archive",
+            "company_record", "posting_record", "posting_transition", "tracker_query", "tracker_log", "application_record"
+        };
+
+        foreach (var tool in allTools)
+        {
+            using var rawResponse = await client.CallToolRawAsync(tool, new
+            {
+                bogusParam = "secretValue123"
+            });
+
+            var root = rawResponse.RootElement;
+            Assert.True(root.TryGetProperty("result", out var result), $"Expected result property for tool {tool}");
+            var text = result.GetProperty("content")[0].GetProperty("text").GetString()!;
+            using var envelope = JsonDocument.Parse(text);
+            Assert.False(envelope.RootElement.GetProperty("ok").GetBoolean(), $"Tool {tool} should return ok=false");
+            var err = envelope.RootElement.GetProperty("error");
+            Assert.Equal("ValidationError", err.GetProperty("code").GetString());
+            var msg = err.GetProperty("message").GetString()!;
+            Assert.Contains("bogusParam", msg, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("secretValue123", msg, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     private static string FindRepoRoot()
     {
         var current = AppContext.BaseDirectory;
@@ -1001,6 +1036,30 @@ public sealed class ShippedHostTrackingIntegrationTests
             }
 
             return resultElement.Clone();
+        }
+
+        public async Task<JsonDocument> CallToolRawAsync(string name, object arguments)
+        {
+            var id = Interlocked.Increment(ref _nextId);
+            var request = JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id = id,
+                method = "tools/call",
+                @params = new
+                {
+                    name = name,
+                    arguments = arguments
+                }
+            });
+
+            await _process.StandardInput.WriteLineAsync(request);
+            await _process.StandardInput.FlushAsync();
+
+            var responseLine = await _process.StandardOutput.ReadLineAsync();
+            Assert.NotNull(responseLine);
+
+            return JsonDocument.Parse(responseLine);
         }
 
         public async Task<JsonElement> CallToolAsync(string name, object arguments)
