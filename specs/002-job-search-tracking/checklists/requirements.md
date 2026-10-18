@@ -31,6 +31,6 @@
 
 ## Notes
 
-- All 16 quality checklist items passed across both initial creation and post-clarification reviews (16/16 items passing).
-- Clarifications from real legacy data inspection integrated into spec: tiered deduplication (A-D), state transitions, redaction, bounded company descriptions, duplicate collapsing, and explicit typed failures.
+- All 16 quality checklist items passed across initial creation and both post-clarification reviews (16/16 items passing).
+- Clarifications integrated into spec: application creation states (lead/unscored/scored), reopen-and-apply override as one audited transaction, AlreadyDecided can_reopen indicator, tiered deduplication (A-D), state transitions, redaction, bounded company descriptions, duplicate collapsing, and explicit typed failures.
 - Zero `[NEEDS CLARIFICATION]` markers exist; feature specification is ready for `/speckit-plan`.

@@ -24,6 +24,9 @@
 - Q: What is the storage engine architectural assumption? → A: Structured storage uses the project's existing datastore ecosystem; the specific engine is decided during implementation planning.
 - Q: What typed operational failures must the system explicitly define? → A: `NotFound`, `AlreadyDecided`, `AlreadyTracked`, `PossibleDuplicate`, `InvalidTransition`, `ConcurrencyConflict`, `ValidationError`.
 - Q: What remains out of scope for Feature 002? → A: Importing legacy export data (Feature 003), scoring algorithms, career site scraping/crawling, UI, authentication, and hosted MCP.
+- Q: From which posting dispositions can an application be created? → A: Application creation is permitted directly from `lead`, `unscored`, and `scored`, transitioning the posting to `applied`.
+- Q: How does the application override flag operate on decided or closed postings? → A: Creating an application with the override flag for a `screened_out` or `closed` posting executes reopen-and-apply as ONE audited transaction, moving the posting directly to `applied` regardless of resurface policy. The audit entry records the override flag, previous disposition, and previous resurface policy.
+- Q: What is returned when re-encountering a screened_out or closed posting with resurface_policy if_reopened? → A: Returns `AlreadyDecided` containing the disposition, reason, resurface_policy, and `can_reopen: true`, mutating nothing (no `last_verified` update, no audit entry).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -43,11 +46,11 @@ As the job-search owner, I want to record and update job postings with full trac
 4. **Given** an existing posting lacking a tenant identifier, **When** a posting is submitted with matching company and requisition ID (Tier C deduplication), **Then** the system matches the existing record.
 5. **Given** an existing posting matching on company and normalized title but lacking matching IDs or URL (Tier D deduplication), **When** submitted, **Then** the system returns a typed `PossibleDuplicate` advisory listing of candidate postings with their current dispositions and reasons, and NEVER auto-merges or modifies any record.
 6. **Given** a posting originally recorded with URL only, **When** subsequent submissions provide valid ATS tenant and requisition identifiers, **Then** the existing record is upgraded in place with the new ATS identifiers rather than creating a duplicate record.
-7. **Given** a posting previously screened out, closed, or rejected with resurface policy `never`, **When** the posting is re-encountered, **Then** the system returns a typed `AlreadyDecided` response with the existing record and prior reason without modifying the record or writing an audit entry.
+7. **Given** a posting previously screened out, closed, or rejected with resurface policy `never`, **When** the posting is re-encountered, **Then** the system returns a typed `AlreadyDecided` response containing the existing record, prior reason, resurface policy, and `can_reopen: false`, mutating nothing (no `last_verified` update, no audit entry).
 8. **Given** an existing posting in disposition `lead`, `scored`, `applied`, or `unscored`, **When** the posting is re-encountered, **Then** the system returns a typed `AlreadyTracked` response with its current state, updating `last_verified` without creating duplicate records.
 9. **Given** a resubmission of an existing posting where no field values or verification timestamps change, **When** processed, **Then** the operation is an idempotent no-op and generates zero audit entries.
 10. **Given** a posting that duplicates another posting, **When** linking `duplicate_of`, **Then** the posting cannot reference itself or another posting that is already marked as a duplicate; any duplicate reference chains are collapsed to the root posting at write time.
-11. **Given** a posting closed or screened out with resurface policy `if_reopened`, **When** re-encountered while still closed, **Then** it remains in its current state until an explicit reopen command is issued.
+11. **Given** a posting previously screened out or closed with resurface policy `if_reopened`, **When** the posting is re-encountered while still closed, **Then** the system returns a typed `AlreadyDecided` response containing the existing disposition, reason, resurface policy, and `can_reopen: true`, mutating nothing (no `last_verified` update, no audit entry); the posting remains in its decided state until an explicit reopen command or an application submission with override is executed.
 12. **Given** a posting with detailed screening rationale, **When** saved, **Then** the long narrative rationale is stored in an independent note and referenced by note identifier rather than embedded as unbounded text in the posting record.
 
 ---
@@ -96,15 +99,16 @@ As the job-search owner, I want to track formal job applications (submission dat
 
 **Acceptance Scenarios**:
 
-1. **Given** an active posting with disposition `scored` or `lead`, **When** the owner submits an application, **Then** an application record is created linking to the posting, recording the resume variant classification (`tailored`, `as_is`, or `ic_framed`) and external pointer.
-2. **Given** a posting currently marked `screened_out` or `closed`, **When** the owner attempts to create an application without an override, **Then** the system rejects the operation with a typed `InvalidTransition` error; **When** submitted with an explicit override flag, **Then** the application is created, the posting transitions to `applied`, and the override is recorded in the audit entry.
+1. **Given** an active posting with disposition `lead`, `unscored`, or `scored`, **When** the owner submits an application, **Then** an application record is created linking to the posting, the posting disposition transitions directly to `applied`, and the resume variant classification (`tailored`, `as_is`, or `ic_framed`) and external pointer are recorded.
+2. **Given** a posting currently marked `screened_out` or `closed` (under either `never` or `if_reopened` resurface policy), **When** the owner attempts to create an application without an override flag, **Then** the system rejects the operation with a typed `InvalidTransition` failure; **When** submitted with an explicit override flag, **Then** the system executes reopen-and-apply as ONE audited transaction, transitioning the posting directly to `applied` regardless of resurface policy, and records the override flag, the previous disposition, and the previous resurface policy in the audit entry.
 3. **Given** an active posting, **When** disposition transitions are requested, **Then** the system enforces the permitted transition matrix:
-   - `lead` -> `scored | unscored | screened_out | closed`
-   - `unscored` -> `scored | screened_out | closed`
+   - `lead` -> `scored | unscored | applied | screened_out | closed`
+   - `unscored` -> `scored | applied | screened_out | closed`
    - `scored` -> `applied | screened_out | closed`
    - `applied` -> `rejected | closed`
    - `screened_out` -> `lead` (only via explicit reopen when policy is `if_reopened`)
    - `closed` -> `lead` (only via explicit reopen when policy is `if_reopened`)
+   - `screened_out | closed` -> `applied` (only via application creation with explicit override flag, as one audited transaction)
    - `rejected` -> terminal (reopen allowed only by explicit command with recorded reason)
    - Any other transition is rejected with a typed `InvalidTransition` error.
 4. **Given** an active application, **When** new interaction milestones occur (follow-up, screening interview, technical round, offer, withdrawal), **Then** chronological events with date-only event dates, sources, and notes are appended to the application's timeline.
@@ -175,8 +179,10 @@ As the job-search owner, I want to record periodic search run executions (start 
 - **In-Place Identifier Upgrades**: If a posting was initially saved by normalized URL alone and a subsequent submission supplies ATS tenant and requisition ID, the system upgrades the existing record in place rather than creating a second record.
 - **Duplicate Reference Chains**: A posting cannot be marked as `duplicate_of` itself or another duplicate. If posting A is marked duplicate of B, and B is already duplicate of C, writing A collapses the relationship so A is stored as `duplicate_of: C`.
 - **Untrusted Posting Descriptions**: Posting descriptions may contain prompt injection attempts or malicious formatting; the system must enforce strict input size ceilings, treat text as opaque data, and never evaluate or interpret instructions contained within posting bodies.
-- **Closed / Screened-Out Resubmissions**: When a posting marked `screened_out`, `closed`, or `rejected` with policy `never` is encountered again, it returns a typed `AlreadyDecided` response without updating the record or writing an audit entry.
-- **Reopened Role with `if_reopened`**: A posting marked `if_reopened` remains closed or screened out when re-encountered unless an explicit reopening command is issued by the caller.
+- **Closed / Screened-Out Resubmissions**: When a posting marked `screened_out`, `closed`, or `rejected` is re-encountered:
+  - If `resurface_policy` is `never` (or disposition is `rejected`), returns typed `AlreadyDecided` with `can_reopen: false` without modifying the record, updating `last_verified`, or writing an audit entry.
+  - If `resurface_policy` is `if_reopened`, returns typed `AlreadyDecided` with `can_reopen: true`, preserving the existing state and mutating nothing (no `last_verified` update, no audit entry) until an explicit reopen or application submission with override occurs.
+- **Reopening via Application Override**: Applying to a posting in `screened_out` or `closed` status using an explicit override flag bypasses the resurface policy and executes reopen-and-apply as ONE audited transaction, moving the posting directly to `applied` while logging the override flag, previous disposition, and previous resurface policy in the audit entry.
 - **Active Postings Re-encountered**: Postings in `lead`, `scored`, `applied`, or `unscored` return `AlreadyTracked` with their current state. `last_verified` is updated only for active (non-decided/non-closed) postings.
 - **Zero-Change Resubmissions**: If an incoming submission matches an existing posting and introduces no field changes or verification updates, the operation is an idempotent no-op and writes no audit log entry.
 - **Long Screening Rationales**: Any screening rationale exceeding brief summary length must be saved as an independent narrative note and linked via note ID, preserving database index performance and document size boundaries.
@@ -197,7 +203,7 @@ As the job-search owner, I want to record periodic search run executions (start 
   - **Tier D (Advisory)**: When matching by `(company_id, normalized_title)` without matching IDs or URLs, System MUST return a typed `PossibleDuplicate` response containing candidate postings with their current dispositions and reasons, and MUST NEVER automatically merge or modify records.
 - **FR-005**: When an existing posting recorded by URL subsequently receives matching ATS identifiers via Tier A or Tier C, System MUST upgrade the existing record in place with the newly discovered identifiers.
 - **FR-006**: System MUST normalize URLs by standardizing schemes, lowercasing domain names, removing default ports, trailing slashes, and removing common tracking/marketing query parameters (e.g., `utm_*`, `ref`, `gh_src`).
-- **FR-007**: When an existing posting with disposition `screened_out`, `closed`, or `rejected` and policy `never` is submitted, System MUST return a typed `AlreadyDecided` response containing the original disposition and reason, and MUST NOT alter the record or write an audit entry.
+- **FR-007**: When an existing posting with disposition `screened_out`, `closed`, or `rejected` is submitted, System MUST return a typed `AlreadyDecided` response containing the existing record, disposition, reason, resurface policy, and `can_reopen` indicator (`false` if policy is `never` or disposition is `rejected`; `true` if policy is `if_reopened` and disposition is `screened_out` or `closed`), and MUST NOT alter the record, update `last_verified`, or write an audit entry.
 - **FR-008**: When an existing posting with disposition `lead`, `scored`, `applied`, or `unscored` is submitted, System MUST return a typed `AlreadyTracked` response with its current state, updating `last_verified` only for active postings.
 - **FR-009**: Resubmission of an existing posting that produces zero changes to stored values MUST be an idempotent no-op and write no audit log entry.
 - **FR-010**: System MUST enforce that a posting cannot be `duplicate_of` itself or of another posting marked as a duplicate, automatically collapsing duplicate reference chains to the root posting upon write.
@@ -219,17 +225,18 @@ As the job-search owner, I want to record periodic search run executions (start 
 - **FR-020**: System MUST record applications linked to a specific posting, containing: owner identifier, posting reference, submitted date (date-only), desired salary range, target start date (date-only), resume variant flag (`tailored`, `as_is`, `ic_framed`), external resume pointer reference, referral contact reference ID, confirmation code/reference, and overall outcome.
 - **FR-021**: System MUST forbid storing raw resume or cover letter document text within the database; only variant metadata and external pointers may be persisted.
 - **FR-022**: System MUST enforce the following valid disposition transitions:
-  - `lead` -> `scored | unscored | screened_out | closed`
-  - `unscored` -> `scored | screened_out | closed`
+  - `lead` -> `scored | unscored | applied | screened_out | closed`
+  - `unscored` -> `scored | applied | screened_out | closed`
   - `scored` -> `applied | screened_out | closed`
   - `applied` -> `rejected | closed`
   - `screened_out` -> `lead` (only via explicit reopen when policy is `if_reopened`)
   - `closed` -> `lead` (only via explicit reopen when policy is `if_reopened`)
+  - `screened_out | closed` -> `applied` (only via application creation with explicit override flag, as one audited transaction)
   - `rejected` -> terminal (reopen permitted only via explicit command with a recorded reason)
   - Any invalid transition attempt MUST return a typed `InvalidTransition` failure.
-- **FR-023**: Creating an application for a posting in `screened_out` or `closed` status MUST require an explicit override flag; if omitted, System MUST return an `InvalidTransition` failure. If present, the override MUST be recorded in the audit entry.
+- **FR-023**: Creating an application for a posting in `screened_out` or `closed` status MUST require an explicit override flag; if omitted, System MUST return an `InvalidTransition` failure. If present, System MUST execute reopen-and-apply as ONE audited transaction, transitioning the posting directly to `applied` regardless of resurface policy, and MUST record the override flag, previous disposition, and previous resurface policy in the audit entry.
 - **FR-024**: System MUST synchronize posting dispositions with application outcomes in the same transaction:
-  - Application submitted -> posting transitions to `applied`
+  - Application created/submitted -> posting transitions to `applied` (from `lead`, `unscored`, `scored`, or via override from `screened_out`/`closed`)
   - Application rejected -> posting transitions to `rejected`
   - Application withdrawn, offer declined, or offer accepted -> posting transitions to `closed` with the outcome reason recorded.
 - **FR-025**: System MUST maintain an append-only timeline of application events for each application, capturing: event date (date-only), event type (`applied`, `follow_up`, `rejected`, `interview`, `offer`, `withdrawn`), event source, and descriptive notes.
@@ -289,7 +296,7 @@ As the job-search owner, I want to record periodic search run executions (start 
 ### Measurable Outcomes
 
 - **SC-001**: Submitting the exact same job posting 100 times across three different aggregator URL formats results in exactly one stored posting record.
-- **SC-002**: Re-evaluating a previously screened-out posting with policy `never` returns a typed `AlreadyDecided` response with the original rationale in a single lookup operation without modifying the datastore or writing an audit entry.
+- **SC-002**: Re-evaluating a previously screened-out, closed, or rejected posting returns a typed `AlreadyDecided` response with the original rationale, resurface policy, and `can_reopen` indicator in a single lookup operation without modifying the datastore, updating `last_verified`, or writing an audit entry.
 - **SC-003**: Point-in-time criteria queries return the 100% accurate, active criteria set for any historical timestamp across multiple revisions and superseded rules.
 - **SC-004**: 100% of state-modifying write operations generate exactly one corresponding append-only audit entry within the same transaction.
 - **SC-005**: Architecture and contract tests verify that zero hard-delete operations or tools exist across the entire codebase.
