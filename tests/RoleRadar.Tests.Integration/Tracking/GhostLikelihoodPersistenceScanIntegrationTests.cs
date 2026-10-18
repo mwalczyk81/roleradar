@@ -70,12 +70,12 @@ public sealed class GhostLikelihoodPersistenceScanIntegrationTests : IAsyncLifet
         await _postingRepo.UpsertPostingAsync(posting);
 
         var signal = new PostingSignal(
-            Id: Guid.CreateVersion7(),
-            OwnerId: ownerId,
-            PostingId: posting.Id,
-            SignalType: SignalType.Gone,
-            Evidence: "Posting removed from company board",
-            ObservedAt: DateTimeOffset.UtcNow);
+            id: Guid.CreateVersion7(),
+            ownerId: ownerId,
+            postingId: posting.Id,
+            signalType: SignalType.Gone,
+            evidence: "Posting removed from company board",
+            observedAt: DateTimeOffset.UtcNow);
         await _postingRepo.AppendSignalAsync(signal);
 
         // 1. Read via TrackerQueryHandler and verify dynamic calculation

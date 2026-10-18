@@ -251,6 +251,28 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
 
         await _context.Postings.UpsertPostingAsync(posting, cancellationToken);
 
+        if (command.Signals is not null && command.Signals.Count > 0)
+        {
+            foreach (var sig in command.Signals)
+            {
+                if (TrackingEnumExtensions.TryParseSignalType(sig.SignalType, out var st))
+                {
+                    var observedAt = !string.IsNullOrWhiteSpace(sig.ObservedAt) && DateTimeOffset.TryParse(sig.ObservedAt, out var obs)
+                        ? obs
+                        : now;
+                    var signalEntity = new PostingSignal(
+                        id: Guid.CreateVersion7(),
+                        ownerId: ownerId,
+                        postingId: posting.Id,
+                        signalType: st,
+                        evidence: sig.Evidence,
+                        observedAt: observedAt,
+                        deadlineDate: sig.DeadlineDate);
+                    await _context.Postings.AppendSignalAsync(signalEntity, cancellationToken);
+                    changedFields.Add("signals");
+                }
+            }
+        }
         if (changedFields.Count > 0)
         {
             var summary = new PostingAuditSummary(posting.Id, changedFields, Timestamp: now);
@@ -424,13 +446,13 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
                         ? obs
                         : now;
                     var signalEntity = new PostingSignal(
-                        Id: Guid.CreateVersion7(),
-                        OwnerId: ownerId,
-                        PostingId: newPosting.Id,
-                        SignalType: st,
-                        Evidence: sig.Evidence,
-                        ObservedAt: observedAt,
-                        DeadlineDate: sig.DeadlineDate);
+                        id: Guid.CreateVersion7(),
+                        ownerId: ownerId,
+                        postingId: newPosting.Id,
+                        signalType: st,
+                        evidence: sig.Evidence,
+                        observedAt: observedAt,
+                        deadlineDate: sig.DeadlineDate);
                     await _context.Postings.AppendSignalAsync(signalEntity, cancellationToken);
                 }
             }

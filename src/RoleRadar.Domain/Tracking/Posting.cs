@@ -13,14 +13,6 @@ public sealed record PostingCandidate(
     PostingDisposition Disposition,
     string? Reason);
 
-public sealed record PostingSignal(
-    Guid Id,
-    string OwnerId,
-    Guid PostingId,
-    SignalType SignalType,
-    string Evidence,
-    DateTimeOffset ObservedAt,
-    string? DeadlineDate = null);
 
 public sealed class Posting
 {

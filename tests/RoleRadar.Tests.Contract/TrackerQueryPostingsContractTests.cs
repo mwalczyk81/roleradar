@@ -63,12 +63,12 @@ public sealed class TrackerQueryPostingsContractTests : IClassFixture<SharedMong
 
         // Append a 'gone' signal to boost ghost likelihood
         var signal = new PostingSignal(
-            Id: Guid.CreateVersion7(),
-            OwnerId: "owner-1",
-            PostingId: posting.Id,
-            SignalType: SignalType.Gone,
-            Evidence: "URL returned 404",
-            ObservedAt: DateTimeOffset.UtcNow);
+            id: Guid.CreateVersion7(),
+            ownerId: "owner-1",
+            postingId: posting.Id,
+            signalType: SignalType.Gone,
+            evidence: "URL returned 404",
+            observedAt: DateTimeOffset.UtcNow);
         await _postingRepo.AppendSignalAsync(signal);
 
         var clock = new SystemUtcClock();
