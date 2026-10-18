@@ -38,6 +38,13 @@ public sealed class SharedMongoFixture : IAsyncLifetime
         ReadinessTimeout = TimeSpan.FromSeconds(5)
     };
 
+    public IReadOnlyDictionary<string, string> CreateProcessEnvironment(string? databaseName = null) =>
+        new Dictionary<string, string>
+        {
+            ["ROLERADAR_MONGO_CONNECTION_STRING"] = ConnectionString,
+            ["ROLERADAR_MONGO_DATABASE"] = databaseName ?? CreateDatabaseName()
+        };
+
     public async Task<IMongoDatabase> CreateDatabaseAsync(string prefix = "roleradar_contract")
     {
         var options = CreateOptions(CreateDatabaseName(prefix));
