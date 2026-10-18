@@ -5,6 +5,7 @@ using ModelContextProtocol.Server;
 using MongoDB.Driver;
 using RoleRadar.Application;
 using RoleRadar.Infrastructure;
+using RoleRadar.Mcp.Stdio.Filters;
 using RoleRadar.Mcp.Stdio.Tools;
 
 namespace RoleRadar.Mcp.Stdio;
@@ -46,6 +47,11 @@ public static class Program
                 .WithStdioServerTransport()
                 .WithTools<NoteMcpTools>()
                 .WithTools<TrackingMcpTools>();
+
+            builder.Services.Configure<McpServerOptions>(options =>
+            {
+                options.Filters.Request.CallToolFilters.Add(UnknownArgumentValidationFilter.Create());
+            });
 
             var app = builder.Build();
 
