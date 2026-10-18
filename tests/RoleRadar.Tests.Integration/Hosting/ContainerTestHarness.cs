@@ -179,8 +179,23 @@ public static class ContainerTestHarness
 
         if (!string.IsNullOrEmpty(stdinInput))
         {
+            var responseReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            void OnDataReceived(object _, DataReceivedEventArgs args)
+            {
+                if (args.Data?.Contains("jsonrpc", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    responseReceived.TrySetResult(true);
+                }
+            }
+
+            process.OutputDataReceived += OnDataReceived;
+
             await process.StandardInput.WriteAsync(stdinInput);
             await process.StandardInput.FlushAsync();
+
+            // Wait for response frame or timeout before closing stdin
+            await Task.WhenAny(responseReceived.Task, Task.Delay(1500));
+            process.OutputDataReceived -= OnDataReceived;
         }
 
         process.StandardInput.Close();

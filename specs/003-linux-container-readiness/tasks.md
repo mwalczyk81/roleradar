@@ -78,12 +78,12 @@
 
 ### Implementation for User Story 1
 
-- [ ] T015 [US1] Create root `Dockerfile` per `contracts/dockerfile-build-contract.md` defining multi-stage build targets:
+- [x] T015 [US1] Create root `Dockerfile` per `contracts/dockerfile-build-contract.md` defining multi-stage build targets:
   - `build`: SDK 10.0.402 pinned by digest, locked mode package restore, framework-dependent publish
   - `tools-downloader`: Ubuntu 24.04 stage downloading MongoDB Database Tools 100.19.1 for target architecture, re-verifying SHA-256 against `full.json` (amd64: `f34b84a67ab96b4ff52571ec5d15e2148d96cb140b1ea9ef8c29ac33c48e3480`, arm64: `ebf518d9a303b36e612e40be106cd0ecc7135dc15d098626f81ac3ee8654a821`), extracting `bin/mongodump`, `bin/mongorestore`, installing `libgssapi-krb5-2` and isolating the 6 shared libraries and their dpkg status entries
   - `mcp`: Runtime `mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled` pinned by multi-arch digest, UID 1654, zero ports, entrypoint `RoleRadar.Mcp.Stdio`
   - `cli`: Runtime `mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled` pinned by multi-arch digest, UID 1654, copying tools, shared libraries, and dpkg status entries, zero ports, entrypoint `RoleRadar.Cli` (depends on T013, T014 failing first) [FR-001, FR-002, FR-003, FR-006, FR-020, SC-004]
-- [ ] T016 [US1] Implement cross-platform PowerShell container execution wrapper `scripts/roleradar-docker.ps1` per `contracts/wrapper-scripts-contract.md` providing unified `--cli` and `--mcp` execution forwarding arguments to `docker run --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop ALL --security-opt no-new-privileges` [FR-001, FR-003, FR-017]
+- [x] T016 [US1] Implement cross-platform PowerShell container execution wrapper `scripts/roleradar-docker.ps1` per `contracts/wrapper-scripts-contract.md` providing unified `--cli` and `--mcp` execution forwarding arguments to `docker run --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop ALL --security-opt no-new-privileges` [FR-001, FR-003, FR-017]
 
 **Checkpoint**: User Story 1 complete — `roleradar-cli` and `roleradar-mcp` container images build reproducibly, metadata tests pass, cold start < 3.0s verified.  
 *Commit*: `feat(docker): add multi-stage Dockerfile and roleradar-docker wrapper script`
