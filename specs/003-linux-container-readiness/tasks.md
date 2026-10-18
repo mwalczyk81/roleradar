@@ -36,9 +36,9 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T006 [P] Create living architecture test in `tests/RoleRadar.Tests.Architecture/ContainerReadinessArchitectureTests.cs` asserting that `RoleRadar.Domain` and `RoleRadar.Application` projects have zero references to container, hosting, or Docker types, exactly 12 MCP tools are registered with zero tool additions, strict inward layering is preserved, and banning `DateTime.Now`, `DateTime.Today`, `DateTime.ToLocalTime()`, and `TimeZoneInfo.Local` across all source code in `src/` [FR-004, FR-012, SC-004]
-- [ ] T007 [P] Write failing unit tests for cross-platform script path helpers and denylist resolution in `tests/RoleRadar.Tests.Unit/Scripts/ScriptPortabilityTests.cs`, asserting that Windows resolution equals `%LOCALAPPDATA%\roleradar\private\denylist.txt` byte-for-byte, macOS/Linux resolves `${XDG_DATA_HOME:-$HOME/.local/share}/roleradar/private/denylist.txt`, and the guard fails closed when the file is missing [FR-017, FR-018, SC-001]
-- [ ] T008 [P] Write failing pure unit tests for `ExternalMongoSafetyGuard` in `tests/RoleRadar.Tests.Contract/ExternalDatabaseGuardUnitTests.cs` implementing the complete 11-case decision table from `contracts/external-database-guard-contract.md`:
+- [x] T006 [P] Create living architecture test in `tests/RoleRadar.Tests.Architecture/ContainerReadinessArchitectureTests.cs` asserting that `RoleRadar.Domain` and `RoleRadar.Application` projects have zero references to container, hosting, or Docker types, exactly 12 MCP tools are registered with zero tool additions, strict inward layering is preserved, and banning `DateTime.Now`, `DateTime.Today`, `DateTime.ToLocalTime()`, and `TimeZoneInfo.Local` across all source code in `src/` [FR-004, FR-012, SC-004]
+- [x] T007 [P] Write failing unit tests for cross-platform script path helpers and denylist resolution in `tests/RoleRadar.Tests.Unit/Scripts/ScriptPortabilityTests.cs`, asserting that Windows resolution equals `%LOCALAPPDATA%\roleradar\private\denylist.txt` byte-for-byte, macOS/Linux resolves `${XDG_DATA_HOME:-$HOME/.local/share}/roleradar/private/denylist.txt`, and the guard fails closed when the file is missing [FR-017, FR-018, SC-001]
+- [x] T008 [P] Write failing pure unit tests for `ExternalMongoSafetyGuard` in `tests/RoleRadar.Tests.Contract/ExternalDatabaseGuardUnitTests.cs` implementing the complete 11-case decision table from `contracts/external-database-guard-contract.md`:
   - `mongodb+srv://cluster0.example.mongodb.net/` -> Allowed (SRV implies TLS)
   - `mongodb+srv://cluster0.example.mongodb.net/?tls=false` -> Rejected (`TlsRequiredException`)
   - `mongodb://host.docker.internal:27017/?tls=false` -> Rejected (`TlsRequiredException`, non-loopback)
@@ -50,7 +50,7 @@
   - `mongodb://remote-db.example.com:27017` -> Rejected (`TlsRequiredException`)
   - Remote cluster where user lacks `listDatabases` privilege -> Rejected with clear redacted message (zero secret or host leak)
   - Target server containing non-test database `production_db` -> Rejected (`ForeignDatabaseDetectedException`) [FR-013, FR-014, SC-005]
-- [ ] T009 [P] Write failing process-level startup smoke tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerStartupSmokeTests.cs` verifying that both CLI and MCP entrypoints launch, print version/help, log exclusively to stderr, and exit cleanly when invoked via container test harness [FR-001, FR-003, FR-004, SC-004]
+- [x] T009 [P] Write failing process-level startup smoke tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerStartupSmokeTests.cs` verifying that both CLI and MCP entrypoints launch, print version/help, log exclusively to stderr, and exit cleanly when invoked via container test harness [FR-001, FR-003, FR-004, SC-004]
 
 ### Foundational Implementation
 
