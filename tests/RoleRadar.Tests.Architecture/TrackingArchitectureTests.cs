@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Server;
+using RoleRadar.Application;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Infrastructure;
 using RoleRadar.Mcp.Stdio.Tools;
@@ -13,7 +14,7 @@ namespace RoleRadar.Tests.Architecture;
 public sealed class TrackingArchitectureTests
 {
     [Fact]
-    public void McpToolSurface_TotalToolsMustNotExceedCeilingOf12()
+    public void McpToolSurface_TotalToolsMustBeExactly12()
     {
         var mcpAssembly = typeof(NoteMcpTools).Assembly;
         var toolMethods = mcpAssembly.GetTypes()
@@ -21,13 +22,11 @@ public sealed class TrackingArchitectureTests
             .Where(m => m.GetCustomAttribute<McpServerToolAttribute>() is not null)
             .ToArray();
 
-        Assert.True(
-            toolMethods.Length <= 12,
-            $"Total MCP tools count is {toolMethods.Length}, which exceeds the mandatory architecture ceiling of <= 12 tools.");
+        Assert.Equal(12, toolMethods.Length);
     }
 
     [Fact]
-    public void TrackingRepositories_MustNotExpose_DeleteOrRemoveMethods()
+    public void RepositoriesAndCliAndTools_MustNotExpose_DeleteOrRemoveNames()
     {
         var trackingRepoInterfaces = new[]
         {
@@ -51,6 +50,74 @@ public sealed class TrackingArchitectureTests
                     m.Name.Contains("Drop", StringComparison.OrdinalIgnoreCase),
                     $"Tracking repository interface '{repoType.Name}' must not expose delete method '{m.Name}'.");
             }
+        }
+
+        // Assert 0 delete/remove MCP tool names
+        var mcpAssembly = typeof(NoteMcpTools).Assembly;
+        var toolNames = mcpAssembly.GetTypes()
+            .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
+            .Select(m => m.GetCustomAttribute<McpServerToolAttribute>()?.Name)
+            .Where(n => n is not null)
+            .ToArray();
+
+        foreach (var name in toolNames)
+        {
+            Assert.DoesNotContain("delete", name!, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("remove", name!, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Assert 0 delete/remove CLI command names across tracking
+        var cliAssembly = typeof(RoleRadar.Cli.Program).Assembly;
+        var cliTypes = cliAssembly.GetTypes();
+        foreach (var t in cliTypes)
+        {
+            if (t.Name.EndsWith("Command", StringComparison.Ordinal) && !t.Name.Equals("WipeCommand", StringComparison.Ordinal))
+            {
+                Assert.DoesNotContain("delete", t.Name, StringComparison.OrdinalIgnoreCase);
+                Assert.DoesNotContain("remove", t.Name, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+    }
+
+    [Fact]
+    public void Application_CommandHandlers_AreAllDecoratedWithTransactionAndAudit()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        services.AddRoleRadarApplication();
+        services.AddRoleRadarInfrastructure(opts =>
+        {
+            opts.ConnectionString = "mongodb://127.0.0.1:27017/?replicaSet=rs0";
+            opts.DatabaseName = "arch_test_db";
+        });
+
+        using var provider = services.BuildServiceProvider();
+
+        // Check each command handler registration
+        var appAssembly = typeof(RoleRadar.Application.DependencyInjection).Assembly;
+        var commandTypes = appAssembly.GetTypes()
+            .Where(t => !t.IsAbstract && !t.IsInterface && t.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICommand<>)))
+            .ToArray();
+
+        foreach (var cmdType in commandTypes)
+        {
+            var commandInterface = cmdType.GetInterfaces().First(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICommand<>));
+            var responseType = commandInterface.GetGenericArguments()[0];
+            var handlerServiceType = typeof(ICommandHandler<,>).MakeGenericType(cmdType, responseType);
+
+            var resolvedHandler = provider.GetService(handlerServiceType);
+            Assert.NotNull(resolvedHandler);
+
+            // Handler should be wrapped by LoggingCommandDecorator wrapping TransactionAndAuditCommandDecorator
+            var handlerType = resolvedHandler.GetType();
+            Assert.Equal(typeof(RoleRadar.Application.Decorators.LoggingCommandDecorator<,>), handlerType.GetGenericTypeDefinition());
+
+            var innerField = handlerType.GetField("_inner", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.NotNull(innerField);
+            var innerHandler = innerField.GetValue(resolvedHandler);
+            Assert.NotNull(innerHandler);
+            Assert.Equal(typeof(RoleRadar.Application.Decorators.TransactionAndAuditCommandDecorator<,>), innerHandler.GetType().GetGenericTypeDefinition());
         }
     }
 
