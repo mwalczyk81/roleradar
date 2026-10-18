@@ -12,7 +12,8 @@ public enum ErrorCode
     ImportConflict,
     InvalidUtf8,
     DatastoreOffline,
-    AuthenticationError
+    AuthenticationError,
+    InvalidTransition
 }
 
 public readonly record struct ResultError(

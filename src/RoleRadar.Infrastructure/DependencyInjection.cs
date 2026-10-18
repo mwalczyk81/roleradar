@@ -31,6 +31,13 @@ public static class DependencyInjection
         services.TryAddSingleton<MongoReadinessProbe>();
         services.TryAddScoped<INoteRepository>(sp =>
             ActivatorUtilities.CreateInstance<MongoNoteRepository>(sp));
+        services.TryAddScoped<ICompanyRepository>(sp =>
+        {
+            var client = sp.GetRequiredService<IMongoClient>();
+            var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
+            var database = client.GetDatabase(opts.DatabaseName);
+            return new RoleRadar.Infrastructure.Mongo.Repositories.MongoCompanyRepository(client, database);
+        });
         services.AddOptions<RoleRadar.Infrastructure.Backup.BackupOptions>();
         services.TryAddScoped<IBackupArchiveService, RoleRadar.Infrastructure.Backup.SecretStreamBackupArchiveService>();
 
