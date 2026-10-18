@@ -312,12 +312,12 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T061 [P] Write failing contract test `TrackerQueryMultiEntityContractTests.cs` for tool `tracker_query` covering discriminators `companies` (filtering by `status`, `tag`, `name`, `includeRetired`, and `includeStale` with `staleAfterDays`), `criteria` (with `effectiveDate` point-in-time filtering), and `applications`, asserting uniform bounded paging (`page`, `pageSize`, default 50, max 200), and validation error when attempting to query `contacts` in `tests/RoleRadar.Tests.Contract/TrackerQueryMultiEntityContractTests.cs` (expected to fail before implementation)
+- [x] T061 [P] Write failing contract test `TrackerQueryMultiEntityContractTests.cs` for tool `tracker_query` covering discriminators `companies` (filtering by `status`, `tag`, `name`, `includeRetired`, and `includeStale` with `staleAfterDays`), `criteria` (with `effectiveDate` point-in-time filtering), and `applications`, asserting uniform bounded paging (`page`, `pageSize`, default 50, max 200), and validation error when attempting to query `contacts` in `tests/RoleRadar.Tests.Contract/TrackerQueryMultiEntityContractTests.cs` (expected to fail before implementation)
 
 ### Implementation for Multi-Entity Query Tool
 
-- [ ] T062 Extend `TrackerQueryHandler` in `src/RoleRadar.Application/Tracking/Queries/TrackerQueryHandler.cs` to route `companies`, `criteria`, and `applications` discriminators using `ICompanyRepository`, `ICriterionRepository`, and `IApplicationRepository` (depends on T061 failing first)
-- [ ] T063 Update MCP tool `tracker_query` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs` with the full entity discriminator schema, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for multi-entity queries (depends on T061 failing first and T062)
+- [x] T062 Extend `TrackerQueryHandler` in `src/RoleRadar.Application/Tracking/Queries/TrackerQueryHandler.cs` to route `companies`, `criteria`, and `applications` discriminators using `ICompanyRepository`, `ICriterionRepository`, and `IApplicationRepository` (depends on T061 failing first)
+- [x] T063 Update MCP tool `tracker_query` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs` with the full entity discriminator schema, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for multi-entity queries (depends on T061 failing first and T062)
 
 **Checkpoint**: Unified query tool is complete across all allowed entities.  
 *Commit*: `feat(query): complete tracker_query multi-entity read routing and paging`
@@ -330,7 +330,7 @@
 
 ### Tests for Backup Compatibility & Guards (MANDATORY - Test-First per Principle II) ⚠️
 
-- [ ] T064 [P] Write failing integration tests in `tests/RoleRadar.Tests.Integration/Backup/TrackingBackupSafetyAndCompatibilityTests.cs` verifying:
+- [x] T064 [P] Write failing integration tests in `tests/RoleRadar.Tests.Integration/Backup/TrackingBackupSafetyAndCompatibilityTests.cs` verifying:
   - Restore non-empty guard blocks restore if ANY of the 9 new collections contains documents
   - Restored-count and wipe summaries report accurate document counts for all 9 collections
   - Tracking index initializer is invoked idempotently after wipe and after restore
@@ -340,20 +340,20 @@
 
 ### Implementation for Backup Compatibility & Guards
 
-- [ ] T065 [P] Extend `scripts/restore.ps1`, `scripts/wipe-data.ps1`, `scripts/backup.ps1`, and backup services in `src/RoleRadar.Infrastructure/Backup/` to enforce the non-empty guard across all 9 new collections (`companies`, `career_sources`, `postings`, `posting_signals`, `criteria`, `applications`, `application_events`, `contacts`, `search_runs`), output restored and wiped counts across all 9 collections, run `TrackingIndexInitializer` after wipe and restore, and maintain 100% backward compatibility with 001 archives (depends on T064 failing first)
+- [x] T065 [P] Extend `scripts/restore.ps1`, `scripts/wipe-data.ps1`, `scripts/backup.ps1`, and backup services in `src/RoleRadar.Infrastructure/Backup/` to enforce the non-empty guard across all 9 new collections (`companies`, `career_sources`, `postings`, `posting_signals`, `criteria`, `applications`, `application_events`, `contacts`, `search_runs`), output restored and wiped counts across all 9 collections, run `TrackingIndexInitializer` after wipe and restore, and maintain 100% backward compatibility with 001 archives (depends on T064 failing first)
 
 ### Cross-Cutting Verification
 
-- [ ] T066 [P] Run final architecture completeness check in `tests/RoleRadar.Tests.Architecture/TrackingArchitectureTests.cs` asserting:
+- [x] T066 [P] Run final architecture completeness check in `tests/RoleRadar.Tests.Architecture/TrackingArchitectureTests.cs` asserting:
   - Total MCP tools count is exactly 12 (6 existing + 6 new)
   - Zero delete/remove methods across all 6 tracking repositories and CLI commands
   - Zero MCP tool names containing delete/remove
   - Zero MCP tools, parameters, or descriptions exposing or referencing contact data
   - 100% of command handlers in `RoleRadar.Application` are wrapped by `TransactionAndAuditCommandDecorator`
-- [ ] T067 [P] Implement parallel-submit race integration tests in `tests/RoleRadar.Tests.Integration/Tracking/ParallelSubmitRaceIntegrationTests.cs` testing concurrent submissions for Tier A, Tier B, and Tier C collisions using Testcontainers
-- [ ] T068 [P] Implement 5,000-posting performance benchmark tests in `tests/RoleRadar.Tests.Integration/Tracking/TrackingBenchmarkTests.cs` asserting p95 lookup latency < 100 ms and p95 search/filter latency < 200 ms across 5,000 postings
-- [ ] T069 [P] Run backup, wipe, and restore round-trip integration tests in `tests/RoleRadar.Tests.Integration/Backup/TrackingBackupRestoreRoundTripTests.cs` asserting 100% data preservation across all 9 new collections
-- [ ] T070 Run `scripts/verify-traceability.ps1` to verify all 48 requirements pass and that every tool name, CLI command, and test file named in the matrix exists in the code on disk; execute quickstart validation; and verify CI checks pass
+- [x] T067 [P] Implement parallel-submit race integration tests in `tests/RoleRadar.Tests.Integration/Tracking/ParallelSubmitRaceIntegrationTests.cs` testing concurrent submissions for Tier A, Tier B, and Tier C collisions using Testcontainers
+- [x] T068 [P] Implement 5,000-posting performance benchmark tests in `tests/RoleRadar.Tests.Integration/Tracking/TrackingBenchmarkTests.cs` asserting p95 lookup latency < 100 ms and p95 search/filter latency < 200 ms across 5,000 postings
+- [x] T069 [P] Run backup, wipe, and restore round-trip integration tests in `tests/RoleRadar.Tests.Integration/Backup/TrackingBackupRestoreRoundTripTests.cs` asserting 100% data preservation across all 9 new collections
+- [x] T070 Run `scripts/verify-traceability.ps1` to verify all 48 requirements pass and that every tool name, CLI command, and test file named in the matrix exists in the code on disk; execute quickstart validation; and verify CI checks pass
 
 **Checkpoint**: All cross-cutting architecture, performance, security, and backup tests pass.  
 *Commit*: `test(cross-cutting): add architecture completeness check, parallel races, benchmarks, and backup compatibility verification`

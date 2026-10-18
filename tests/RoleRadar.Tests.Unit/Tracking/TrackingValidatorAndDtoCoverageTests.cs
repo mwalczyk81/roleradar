@@ -361,7 +361,7 @@ public sealed class TrackingValidatorAndDtoCoverageTests
         Assert.False(unsupportedRes.IsSuccess);
         Assert.Equal(ErrorCode.ValidationError, unsupportedRes.Error!.Value.Code);
 
-        // search_run placeholder
+        // search_run validation without started_at
         var searchRunRes = await handler.HandleAsync(new TrackerLogCommand(Action: "search_run"));
         Assert.False(searchRunRes.IsSuccess);
         Assert.Equal(ErrorCode.ValidationError, searchRunRes.Error!.Value.Code);
