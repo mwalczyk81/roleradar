@@ -11,3 +11,6 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0005](./0005-revision-history-policy.md) | Revision History Policy — Full Snapshots Only for Destructive Edits | Accepted | `001-memory-replacement` |
 | [ADR-0006](./0006-handlers-with-decorators-no-mediator.md) | Plain Command & Query Handlers with Explicit Decorators Instead of a Mediator Library | Accepted | `001-memory-replacement` |
 | [ADR-0007](./0007-backup-streaming-aead-encryption.md) | Streamed Backup Authenticated Encryption (`Geralt` libsodium `secretstream` + `Argon2id`) and Two-Pass Restore | Accepted | `001-memory-replacement` |
+| [ADR-0008](./0008-mongodb-structured-job-search-storage.md) | MongoDB Replica Set Only for Structured Job-Search Storage | Accepted | `002-job-search-tracking` |
+| [ADR-0009](./0009-pattern-reuse-and-typed-results-for-feature-002.md) | Architectural Pattern Reuse and Typed Operational Failures for Feature 002 | Accepted | `002-job-search-tracking` |
+| [ADR-0010](./0010-immutable-auditability-and-zero-hard-deletes.md) | Immutable Auditability, Zero Hard Deletes, and Contact Privacy Isolation | Accepted | `002-job-search-tracking` |
