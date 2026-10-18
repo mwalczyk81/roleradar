@@ -93,7 +93,39 @@ Submit same role from an aggregator on a different UTC date with matching tenant
 
 Verify result: Returns `status: "already_tracked"`, referencing the existing posting GUID. `last_verified_at` is updated as a real write, generating an audit entry with a one-field summary (`last_verified_at`). No duplicate document inserted. Submitting again on the same UTC day writes nothing and creates no audit entry.
 
-#### 3. Test Tier D Advisory Match
+#### 3. Test Ingest Dedup Match with Differing Fields (Differences List)
+Submit the same role via aggregator but with differing compensation and remote type:
+
+```json
+{
+  "companyId": "<acme_company_guid>",
+  "title": "Staff Backend Engineer",
+  "sourceKind": "aggregator",
+  "atsTenant": "acmesoftware",
+  "requisitionId": "4012948002",
+  "remoteType": "remote",
+  "compensationMin": 190000
+}
+```
+
+Verify result: Returns `status: "already_tracked"`. Existing posting fields are **not modified**; instead, response includes `differences: [ { "field": "remote_type", "stored": "hybrid", "supplied": "remote" }, { "field": "compensation_min", "stored": 175000, "supplied": 190000 } ]`.
+
+#### 4. Test Explicit Update Mode
+Call `posting_record` providing `postingId` and current `versionToken`:
+
+```json
+{
+  "postingId": "<posting_guid>",
+  "versionToken": "<current_version_token>",
+  "location": "Austin, TX (Remote Eligible)",
+  "remoteType": "remote",
+  "score": 9.0
+}
+```
+
+Verify result: Returns `status: "updated"`. Modifies only supplied fields (`location`, `remote_type`, `score`). `version_token` rotates. Audit log entry summary records `fields: ["location", "remote_type", "score"]`. Passing an outdated `versionToken` returns `ErrorCode.Conflict` (`ConcurrencyConflict`).
+
+#### 5. Test Tier D Advisory Match
 Submit a role with no requisition ID and a matching normalized title for the same company:
 
 ```json
@@ -112,7 +144,7 @@ Verify result: Returns `status: "possible_duplicate"`, listing candidate GUIDs a
 ### Step 2.3: Disposition Transitions & Decided Handling
 
 #### 1. Screen Out Posting
-Transition posting to `screened_out` referencing a criterion:
+Transition posting to `screened_out` referencing a criterion (`resurfacePolicy` defaults to `"never"` if omitted, but can be set to `"if_reopened"`):
 
 ```json
 {
@@ -124,17 +156,18 @@ Transition posting to `screened_out` referencing a criterion:
 }
 ```
 
-Verify result: Posting disposition updated to `screened_out`. `audit_log` records state transition. Attempting to transition directly to `applied` via `posting_transition` is rejected with `ErrorCode.InvalidTransition`.
+Verify result: Posting disposition updated to `screened_out` and `decided_at` is set to the current UTC timestamp. `audit_log` records state transition. Attempting to transition directly to `applied` via `posting_transition` is rejected with `ErrorCode.InvalidTransition`. Stored `resurface_policy` governs future transitions: returning to `lead` is rejected if stored policy is `"never"`.
 
 #### 2. Re-encounter Decided Posting
-Submit posting again:
+Submit posting again via `posting_record`:
 
 Verify result: Returns `status: "already_decided"`, `priorReason: "Required relocation...", resurfacePolicy: "if_reopened", canReopen: true`. Data store is untouched (no `last_verified_at` update, zero audit entries).
 
 ---
 
-### Step 2.4: Atomic Reopen-and-Apply with Override
+### Step 2.4: Application Management & Events
 
+#### 1. Atomic Reopen-and-Apply with Override
 Attempt to apply to the screened-out posting without override:
 - Call `application_record` with `action: "create"`, `overrideDecided: false`.
 - Verify result: Rejected with `ErrorCode.InvalidTransition`.
@@ -157,10 +190,25 @@ Apply with explicit override:
   ```
 - Verify result: Succeeded in a single transaction. Posting disposition moved to `applied`, application created, and `audit_log` captures previous disposition (`screened_out`), previous policy (`if_reopened`), and override justification.
 
+#### 2. Append Event to Decided / Terminal Posting
+Append an event to an application whose posting has reached a terminal or decided disposition (`rejected` or `closed`):
+- Call `application_record` with:
+  ```json
+  {
+    "action": "append_event",
+    "applicationId": "<application_guid>",
+    "eventType": "rejected",
+    "eventDate": "2026-10-25",
+    "note": "Automated status notification received after final interview."
+  }
+  ```
+- Verify result: The event is appended to `application_events` and audited. If the posting is already in `rejected` or `closed`, the posting disposition remains unchanged (no invalid transition error, no re-mutation of decided state).
+
 ---
 
-### Step 2.5: Point-in-Time Criteria Revisioning via `tracker_log`
+### Step 2.5: Point-in-Time Criteria Revisioning & Search Runs via `tracker_log`
 
+#### 1. Insert and Revise Screening Criteria
 1. Insert screening criterion via `tracker_log` effective `2026-01-01`:
    ```json
    {
@@ -172,15 +220,39 @@ Apply with explicit override:
      "effectiveFrom": "2026-01-01T00:00:00Z"
    }
    ```
-2. Revise criterion via `tracker_log` effective `2026-07-01` ($200k):
-   - Previous version's `effective_to` is set to `2026-07-01T00:00:00Z` and `is_active` set to `false`.
-   - New version created with `is_active: true`.
-3. Query `tracker_query` with `entity: "criteria"`, `effectiveDate: "2026-03-15"`:
-   - Returns version 1 ($180k).
-4. Query `tracker_query` with `effectiveDate: "2026-10-17"`:
-   - Returns version 2 ($200k).
+2. Attempt revision without `versionToken`:
+   - Call `tracker_log` with `action: "criterion_revision"`, `key: "min_base_salary"`, `value: "200000"`, `effectiveFrom: "2026-07-01T00:00:00Z"`, omitting `versionToken`.
+   - Verify result: Rejected with `ErrorCode.Conflict` (`ConcurrencyConflict`).
+3. Attempt revision with non-sequenced `effectiveFrom`:
+   - Call `tracker_log` with `effectiveFrom: "2025-12-01T00:00:00Z"` and valid `versionToken`.
+   - Verify result: Rejected with `ErrorCode.Validation` (`effectiveFrom` must be strictly later than current active version's `effective_from`).
+4. Successfully revise criterion:
+   - Call `tracker_log` with valid `versionToken` and `effectiveFrom: "2026-07-01T00:00:00Z"`.
+   - Verify result: Previous version's `effective_to` is set to `2026-07-01T00:00:00Z` and `is_active` set to `false`. New version created with `is_active: true`.
+5. Deactivate criterion without replacement:
+   - Call `tracker_log` with `action: "criterion_deactivate"`, `key: "min_base_salary"`, `versionToken: "<v2_token>"`, `effectiveFrom: "2026-09-01T00:00:00Z"`.
+   - Verify result: Active version's `is_active` set to `false` and `effective_to` set to `2026-09-01T00:00:00Z`. Fully audited.
 
----
+#### 2. Query Criteria Point-in-Time
+- Query `tracker_query` with `entity: "criteria"`, `effectiveDate: "2026-03-15"`: Returns version 1 ($180k).
+- Query `tracker_query` with `effectiveDate: "2026-07-15"`: Returns version 2 ($200k).
+- Query `tracker_query` with `effectiveDate: "2026-10-01"`: Returns no active criterion for that key.
+
+#### 3. Search Run Logging & Deduplication
+1. Log search run via `tracker_log`:
+   ```json
+   {
+     "action": "search_run",
+     "startedAt": "2026-10-17T14:00:00Z",
+     "completedAt": "2026-10-17T14:15:00Z",
+     "companiesChecked": 12,
+     "postingsFound": 3,
+     "notes": "Weekly sweep"
+   }
+   ```
+   - Verify result: Created in `search_runs` collection and logged in `audit_log`.
+2. Resubmit search run with identical `startedAt`:
+   - Verify result: Unique index on `(owner_id, started_at)` catches collision; returns `status: "already_logged"` and existing run details without duplicate insertion or audit write.
 
 ### Step 2.6: Confidential Contact Privacy & CLI Redaction
 

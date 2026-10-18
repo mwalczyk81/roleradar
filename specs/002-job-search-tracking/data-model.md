@@ -78,6 +78,7 @@ Defines how to access openings for a company.
   "slug": "acme-careers",
   "fetch_method": "api",
   "notes": "Greenhouse public API boards.greenhouse.io/v1/boards/acmesoftware/jobs",
+  "is_active": true,
   "version_token": "BinData(4, '0192e401-0000-7000-8000-000000000004')",
   "created_at": "2026-10-17T12:00:00Z",
   "updated_at": "2026-10-17T12:00:00Z"
@@ -93,11 +94,13 @@ Defines how to access openings for a company.
 - `slug` (string, optional, max 150 chars).
 - `fetch_method` (string enum: `api`, `browser`, `blocked`).
 - `notes` (string, optional, max 500 chars).
+- `is_active` (boolean, mandatory, default: true; set to false to retire source).
 - `version_token` (`Guid`, binary subtype 4, mandatory).
 
 #### Indexes:
 1. `owner_id_1_company_id_1_ats_type_1_tenant_1_slug_1`: `{ owner_id: 1, company_id: 1, ats_type: 1, tenant: 1, slug: 1 }` (unique).
 2. `owner_id_1_ats_type_1_tenant_1`: `{ owner_id: 1, ats_type: 1, tenant: 1 }`.
+3. `owner_id_1_company_id_1_is_active_1`: `{ owner_id: 1, company_id: 1, is_active: 1 }`.
 
 ---
 
@@ -138,6 +141,7 @@ Core job opportunity record with multi-tier deduplication and screening memory.
   "disposition_reason": "Matches staff backend tech stack criterion; compensation meets preference.",
   "disposition_criterion_id": "BinData(4, '0192e401-0000-7000-8000-000000000010')",
   "resurface_policy": "never",
+  "decided_at": "2026-10-17T09:00:00Z",
   "duplicate_of_id": null,
   "screening_note_id": "BinData(4, '0192e401-0000-7000-8000-000000000099')",
   "version_token": "BinData(4, '0192e401-0000-7000-8000-000000000006')",
@@ -175,6 +179,7 @@ Core job opportunity record with multi-tier deduplication and screening memory.
 - `disposition_reason` (string, optional, max 500 chars).
 - `disposition_criterion_id` (`Guid`, binary subtype 4, optional reference to `criteria`).
 - `resurface_policy` (string enum: `never`, `if_reopened`, default: `never`).
+- `decided_at` (UTC timestamp, optional, populated when entering `screened_out`, `closed`, or `rejected`).
 - `duplicate_of_id` (`Guid`, binary subtype 4, optional; cannot equal `_id`; duplicate chains collapsed upon write).
 - `screening_note_id` (`Guid`, binary subtype 4, optional reference to `notes`).
 - `version_token` (`Guid`, binary subtype 4, mandatory).
@@ -483,7 +488,7 @@ Search batch execution logging and narrative linkage.
 - `notes` (string, optional, max 500 chars).
 
 #### Indexes:
-1. `owner_id_1_started_at_desc`: `{ owner_id: 1, started_at: -1 }`.
+1. `owner_id_1_started_at_1`: `{ owner_id: 1, started_at: 1 }` (unique: duplicate returns existing run with status `already_logged`).
 
 ---
 
@@ -570,6 +575,7 @@ stateDiagram-v2
 ### Transition Invariants
 1. `applied` is **reachable only via application creation**, NEVER through `posting_transition`.
 2. Direct transition from `screened_out` or `closed` to `applied` is permitted **only** via application creation when the `override: true` flag is provided. This executes as **one audited transaction** regardless of resurface policy.
-3. `screened_out` and `closed` postings with `resurface_policy: if_reopened` return to `lead` only through an explicit `posting_transition` (target: `lead`, policy: `if_reopened`).
-4. `rejected` is terminal. Reopening requires an explicit `posting_transition` (target: `lead`) with a mandatory audit reason.
-5. Ingestion paths: Internal batch import (Feature 003) can create postings in any disposition, requiring reason and resurface policy for decided states, and an existing application or integrity warning for `applied`. MCP creation defaults to `lead`.
+3. `screened_out` and `closed` postings return to `lead` only through an explicit `posting_transition` (target: `lead`), which evaluates the **stored** `resurface_policy` (must be `if_reopened`). The `resurfacePolicy` parameter on `posting_transition` sets the policy at decision time (`screened_out` or `closed`).
+4. Whenever a posting enters `screened_out`, `closed`, or `rejected`, `decided_at` is set to the current UTC timestamp.
+5. `rejected` is terminal. Reopening requires an explicit `posting_transition` (target: `lead`) with a mandatory audit reason.
+6. Ingestion paths: Internal batch import (Feature 003) can create postings in any disposition, requiring reason and resurface policy for decided states, and an existing application or integrity warning for `applied`. MCP creation defaults to `lead`.

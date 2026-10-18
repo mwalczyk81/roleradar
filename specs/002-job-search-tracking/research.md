@@ -137,12 +137,12 @@ An automated integration test asserts that querying the raw MongoDB collection a
 - Third-party confidential contacts and referential integrity verification are strictly CLI-only.
 
 ### 6 New Tools Exposed on MCP
-1. `posting_record`: Ingests/updates posting with tiered deduplication (Tiers A-D), compensation, culture, disposition, resurface policy, and duplicate link.
+1. `posting_record`: Ingests/updates posting with tiered deduplication (Tiers A-D), differences list detection on duplicate match, explicit update mode (`postingId` + `versionToken`), compensation, culture, disposition, resurface policy, and duplicate link.
 2. `posting_transition`: Explicitly transitions posting disposition (`screened_out`, `closed`, `reopened`) or updates verification status. Target `applied` is disallowed.
-3. `company_record`: Records or updates a company profile (with bounded 300-char description and ownership type) and associates career sources.
-4. `application_record`: Records a job application (variant pointer, referral, numeric salary range), appends timeline events (8 types), and supports atomic reopen-and-apply override for decided roles.
-5. `tracker_log`: Appends immutable operational records for screening criteria revisions (closing previous version) and search run execution batches linked to report notes.
-6. `tracker_query`: Paged, bounded read tool (default 50, max 200 items) with a discriminator (`postings`, `decided_postings`, `posting_dedup_lookup`, `companies`, `criteria`, `applications`).
+3. `company_record`: Records or updates a company profile (with bounded 300-char description and ownership type) and associates career sources (upsert by id or composite key, with `is_active` retirement flag).
+4. `application_record`: Records a job application (variant pointer, referral, numeric salary range), appends timeline events (8 types, accepting events on decided postings without mutating disposition), and supports atomic reopen-and-apply override for decided roles.
+5. `tracker_log`: Appends immutable operational records for screening criteria revisions (strict `effectiveFrom` sequencing, closing previous version) and deactivations (`criterion_deactivate`), and search run execution batches linked to report notes (with unique `startedAt` deduplication returning `already_logged`).
+6. `tracker_query`: Paged, bounded read tool (uniform page/pageSize, default 50, max 200 items) with a discriminator (`postings`, `decided_postings`, `posting_dedup_lookup`, `companies`, `criteria`, `applications`).
 
 Total new tools: **6**. Total server tools: **12**. Satisfies the <=12 constitutional cap and preserves privacy boundaries.
 

@@ -13,6 +13,11 @@ Technically, Feature 002 builds directly on Feature 001's architectural foundati
 - **Architectural Patterns**: Pure inward layering (`Domain` → `Application` → `Infrastructure` → `Mcp.Stdio` / `Cli`). Hand-written `ICommandHandler<TCommand, TResponse>` and `IQueryHandler<TQuery, TResponse>` wrapped transparently by `TransactionAndAuditCommandDecorator` inside multi-document ACID transactions, `AppendOnlyMongoCollection<T>` for append-only streams, typed `Result<T>` and `ErrorCode` without unhandled exceptions, and `ConnectionStringRedactor` ([ADR-0009](../../docs/adr/0009-pattern-reuse-and-typed-results-for-feature-002.md)).
 - **Zero Hard Deletes**: No delete methods on any repository, no delete/drop CLI commands, and no delete tools exposed via MCP. Enforced by architecture reflection tests ([ADR-0010](../../docs/adr/0010-immutable-auditability-and-zero-hard-deletes.md)).
 - **Deduplication Tiers & Parallel-Submit Safety**: Multi-tiered deduplication using computed keys: Tier A (`dedup_key_a = tenant|requisition`), Tier B (`dedup_key_b = normalized_url`), Tier C (`dedup_key_c = companyId|requisition` when no tenant), each backed by a partial unique index (`$type: "string"`), and Tier D advisory non-unique index (`company_id` + `normalized_title`) returning typed `PossibleDuplicate` without auto-merging. Parallel submits catching duplicate key violations (`E11000`) re-read the winner inside the transaction to return `AlreadyDecided` or `AlreadyTracked`.
+- **Posting Record Ingest vs Update Mode**: Ingest/dedup mode checks Tiers A–D. On duplicate match, stored fields other than `last_verified_at` are never changed; differing supplied values return in a `differences` list. Explicit update mode (`postingId` + `versionToken`) mutates only supplied fields, records changed field names in audit log, and rejects stale tokens with `ConcurrencyConflict`.
+- **Career Sources Upsert & is_active**: Career sources are upserted by `id` or composite `(ats_type, tenant, slug)` with an `is_active` flag (default `true`); omission never deletes sources. Retired sources are excluded from queries unless `includeRetired` is true.
+- **Resurface Policy & Decided Timestamp**: Default `resurface_policy` is `"never"`. Transitions to `screened_out`, `closed`, or `rejected` set `decided_at` (UTC). Stored policy controls re-transition back to `lead`.
+- **Terminal Application Events**: Appending events to applications whose posting is already `rejected` or `closed` appends the event and audits it without mutating the posting disposition.
+- **Point-in-Time Criteria & Deactivation**: `criterion_revision` enforces strict `effectiveFrom` sequencing and `versionToken` validation. `criterion_deactivate` closes active criteria without replacement. Search runs enforce unique `(owner_id, started_at)` returning `already_logged` on duplicate.
 - **MCP Surface Ceiling**: Exactly 6 new tools exposed on `RoleRadar.Mcp.Stdio` (`posting_record`, `posting_transition`, `company_record`, `application_record`, `tracker_log`, `tracker_query`), bringing the total tool count to 12 (within the <=12 constitutional cap). 100% write coverage across MCP and CLI is verified by a requirement traceability matrix.
 - **Contact Privacy**: Contact records isolated in `contacts` and managed exclusively via CLI (`roleradar contact add|get|redact`). No contact data is reachable through any MCP tool, log, error, or diagnostic output. Audit summaries contain strictly changed field names and IDs.
 
@@ -106,8 +111,8 @@ src/
 │   ├── Common/                      # Entity base, OwnerId, UtcClock, Sha256Hasher
 │   ├── Tracking/                    # Pure domain models, normalizers, and rules
 │   │   ├── Company.cs               # Company profile, ownership type, category tags
-│   │   ├── CareerSource.cs          # ATS portal endpoint, tenant, slug, fetch_method, notes
-│   │   ├── Posting.cs               # Posting aggregate, computed dedup keys, score, culture, resurface policy
+│   │   ├── CareerSource.cs          # ATS portal endpoint, tenant, slug, fetch_method, is_active, notes
+│   │   ├── Posting.cs               # Posting aggregate, computed dedup keys, score, culture, resurface policy, decided_at
 │   │   ├── PostingDisposition.cs    # Disposition enum & pure table-driven transition matrix
 │   │   ├── PostingSignal.cs         # Positive/negative/deadline signal item
 │   │   ├── UrlNormalizer.cs         # Pure URL normalizer stripping tracking parameters
@@ -129,7 +134,7 @@ src/
 ├── RoleRadar.Infrastructure/
 │   ├── Mongo/
 │   │   ├── MongoTrackingRepository.cs # MongoDB implementation of ITrackingRepository
-│   │   ├── TrackingIndexInitializer.cs# Partial unique indexes for dedup_key_a/b/c & active criteria & career_sources
+│   │   ├── TrackingIndexInitializer.cs# Partial unique indexes for dedup_key_a/b/c & active criteria & career_sources & search_runs
 │   │   └── TrackingMongoOptions.cs  # Collection names and configuration
 ├── RoleRadar.Mcp.Stdio/
 │   └── Tools/
@@ -144,27 +149,34 @@ src/
 tests/
 ├── RoleRadar.Tests.Unit/
 │   ├── Tracking/
-│   │   ├── UrlNormalizerPropertyTests.cs # FsCheck property tests (idempotency, parameter stripping)
-│   │   ├── TitleNormalizerTests.cs       # Case, punctuation, spacing normalizer tests
-│   │   ├── DispositionMatrixTests.cs     # Exhaustive table-driven transition matrix unit tests
-│   │   ├── GhostLikelihoodTests.cs       # Dynamic rule tests & persistence scan assert
-│   │   └── ContactPrivacyTests.cs        # Verifies audit summaries contain field names only
+│   │   ├── UrlNormalizerPropertyTests.cs      # FsCheck property tests (idempotency, parameter stripping)
+│   │   ├── TitleNormalizerTests.cs            # Case, punctuation, spacing normalizer tests
+│   │   ├── DispositionMatrixTests.cs          # Exhaustive table-driven transition matrix unit tests
+│   │   ├── GhostLikelihoodTests.cs            # Dynamic rule tests & persistence scan assert
+│   │   ├── CriterionVersionValidationTests.cs # EffectiveFrom sequencing & version token validation
+│   │   └── ContactPrivacyTests.cs             # Verifies audit summaries contain field names only
 ├── RoleRadar.Tests.Architecture/
-│   ├── LayeringTests.cs                  # NetArchTest inward dependency verification
-│   ├── NoDeleteMethodsRuleTests.cs       # Reflection test: no delete/remove methods on repositories
-│   ├── McpToolSurfaceTests.cs            # Asserts tool cap <= 12 and zero delete tools
-│   └── McpZeroContactExposureTests.cs    # Asserts no MCP tool/parameter/description references contact data
+│   ├── LayeringTests.cs                       # NetArchTest inward dependency verification
+│   ├── NoDeleteMethodsRuleTests.cs            # Reflection test: no delete/remove methods on repositories
+│   ├── McpToolSurfaceTests.cs                 # Asserts tool cap <= 12 and zero delete tools
+│   └── McpZeroContactExposureTests.cs         # Asserts no MCP tool/parameter/description references contact data
 ├── RoleRadar.Tests.Contract/
-│   ├── TrackingRepositoryContractTests.cs# MongoDB replica set contract tests
-│   └── PartialUniqueIndexTests.cs        # Tier A/B/C dedup key collisions and parallel race handling
+│   ├── TrackingRepositoryContractTests.cs     # MongoDB replica set contract tests
+│   ├── PartialUniqueIndexTests.cs             # Tier A/B/C dedup key collisions and parallel race handling
+│   ├── PostingRecordExplicitUpdateTests.cs    # Explicit update mode: partial mutation, versionToken, ConcurrencyConflict
+│   ├── PostingRecordDifferencesListTests.cs   # Ingest mode dedup match: differences list, no field mutation
+│   ├── CareerSourceUpsertTests.cs             # Upsert by id / composite key, is_active flag retirement/reactivation
+│   ├── CriterionDeactivateTests.cs            # Deactivate active criterion without replacement, audit summary
+│   ├── SearchRunDuplicateTests.cs             # Unique index on (owner_id, started_at), returns already_logged
+│   └── DecidedPostingEventNonMutationTests.cs # Append event to decided/terminal posting preserves disposition
 └── RoleRadar.Tests.Integration/
-    ├── DeduplicationIntegrationTests.cs  # Parallel duplicate submission test
-    ├── ReopenAndApplyOverrideTests.cs    # Atomic reopen-and-apply transaction test
-    ├── CriteriaPointInTimeTests.cs       # Historical effective date query tests
-    ├── ContactCliPrivacyTests.cs         # Redaction, audit summary verification, and no-leak test
-    ├── IntegrityVerificationTests.cs     # Dangling pointer detection tests
-    ├── Benchmark5000PostingsTests.cs     # 5,000-posting dataset latency benchmark (<100ms/<200ms)
-    └── BackupRestoreTrackingTests.cs     # Backup and restore round-trip across all 9 collections
+    ├── DeduplicationIntegrationTests.cs       # Parallel duplicate submission test
+    ├── ReopenAndApplyOverrideTests.cs         # Atomic reopen-and-apply transaction test
+    ├── CriteriaPointInTimeTests.cs            # Historical effective date query tests
+    ├── ContactCliPrivacyTests.cs              # Redaction, audit summary verification, and no-leak test
+    ├── IntegrityVerificationTests.cs          # Dangling pointer detection tests
+    ├── Benchmark5000PostingsTests.cs          # 5,000-posting dataset latency benchmark (<100ms/<200ms)
+    └── BackupRestoreTrackingTests.cs          # Backup and restore round-trip across all 9 collections
 ```
 
 **Structure Decision**: Maintains the clean 5-project solution under `src/` and 4 test projects under `tests/`, expanding `Domain`, `Application`, and `Infrastructure` with tracking aggregates, computed deduplication keys, and queries while reusing the existing MongoDB infrastructure, transaction decorator, and streaming backup pipeline.
