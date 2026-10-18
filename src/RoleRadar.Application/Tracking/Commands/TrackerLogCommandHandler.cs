@@ -137,7 +137,8 @@ public sealed class TrackerLogCommandHandler : ICommandHandler<TrackerLogCommand
                 Action: "criterion_revision",
                 RecordId: newCriterion.Id,
                 Status: "success",
-                UpdatedAtUtc: now));
+                UpdatedAtUtc: now,
+                VersionToken: newCriterion.VersionToken));
         }
 
         // Active version exists: version token is mandatory
@@ -195,7 +196,8 @@ public sealed class TrackerLogCommandHandler : ICommandHandler<TrackerLogCommand
             Action: "criterion_revision",
             RecordId: replacement.Id,
             Status: "success",
-            UpdatedAtUtc: now));
+            UpdatedAtUtc: now,
+            VersionToken: replacement.VersionToken));
     }
 
     private async Task<Result<TrackerLogResultDto>> HandleCriterionDeactivateAsync(
@@ -266,7 +268,8 @@ public sealed class TrackerLogCommandHandler : ICommandHandler<TrackerLogCommand
             Action: "criterion_deactivate",
             RecordId: currentActive.Id,
             Status: "success",
-            UpdatedAtUtc: now));
+            UpdatedAtUtc: now,
+            VersionToken: currentActive.VersionToken));
     }
 
     private Task AppendAuditAsync(

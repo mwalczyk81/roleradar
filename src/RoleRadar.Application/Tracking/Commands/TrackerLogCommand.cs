@@ -20,4 +20,5 @@ public sealed record TrackerLogResultDto(
     string Action,
     Guid RecordId,
     string Status,
-    DateTimeOffset UpdatedAtUtc);
+    DateTimeOffset UpdatedAtUtc,
+    Guid? VersionToken = null);
