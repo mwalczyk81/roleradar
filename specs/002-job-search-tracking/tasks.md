@@ -125,12 +125,12 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T028 [P] [US2] Write failing contract test `CompanyRecordContractTests.cs` for tool `company_record` covering company creation, description up to 300 chars, career sources upsert by `id` or composite `(ats_type, tenant, slug)`, `is_active` flag retirement and reactivation without deletion, and omission of sources leaving existing sources untouched in `tests/RoleRadar.Tests.Contract/CompanyRecordContractTests.cs` (expected to fail before implementation)
+- [x] T028 [P] [US2] Write failing contract test `CompanyRecordContractTests.cs` for tool `company_record` covering company creation, description up to 300 chars, career sources upsert by `id` or composite `(ats_type, tenant, slug)`, `is_active` flag retirement and reactivation without deletion, and omission of sources leaving existing sources untouched in `tests/RoleRadar.Tests.Contract/CompanyRecordContractTests.cs` (expected to fail before implementation)
 
 ### Implementation for User Story 2
 
-- [ ] T029 [P] [US2] Implement `RecordCompanyCommand`, `RecordCompanyCommandHandler`, and DTOs in `src/RoleRadar.Application/Tracking/Commands/RecordCompanyCommand.cs` (upserting career sources by id or composite key, handling `isActive` input parameter) (depends on T028 failing first)
-- [ ] T030 [US2] Implement MCP tool `company_record` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs`, register handler wrapped by `TransactionAndAuditCommandDecorator` in `src/RoleRadar.Application/DependencyInjection.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for company recording (depends on T028 failing first and T029)
+- [x] T029 [P] [US2] Implement `RecordCompanyCommand`, `RecordCompanyCommandHandler`, and DTOs in `src/RoleRadar.Application/Tracking/Commands/RecordCompanyCommand.cs` (upserting career sources by id or composite key, handling `isActive` input parameter) (depends on T028 failing first)
+- [x] T030 [US2] Implement MCP tool `company_record` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs`, register handler wrapped by `TransactionAndAuditCommandDecorator` in `src/RoleRadar.Application/DependencyInjection.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for company recording (depends on T028 failing first and T029)
 
 **Checkpoint**: User Story 2 is complete and independently verified by `CompanyRecordContractTests`.  
 *Commit*: `feat(companies): implement company_record with career source upsert and is_active lifecycle`

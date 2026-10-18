@@ -168,10 +168,10 @@ public sealed class MongoCompanyRepository : ICompanyRepository
             ["normalized_name"] = company.NormalizedName,
             ["description"] = company.Description is null ? BsonNull.Value : company.Description,
             ["parent_company"] = company.ParentCompany is null ? BsonNull.Value : company.ParentCompany,
-            ["ownership_type"] = company.OwnershipType.ToString().ToLowerInvariant(),
+            ["ownership_type"] = company.OwnershipType.ToSnakeCase(),
             ["headquarters"] = company.Headquarters is null ? BsonNull.Value : company.Headquarters,
             ["category_tags"] = new BsonArray(company.CategoryTags),
-            ["status"] = company.Status.ToString().ToLowerInvariant(),
+            ["status"] = company.Status.ToSnakeCase(),
             ["last_checked_at"] = company.LastCheckedAt.HasValue ? BsonDateTime.Create(company.LastCheckedAt.Value.UtcDateTime) : BsonNull.Value,
             ["last_check_result"] = company.LastCheckResult is null ? BsonNull.Value : company.LastCheckResult,
             ["version_token"] = new BsonBinaryData(company.VersionToken, GuidRepresentation.Standard),
@@ -186,13 +186,16 @@ public sealed class MongoCompanyRepository : ICompanyRepository
         var id = doc["_id"].AsGuid;
         var ownerId = doc["owner_id"].AsString;
         var name = doc["name"].AsString;
+        var normalizedName = doc.Contains("normalized_name") && !doc["normalized_name"].IsBsonNull
+            ? doc["normalized_name"].AsString
+            : name.ToLowerInvariant();
         var description = doc.Contains("description") && !doc["description"].IsBsonNull ? doc["description"].AsString : null;
         var parentCompany = doc.Contains("parent_company") && !doc["parent_company"].IsBsonNull ? doc["parent_company"].AsString : null;
 
         var ownershipType = OwnershipType.Unknown;
         if (doc.Contains("ownership_type") && !doc["ownership_type"].IsBsonNull)
         {
-            Enum.TryParse<OwnershipType>(doc["ownership_type"].AsString, ignoreCase: true, out ownershipType);
+            _ = TrackingEnumExtensions.TryParseOwnershipType(doc["ownership_type"].AsString, out ownershipType);
         }
 
         var headquarters = doc.Contains("headquarters") && !doc["headquarters"].IsBsonNull ? doc["headquarters"].AsString : null;
@@ -204,7 +207,7 @@ public sealed class MongoCompanyRepository : ICompanyRepository
         var status = CompanyStatus.Neutral;
         if (doc.Contains("status") && !doc["status"].IsBsonNull)
         {
-            Enum.TryParse<CompanyStatus>(doc["status"].AsString, ignoreCase: true, out status);
+            _ = TrackingEnumExtensions.TryParseCompanyStatus(doc["status"].AsString, out status);
         }
 
         var lastCheckedAt = doc.Contains("last_checked_at") && !doc["last_checked_at"].IsBsonNull
@@ -215,21 +218,34 @@ public sealed class MongoCompanyRepository : ICompanyRepository
             ? doc["last_check_result"].AsString
             : null;
 
+        var versionToken = doc.Contains("version_token")
+            ? doc["version_token"].AsGuid
+            : Guid.Empty;
+
         var createdAt = doc.Contains("created_at")
             ? new DateTimeOffset(doc["created_at"].ToUniversalTime(), TimeSpan.Zero)
             : DateTimeOffset.UtcNow;
 
-        return Company.Create(
+        var updatedAt = doc.Contains("updated_at")
+            ? new DateTimeOffset(doc["updated_at"].ToUniversalTime(), TimeSpan.Zero)
+            : createdAt;
+
+        return Company.Rehydrate(
+            id,
             ownerId,
             name,
+            normalizedName,
             description,
             parentCompany,
             ownershipType,
             headquarters,
             categoryTags,
             status,
-            id,
-            createdAt);
+            lastCheckedAt,
+            lastCheckResult,
+            versionToken,
+            createdAt,
+            updatedAt);
     }
 
     private static BsonDocument SerializeCareerSource(CareerSource source)
@@ -242,7 +258,7 @@ public sealed class MongoCompanyRepository : ICompanyRepository
             ["ats_type"] = source.AtsType,
             ["tenant"] = source.Tenant is null ? BsonNull.Value : source.Tenant,
             ["slug"] = source.Slug is null ? BsonNull.Value : source.Slug,
-            ["fetch_method"] = source.FetchMethod.ToString().ToLowerInvariant(),
+            ["fetch_method"] = source.FetchMethod.ToSnakeCase(),
             ["notes"] = source.Notes is null ? BsonNull.Value : source.Notes,
             ["is_active"] = source.IsActive,
             ["version_token"] = new BsonBinaryData(source.VersionToken, GuidRepresentation.Standard),
@@ -263,17 +279,26 @@ public sealed class MongoCompanyRepository : ICompanyRepository
         var fetchMethod = FetchMethod.Api;
         if (doc.Contains("fetch_method") && !doc["fetch_method"].IsBsonNull)
         {
-            Enum.TryParse<FetchMethod>(doc["fetch_method"].AsString, ignoreCase: true, out fetchMethod);
+            _ = TrackingEnumExtensions.TryParseFetchMethod(doc["fetch_method"].AsString, out fetchMethod);
         }
 
         var notes = doc.Contains("notes") && !doc["notes"].IsBsonNull ? doc["notes"].AsString : null;
         var isActive = doc.Contains("is_active") && doc["is_active"].AsBoolean;
 
+        var versionToken = doc.Contains("version_token")
+            ? doc["version_token"].AsGuid
+            : Guid.Empty;
+
         var createdAt = doc.Contains("created_at")
             ? new DateTimeOffset(doc["created_at"].ToUniversalTime(), TimeSpan.Zero)
             : DateTimeOffset.UtcNow;
 
-        return CareerSource.Create(
+        var updatedAt = doc.Contains("updated_at")
+            ? new DateTimeOffset(doc["updated_at"].ToUniversalTime(), TimeSpan.Zero)
+            : createdAt;
+
+        return CareerSource.Rehydrate(
+            id,
             ownerId,
             companyId,
             atsType,
@@ -282,7 +307,8 @@ public sealed class MongoCompanyRepository : ICompanyRepository
             fetchMethod,
             notes,
             isActive,
-            id,
-            createdAt);
+            versionToken,
+            createdAt,
+            updatedAt);
     }
 }

@@ -73,6 +73,37 @@ public sealed class CareerSource
         };
     }
 
+    public static CareerSource Rehydrate(
+        Guid id,
+        string ownerId,
+        Guid companyId,
+        string atsType,
+        string? tenant,
+        string? slug,
+        FetchMethod fetchMethod,
+        string? notes,
+        bool isActive,
+        Guid versionToken,
+        DateTimeOffset createdAt,
+        DateTimeOffset updatedAt)
+    {
+        return new CareerSource
+        {
+            Id = id,
+            OwnerId = ownerId,
+            CompanyId = companyId,
+            AtsType = atsType,
+            Tenant = tenant,
+            Slug = slug,
+            FetchMethod = fetchMethod,
+            Notes = notes,
+            IsActive = isActive,
+            VersionToken = versionToken,
+            CreatedAt = createdAt,
+            UpdatedAt = updatedAt
+        };
+    }
+
     public void Retire(DateTimeOffset? now = null)
     {
         IsActive = false;

@@ -83,6 +83,43 @@ public sealed class Company
         };
     }
 
+    public static Company Rehydrate(
+        Guid id,
+        string ownerId,
+        string name,
+        string normalizedName,
+        string? description,
+        string? parentCompany,
+        OwnershipType ownershipType,
+        string? headquarters,
+        IReadOnlyList<string> categoryTags,
+        CompanyStatus status,
+        DateTimeOffset? lastCheckedAt,
+        string? lastCheckResult,
+        Guid versionToken,
+        DateTimeOffset createdAt,
+        DateTimeOffset updatedAt)
+    {
+        return new Company
+        {
+            Id = id,
+            OwnerId = ownerId,
+            Name = name,
+            NormalizedName = normalizedName,
+            Description = description,
+            ParentCompany = parentCompany,
+            OwnershipType = ownershipType,
+            Headquarters = headquarters,
+            CategoryTags = categoryTags,
+            Status = status,
+            LastCheckedAt = lastCheckedAt,
+            LastCheckResult = lastCheckResult,
+            VersionToken = versionToken,
+            CreatedAt = createdAt,
+            UpdatedAt = updatedAt
+        };
+    }
+
     public void Update(
         string? name = null,
         string? description = null,

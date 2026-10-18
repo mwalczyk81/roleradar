@@ -27,6 +27,33 @@ public sealed record DecidedPostingSummaryItemDto(
     string ResurfacePolicy,
     DateTimeOffset? DecidedAtUtc);
 
+public sealed record CareerSourceSummaryItemDto(
+    Guid Id,
+    Guid CompanyId,
+    string AtsType,
+    string? Tenant,
+    string? Slug,
+    string FetchMethod,
+    string? Notes,
+    bool IsActive,
+    Guid VersionToken);
+
+public sealed record CompanySummaryItemDto(
+    Guid Id,
+    string Name,
+    string? Description,
+    string? ParentCompany,
+    string OwnershipType,
+    string? Headquarters,
+    string Status,
+    IReadOnlyList<string> CategoryTags,
+    IReadOnlyList<CareerSourceSummaryItemDto> CareerSources,
+    DateTimeOffset? LastCheckedAt,
+    string? LastCheckResult,
+    Guid VersionToken,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
 public sealed record TrackerQueryResultDto(
     string Entity,
     int Page,
@@ -95,6 +122,7 @@ public sealed class TrackerQueryHandler : IQueryHandler<TrackerQueryRequest, Tra
             "postings" => await HandlePostingsQueryAsync(query, ownerId, page, pageSize, now, cancellationToken),
             "decided_postings" => await HandleDecidedPostingsQueryAsync(ownerId, page, pageSize, cancellationToken),
             "posting_dedup_lookup" => await HandleDedupLookupQueryAsync(query, ownerId, cancellationToken),
+            "companies" => await HandleCompaniesQueryAsync(query, ownerId, page, pageSize, now, cancellationToken),
             _ => Result<TrackerQueryResultDto>.Failure(
                 ErrorCode.ValidationError,
                 $"Entity discriminator '{query.Entity}' is not supported by tracker_query postings handler.")
@@ -269,5 +297,97 @@ public sealed class TrackerQueryHandler : IQueryHandler<TrackerQueryRequest, Tra
             LastVerifiedAt: p.LastVerifiedAt);
 
         return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto("posting_dedup_lookup", 1, 1, 1, [item]));
+    }
+
+    private async Task<Result<TrackerQueryResultDto>> HandleCompaniesQueryAsync(
+        TrackerQueryRequest query,
+        string ownerId,
+        int page,
+        int pageSize,
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        CompanyStatus? statusFilter = null;
+        if (!string.IsNullOrWhiteSpace(query.Status) &&
+            TrackingEnumExtensions.TryParseCompanyStatus(query.Status, out var parsedStatus))
+        {
+            statusFilter = parsedStatus;
+        }
+
+        var listResult = await _context.Companies.ListAsync(ownerId, statusFilter, cancellationToken);
+        if (!listResult.IsSuccess || listResult.Value is null)
+        {
+            return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto("companies", page, pageSize, 0, []));
+        }
+
+        var companies = listResult.Value.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(query.Tag))
+        {
+            var tag = query.Tag.Trim();
+            companies = companies.Where(c => c.CategoryTags.Contains(tag, StringComparer.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Name))
+        {
+            var name = query.Name.Trim();
+            companies = companies.Where(c => c.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (query.IncludeStale)
+        {
+            var threshold = now.AddDays(-query.StaleAfterDays);
+            companies = companies.Where(c => !c.LastCheckedAt.HasValue || c.LastCheckedAt.Value <= threshold);
+        }
+
+        var filteredList = companies.ToList();
+        var totalCount = filteredList.Count;
+        var pagedCompanies = filteredList.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        var items = new List<object>(pagedCompanies.Count);
+        foreach (var c in pagedCompanies)
+        {
+            var sourcesRes = await _context.Companies.GetCareerSourcesAsync(
+                ownerId,
+                c.Id,
+                includeInactive: query.IncludeRetired,
+                cancellationToken);
+
+            var sources = sourcesRes.IsSuccess && sourcesRes.Value is not null
+                ? sourcesRes.Value.Select(s => new CareerSourceSummaryItemDto(
+                    Id: s.Id,
+                    CompanyId: s.CompanyId,
+                    AtsType: s.AtsType,
+                    Tenant: s.Tenant,
+                    Slug: s.Slug,
+                    FetchMethod: s.FetchMethod.ToSnakeCase(),
+                    Notes: s.Notes,
+                    IsActive: s.IsActive,
+                    VersionToken: s.VersionToken)).ToArray()
+                : [];
+
+            items.Add(new CompanySummaryItemDto(
+                Id: c.Id,
+                Name: c.Name,
+                Description: c.Description,
+                ParentCompany: c.ParentCompany,
+                OwnershipType: c.OwnershipType.ToSnakeCase(),
+                Headquarters: c.Headquarters,
+                Status: c.Status.ToSnakeCase(),
+                CategoryTags: c.CategoryTags,
+                CareerSources: sources,
+                LastCheckedAt: c.LastCheckedAt,
+                LastCheckResult: c.LastCheckResult,
+                VersionToken: c.VersionToken,
+                CreatedAt: c.CreatedAt,
+                UpdatedAt: c.UpdatedAt));
+        }
+
+        return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto(
+            Entity: "companies",
+            Page: page,
+            PageSize: pageSize,
+            TotalCount: totalCount,
+            Items: items));
     }
 }
