@@ -356,4 +356,47 @@ public static class TrackingEnumExtensions
             default: return false;
         }
     }
+
+    public static string ToSnakeCase(this CriterionCategory category) => category switch
+    {
+        CriterionCategory.HardSkip => "hard_skip",
+        CriterionCategory.Weight => "weight",
+        CriterionCategory.Preference => "preference",
+        _ => category.ToString().ToLowerInvariant()
+    };
+
+    public static bool TryParseCriterionCategory(string? val, out CriterionCategory category)
+    {
+        category = CriterionCategory.HardSkip;
+        if (string.IsNullOrWhiteSpace(val)) return false;
+        var s = val.Trim().ToLowerInvariant().Replace("-", "_");
+        switch (s)
+        {
+            case "hard_skip":
+            case "hardskip": category = CriterionCategory.HardSkip; return true;
+            case "weight": category = CriterionCategory.Weight; return true;
+            case "preference": category = CriterionCategory.Preference; return true;
+            default: return false;
+        }
+    }
+
+    public static string ToSnakeCase(this ProvenanceKind provenance) => provenance switch
+    {
+        ProvenanceKind.Stated => "stated",
+        ProvenanceKind.Inferred => "inferred",
+        _ => provenance.ToString().ToLowerInvariant()
+    };
+
+    public static bool TryParseProvenanceKind(string? val, out ProvenanceKind provenance)
+    {
+        provenance = ProvenanceKind.Stated;
+        if (string.IsNullOrWhiteSpace(val)) return false;
+        var s = val.Trim().ToLowerInvariant().Replace("-", "_");
+        switch (s)
+        {
+            case "stated": provenance = ProvenanceKind.Stated; return true;
+            case "inferred": provenance = ProvenanceKind.Inferred; return true;
+            default: return false;
+        }
+    }
 }

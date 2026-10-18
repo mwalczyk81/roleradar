@@ -54,6 +54,18 @@ public sealed record CompanySummaryItemDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
+public sealed record CriterionSummaryItemDto(
+    Guid Id,
+    string Key,
+    string Category,
+    string Value,
+    string Provenance,
+    DateTimeOffset EffectiveFrom,
+    DateTimeOffset? EffectiveTo,
+    bool IsActive,
+    Guid VersionToken,
+    DateTimeOffset CreatedAt);
+
 public sealed record TrackerQueryResultDto(
     string Entity,
     int Page,
@@ -125,6 +137,7 @@ public sealed class TrackerQueryHandler : IQueryHandler<TrackerQueryRequest, Tra
                 "decided_postings" => await HandleDecidedPostingsQueryAsync(ownerId, page, pageSize, cancellationToken),
                 "posting_dedup_lookup" => await HandleDedupLookupQueryAsync(query, ownerId, cancellationToken),
                 "companies" => await HandleCompaniesQueryAsync(query, ownerId, page, pageSize, now, cancellationToken),
+                "criteria" => await HandleCriteriaQueryAsync(query, ownerId, page, pageSize, cancellationToken),
                 _ => Result<TrackerQueryResultDto>.Failure(
                     ErrorCode.ValidationError,
                     $"Entity discriminator '{query.Entity}' is not supported by tracker_query postings handler.")
@@ -392,6 +405,66 @@ public sealed class TrackerQueryHandler : IQueryHandler<TrackerQueryRequest, Tra
 
         return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto(
             Entity: "companies",
+            Page: page,
+            PageSize: pageSize,
+            TotalCount: totalCount,
+            Items: items));
+    }
+
+    private async Task<Result<TrackerQueryResultDto>> HandleCriteriaQueryAsync(
+        TrackerQueryRequest query,
+        string ownerId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<Criterion> criteria;
+
+        if (!string.IsNullOrWhiteSpace(query.EffectiveDate))
+        {
+            if (!DateTimeOffset.TryParse(query.EffectiveDate, System.Globalization.CultureInfo.InvariantCulture, out var parsedEffectiveDate))
+            {
+                return Result<TrackerQueryResultDto>.Failure(
+                    ErrorCode.ValidationError,
+                    $"Invalid EffectiveDate format '{query.EffectiveDate}'. Expected YYYY-MM-DD or ISO 8601 string.");
+            }
+
+            var effResult = await _context.Criteria.GetEffectiveAtAsync(ownerId, parsedEffectiveDate, cancellationToken);
+            if (!effResult.IsSuccess || effResult.Value is null)
+            {
+                return Result<TrackerQueryResultDto>.Failure(effResult.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to query effective criteria."));
+            }
+
+            criteria = effResult.Value;
+        }
+        else
+        {
+            var activeResult = await _context.Criteria.ListActiveAsync(ownerId, cancellationToken);
+            if (!activeResult.IsSuccess || activeResult.Value is null)
+            {
+                return Result<TrackerQueryResultDto>.Failure(activeResult.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to list active criteria."));
+            }
+
+            criteria = activeResult.Value;
+        }
+
+        var totalCount = criteria.Count;
+        var pagedCriteria = criteria.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+
+        var items = pagedCriteria.Select(c => new CriterionSummaryItemDto(
+            Id: c.Id,
+            Key: c.Key,
+            Category: c.Category.ToSnakeCase(),
+            Value: c.Value,
+            Provenance: c.Provenance.ToSnakeCase(),
+            EffectiveFrom: c.EffectiveFrom,
+            EffectiveTo: c.EffectiveTo,
+            IsActive: c.IsActive,
+            VersionToken: c.VersionToken,
+            CreatedAt: c.CreatedAt)).ToArray();
+
+        return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto(
+            Entity: "criteria",
             Page: page,
             PageSize: pageSize,
             TotalCount: totalCount,

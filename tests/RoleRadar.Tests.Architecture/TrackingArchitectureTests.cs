@@ -101,8 +101,10 @@ public sealed class TrackingArchitectureTests
         using var provider = services.BuildServiceProvider();
         var companyRepo = provider.GetService<ICompanyRepository>();
         var postingRepo = provider.GetService<IPostingRepository>();
+        var criterionRepo = provider.GetService<ICriterionRepository>();
         Assert.NotNull(companyRepo);
         Assert.NotNull(postingRepo);
+        Assert.NotNull(criterionRepo);
     }
 
     [Fact]

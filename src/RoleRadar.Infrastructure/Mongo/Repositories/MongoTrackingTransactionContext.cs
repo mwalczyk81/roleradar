@@ -9,24 +9,27 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
 {
     private readonly ICompanyRepository _companies;
     private readonly IPostingRepository _postings;
+    private readonly ICriterionRepository _criteria;
     private readonly IMongoCollection<BsonDocument> _auditCollection;
     private readonly IClientSessionHandle? _session;
 
     public MongoTrackingTransactionContext(
         ICompanyRepository companies,
         IPostingRepository postings,
+        ICriterionRepository criteria,
         IMongoCollection<BsonDocument> auditCollection,
         IClientSessionHandle? session = null)
     {
         _companies = companies ?? throw new ArgumentNullException(nameof(companies));
         _postings = postings ?? throw new ArgumentNullException(nameof(postings));
+        _criteria = criteria ?? throw new ArgumentNullException(nameof(criteria));
         _auditCollection = auditCollection ?? throw new ArgumentNullException(nameof(auditCollection));
         _session = session;
     }
 
     public ICompanyRepository Companies => _companies;
     public IPostingRepository Postings => _postings;
-    public ICriterionRepository Criteria => throw new NotImplementedException("Criteria available in US3");
+    public ICriterionRepository Criteria => _criteria;
     public IApplicationRepository Applications => throw new NotImplementedException("Applications available in US4");
     public IContactRepository Contacts => throw new NotImplementedException("Contacts available in US6");
     public ISearchRunRepository SearchRuns => throw new NotImplementedException("SearchRuns available in US7");

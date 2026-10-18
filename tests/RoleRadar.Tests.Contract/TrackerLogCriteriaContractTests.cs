@@ -58,7 +58,7 @@ public sealed class TrackerLogCriteriaContractTests : IClassFixture<SharedMongoF
     [Fact]
     public async Task TrackerLog_CriterionRevision_StrictSequencingAndTokenHandling()
     {
-        var handler = new TrackerLogCommandHandler(_context);
+        var handler = new TrackerLogCommandHandler(_context, SystemUtcClock.Instance);
 
         // 1. Initial version
         var initialCmd = new TrackerLogCommand(
@@ -158,7 +158,7 @@ public sealed class TrackerLogCriteriaContractTests : IClassFixture<SharedMongoF
     [Fact]
     public async Task TrackerLog_CriterionDeactivate_ClosesActiveCriterionWithoutReplacement()
     {
-        var handler = new TrackerLogCommandHandler(_context);
+        var handler = new TrackerLogCommandHandler(_context, SystemUtcClock.Instance);
 
         var initialCmd = new TrackerLogCommand(
             Action: "criterion_revision",
@@ -204,7 +204,7 @@ public sealed class TrackerLogCriteriaContractTests : IClassFixture<SharedMongoF
     [Fact]
     public async Task TrackerQuery_Criteria_PointInTimeEvaluation()
     {
-        var handler = new TrackerLogCommandHandler(_context);
+        var handler = new TrackerLogCommandHandler(_context, SystemUtcClock.Instance);
 
         // v1: 2026-01-01
         var v1Cmd = new TrackerLogCommand(
