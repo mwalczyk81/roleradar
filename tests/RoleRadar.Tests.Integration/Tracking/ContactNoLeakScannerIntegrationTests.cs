@@ -133,9 +133,9 @@ public sealed class ContactNoLeakScannerIntegrationTests : IAsyncLifetime
 
             var (backupCode, backupOut, backupErr) = await RunCliAsync(
                 cliDllPath,
-                $"backup --output \"{backupFile}\" --passphrase \"{passphrase}\"",
+                $"backup \"{backupFile}\" --passphrase-env ROLERADAR_BACKUP_PASSPHRASE",
                 backupEnv);
-            Assert.Equal(0, backupCode);
+            Assert.True(backupCode == 0, $"Backup failed with code {backupCode}. Stderr: '{backupErr}'. Stdout: '{backupOut}'");
             Assert.True(File.Exists(backupFile));
 
             var backupBytes = await File.ReadAllBytesAsync(backupFile);

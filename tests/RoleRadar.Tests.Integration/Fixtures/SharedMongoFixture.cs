@@ -40,12 +40,23 @@ public sealed class SharedMongoFixture : IAsyncLifetime
         ReadinessTimeout = TimeSpan.FromSeconds(5)
     };
 
-    public IReadOnlyDictionary<string, string> CreateProcessEnvironment(string? databaseName = null) =>
-        new Dictionary<string, string>
+    public IReadOnlyDictionary<string, string> CreateProcessEnvironment(string? databaseName = null)
+    {
+        var db = databaseName ?? CreateDatabaseName();
+        var mongoUrl = new MongoUrl(ConnectionString);
+        var authPart = (!string.IsNullOrEmpty(mongoUrl.Username) && !string.IsNullOrEmpty(mongoUrl.Password))
+            ? $"{mongoUrl.Username}:{mongoUrl.Password}@"
+            : string.Empty;
+        var internalUri = $"mongodb://{authPart}localhost:27017/?replicaSet=rs0&authSource=admin";
+
+        return new Dictionary<string, string>
         {
             ["ROLERADAR_MONGO_CONNECTION_STRING"] = ConnectionString,
-            ["ROLERADAR_MONGO_DATABASE"] = databaseName ?? CreateDatabaseName()
+            ["ROLERADAR_MONGO_DATABASE"] = db,
+            ["ROLERADAR_BACKUP_DUMP_COMMAND"] = $"docker exec -i {_mongoContainer.Id} mongodump --uri=\"{internalUri}\" --archive --gzip --oplog",
+            ["ROLERADAR_BACKUP_RESTORE_COMMAND"] = $"docker exec -i {_mongoContainer.Id} mongorestore --uri=\"{internalUri}\" --archive --gzip --oplogReplay --nsInclude \"<db>.*\""
         };
+    }
 
     public async Task<IMongoDatabase> CreateDatabaseAsync(string prefix = "roleradar_int")
     {

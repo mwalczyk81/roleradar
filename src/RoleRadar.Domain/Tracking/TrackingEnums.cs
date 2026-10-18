@@ -536,4 +536,35 @@ public static class TrackingEnumExtensions
             default: return false;
         }
     }
+
+    public static string ToSnakeCase(this ContactRelationship relationship) => relationship switch
+    {
+        ContactRelationship.Recruiter => "recruiter",
+        ContactRelationship.Referral => "referral",
+        ContactRelationship.HiringManager => "hiring_manager",
+        ContactRelationship.Peer => "peer",
+        ContactRelationship.Redacted => "redacted",
+        _ => relationship.ToString().ToLowerInvariant()
+    };
+
+    public static bool TryParseContactRelationship(string? val, out ContactRelationship relationship)
+    {
+        relationship = ContactRelationship.Recruiter;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
+        var s = val.Trim().ToLowerInvariant().Replace("-", "_");
+        switch (s)
+        {
+            case "recruiter": relationship = ContactRelationship.Recruiter; return true;
+            case "referral": relationship = ContactRelationship.Referral; return true;
+            case "hiring_manager":
+            case "hiringmanager": relationship = ContactRelationship.HiringManager; return true;
+            case "peer": relationship = ContactRelationship.Peer; return true;
+            case "redacted": relationship = ContactRelationship.Redacted; return true;
+            default: return false;
+        }
+    }
 }

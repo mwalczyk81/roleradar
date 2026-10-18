@@ -11,8 +11,27 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
     private readonly IPostingRepository _postings;
     private readonly ICriterionRepository _criteria;
     private readonly IApplicationRepository _applications;
+    private readonly IContactRepository? _contacts;
     private readonly IMongoCollection<BsonDocument> _auditCollection;
     private readonly IClientSessionHandle? _session;
+
+    public MongoTrackingTransactionContext(
+        ICompanyRepository companies,
+        IPostingRepository postings,
+        ICriterionRepository criteria,
+        IApplicationRepository applications,
+        IContactRepository contacts,
+        IMongoCollection<BsonDocument> auditCollection,
+        IClientSessionHandle? session = null)
+    {
+        _companies = companies ?? throw new ArgumentNullException(nameof(companies));
+        _postings = postings ?? throw new ArgumentNullException(nameof(postings));
+        _criteria = criteria ?? throw new ArgumentNullException(nameof(criteria));
+        _applications = applications ?? throw new ArgumentNullException(nameof(applications));
+        _contacts = contacts ?? throw new ArgumentNullException(nameof(contacts));
+        _auditCollection = auditCollection ?? throw new ArgumentNullException(nameof(auditCollection));
+        _session = session;
+    }
 
     public MongoTrackingTransactionContext(
         ICompanyRepository companies,
@@ -26,6 +45,7 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
         _postings = postings ?? throw new ArgumentNullException(nameof(postings));
         _criteria = criteria ?? throw new ArgumentNullException(nameof(criteria));
         _applications = applications ?? throw new ArgumentNullException(nameof(applications));
+        _contacts = null;
         _auditCollection = auditCollection ?? throw new ArgumentNullException(nameof(auditCollection));
         _session = session;
     }
@@ -34,7 +54,7 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
     public IPostingRepository Postings => _postings;
     public ICriterionRepository Criteria => _criteria;
     public IApplicationRepository Applications => _applications;
-    public IContactRepository Contacts => throw new NotImplementedException("Contacts available in US6");
+    public IContactRepository Contacts => _contacts ?? throw new InvalidOperationException("Contact repository not configured in this transaction context.");
     public ISearchRunRepository SearchRuns => throw new NotImplementedException("SearchRuns available in US7");
 
     public async Task AppendAuditEntryAsync(AuditLogEntry entry, CancellationToken cancellationToken = default)

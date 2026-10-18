@@ -2,14 +2,6 @@ using RoleRadar.Domain.Common;
 
 namespace RoleRadar.Domain.Tracking;
 
-public enum ContactRelationship
-{
-    Recruiter,
-    Referral,
-    HiringManager,
-    Peer,
-    Redacted
-}
 
 public sealed class Contact
 {

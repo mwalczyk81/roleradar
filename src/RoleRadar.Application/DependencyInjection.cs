@@ -44,7 +44,10 @@ public static class DependencyInjection
         services.AddCommandHandler<Tracking.Commands.RecordCompanyCommand, Tracking.Commands.CompanyRecordResultDto, Tracking.Commands.RecordCompanyCommandHandler>();
         services.AddCommandHandler<Tracking.Commands.TrackerLogCommand, Tracking.Commands.TrackerLogResultDto, Tracking.Commands.TrackerLogCommandHandler>();
         services.AddCommandHandler<Tracking.Commands.RecordApplicationCommand, Tracking.Commands.ApplicationRecordResultDto, Tracking.Commands.RecordApplicationCommandHandler>();
+        services.AddCommandHandler<Tracking.Commands.AddContactCommand, Tracking.Commands.ContactResultDto, Tracking.Commands.AddContactCommandHandler>();
+        services.AddCommandHandler<Tracking.Commands.RedactContactCommand, Tracking.Commands.ContactRedactResultDto, Tracking.Commands.RedactContactCommandHandler>();
         services.AddQueryHandler<Tracking.Queries.TrackerQueryRequest, Tracking.Queries.TrackerQueryResultDto, Tracking.Queries.TrackerQueryHandler>();
+        services.AddQueryHandler<Tracking.Queries.GetContactQuery, Tracking.Queries.ContactDto?, Tracking.Queries.GetContactQueryHandler>();
 
         return services;
     }

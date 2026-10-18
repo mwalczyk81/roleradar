@@ -66,7 +66,9 @@ public interface IApplicationRepository
 
 public interface IContactRepository
 {
-    // Placeholders for User Story 6
+    Task<Result<Domain.Tracking.Contact?>> GetByIdAsync(string ownerId, Guid id, CancellationToken cancellationToken = default);
+    Task<Result<bool>> UpsertContactAsync(Domain.Tracking.Contact contact, CancellationToken cancellationToken = default);
+    Task<Result<int>> CountContactsAsync(string ownerId, bool? isRedacted = null, CancellationToken cancellationToken = default);
 }
 
 public interface ISearchRunRepository

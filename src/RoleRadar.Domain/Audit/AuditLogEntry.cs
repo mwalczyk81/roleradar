@@ -103,10 +103,10 @@ public sealed class AuditLogEntry
             throw new ArgumentException($"Operation '{operation}' must not specify a NoteRevisionId.", nameof(noteRevisionId));
         }
 
-        var isAppendOperation = operation == AuditOperation.NoteAppend;
+        var isAppendOperation = operation is AuditOperation.NoteAppend or AuditOperation.ContactAdd or AuditOperation.ContactRedact;
         if (isAppendOperation && string.IsNullOrEmpty(appendedText))
         {
-            throw new ArgumentException("Operation 'note_append' requires non-empty AppendedText.", nameof(appendedText));
+            throw new ArgumentException($"Operation '{operation}' requires non-empty AppendedText.", nameof(appendedText));
         }
 
         if (!isAppendOperation && appendedText is not null)
@@ -125,7 +125,7 @@ public sealed class AuditLogEntry
             throw new ArgumentException($"Operation '{operation}' must not specify ResolvedDefaultDate.", nameof(resolvedDefaultDate));
         }
 
-        var isCreateOperation = operation is AuditOperation.NoteCreate or AuditOperation.ImportCreate;
+        var isCreateOperation = operation is AuditOperation.NoteCreate or AuditOperation.ImportCreate or AuditOperation.ContactAdd;
         if (isCreateOperation && beforeSummary is not null)
         {
             throw new ArgumentException($"Operation '{operation}' must have null BeforeSummary.", nameof(beforeSummary));

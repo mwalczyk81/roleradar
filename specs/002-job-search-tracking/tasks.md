@@ -250,14 +250,14 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T047 [P] [US6] Write failing contract test `ContactCliContractTests.cs` for CLI commands `roleradar contact add|get|redact` covering creation with name, role, company, relationship (`recruiter`, `referral`, `hiring_manager`, `peer`), retrieval strictly by contact ID, and `redact` blanking personal fields while preserving ID and auditing with field-names-only summary in `tests/RoleRadar.Tests.Contract/ContactCliContractTests.cs` (expected to fail before implementation)
-- [ ] T048 [P] [US6] Write failing unit test `ContactPrivacyTests.cs` proving audit summaries contain exclusively changed field names and record IDs, and zero contact data is present in `ContactAuditContentSummary` in `tests/RoleRadar.Tests.Unit/Tracking/ContactPrivacyTests.cs` (expected to fail before implementation)
-- [ ] T049 [P] [US6] Write failing architecture test `McpZeroContactExposureTests.cs` using NetArchTest asserting that no MCP tool class, method, parameter, or tool description references `Contact` types or exposes contact data in `tests/RoleRadar.Tests.Architecture/McpZeroContactExposureTests.cs` (expected to fail before implementation)
-- [ ] T050 [P] [US6] Write failing integration test `ContactNoLeakScannerIntegrationTests.cs` creating a contact via CLI, triggering error conditions, status checks, search queries, and backup archive dumps, and scanning all outputs to assert zero leaks of personal contact information in `tests/RoleRadar.Tests.Integration/Tracking/ContactNoLeakScannerIntegrationTests.cs` (expected to fail before implementation)
+- [x] T047 [P] [US6] Write failing contract test `ContactCliContractTests.cs` for CLI commands `roleradar contact add|get|redact` covering creation with name, role, company, relationship (`recruiter`, `referral`, `hiring_manager`, `peer`), retrieval strictly by contact ID, and `redact` blanking personal fields while preserving ID and auditing with field-names-only summary in `tests/RoleRadar.Tests.Contract/ContactCliContractTests.cs` (expected to fail before implementation)
+- [x] T048 [P] [US6] Write failing unit test `ContactPrivacyTests.cs` proving audit summaries contain exclusively changed field names and record IDs, and zero contact data is present in `ContactAuditContentSummary` in `tests/RoleRadar.Tests.Unit/Tracking/ContactPrivacyTests.cs` (expected to fail before implementation)
+- [x] T049 [P] [US6] Write failing architecture test `McpZeroContactExposureTests.cs` using NetArchTest asserting that no MCP tool class, method, parameter, or tool description references `Contact` types or exposes contact data in `tests/RoleRadar.Tests.Architecture/McpZeroContactExposureTests.cs` (expected to fail before implementation)
+- [x] T050 [P] [US6] Write failing integration test `ContactNoLeakScannerIntegrationTests.cs` creating a contact via CLI, triggering error conditions, status checks, search queries, and backup archive dumps, and scanning all outputs to assert zero leaks of personal contact information in `tests/RoleRadar.Tests.Integration/Tracking/ContactNoLeakScannerIntegrationTests.cs` (expected to fail before implementation)
 
 ### Implementation for User Story 6
 
-- [ ] T051 [P] [US6] Implement `Contact` aggregate root in `src/RoleRadar.Domain/Tracking/Contact.cs` and `MongoContactRepository` implementing `IContactRepository` in `src/RoleRadar.Infrastructure/Mongo/Repositories/MongoContactRepository.cs`, enforcing `data-model.md` constraints verbatim:
+- [x] T051 [P] [US6] Implement `Contact` aggregate root in `src/RoleRadar.Domain/Tracking/Contact.cs` and `MongoContactRepository` implementing `IContactRepository` in `src/RoleRadar.Infrastructure/Mongo/Repositories/MongoContactRepository.cs`, enforcing `data-model.md` constraints verbatim:
   - `_id`: Required binary subtype 4 GUID
   - `owner_id`: Required string
   - `name`: Required string, 1..150 chars (set to `"[REDACTED]"` upon redaction)
@@ -268,8 +268,8 @@
   - `notes`: Optional string, max 500 chars (null upon redaction)
   - `is_redacted`: Boolean, default false (true upon redaction)
   - `version_token`: Required binary subtype 4 GUID
-- [ ] T052 [P] [US6] Implement `AddContactCommand`, `GetContactQuery`, `RedactContactCommand`, and handlers in `src/RoleRadar.Application/Tracking/Commands/ContactCommands.cs` and `src/RoleRadar.Application/Tracking/Queries/GetContactQuery.cs` (depends on T047, T048 failing first and T051)
-- [ ] T053 [US6] Implement CLI command `roleradar contact add|get|redact` in `src/RoleRadar.Cli/Commands/ContactCommand.cs`, register handlers in `src/RoleRadar.Application/DependencyInjection.cs`, register CLI root in `src/RoleRadar.Cli/Program.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for contact commands (depends on T047, T049, T050 failing first and T052)
+- [x] T052 [P] [US6] Implement `AddContactCommand`, `GetContactQuery`, `RedactContactCommand`, and handlers in `src/RoleRadar.Application/Tracking/Commands/ContactCommands.cs` and `src/RoleRadar.Application/Tracking/Queries/GetContactQuery.cs` (depends on T047, T048 failing first and T051)
+- [x] T053 [US6] Implement CLI command `roleradar contact add|get|redact` in `src/RoleRadar.Cli/Commands/ContactCommand.cs`, register handlers in `src/RoleRadar.Application/DependencyInjection.cs`, register CLI root in `src/RoleRadar.Cli/Program.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for contact commands (depends on T047, T049, T050 failing first and T052)
 
 **Checkpoint**: User Story 6 is complete and independently verified by `ContactCliContractTests`, `ContactPrivacyTests`, `McpZeroContactExposureTests`, and `ContactNoLeakScannerIntegrationTests`.  
 *Commit*: `feat(contacts): implement CLI-only confidential contact management with privacy redaction`

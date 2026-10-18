@@ -103,10 +103,12 @@ public sealed class TrackingArchitectureTests
         var postingRepo = provider.GetService<IPostingRepository>();
         var criterionRepo = provider.GetService<ICriterionRepository>();
         var applicationRepo = provider.GetService<IApplicationRepository>();
+        var contactRepo = provider.GetService<IContactRepository>();
         Assert.NotNull(companyRepo);
         Assert.NotNull(postingRepo);
         Assert.NotNull(criterionRepo);
         Assert.NotNull(applicationRepo);
+        Assert.NotNull(contactRepo);
     }
 
     [Fact]

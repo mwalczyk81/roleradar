@@ -36,6 +36,32 @@ public sealed class StartupSmokeIntegrationTests
         Assert.DoesNotContain("Unhandled exception", stderr, StringComparison.OrdinalIgnoreCase);
         Assert.Equal(0, exitCode);
         Assert.Contains("RoleRadar Store: Ready", stdout, StringComparison.OrdinalIgnoreCase);
+
+        // Also smoke test contact command
+        var (contactAddCode, contactAddOut, contactAddErr) = await RunProcessAsync(
+            "dotnet",
+            $"\"{cliDllPath}\" contact add --name \"Smoke Contact\" --role \"Smoke Tester\" --json",
+            env);
+        Assert.Equal(0, contactAddCode);
+        Assert.DoesNotContain("Unhandled exception", contactAddErr, StringComparison.OrdinalIgnoreCase);
+        using var doc = System.Text.Json.JsonDocument.Parse(contactAddOut);
+        var contactId = doc.RootElement.GetProperty("data").GetProperty("id").GetString()!;
+
+        var (contactGetCode, contactGetOut, contactGetErr) = await RunProcessAsync(
+            "dotnet",
+            $"\"{cliDllPath}\" contact get --id {contactId} --json",
+            env);
+        Assert.Equal(0, contactGetCode);
+        Assert.DoesNotContain("Unhandled exception", contactGetErr, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Smoke Contact", contactGetOut);
+
+        var (contactRedactCode, contactRedactOut, contactRedactErr) = await RunProcessAsync(
+            "dotnet",
+            $"\"{cliDllPath}\" contact redact --id {contactId} --force --json",
+            env);
+        Assert.Equal(0, contactRedactCode);
+        Assert.DoesNotContain("Unhandled exception", contactRedactErr, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("redacted", contactRedactOut);
     }
 
     [Fact]

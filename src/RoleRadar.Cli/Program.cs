@@ -26,6 +26,7 @@ public static class Program
             rootCommand.Add(BackupCommand.Create(services));
             rootCommand.Add(RestoreCommand.Create(services));
             rootCommand.Add(WipeCommand.Create(services));
+            rootCommand.Add(ContactCommand.Create(services));
 
             var parseResult = rootCommand.Parse(args);
 
