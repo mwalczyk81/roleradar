@@ -212,6 +212,9 @@ public sealed class TrackerQueryPostingsContractTests : IAsyncLifetime
 
         public Task<Result<IReadOnlyList<PostingSignal>>> GetSignalsAsync(string ownerId, Guid postingId, CancellationToken cancellationToken = default) =>
             throw new NotImplementedException();
+
+        public Task<Result<ILookup<Guid, PostingSignal>>> GetSignalsForPostingsAsync(string ownerId, IEnumerable<Guid> postingIds, CancellationToken cancellationToken = default) =>
+            throw CreateEx();
     }
 
     private sealed class TrackingTransactionContextReal : ITrackingTransactionContext

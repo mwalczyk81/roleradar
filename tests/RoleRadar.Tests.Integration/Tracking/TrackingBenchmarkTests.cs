@@ -15,6 +15,7 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Tracking;
 
+[Collection("BenchmarkCollection")]
 public sealed class TrackingBenchmarkTests : IAsyncLifetime
 {
     private readonly SharedMongoFixture _sharedMongo;

@@ -330,6 +330,49 @@ public sealed class MongoPostingRepository : IPostingRepository
         return Result<IReadOnlyList<PostingSignal>>.Success(list);
     }
 
+    public async Task<Result<ILookup<Guid, PostingSignal>>> GetSignalsForPostingsAsync(
+        string ownerId,
+        IEnumerable<Guid> postingIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
+        ArgumentNullException.ThrowIfNull(postingIds);
+        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
+
+        var idList = postingIds.Select(id => new BsonBinaryData(id, GuidRepresentation.Standard)).ToList();
+        if (idList.Count == 0)
+        {
+            return Result<ILookup<Guid, PostingSignal>>.Success(Enumerable.Empty<PostingSignal>().ToLookup(s => s.PostingId));
+        }
+
+        var filter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
+            Builders<BsonDocument>.Filter.In("posting_id", idList));
+
+        var session = MongoNoteRepository.CurrentSession;
+        var docs = session is not null
+            ? await _signals.Find(session, filter).ToListAsync(cancellationToken)
+            : await _signals.Find(filter).ToListAsync(cancellationToken);
+
+        var list = new List<PostingSignal>(docs.Count);
+        foreach (var doc in docs)
+        {
+            var id = doc["_id"].AsGuid;
+            var postingId = doc["posting_id"].AsGuid;
+            var sigTypeStr = doc["signal_type"].AsString;
+            _ = TrackingEnumExtensions.TryParseSignalType(sigTypeStr, out var sigType);
+            var evidence = doc["evidence"].AsString;
+            var observedAt = DateTime.SpecifyKind(doc["observed_at"].ToUniversalTime(), DateTimeKind.Utc);
+            var deadline = doc.Contains("deadline_date") && !doc["deadline_date"].IsBsonNull
+                ? doc["deadline_date"].AsString
+                : null;
+
+            list.Add(new PostingSignal(id, ownerId, postingId, sigType, evidence, observedAt, deadline));
+        }
+
+        return Result<ILookup<Guid, PostingSignal>>.Success(list.ToLookup(s => s.PostingId));
+    }
+
     private static BsonDocument SerializePosting(Posting p)
     {
         var comp = new BsonDocument

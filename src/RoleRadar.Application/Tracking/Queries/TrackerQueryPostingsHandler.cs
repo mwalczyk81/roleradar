@@ -239,11 +239,16 @@ public sealed class TrackerQueryHandler : IQueryHandler<TrackerQueryRequest, Tra
             ownerId, query.CompanyId, dispositionFilter, cancellationToken);
         var totalCount = countResult.IsSuccess ? countResult.Value : postingsResult.Value.Count;
 
+        var postingIds = postingsResult.Value.Select(p => p.Id).ToList();
+        var signalsLookupResult = await _context.Postings.GetSignalsForPostingsAsync(ownerId, postingIds, cancellationToken);
+        var signalsLookup = signalsLookupResult.IsSuccess && signalsLookupResult.Value is not null
+            ? signalsLookupResult.Value
+            : Enumerable.Empty<PostingSignal>().ToLookup(s => s.PostingId);
+
         var items = new List<object>(postingsResult.Value.Count);
         foreach (var p in postingsResult.Value)
         {
-            var sigsResult = await _context.Postings.GetSignalsAsync(ownerId, p.Id, cancellationToken);
-            var sigs = sigsResult.IsSuccess && sigsResult.Value is not null ? sigsResult.Value : [];
+            var sigs = signalsLookup[p.Id].ToList();
             var ghost = GhostLikelihoodEvaluator.Evaluate(p, sigs, now);
 
             items.Add(new PostingSummaryItemDto(

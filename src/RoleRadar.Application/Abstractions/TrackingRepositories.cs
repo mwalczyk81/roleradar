@@ -42,6 +42,7 @@ public interface IPostingRepository
     Task<Result<bool>> UpsertPostingAsync(Posting posting, CancellationToken cancellationToken = default);
     Task<Result<bool>> AppendSignalAsync(PostingSignal signal, CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<PostingSignal>>> GetSignalsAsync(string ownerId, Guid postingId, CancellationToken cancellationToken = default);
+    Task<Result<ILookup<Guid, PostingSignal>>> GetSignalsForPostingsAsync(string ownerId, IEnumerable<Guid> postingIds, CancellationToken cancellationToken = default);
 }
 
 public interface ICriterionRepository
