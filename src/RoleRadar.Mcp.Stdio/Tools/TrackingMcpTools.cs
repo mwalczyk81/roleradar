@@ -20,16 +20,55 @@ public sealed class TrackingMcpTools
 
     private readonly ICommandHandler<RecordPostingCommand, PostingRecordResultDto> _recordPostingHandler;
     private readonly ICommandHandler<TransitionPostingCommand, PostingTransitionResultDto> _transitionPostingHandler;
+    private readonly ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto> _recordCompanyHandler;
     private readonly IQueryHandler<TrackerQueryRequest, TrackerQueryResultDto> _trackerQueryHandler;
 
     public TrackingMcpTools(
         ICommandHandler<RecordPostingCommand, PostingRecordResultDto> recordPostingHandler,
         ICommandHandler<TransitionPostingCommand, PostingTransitionResultDto> transitionPostingHandler,
+        ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto> recordCompanyHandler,
         IQueryHandler<TrackerQueryRequest, TrackerQueryResultDto> trackerQueryHandler)
     {
         _recordPostingHandler = recordPostingHandler ?? throw new ArgumentNullException(nameof(recordPostingHandler));
         _transitionPostingHandler = transitionPostingHandler ?? throw new ArgumentNullException(nameof(transitionPostingHandler));
+        _recordCompanyHandler = recordCompanyHandler ?? throw new ArgumentNullException(nameof(recordCompanyHandler));
         _trackerQueryHandler = trackerQueryHandler ?? throw new ArgumentNullException(nameof(trackerQueryHandler));
+    }
+
+    [McpServerTool(Name = "company_record"), Description("Creates or updates a tracked company profile with ownership type, category tags, description, and career sources (ATS endpoints) with upsert by id or natural key without accidental source deletion.")]
+    public async Task<string> CompanyRecordAsync(
+        [Description("Unique company identifier (generated if omitted).")] Guid? id = null,
+        [Description("Unique company name (1..150 characters).")] string name = "",
+        [Description("Summary of industry, ownership context, and headquarters (max 300 characters).")] string? description = null,
+        [Description("Parent company name (max 150 characters).")] string? parentCompany = null,
+        [Description("Ownership type ('public', 'private', 'pe_backed', 'vc_backed', 'mutual', 'subsidiary', 'nonprofit', 'government', 'unknown').")] string ownershipType = "unknown",
+        [Description("Primary headquarters location (max 150 characters).")] string? headquarters = null,
+        [Description("Tracking status ('target', 'watch', 'avoid', 'neutral').")] string status = "neutral",
+        [Description("Category or industry tags (max 20 tags, each max 50 characters).")] string[]? categoryTags = null,
+        [Description("Career source ATS endpoints to upsert.")] CareerSourceInputDto[]? careerSources = null,
+        [Description("Optimistic concurrency token required when updating an existing company.")] Guid? versionToken = null,
+        CancellationToken cancellationToken = default)
+    {
+        var command = new RecordCompanyCommand(
+            Id: id,
+            Name: name,
+            Description: description,
+            ParentCompany: parentCompany,
+            OwnershipType: ownershipType,
+            Headquarters: headquarters,
+            Status: status,
+            CategoryTags: categoryTags,
+            CareerSources: careerSources,
+            VersionToken: versionToken);
+
+        var result = await _recordCompanyHandler.HandleAsync(command, cancellationToken);
+        if (!result.IsSuccess)
+        {
+            var err = result.Error!.Value;
+            return JsonSerializer.Serialize(new { error = new { code = err.Code.ToString(), message = err.Message } }, JsonOptions);
+        }
+
+        return JsonSerializer.Serialize(result.Value, JsonOptions);
     }
 
     [McpServerTool(Name = "posting_record"), Description("Creates, ingests, or explicitly updates a tracked job posting with company, title, URL, ATS identifiers, compensation, location, score, culture rating, screening note link, signals, and resurface policy, enforcing tiered deduplication (tiers A-D).")]

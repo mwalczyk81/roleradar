@@ -115,6 +115,7 @@ public sealed class TrackingArchitectureTests
             .Where(name => name is not null)
             .ToArray();
 
+        Assert.Contains("company_record", toolNames);
         Assert.Contains("posting_record", toolNames);
         Assert.Contains("posting_transition", toolNames);
         Assert.Contains("tracker_query", toolNames);

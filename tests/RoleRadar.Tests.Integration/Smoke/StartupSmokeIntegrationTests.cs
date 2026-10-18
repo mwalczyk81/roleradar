@@ -99,6 +99,7 @@ public sealed class StartupSmokeIntegrationTests
         Assert.NotNull(toolsResponse);
         Assert.Contains("note_create", toolsResponse);
         Assert.Contains("note_archive", toolsResponse);
+        Assert.Contains("company_record", toolsResponse);
         Assert.Contains("posting_record", toolsResponse);
         Assert.Contains("posting_transition", toolsResponse);
         Assert.Contains("tracker_query", toolsResponse);

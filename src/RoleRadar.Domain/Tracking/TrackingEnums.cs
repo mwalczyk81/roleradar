@@ -275,4 +275,85 @@ public static class TrackingEnumExtensions
             default: return false;
         }
     }
+
+    public static string ToSnakeCase(this OwnershipType ownershipType) => ownershipType switch
+    {
+        OwnershipType.Public => "public",
+        OwnershipType.Private => "private",
+        OwnershipType.PeBacked => "pe_backed",
+        OwnershipType.VcBacked => "vc_backed",
+        OwnershipType.Mutual => "mutual",
+        OwnershipType.Subsidiary => "subsidiary",
+        OwnershipType.Nonprofit => "nonprofit",
+        OwnershipType.Government => "government",
+        _ => "unknown"
+    };
+
+    public static bool TryParseOwnershipType(string? val, out OwnershipType type)
+    {
+        type = OwnershipType.Unknown;
+        if (string.IsNullOrWhiteSpace(val)) return false;
+        var s = val.Trim().ToLowerInvariant().Replace("-", "_");
+        switch (s)
+        {
+            case "public": type = OwnershipType.Public; return true;
+            case "private": type = OwnershipType.Private; return true;
+            case "pe_backed":
+            case "pebacked": type = OwnershipType.PeBacked; return true;
+            case "vc_backed":
+            case "vcbacked": type = OwnershipType.VcBacked; return true;
+            case "mutual": type = OwnershipType.Mutual; return true;
+            case "subsidiary": type = OwnershipType.Subsidiary; return true;
+            case "nonprofit": type = OwnershipType.Nonprofit; return true;
+            case "government": type = OwnershipType.Government; return true;
+            case "unknown": type = OwnershipType.Unknown; return true;
+            default: return false;
+        }
+    }
+
+    public static string ToSnakeCase(this CompanyStatus status) => status switch
+    {
+        CompanyStatus.Target => "target",
+        CompanyStatus.Watch => "watch",
+        CompanyStatus.Avoid => "avoid",
+        CompanyStatus.Neutral => "neutral",
+        _ => status.ToString().ToLowerInvariant()
+    };
+
+    public static bool TryParseCompanyStatus(string? val, out CompanyStatus status)
+    {
+        status = CompanyStatus.Neutral;
+        if (string.IsNullOrWhiteSpace(val)) return false;
+        var s = val.Trim().ToLowerInvariant().Replace("-", "_");
+        switch (s)
+        {
+            case "target": status = CompanyStatus.Target; return true;
+            case "watch": status = CompanyStatus.Watch; return true;
+            case "avoid": status = CompanyStatus.Avoid; return true;
+            case "neutral": status = CompanyStatus.Neutral; return true;
+            default: return false;
+        }
+    }
+
+    public static string ToSnakeCase(this FetchMethod method) => method switch
+    {
+        FetchMethod.Api => "api",
+        FetchMethod.Browser => "browser",
+        FetchMethod.Blocked => "blocked",
+        _ => method.ToString().ToLowerInvariant()
+    };
+
+    public static bool TryParseFetchMethod(string? val, out FetchMethod method)
+    {
+        method = FetchMethod.Api;
+        if (string.IsNullOrWhiteSpace(val)) return false;
+        var s = val.Trim().ToLowerInvariant().Replace("-", "_");
+        switch (s)
+        {
+            case "api": method = FetchMethod.Api; return true;
+            case "browser": method = FetchMethod.Browser; return true;
+            case "blocked": method = FetchMethod.Blocked; return true;
+            default: return false;
+        }
+    }
 }
