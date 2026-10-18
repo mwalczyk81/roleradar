@@ -4,9 +4,8 @@ namespace RoleRadar.Domain.Tracking;
 
 public static class UrlNormalizer
 {
-    private static readonly HashSet<string> ExactDenylist =
-    [
-        with(StringComparer.OrdinalIgnoreCase),
+    private static readonly HashSet<string> ExactDenylist = new(StringComparer.OrdinalIgnoreCase)
+    {
         "ref",
         "source",
         "gh_src",
@@ -30,7 +29,7 @@ public static class UrlNormalizer
         "igshid",
         "yclid",
         "mkt_tok"
-    ];
+    };
 
     public static string? Normalize(string? url)
     {

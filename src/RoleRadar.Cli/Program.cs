@@ -6,7 +6,6 @@ using RoleRadar.Application;
 using RoleRadar.Cli.Commands;
 using RoleRadar.Infrastructure;
 using RoleRadar.Infrastructure.Backup;
-using RoleRadar.Infrastructure.Mongo;
 
 namespace RoleRadar.Cli;
 
@@ -21,14 +20,12 @@ public static class Program
 
             await using var services = BuildServiceProvider(args, isVerbose: isVerbose);
 
-            var rootCommand = new RootCommand("RoleRadar local CLI")
-            {
-                StatusCommand.Create(services),
-                ImportCommand.Create(services),
-                BackupCommand.Create(services),
-                RestoreCommand.Create(services),
-                WipeCommand.Create(services)
-            };
+            var rootCommand = new RootCommand("RoleRadar local CLI");
+            rootCommand.Add(StatusCommand.Create(services));
+            rootCommand.Add(ImportCommand.Create(services));
+            rootCommand.Add(BackupCommand.Create(services));
+            rootCommand.Add(RestoreCommand.Create(services));
+            rootCommand.Add(WipeCommand.Create(services));
 
             var parseResult = rootCommand.Parse(args);
 
@@ -43,9 +40,9 @@ public static class Program
 
             return await parseResult.InvokeAsync(cancellationToken: CancellationToken.None);
         }
-        catch (InvalidOperationException ex) when (ex.Message == ConnectionStringRedactor.InvalidConnectionStringErrorMessage)
+        catch (InvalidOperationException ex) when (ex.Message == RoleRadar.Infrastructure.Mongo.ConnectionStringRedactor.InvalidConnectionStringErrorMessage)
         {
-            Console.Error.WriteLine(ConnectionStringRedactor.InvalidConnectionStringErrorMessage);
+            Console.Error.WriteLine(RoleRadar.Infrastructure.Mongo.ConnectionStringRedactor.InvalidConnectionStringErrorMessage);
             return 1;
         }
     }
