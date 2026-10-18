@@ -27,6 +27,11 @@
 - Q: From which posting dispositions can an application be created? → A: Application creation is permitted directly from `lead`, `unscored`, and `scored`, transitioning the posting to `applied`.
 - Q: How does the application override flag operate on decided or closed postings? → A: Creating an application with the override flag for a `screened_out` or `closed` posting executes reopen-and-apply as ONE audited transaction, moving the posting directly to `applied` regardless of resurface policy. The audit entry records the override flag, previous disposition, and previous resurface policy.
 - Q: What is returned when re-encountering a screened_out or closed posting with resurface_policy if_reopened? → A: Returns `AlreadyDecided` containing the disposition, reason, resurface_policy, and `can_reopen: true`, mutating nothing (no `last_verified` update, no audit entry).
+- Q: How are confidential contacts accessed and modified? → A: Contacts are CLI-only (`roleradar contact add|get|redact`, lookup by contact ID only). No contact data is reachable through any MCP tool. Applications retain only an optional `referral_contact_id`.
+- Q: How does updating last_verified_at on a re-encountered active posting behave with auditing? → A: Updating `last_verified_at` on an active posting is a real write and produces an audit entry with a one-field summary (`last_verified_at`). A resubmission identical to stored state on the same UTC day writes nothing and produces no audit entry.
+- Q: What are the application event types and outcome mappings? → A: Application events are `applied`, `follow_up`, `interview`, `offer`, `offer_accepted`, `offer_declined`, `rejected`, and `withdrawn`. `offer` is not terminal. `offer_accepted`, `offer_declined`, and `withdrawn` close the posting with a recorded reason; `rejected` sets the posting disposition to `rejected`.
+- Q: In which dispositions can postings be created across ingestion paths? → A: Postings can be created in any disposition by the internal import path (Feature 003), with a required reason and resurface policy for decided states; `applied` requires an application record or emits an integrity warning. The MCP creation path defaults to `lead`. `applied` is reachable only through application creation, never through `posting_transition`.
+- Q: What is the exact MCP tool surface, and what surfaces handle CLI-only operations? → A: At most 6 new MCP tools: `posting_record`, `posting_transition`, `company_record`, `application_record`, `tracker_log` (criterion revisions and search runs), and `tracker_query` (all reads, plus read-only posting lookup by deduplication key). Contacts management and referential integrity verification are CLI-only. Every spec-mandated write operation must have an MCP tool or CLI command.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -40,15 +45,15 @@ As the job-search owner, I want to record and update job postings with full trac
 
 **Acceptance Scenarios**:
 
-1. **Given** a new job posting with an ATS tenant identifier and requisition ID, **When** the owner submits the posting for the first time, **Then** the posting is recorded with disposition `lead` (or provided initial disposition) and an audit entry is generated.
+1. **Given** a new job posting submitted via MCP, **When** processed, **Then** the posting is recorded defaulting to disposition `lead` with an audit entry; **Given** an internal import batch (Feature 003), **When** ingested, **Then** the posting may be created in any disposition, requiring a disposition reason and resurface policy if created in a decided state (`screened_out`, `closed`, `rejected`), and requiring an existing application record or raising an integrity warning if created in `applied`.
 2. **Given** an existing posting with an ATS tenant and requisition ID, **When** an aggregator submits the same posting with a different external URL but matching tenant and requisition ID (Tier A deduplication), **Then** the existing record is matched rather than creating a duplicate, and `last_verified` is updated only if the posting is not in a decided/closed state.
 3. **Given** an existing posting lacking ATS identifiers, **When** a posting is submitted with a matching normalized URL (Tier B deduplication), **Then** the system matches the existing record and updates `last_verified` if active.
 4. **Given** an existing posting lacking a tenant identifier, **When** a posting is submitted with matching company and requisition ID (Tier C deduplication), **Then** the system matches the existing record.
 5. **Given** an existing posting matching on company and normalized title but lacking matching IDs or URL (Tier D deduplication), **When** submitted, **Then** the system returns a typed `PossibleDuplicate` advisory listing of candidate postings with their current dispositions and reasons, and NEVER auto-merges or modifies any record.
 6. **Given** a posting originally recorded with URL only, **When** subsequent submissions provide valid ATS tenant and requisition identifiers, **Then** the existing record is upgraded in place with the new ATS identifiers rather than creating a duplicate record.
 7. **Given** a posting previously screened out, closed, or rejected with resurface policy `never`, **When** the posting is re-encountered, **Then** the system returns a typed `AlreadyDecided` response containing the existing record, prior reason, resurface policy, and `can_reopen: false`, mutating nothing (no `last_verified` update, no audit entry).
-8. **Given** an existing posting in disposition `lead`, `scored`, `applied`, or `unscored`, **When** the posting is re-encountered, **Then** the system returns a typed `AlreadyTracked` response with its current state, updating `last_verified` without creating duplicate records.
-9. **Given** a resubmission of an existing posting where no field values or verification timestamps change, **When** processed, **Then** the operation is an idempotent no-op and generates zero audit entries.
+8. **Given** an existing posting in disposition `lead`, `scored`, `applied`, or `unscored`, **When** the posting is re-encountered on a different UTC date, **Then** the system returns a typed `AlreadyTracked` response with its current state, updates `last_verified` as a real write, and records an audit entry with a one-field summary (`last_verified_at`).
+9. **Given** a resubmission of an existing posting where all field values and the UTC date of `last_verified` are identical to stored state on the same UTC day, **When** processed, **Then** the operation is an idempotent no-op and generates zero writes and zero audit entries.
 10. **Given** a posting that duplicates another posting, **When** linking `duplicate_of`, **Then** the posting cannot reference itself or another posting that is already marked as a duplicate; any duplicate reference chains are collapsed to the root posting at write time.
 11. **Given** a posting previously screened out or closed with resurface policy `if_reopened`, **When** the posting is re-encountered while still closed, **Then** the system returns a typed `AlreadyDecided` response containing the existing disposition, reason, resurface policy, and `can_reopen: true`, mutating nothing (no `last_verified` update, no audit entry); the posting remains in its decided state until an explicit reopen command or an application submission with override is executed.
 12. **Given** a posting with detailed screening rationale, **When** saved, **Then** the long narrative rationale is stored in an independent note and referenced by note identifier rather than embedded as unbounded text in the posting record.
@@ -102,20 +107,21 @@ As the job-search owner, I want to track formal job applications (submission dat
 1. **Given** an active posting with disposition `lead`, `unscored`, or `scored`, **When** the owner submits an application, **Then** an application record is created linking to the posting, the posting disposition transitions directly to `applied`, and the resume variant classification (`tailored`, `as_is`, or `ic_framed`) and external pointer are recorded.
 2. **Given** a posting currently marked `screened_out` or `closed` (under either `never` or `if_reopened` resurface policy), **When** the owner attempts to create an application without an override flag, **Then** the system rejects the operation with a typed `InvalidTransition` failure; **When** submitted with an explicit override flag, **Then** the system executes reopen-and-apply as ONE audited transaction, transitioning the posting directly to `applied` regardless of resurface policy, and records the override flag, the previous disposition, and the previous resurface policy in the audit entry.
 3. **Given** an active posting, **When** disposition transitions are requested, **Then** the system enforces the permitted transition matrix:
-   - `lead` -> `scored | unscored | applied | screened_out | closed`
-   - `unscored` -> `scored | applied | screened_out | closed`
-   - `scored` -> `applied | screened_out | closed`
+   - `lead` -> `scored | unscored | screened_out | closed`
+   - `unscored` -> `scored | screened_out | closed`
+   - `scored` -> `screened_out | closed`
+   - `lead | unscored | scored` -> `applied` (ONLY reachable via application creation, NEVER via posting_transition)
    - `applied` -> `rejected | closed`
    - `screened_out` -> `lead` (only via explicit reopen when policy is `if_reopened`)
    - `closed` -> `lead` (only via explicit reopen when policy is `if_reopened`)
    - `screened_out | closed` -> `applied` (only via application creation with explicit override flag, as one audited transaction)
    - `rejected` -> terminal (reopen allowed only by explicit command with recorded reason)
-   - Any other transition is rejected with a typed `InvalidTransition` error.
-4. **Given** an active application, **When** new interaction milestones occur (follow-up, screening interview, technical round, offer, withdrawal), **Then** chronological events with date-only event dates, sources, and notes are appended to the application's timeline.
-5. **Given** an application outcome update, **When** the outcome transitions, **Then** the parent posting disposition synchronizes within the same transaction:
-   - `submitted` -> posting transitions to `applied`
+   - `applied` is NEVER reachable through `posting_transition`. Any invalid transition attempt is rejected with a typed `InvalidTransition` error.
+4. **Given** an active application, **When** new interaction milestones occur, **Then** chronological events from the supported event set (`applied`, `follow_up`, `interview`, `offer`, `offer_accepted`, `offer_declined`, `rejected`, `withdrawn`) with date-only event dates, sources, and notes are appended to the application's timeline. An `offer` event is not terminal.
+5. **Given** an application outcome update or terminal event, **When** processed, **Then** the parent posting disposition synchronizes within the same transaction:
+   - `applied` / application created -> posting transitions to `applied`
    - `rejected` -> posting transitions to `rejected`
-   - `withdrawn`, `declined_offer`, or `accepted_offer` -> posting transitions to `closed` with the reason recorded.
+   - `offer_accepted`, `offer_declined`, or `withdrawn` -> posting transitions to `closed` with the reason recorded.
 
 ---
 
@@ -138,20 +144,20 @@ As the job-search owner, I want to attach observed signals to job postings (such
 
 ### User Story 6 - Confidential Contacts Isolation (Priority: P2)
 
-As the job-search owner, I want to record third-party contacts (recruiters, hiring managers, and referral connections) in a strictly confidential store that is isolated from default searches, error messages, status summaries, and log outputs, and support a redact operation, so that personal contact data is never exposed during routine operations or automated agent searches.
+As the job-search owner, I want to manage third-party contacts (recruiters, hiring managers, and referral connections) exclusively through CLI commands (`roleradar contact add|get|redact`), isolated completely from all MCP tools, default searches, error messages, status summaries, and log outputs, and support a redact operation, so that personal contact data is never exposed during routine operations or automated agent interactions. Applications reference contacts solely through an optional `referral_contact_id`.
 
-**Why this priority**: Personal contact details represent third-party personal data. Under privacy-first principles, this sensitive information must never leak into general search results, logs, or diagnostic outputs, but must remain accessible when explicitly requested for a specific application or company.
+**Why this priority**: Personal contact details represent third-party personal data. Under privacy-first principles, this sensitive information must never leak into general search results, logs, diagnostic outputs, or agent contexts via MCP, but must remain manageable via local CLI operations by contact ID.
 
-**Independent Test**: Can be tested by creating a contact record, running standard general search operations, inspecting captured logs, status outputs, and audit summaries to verify zero contact personal details appear, verifying that contact write audit entries contain only record IDs and changed field names, and verifying that the `redact` operation blanks personal fields while retaining the audited record ID.
+**Independent Test**: Can be tested by creating a contact record via CLI, verifying no MCP tool exposes or accesses contact records, inspecting captured logs, status outputs, and audit summaries to verify zero contact personal details appear, verifying that contact write audit entries contain only record IDs and changed field names, asserting that `roleradar contact get <id>` retrieves the contact by ID only, and verifying that `roleradar contact redact <id>` blanks personal fields while retaining the audited record ID.
 
 **Acceptance Scenarios**:
 
-1. **Given** a professional contact associated with a company or application, **When** recorded, **Then** the contact is saved with name, role, organization, and relationship type.
-2. **Given** general search queries for postings, companies, or criteria, **When** results are returned, **Then** contact details are completely omitted from the output.
-3. **Given** an error condition, status command, or routine log entry involving a contact or contact reference, **When** logged or reported, **Then** the contact's name, role, and personal details are completely excluded.
-4. **Given** any create or update write operation on a contact record, **When** the mandatory audit entry is written, **Then** the before and after summaries contain ONLY changed field names and record identifiers, NEVER names, roles, or company strings.
-5. **Given** an existing contact that must be removed, **When** the owner invokes the `redact` operation, **Then** the system blanks all personal data fields (name, role, notes) while keeping the record ID in place, generating a compliant audit entry without violating the zero hard-delete constraint.
-6. **Given** a specific inquiry requesting a contact by reference ID, **When** executed via the dedicated contact query tool, **Then** the contact details are returned to the authorized owner.
+1. **Given** a professional contact associated with a company or application, **When** recorded via `roleradar contact add`, **Then** the contact is saved with name, role, organization, and relationship type, and is retrievable solely by direct contact ID via `roleradar contact get <id>`.
+2. **Given** any Model Context Protocol (MCP) tool call or query, **When** executed, **Then** zero contact records or contact personal fields are reachable, queryable, or returned through any MCP tool surface.
+3. **Given** an application record, **When** associating a contact, **Then** the application stores only an optional `referral_contact_id` reference without embedding contact details.
+4. **Given** an error condition, status command, or routine log entry involving a contact or contact reference, **When** logged or reported, **Then** the contact's name, role, and personal details are completely excluded.
+5. **Given** any create or update write operation on a contact record, **When** the mandatory audit entry is written, **Then** the before and after summaries contain ONLY changed field names and record identifiers, NEVER names, roles, or company strings.
+6. **Given** an existing contact that must be removed, **When** the owner invokes `roleradar contact redact <id>`, **Then** the system blanks all personal data fields (name, role, notes) while keeping the record ID in place, generating a compliant audit entry without violating the zero hard-delete constraint.
 
 ---
 
@@ -183,8 +189,9 @@ As the job-search owner, I want to record periodic search run executions (start 
   - If `resurface_policy` is `never` (or disposition is `rejected`), returns typed `AlreadyDecided` with `can_reopen: false` without modifying the record, updating `last_verified`, or writing an audit entry.
   - If `resurface_policy` is `if_reopened`, returns typed `AlreadyDecided` with `can_reopen: true`, preserving the existing state and mutating nothing (no `last_verified` update, no audit entry) until an explicit reopen or application submission with override occurs.
 - **Reopening via Application Override**: Applying to a posting in `screened_out` or `closed` status using an explicit override flag bypasses the resurface policy and executes reopen-and-apply as ONE audited transaction, moving the posting directly to `applied` while logging the override flag, previous disposition, and previous resurface policy in the audit entry.
-- **Active Postings Re-encountered**: Postings in `lead`, `scored`, `applied`, or `unscored` return `AlreadyTracked` with their current state. `last_verified` is updated only for active (non-decided/non-closed) postings.
-- **Zero-Change Resubmissions**: If an incoming submission matches an existing posting and introduces no field changes or verification updates, the operation is an idempotent no-op and writes no audit log entry.
+- **Active Postings Re-encountered**: Postings in `lead`, `scored`, `applied`, or `unscored` return `AlreadyTracked` with their current state. If re-encountered on a different UTC date, `last_verified_at` is updated as a real write, generating an audit entry with a one-field summary (`last_verified_at`).
+- **Zero-Change Resubmissions**: If an incoming submission matches an existing posting and introduces no field changes, and `last_verified_at` is identical to stored state on the same UTC day, the operation is an idempotent no-op and generates zero writes and zero audit log entries.
+- **Creation Dispositions Across Paths**: Ingestion via internal batch import (Feature 003) allows postings to be created in any valid disposition (mandating reasons/policy for decided states, and application links or integrity warnings for `applied`). MCP creation always defaults to `lead`. `applied` is never reachable through `posting_transition`.
 - **Long Screening Rationales**: Any screening rationale exceeding brief summary length must be saved as an independent narrative note and linked via note ID, preserving database index performance and document size boundaries.
 - **Concurrent Updates to Postings**: Optimistic concurrency tokens or transactional version checks ensure conflicting concurrent updates to a posting's disposition or metadata are rejected cleanly with a typed `ConcurrencyConflict` error.
 
@@ -204,11 +211,14 @@ As the job-search owner, I want to record periodic search run executions (start 
 - **FR-005**: When an existing posting recorded by URL subsequently receives matching ATS identifiers via Tier A or Tier C, System MUST upgrade the existing record in place with the newly discovered identifiers.
 - **FR-006**: System MUST normalize URLs by standardizing schemes, lowercasing domain names, removing default ports, trailing slashes, and removing common tracking/marketing query parameters (e.g., `utm_*`, `ref`, `gh_src`).
 - **FR-007**: When an existing posting with disposition `screened_out`, `closed`, or `rejected` is submitted, System MUST return a typed `AlreadyDecided` response containing the existing record, disposition, reason, resurface policy, and `can_reopen` indicator (`false` if policy is `never` or disposition is `rejected`; `true` if policy is `if_reopened` and disposition is `screened_out` or `closed`), and MUST NOT alter the record, update `last_verified`, or write an audit entry.
-- **FR-008**: When an existing posting with disposition `lead`, `scored`, `applied`, or `unscored` is submitted, System MUST return a typed `AlreadyTracked` response with its current state, updating `last_verified` only for active postings.
-- **FR-009**: Resubmission of an existing posting that produces zero changes to stored values MUST be an idempotent no-op and write no audit log entry.
+- **FR-008**: When an existing posting with disposition `lead`, `scored`, `applied`, or `unscored` is submitted:
+  - If re-encountered on a different UTC date, System MUST return a typed `AlreadyTracked` response with its current state, update `last_verified_at` as a real write, and record an audit entry with a one-field summary (`last_verified_at`).
+  - If submitted with values and `last_verified_at` identical to stored state on the same UTC day, System MUST return `AlreadyTracked` with zero writes and zero audit entries.
+- **FR-009**: Resubmission of an existing posting that produces zero changes to stored values on the same UTC day MUST be an idempotent no-op and write no audit log entry.
 - **FR-010**: System MUST enforce that a posting cannot be `duplicate_of` itself or of another posting marked as a duplicate, automatically collapsing duplicate reference chains to the root posting upon write.
 - **FR-011**: System MUST allow postings to reference an external narrative note ID for long-form screening rationale rather than embedding arbitrary prose in the posting record.
 - **FR-012**: System MUST enforce maximum length bounds on all text fields (e.g., title, URL, location, compensation text, disposition reason, culture summary) and treat all external posting text as untrusted data.
+- **FR-012a**: Ingestion via the internal batch import path (Feature 003) MUST support creating postings in any valid disposition (mandating reason and resurface policy for decided states, and an application record or integrity warning for `applied`). Ingestion via MCP creation MUST default to `lead`. `applied` MUST NOT be reachable through `posting_transition`.
 
 #### Companies & Career Sources
 - **FR-013**: System MUST track companies with attributes: owner identifier, company name, bounded company description (max 300 characters covering industry, ownership, and headquarters notes), parent company name, ownership type (`public`, `private`, `pe_backed`, `vc_backed`, `mutual`, `subsidiary`, `nonprofit`, `government`, `unknown`), headquarters location, category tags, tracking status (`target`, `watch`, `avoid`, `neutral`), last checked timestamp (UTC), and last check result summary.
@@ -222,36 +232,38 @@ As the job-search owner, I want to record periodic search run executions (start 
 - **FR-019**: System MUST allow posting disposition reasons to reference the specific criterion key or revision that motivated the disposition.
 
 #### Applications & State Transitions
-- **FR-020**: System MUST record applications linked to a specific posting, containing: owner identifier, posting reference, submitted date (date-only), desired salary range, target start date (date-only), resume variant flag (`tailored`, `as_is`, `ic_framed`), external resume pointer reference, referral contact reference ID, confirmation code/reference, and overall outcome.
+- **FR-020**: System MUST record applications linked to a specific posting, containing: owner identifier, posting reference, submitted date (date-only), desired salary range, target start date (date-only), resume variant flag (`tailored`, `as_is`, `ic_framed`), external resume pointer reference, referral contact reference ID (`referral_contact_id`, optional), confirmation code/reference, and overall outcome.
 - **FR-021**: System MUST forbid storing raw resume or cover letter document text within the database; only variant metadata and external pointers may be persisted.
 - **FR-022**: System MUST enforce the following valid disposition transitions:
-  - `lead` -> `scored | unscored | applied | screened_out | closed`
-  - `unscored` -> `scored | applied | screened_out | closed`
-  - `scored` -> `applied | screened_out | closed`
+  - `lead` -> `scored | unscored | screened_out | closed`
+  - `unscored` -> `scored | screened_out | closed`
+  - `scored` -> `screened_out | closed`
+  - `lead | unscored | scored` -> `applied` (ONLY reachable via application creation, NEVER via posting_transition)
   - `applied` -> `rejected | closed`
   - `screened_out` -> `lead` (only via explicit reopen when policy is `if_reopened`)
   - `closed` -> `lead` (only via explicit reopen when policy is `if_reopened`)
   - `screened_out | closed` -> `applied` (only via application creation with explicit override flag, as one audited transaction)
   - `rejected` -> terminal (reopen permitted only via explicit command with a recorded reason)
-  - Any invalid transition attempt MUST return a typed `InvalidTransition` failure.
+  - `applied` is NEVER reachable through `posting_transition`. Any invalid transition attempt MUST return a typed `InvalidTransition` failure.
 - **FR-023**: Creating an application for a posting in `screened_out` or `closed` status MUST require an explicit override flag; if omitted, System MUST return an `InvalidTransition` failure. If present, System MUST execute reopen-and-apply as ONE audited transaction, transitioning the posting directly to `applied` regardless of resurface policy, and MUST record the override flag, previous disposition, and previous resurface policy in the audit entry.
 - **FR-024**: System MUST synchronize posting dispositions with application outcomes in the same transaction:
   - Application created/submitted -> posting transitions to `applied` (from `lead`, `unscored`, `scored`, or via override from `screened_out`/`closed`)
-  - Application rejected -> posting transitions to `rejected`
-  - Application withdrawn, offer declined, or offer accepted -> posting transitions to `closed` with the outcome reason recorded.
-- **FR-025**: System MUST maintain an append-only timeline of application events for each application, capturing: event date (date-only), event type (`applied`, `follow_up`, `rejected`, `interview`, `offer`, `withdrawn`), event source, and descriptive notes.
+  - Application outcome or terminal event `rejected` -> posting transitions to `rejected`
+  - Application outcome or terminal event `offer_accepted`, `offer_declined`, or `withdrawn` -> posting transitions to `closed` with the outcome reason recorded.
+  - Event `offer` is non-terminal and MUST NOT close or reject the posting.
+- **FR-025**: System MUST maintain an append-only timeline of application events for each application, capturing: event date (date-only), event type (`applied`, `follow_up`, `interview`, `offer`, `offer_accepted`, `offer_declined`, `rejected`, `withdrawn`), event source, and descriptive notes.
 
 #### Posting Signals & Dynamic Assessment
 - **FR-026**: System MUST record signals observed against postings, capturing: posting reference, signal type (`repost`, `no_salary`, `parallel_posting`, `gone`, `phantom`, `deadline`), evidence description, optional deadline date (date-only, for `deadline` signal types), and observation timestamp (UTC).
 - **FR-027**: System MUST dynamically compute a ghost likelihood rating when a posting is retrieved, combining active signals using deterministic rules, and MUST NOT persist this calculated rating to storage.
 
-#### Confidential Contacts Isolation & Redaction
-- **FR-028**: System MUST store third-party contact records with: owner identifier, name, current role, company affiliation, and relationship category (recruiter, referral, hiring manager, peer).
-- **FR-029**: System MUST strictly isolate contacts from general search results: default queries for postings, companies, or criteria MUST NEVER return contact personal data.
-- **FR-030**: System MUST ensure that contact names and personal information never appear in system logs, diagnostics, status command output, or error messages.
+#### Confidential Contacts Isolation & Redaction (CLI-Only)
+- **FR-028**: System MUST provide CLI commands (`roleradar contact add|get|redact`) to manage third-party contact records with: owner identifier, name, current role, company affiliation, and relationship category (recruiter, referral, hiring manager, peer). Contact data MUST NOT be exposed or reachable through any Model Context Protocol (MCP) tool.
+- **FR-029**: System MUST strictly isolate contacts from general search results and all MCP queries: queries for postings, companies, criteria, or applications MUST NEVER return contact personal data. Applications MAY reference a contact solely by `referral_contact_id`.
+- **FR-030**: System MUST ensure that contact names and personal information never appear in system logs, diagnostics, status command output, error messages, or MCP responses.
 - **FR-031**: For all write operations on contact records, System MUST record audit log before/after summaries containing ONLY changed field names and record identifiers, strictly excluding names, roles, or company text.
-- **FR-032**: System MUST provide a dedicated `redact` operation for contacts that blanks all personal fields (name, role, affiliation) while preserving the record ID and recording an audit entry, upholding the zero hard-delete constraint.
-- **FR-033**: System MUST restrict contact retrieval to dedicated, explicit single-entity lookup operations referencing the specific contact identifier.
+- **FR-032**: System MUST provide a dedicated `roleradar contact redact <id>` CLI command that blanks all personal fields (name, role, affiliation, notes) while preserving the record ID and recording an audit entry, upholding the zero hard-delete constraint.
+- **FR-033**: System MUST restrict contact retrieval to `roleradar contact get <id>` referencing the specific contact identifier, with zero list/search tools for contacts on MCP.
 
 #### Notes Association, Search Runs & Integrity
 - **FR-034**: System MUST allow notes to optionally store a link to a company, posting, or application by ID; existing notes lacking links remain completely valid without migration.
@@ -262,7 +274,8 @@ As the job-search owner, I want to record periodic search run executions (start 
 #### Query Performance, Paging & Tool Ceilings
 - **FR-038**: All listing and search tools MUST be paged and bounded (default page size: 50, maximum page size: 200 items, with response size caps matching note retrieval tools).
 - **FR-039**: System MUST provide a compact "decided postings" listing tool returning only posting keys, dispositions, reasons, and resurface policies to allow rapid candidate screening without loading full posting records.
-- **FR-040**: The Model Context Protocol (MCP) server interface MUST expose at most 6 new tools (maintaining a strict ceiling of at most 12 total tools across Features 001 and 002) with zero delete tools.
+- **FR-040**: The Model Context Protocol (MCP) server interface MUST expose at most 6 new tools (maintaining a strict ceiling of at most 12 total tools across Features 001 and 002) with zero delete tools: `posting_record`, `posting_transition`, `company_record`, `application_record`, `tracker_log` (logging criterion revisions and search runs), and `tracker_query` (all structured reads, including read-only posting lookup by deduplication key). Contacts management and referential integrity verification MUST be CLI-only commands.
+- **FR-040a**: Every spec-mandated write operation MUST have a corresponding MCP tool or CLI command ensuring 100% operational write coverage without direct database intervention.
 
 #### Cross-Cutting Architectural & Safety Constraints
 - **FR-041**: Every record across all entities MUST include an `owner_id` attribute.
@@ -285,10 +298,10 @@ As the job-search owner, I want to record periodic search run executions (start 
 - **Company**: An employer organization tracking name, description (max 300 chars), parent company, ownership type (`public`, `private`, `pe_backed`, `vc_backed`, `mutual`, `subsidiary`, `nonprofit`, `government`, `unknown`), category tags, headquarters, tracking status (`target`, `watch`, `avoid`, `neutral`), and recent verification history.
 - **CareerSource**: Specific careers portal configuration for a company, defining the ATS platform, tenant name, URL slug, fetch method (`api`, `browser`, `blocked`), and access guidance.
 - **Criterion**: An immutable screening rule with key, category (`hard_skip`, `weight`, `preference`), value, validity timeframe (effective-from and effective-to UTC timestamps), and stated or inferred provenance.
-- **Application**: A formal submission record linked to a posting, containing submission date (date-only), compensation targets, target start date (date-only), resume variant classification and pointer, referral contact reference, confirmation code, and outcome.
-- **ApplicationEvent**: A chronological interaction milestone on an application timeline (applied, interview round, follow-up, offer, withdrawal) with a date-only event date.
+- **Application**: A formal submission record linked to a posting, containing submission date (date-only), compensation targets, target start date (date-only), resume variant classification and pointer, referral contact reference ID (`referral_contact_id`, optional), confirmation code, and outcome.
+- **ApplicationEvent**: A chronological interaction milestone on an application timeline (`applied`, `follow_up`, `interview`, `offer`, `offer_accepted`, `offer_declined`, `rejected`, `withdrawn`) with a date-only event date.
 - **PostingSignal**: An observable quality or risk signal (repost, omitted salary, phantom listing, deadline with optional date-only target) tied to a posting with evidence and UTC timestamp.
-- **Contact**: A private third-party professional contact (recruiter, referral) kept isolated from general queries and diagnostics, supporting redaction.
+- **Contact**: A private third-party professional contact (recruiter, referral) managed exclusively via CLI (`roleradar contact`), completely unreachable through MCP tools, and isolated from general queries, logs, and diagnostics, supporting redaction.
 - **SearchRun**: An execution record of a search batch capturing UTC timestamp, new postings discovered, and reference to a run narrative note.
 
 ## Success Criteria *(mandatory)*
@@ -301,9 +314,9 @@ As the job-search owner, I want to record periodic search run executions (start 
 - **SC-004**: 100% of state-modifying write operations generate exactly one corresponding append-only audit entry within the same transaction.
 - **SC-005**: Architecture and contract tests verify that zero hard-delete operations or tools exist across the entire codebase.
 - **SC-006**: Lookup of a posting by deduplication key completes in under 100 milliseconds (p95) on a dataset of 5,000 postings; searching postings by company or disposition completes in under 200 milliseconds (p95).
-- **SC-007**: Automated scans of logs, error payloads, diagnostic status outputs, and general search results detect zero third-party contact names or personal details.
+- **SC-007**: Automated scans of logs, error payloads, diagnostic status outputs, MCP server tool responses, and general search results detect zero third-party contact names or personal details; contacts are accessible solely via explicit CLI command (`roleradar contact get <id>`).
 - **SC-008**: Performing an encrypted backup followed by a wipe and restore operation yields 100% identical entity counts across all new entities (postings, companies, sources, criteria, applications, events, signals, contacts, search runs).
-- **SC-009**: The total number of tools exposed by the Model Context Protocol (MCP) server does not exceed 12 tools (at most 6 new tools added to the existing 6), with zero delete tools.
+- **SC-009**: The total number of tools exposed by the Model Context Protocol (MCP) server does not exceed 12 tools (at most 6 new tools added to the existing 6: `posting_record`, `posting_transition`, `company_record`, `application_record`, `tracker_log`, `tracker_query`), with zero delete tools and zero contact tools.
 - **SC-010**: Advisory duplicate screening (Tier D) accurately flags candidate postings by company and normalized title for 100% of ambiguous test cases without altering existing records.
 
 ## Assumptions
