@@ -55,12 +55,12 @@ public interface ICriterionRepository
 
 public interface IApplicationRepository
 {
-    Task<Result<RoleRadar.Domain.Tracking.Application?>> GetByIdAsync(string ownerId, Guid id, CancellationToken cancellationToken = default);
-    Task<Result<RoleRadar.Domain.Tracking.Application?>> GetByPostingIdAsync(string ownerId, Guid postingId, CancellationToken cancellationToken = default);
-    Task<Result<bool>> UpsertApplicationAsync(RoleRadar.Domain.Tracking.Application application, CancellationToken cancellationToken = default);
+    Task<Result<Domain.Tracking.Application?>> GetByIdAsync(string ownerId, Guid id, CancellationToken cancellationToken = default);
+    Task<Result<Domain.Tracking.Application?>> GetByPostingIdAsync(string ownerId, Guid postingId, CancellationToken cancellationToken = default);
+    Task<Result<bool>> UpsertApplicationAsync(Domain.Tracking.Application application, CancellationToken cancellationToken = default);
     Task<Result<bool>> AppendEventAsync(ApplicationEvent appEvent, CancellationToken cancellationToken = default);
     Task<Result<IReadOnlyList<ApplicationEvent>>> GetEventsAsync(string ownerId, Guid applicationId, CancellationToken cancellationToken = default);
-    Task<Result<IReadOnlyList<RoleRadar.Domain.Tracking.Application>>> ListApplicationsAsync(string ownerId, string? outcome = null, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default);
+    Task<Result<IReadOnlyList<Domain.Tracking.Application>>> ListApplicationsAsync(string ownerId, string? outcome = null, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default);
     Task<Result<int>> CountApplicationsAsync(string ownerId, string? outcome = null, CancellationToken cancellationToken = default);
 }
 

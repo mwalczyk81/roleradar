@@ -378,7 +378,7 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
         public Task<Result<IReadOnlyList<NoteRevision>>> GetRevisionsAsync(string ownerId, Guid noteId, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
 
-        public Task<Result<IReadOnlyList<RoleRadar.Domain.Audit.AuditLogEntry>>> GetAuditEntriesAsync(string ownerId, Guid? noteId = null, CancellationToken cancellationToken = default)
+        public Task<Result<IReadOnlyList<Domain.Audit.AuditLogEntry>>> GetAuditEntriesAsync(string ownerId, Guid? noteId = null, CancellationToken cancellationToken = default)
             => throw new NotSupportedException();
     }
 
@@ -390,6 +390,6 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
         public IApplicationRepository Applications => throw new NotSupportedException();
         public IContactRepository Contacts => throw new NotSupportedException();
         public ISearchRunRepository SearchRuns => throw new NotSupportedException();
-        public Task AppendAuditEntryAsync(RoleRadar.Domain.Audit.AuditLogEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task AppendAuditEntryAsync(Domain.Audit.AuditLogEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

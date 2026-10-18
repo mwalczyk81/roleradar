@@ -36,28 +36,28 @@ public static class DependencyInjection
             var client = sp.GetRequiredService<IMongoClient>();
             var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
             var database = client.GetDatabase(opts.DatabaseName);
-            return new RoleRadar.Infrastructure.Mongo.Repositories.MongoCompanyRepository(client, database);
+            return new Mongo.Repositories.MongoCompanyRepository(client, database);
         });
         services.TryAddScoped<IPostingRepository>(sp =>
         {
             var client = sp.GetRequiredService<IMongoClient>();
             var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
             var database = client.GetDatabase(opts.DatabaseName);
-            return new RoleRadar.Infrastructure.Mongo.Repositories.MongoPostingRepository(client, database);
+            return new Mongo.Repositories.MongoPostingRepository(client, database);
         });
         services.TryAddScoped<ICriterionRepository>(sp =>
         {
             var client = sp.GetRequiredService<IMongoClient>();
             var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
             var database = client.GetDatabase(opts.DatabaseName);
-            return new RoleRadar.Infrastructure.Mongo.Repositories.MongoCriterionRepository(client, database);
+            return new Mongo.Repositories.MongoCriterionRepository(client, database);
         });
         services.TryAddScoped<IApplicationRepository>(sp =>
         {
             var client = sp.GetRequiredService<IMongoClient>();
             var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
             var database = client.GetDatabase(opts.DatabaseName);
-            return new RoleRadar.Infrastructure.Mongo.Repositories.MongoApplicationRepository(client, database);
+            return new Mongo.Repositories.MongoApplicationRepository(client, database);
         });
         services.TryAddScoped<ITrackingTransactionContext>(sp =>
         {
@@ -69,10 +69,10 @@ public static class DependencyInjection
             var criteria = sp.GetRequiredService<ICriterionRepository>();
             var applications = sp.GetRequiredService<IApplicationRepository>();
             var auditLog = database.GetCollection<MongoDB.Bson.BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
-            return new RoleRadar.Infrastructure.Mongo.Repositories.MongoTrackingTransactionContext(companies, postings, criteria, applications, auditLog);
+            return new Mongo.Repositories.MongoTrackingTransactionContext(companies, postings, criteria, applications, auditLog);
         });
-        services.AddOptions<RoleRadar.Infrastructure.Backup.BackupOptions>();
-        services.TryAddScoped<IBackupArchiveService, RoleRadar.Infrastructure.Backup.SecretStreamBackupArchiveService>();
+        services.AddOptions<Backup.BackupOptions>();
+        services.TryAddScoped<IBackupArchiveService, Backup.SecretStreamBackupArchiveService>();
 
         return services;
     }

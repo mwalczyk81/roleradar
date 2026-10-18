@@ -123,6 +123,6 @@ public sealed class PostingSignalContractTests : IClassFixture<SharedMongoFixtur
         public IApplicationRepository Applications => throw new NotImplementedException();
         public IContactRepository Contacts => throw new NotImplementedException();
         public ISearchRunRepository SearchRuns => throw new NotImplementedException();
-        public Task AppendAuditEntryAsync(RoleRadar.Domain.Audit.AuditLogEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task AppendAuditEntryAsync(Domain.Audit.AuditLogEntry entry, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

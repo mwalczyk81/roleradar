@@ -21,30 +21,30 @@ public static class DependencyInjection
         services.AddSingleton<ICommandValidator<AppendToNoteCommand>, AppendToNoteCommandValidator>();
         services.AddSingleton<ICommandValidator<ReplaceNoteSectionCommand>, ReplaceNoteSectionCommandValidator>();
         services.AddSingleton<ICommandValidator<ArchiveNoteCommand>, ArchiveNoteCommandValidator>();
-        services.AddSingleton<ICommandValidator<RoleRadar.Application.Import.Commands.ImportMarkdownCommand>, RoleRadar.Application.Import.Commands.ImportMarkdownCommandValidator>();
+        services.AddSingleton<ICommandValidator<Import.Commands.ImportMarkdownCommand>, Import.Commands.ImportMarkdownCommandValidator>();
 
         // US1, US2 & US4 Command Handlers (wrapped by TransactionAndAuditCommandDecorator + LoggingCommandDecorator)
         services.AddCommandHandler<CreateNoteCommand, NoteCreatedDto, CreateNoteCommandHandler>();
         services.AddCommandHandler<AppendToNoteCommand, NoteUpdatedDto, AppendToNoteCommandHandler>();
         services.AddCommandHandler<ReplaceNoteSectionCommand, NoteSectionReplacedDto, ReplaceNoteSectionCommandHandler>();
         services.AddCommandHandler<ArchiveNoteCommand, NoteArchivedDto, ArchiveNoteCommandHandler>();
-        services.AddCommandHandler<RoleRadar.Application.Import.Commands.ImportMarkdownCommand, RoleRadar.Application.Import.Commands.ImportMarkdownSummaryDto, RoleRadar.Application.Import.Commands.ImportMarkdownCommandHandler>();
+        services.AddCommandHandler<Import.Commands.ImportMarkdownCommand, Import.Commands.ImportMarkdownSummaryDto, Import.Commands.ImportMarkdownCommandHandler>();
 
         // US1 Query Handlers (wrapped by LoggingQueryDecorator)
         services.AddQueryHandler<GetNoteQuery, NoteDetailDto, GetNoteQueryHandler>();
         services.AddQueryHandler<SearchNotesQuery, NoteSearchResponseDto, SearchNotesQueryHandler>();
 
         // US1 Tracking Commands and Queries
-        services.AddSingleton<ICommandValidator<RoleRadar.Application.Tracking.Commands.RecordPostingCommand>, RoleRadar.Application.Tracking.Commands.RecordPostingCommandValidator>();
-        services.AddSingleton<ICommandValidator<RoleRadar.Application.Tracking.Commands.TransitionPostingCommand>, RoleRadar.Application.Tracking.Commands.TransitionPostingCommandValidator>();
-        services.AddSingleton<ICommandValidator<RoleRadar.Application.Tracking.Commands.RecordCompanyCommand>, RoleRadar.Application.Tracking.Commands.RecordCompanyCommandValidator>();
-        services.AddSingleton<ICommandValidator<RoleRadar.Application.Tracking.Commands.RecordApplicationCommand>, RoleRadar.Application.Tracking.Commands.RecordApplicationCommandValidator>();
-        services.AddCommandHandler<RoleRadar.Application.Tracking.Commands.RecordPostingCommand, RoleRadar.Application.Tracking.Commands.PostingRecordResultDto, RoleRadar.Application.Tracking.Commands.RecordPostingCommandHandler>();
-        services.AddCommandHandler<RoleRadar.Application.Tracking.Commands.TransitionPostingCommand, RoleRadar.Application.Tracking.Commands.PostingTransitionResultDto, RoleRadar.Application.Tracking.Commands.TransitionPostingCommandHandler>();
-        services.AddCommandHandler<RoleRadar.Application.Tracking.Commands.RecordCompanyCommand, RoleRadar.Application.Tracking.Commands.CompanyRecordResultDto, RoleRadar.Application.Tracking.Commands.RecordCompanyCommandHandler>();
-        services.AddCommandHandler<RoleRadar.Application.Tracking.Commands.TrackerLogCommand, RoleRadar.Application.Tracking.Commands.TrackerLogResultDto, RoleRadar.Application.Tracking.Commands.TrackerLogCommandHandler>();
-        services.AddCommandHandler<RoleRadar.Application.Tracking.Commands.RecordApplicationCommand, RoleRadar.Application.Tracking.Commands.ApplicationRecordResultDto, RoleRadar.Application.Tracking.Commands.RecordApplicationCommandHandler>();
-        services.AddQueryHandler<RoleRadar.Application.Tracking.Queries.TrackerQueryRequest, RoleRadar.Application.Tracking.Queries.TrackerQueryResultDto, RoleRadar.Application.Tracking.Queries.TrackerQueryHandler>();
+        services.AddSingleton<ICommandValidator<Tracking.Commands.RecordPostingCommand>, Tracking.Commands.RecordPostingCommandValidator>();
+        services.AddSingleton<ICommandValidator<Tracking.Commands.TransitionPostingCommand>, Tracking.Commands.TransitionPostingCommandValidator>();
+        services.AddSingleton<ICommandValidator<Tracking.Commands.RecordCompanyCommand>, Tracking.Commands.RecordCompanyCommandValidator>();
+        services.AddSingleton<ICommandValidator<Tracking.Commands.RecordApplicationCommand>, Tracking.Commands.RecordApplicationCommandValidator>();
+        services.AddCommandHandler<Tracking.Commands.RecordPostingCommand, Tracking.Commands.PostingRecordResultDto, Tracking.Commands.RecordPostingCommandHandler>();
+        services.AddCommandHandler<Tracking.Commands.TransitionPostingCommand, Tracking.Commands.PostingTransitionResultDto, Tracking.Commands.TransitionPostingCommandHandler>();
+        services.AddCommandHandler<Tracking.Commands.RecordCompanyCommand, Tracking.Commands.CompanyRecordResultDto, Tracking.Commands.RecordCompanyCommandHandler>();
+        services.AddCommandHandler<Tracking.Commands.TrackerLogCommand, Tracking.Commands.TrackerLogResultDto, Tracking.Commands.TrackerLogCommandHandler>();
+        services.AddCommandHandler<Tracking.Commands.RecordApplicationCommand, Tracking.Commands.ApplicationRecordResultDto, Tracking.Commands.RecordApplicationCommandHandler>();
+        services.AddQueryHandler<Tracking.Queries.TrackerQueryRequest, Tracking.Queries.TrackerQueryResultDto, Tracking.Queries.TrackerQueryHandler>();
 
         return services;
     }

@@ -67,7 +67,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
         {
             await EnsureIndexesOnceAsync(cancellationToken);
         }
-        catch (RoleRadar.Domain.Tracking.TrackingIndexValidationException ex)
+        catch (Domain.Tracking.TrackingIndexValidationException ex)
         {
             return Result<TResponse>.Failure(ErrorCode.ValidationError, ex.Message);
         }
@@ -128,7 +128,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             {
                 await Task.Delay(Random.Shared.Next(50, 250), cancellationToken);
             }
-            catch (RoleRadar.Domain.Tracking.TrackingIndexValidationException ex)
+            catch (Domain.Tracking.TrackingIndexValidationException ex)
             {
                 return Result<TResponse>.Failure(ErrorCode.ValidationError, ex.Message);
             }

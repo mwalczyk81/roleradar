@@ -40,7 +40,7 @@ public sealed class InvalidConnectionStringSecurityIntegrationTests
 
     private static string GetMcpDllPath()
     {
-        var mcpDllPath = typeof(RoleRadar.Mcp.Stdio.Program).Assembly.Location;
+        var mcpDllPath = typeof(Mcp.Stdio.Program).Assembly.Location;
         if (string.IsNullOrWhiteSpace(mcpDllPath) || !File.Exists(mcpDllPath))
         {
             mcpDllPath = Path.Combine(AppContext.BaseDirectory, "RoleRadar.Mcp.Stdio.dll");
