@@ -18,11 +18,11 @@
 
 **Purpose**: Establish requirements traceability automation, deny-by-default Docker build filtering, vulnerability allowlist schema, compose profiles overlay, and Dependabot Docker coverage.
 
-- [ ] T001 Implement automated requirements traceability verification script `scripts/verify-traceability-003.ps1` parsing `specs/003-linux-container-readiness/spec.md` to extract all 30 requirements (FR-001 through FR-030) and 8 success criteria (SC-001 through SC-008), verifying each is cited in `tasks.md`, each maps to a test or CI job, and all referenced files exist on disk [FR-001..FR-030, SC-001..SC-008]
-- [ ] T002 [P] Create repository deny-by-default `.dockerignore` file per `contracts/dockerfile-build-contract.md` strictly excluding sensitive directories (`import-review/`, `private/`, `db/`), credentials (`*.env`), backup archives (`*.rrbak`, `*.dump`), build artifacts (`bin/`, `obj/`, `dist/`), and git history (`.git/`) [FR-023, SC-001]
-- [ ] T003 [P] Create container vulnerability scanning allowlist `.trivy-allowlist.yaml` per `specs/003-linux-container-readiness/data-model.md` defining schema for CVE ID, package name, version, severity, fix availability, expiration date, and architectural justification [FR-022, SC-002]
-- [ ] T004 [P] Create Docker Compose profiles overlay `deploy/docker-compose.apps.yml` per `contracts/wrapper-scripts-contract.md` defining `roleradar-cli` and `roleradar-mcp` services under profiles `cli` and `mcp`, connecting to `roleradar_default` network with `directConnection=true` [FR-001, FR-005]
-- [ ] T005 [P] Create Dependabot configuration `.github/dependabot.yml` adding `docker` package-ecosystem entries covering the repository root Dockerfile (`/`) and Docker Compose files (`/deploy`), with a test or script asserting the Dockerfile is covered [FR-020, SC-002]
+- [x] T001 Implement automated requirements traceability verification script `scripts/verify-traceability-003.ps1` parsing `specs/003-linux-container-readiness/spec.md` to extract all 30 requirements (FR-001 through FR-030) and 8 success criteria (SC-001 through SC-008), verifying each is cited in `tasks.md`, each maps to a test or CI job, and all referenced files exist on disk [FR-001..FR-030, SC-001..SC-008]
+- [x] T002 [P] Create repository deny-by-default `.dockerignore` file per `contracts/dockerfile-build-contract.md` strictly excluding sensitive directories (`import-review/`, `private/`, `db/`), credentials (`*.env`), backup archives (`*.rrbak`, `*.dump`), build artifacts (`bin/`, `obj/`, `dist/`), and git history (`.git/`) [FR-023, SC-001]
+- [x] T003 [P] Create container vulnerability scanning allowlist `.trivy-allowlist.yaml` per `specs/003-linux-container-readiness/data-model.md` defining schema for CVE ID, package name, version, severity, fix availability, expiration date, and architectural justification [FR-022, SC-002]
+- [x] T004 [P] Create Docker Compose profiles overlay `deploy/docker-compose.apps.yml` per `contracts/wrapper-scripts-contract.md` defining `roleradar-cli` and `roleradar-mcp` services under profiles `cli` and `mcp`, connecting to `roleradar_default` network with `directConnection=true` [FR-001, FR-005]
+- [x] T005 [P] Create Dependabot configuration `.github/dependabot.yml` adding `docker` package-ecosystem entries covering the repository root Dockerfile (`/`) and Docker Compose files (`/deploy`), with a test or script asserting the Dockerfile is covered [FR-020, SC-002]
 
 ---
 
@@ -242,7 +242,7 @@
 
 **Purpose**: Verify end-to-end requirement traceability mapping every FR and SC to a task and test, and validate clean-machine quickstart workflow.
 
-- [ ] T039 Execute requirements traceability verification script `scripts/verify-traceability-003.ps1` asserting that all 30 requirements (FR-001 through FR-030) and 8 success criteria (SC-001 through SC-008) are cited in tasks.md, each maps to a test or CI job, and all referenced test files exist on disk [FR-001..FR-030, SC-001..SC-008, SC-008]
+- [ ] T039 Execute requirements traceability verification script `scripts/verify-traceability-003.ps1` asserting that all 30 requirements (FR-001 through FR-030, including ADR records FR-027 and FR-028) and 8 success criteria (SC-001 through SC-008) are cited in tasks.md, each maps to a test or CI job, and all referenced test files exist on disk [FR-001, FR-027, FR-028, SC-008]
 - [ ] T040 Execute clean-machine validation per `specs/003-linux-container-readiness/quickstart.md` using only Docker (build CLI and MCP images, start compose MongoDB, execute status, create encrypted backup via `--passphrase-stdin`, test MCP stdio initialize handshake, and run `test-images.ps1`) [FR-001, FR-003, FR-007, SC-003, SC-007]
 
 ---

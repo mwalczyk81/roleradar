@@ -1,0 +1,44 @@
+services:
+  cli:
+    profiles: ["apps"]
+    build:
+      context: ..
+      target: cli
+    image: roleradar-cli:local
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - ROLERADAR_MONGO_CONNECTION_STRING=mongodb://mongo:27017/?directConnection=true
+      - ROLERADAR_MONGO_DATABASE=roleradar
+      - DOTNET_EnableDiagnostics=0
+      - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+      - DOTNET_gcServer=0
+    volumes:
+      - ./data/backup:/data/backup:rw
+    network_mode: default
+
+  mcp:
+    profiles: ["apps"]
+    build:
+      context: ..
+      target: mcp
+    image: roleradar-mcp:local
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - ROLERADAR_MONGO_CONNECTION_STRING=mongodb://mongo:27017/?directConnection=true
+      - ROLERADAR_MONGO_DATABASE=roleradar
+      - DOTNET_EnableDiagnostics=0
+      - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+      - DOTNET_gcServer=0
+    network_mode: default
