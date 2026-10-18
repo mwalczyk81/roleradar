@@ -487,7 +487,11 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             if (firstRead == 0)
             {
                 await TerminateProcessTreeAsync(process);
-                if (File.Exists(partialPath)) File.Delete(partialPath);
+                if (File.Exists(partialPath))
+                {
+                    File.Delete(partialPath);
+                }
+
                 var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
                 return Result<BackupArchiveSummaryDto>.Failure(
                     ErrorCode.ValidationError,
@@ -497,7 +501,11 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             if (!IsValidMongodumpArchive(firstChunk, firstRead))
             {
                 await TerminateProcessTreeAsync(process);
-                if (File.Exists(partialPath)) File.Delete(partialPath);
+                if (File.Exists(partialPath))
+                {
+                    File.Delete(partialPath);
+                }
+
                 var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
                 return Result<BackupArchiveSummaryDto>.Failure(
                     ErrorCode.ValidationError,
@@ -530,7 +538,11 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                 if (!encResult.IsSuccess)
                 {
                     await TerminateProcessTreeAsync(process);
-                    if (File.Exists(partialPath)) File.Delete(partialPath);
+                    if (File.Exists(partialPath))
+                    {
+                        File.Delete(partialPath);
+                    }
+
                     return Result<BackupArchiveSummaryDto>.Failure(encResult.Error!.Value);
                 }
 
@@ -542,7 +554,11 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             if (process.ExitCode != 0)
             {
                 var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
-                if (File.Exists(partialPath)) File.Delete(partialPath);
+                if (File.Exists(partialPath))
+                {
+                    File.Delete(partialPath);
+                }
+
                 return Result<BackupArchiveSummaryDto>.Failure(
                     ErrorCode.ValidationError,
                     $"mongodump failed with exit code {process.ExitCode}: {stderr}");
@@ -809,7 +825,11 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
     private static bool IsValidMongodumpArchive(byte[] chunk, int count)
     {
-        if (count < 4) return false;
+        if (count < 4)
+        {
+            return false;
+        }
+
         var span = chunk.AsSpan(0, count);
 
         // 1. Direct uncompressed archive magic
@@ -843,7 +863,10 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
     private static bool MatchesArchiveMagic(ReadOnlySpan<byte> span)
     {
-        if (span.Length < 4) return false;
+        if (span.Length < 4)
+        {
+            return false;
+        }
 
         ReadOnlySpan<byte> magic1 = [0x6d, 0xe2, 0x99, 0x81];
         ReadOnlySpan<byte> magic2 = [0x81, 0x99, 0xe2, 0x6d];
@@ -858,7 +881,11 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
     private static async Task TerminateProcessTreeAsync(Process? process)
     {
-        if (process is null) return;
+        if (process is null)
+        {
+            return;
+        }
+
         try
         {
             if (!process.HasExited)

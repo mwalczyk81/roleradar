@@ -282,7 +282,10 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
         }
         finally
         {
-            if (File.Exists(tempFile)) File.Delete(tempFile);
+            if (File.Exists(tempFile))
+            {
+                File.Delete(tempFile);
+            }
         }
     }
 
@@ -413,7 +416,10 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
         }
         finally
         {
-            if (File.Exists(backupFile)) File.Delete(backupFile);
+            if (File.Exists(backupFile))
+            {
+                File.Delete(backupFile);
+            }
         }
     }
 
@@ -443,7 +449,10 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
         }
         finally
         {
-            if (Directory.Exists(targetDir)) Directory.Delete(targetDir, true);
+            if (Directory.Exists(targetDir))
+            {
+                Directory.Delete(targetDir, true);
+            }
         }
     }
 
@@ -482,7 +491,10 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
         }
         finally
         {
-            if (Directory.Exists(targetDir)) Directory.Delete(targetDir, true);
+            if (Directory.Exists(targetDir))
+            {
+                Directory.Delete(targetDir, true);
+            }
         }
     }
 
@@ -513,7 +525,10 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
         }
         finally
         {
-            if (Directory.Exists(targetDir)) Directory.Delete(targetDir, true);
+            if (Directory.Exists(targetDir))
+            {
+                Directory.Delete(targetDir, true);
+            }
         }
     }
 
@@ -574,7 +589,10 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
         }
         finally
         {
-            if (Directory.Exists(targetDir)) Directory.Delete(targetDir, true);
+            if (Directory.Exists(targetDir))
+            {
+                Directory.Delete(targetDir, true);
+            }
         }
     }
 
@@ -636,7 +654,11 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
         }
         finally
         {
-            if (File.Exists(backupFile)) File.Delete(backupFile);
+            if (File.Exists(backupFile))
+            {
+                File.Delete(backupFile);
+            }
+
             await mongoClient.DropDatabaseAsync(dbBName);
         }
     }
@@ -733,7 +755,10 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
             }
             finally
             {
-                if (File.Exists(backupFile)) File.Delete(backupFile);
+                if (File.Exists(backupFile))
+                {
+                    File.Delete(backupFile);
+                }
             }
         }
         finally
@@ -748,7 +773,10 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
 
             try
             {
-                if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true);
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, true);
+                }
             }
             catch { }
         }
@@ -767,7 +795,11 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
                 UseShellExecute = false,
                 CreateNoWindow = true
             });
-            if (proc is null) return false;
+            if (proc is null)
+            {
+                return false;
+            }
+
             proc.WaitForExit(3000);
             return proc.ExitCode == 0;
         }

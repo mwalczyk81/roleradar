@@ -142,7 +142,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseDisposition(string? val, out PostingDisposition disposition)
     {
         disposition = PostingDisposition.Lead;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
@@ -168,7 +172,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseResurfacePolicy(string? val, out ResurfacePolicy policy)
     {
         policy = ResurfacePolicy.Never;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
@@ -189,7 +197,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseSourceKind(string? val, out SourceKind kind)
     {
         kind = SourceKind.Ats;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
@@ -210,7 +222,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseRemoteType(string? val, out RemoteType remoteType)
     {
         remoteType = RemoteType.Unknown;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
@@ -233,7 +249,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseCultureLevel(string? val, out CultureLevel cultureLevel)
     {
         cultureLevel = CultureLevel.Unknown;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
@@ -260,7 +280,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseSignalType(string? val, out SignalType signalType)
     {
         signalType = SignalType.Repost;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
@@ -292,7 +316,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseOwnershipType(string? val, out OwnershipType type)
     {
         type = OwnershipType.Unknown;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
@@ -323,7 +351,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseCompanyStatus(string? val, out CompanyStatus status)
     {
         status = CompanyStatus.Neutral;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
@@ -346,7 +378,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseFetchMethod(string? val, out FetchMethod method)
     {
         method = FetchMethod.Api;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
@@ -368,7 +404,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseCriterionCategory(string? val, out CriterionCategory category)
     {
         category = CriterionCategory.HardSkip;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
@@ -390,7 +430,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseProvenanceKind(string? val, out ProvenanceKind provenance)
     {
         provenance = ProvenanceKind.Stated;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
@@ -411,7 +455,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseResumeVariant(string? val, out ResumeVariant variant)
     {
         variant = ResumeVariant.Tailored;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
@@ -435,7 +483,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseApplicationOutcome(string? val, out ApplicationOutcome outcome)
     {
         outcome = ApplicationOutcome.Applied;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
@@ -462,7 +514,11 @@ public static class TrackingEnumExtensions
     public static bool TryParseApplicationEventType(string? val, out ApplicationEventType eventType)
     {
         eventType = ApplicationEventType.Applied;
-        if (string.IsNullOrWhiteSpace(val)) return false;
+        if (string.IsNullOrWhiteSpace(val))
+        {
+            return false;
+        }
+
         var s = val.Trim().ToLowerInvariant().Replace("-", "_");
         switch (s)
         {
