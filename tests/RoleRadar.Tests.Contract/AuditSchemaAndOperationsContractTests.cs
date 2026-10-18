@@ -344,6 +344,106 @@ public sealed class AuditSchemaAndOperationsContractTests : IAsyncLifetime
         }
     }
 
+    [Fact]
+    public async Task ShippedHost_CompanyRecord_ChangingCompanyFieldsWithAndWithoutCareerSources_EmitsCorrectAuditsAndRotatesVersionToken()
+    {
+        var mcpDllPath = McpHostLocator.GetMcpDllPath();
+        var env = _fixture.CreateProcessEnvironment(_databaseName);
+
+        var auditCol = _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
+        var companyCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName);
+
+        await using var mcpClient = await McpProcessClient.StartAsync(mcpDllPath, env);
+
+        // 1. Create company
+        var createRes = await mcpClient.CallToolAsync("company_record", new
+        {
+            name = "Dual Audit Corp",
+            ownershipType = "private",
+            status = "target",
+            description = "Initial description"
+        });
+        Assert.True(createRes.GetProperty("ok").GetBoolean(), createRes.ToString());
+        var companyData = createRes.GetProperty("data").GetProperty("company");
+        var companyId = Guid.Parse(companyData.GetProperty("id").GetString()!);
+        var initialToken = Guid.Parse(companyData.GetProperty("versionToken").GetString()!);
+
+        var initialDoc = await companyCol.Find(Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(companyId, GuidRepresentation.Standard))).FirstOrDefaultAsync();
+        Assert.NotNull(initialDoc);
+        var initialUpdatedAt = initialDoc["updated_at"].ToUniversalTime();
+
+        // 2. Change company fields ONLY -> company_update audit, rotates version token, updates updated_at
+        var updateCompanyRes = await mcpClient.CallToolAsync("company_record", new
+        {
+            id = companyId.ToString(),
+            name = "Dual Audit Corp",
+            versionToken = initialToken.ToString(),
+            description = "Updated description only"
+        });
+        Assert.True(updateCompanyRes.GetProperty("ok").GetBoolean(), updateCompanyRes.ToString());
+        var updatedToken1 = Guid.Parse(updateCompanyRes.GetProperty("data").GetProperty("company").GetProperty("versionToken").GetString()!);
+        Assert.NotEqual(initialToken, updatedToken1);
+
+        var docAfterUpdate1 = await companyCol.Find(Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(companyId, GuidRepresentation.Standard))).FirstOrDefaultAsync();
+        Assert.NotNull(docAfterUpdate1);
+        Assert.Equal("Updated description only", docAfterUpdate1["description"].AsString);
+        Assert.True(docAfterUpdate1["updated_at"].ToUniversalTime() >= initialUpdatedAt);
+
+        var companyUpdateAudits1 = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("operation", "company_update")).ToListAsync();
+        Assert.Single(companyUpdateAudits1);
+        var csAudits1 = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("operation", "career_source_upsert")).ToListAsync();
+        Assert.Empty(csAudits1);
+
+        // 3. Change BOTH company fields AND career sources -> BOTH company_update AND career_source_upsert audits in same transaction!
+        var dualUpdateRes = await mcpClient.CallToolAsync("company_record", new
+        {
+            id = companyId.ToString(),
+            name = "Dual Audit Corp",
+            versionToken = updatedToken1.ToString(),
+            description = "Updated description with career source",
+            careerSources = new[]
+            {
+                new { atsType = "greenhouse", tenant = "dualaudit", isActive = true }
+            }
+        });
+        Assert.True(dualUpdateRes.GetProperty("ok").GetBoolean(), dualUpdateRes.ToString());
+        var updatedToken2 = Guid.Parse(dualUpdateRes.GetProperty("data").GetProperty("company").GetProperty("versionToken").GetString()!);
+        Assert.NotEqual(updatedToken1, updatedToken2);
+
+        var docAfterUpdate2 = await companyCol.Find(Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(companyId, GuidRepresentation.Standard))).FirstOrDefaultAsync();
+        Assert.NotNull(docAfterUpdate2);
+        Assert.Equal("Updated description with career source", docAfterUpdate2["description"].AsString);
+
+        var companyUpdateAudits2 = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("operation", "company_update")).ToListAsync();
+        Assert.Equal(2, companyUpdateAudits2.Count);
+
+        var csAudits2 = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("operation", "career_source_upsert")).ToListAsync();
+        Assert.Single(csAudits2);
+        Assert.Equal("company", csAudits2[0]["entity_type"].AsString);
+        Assert.Equal(companyId, csAudits2[0]["entity_id"].AsGuid);
+
+        // 4. Update career sources ONLY (no company fields changed) -> career_source_upsert audit only
+        var csOnlyRes = await mcpClient.CallToolAsync("company_record", new
+        {
+            id = companyId.ToString(),
+            name = "Dual Audit Corp",
+            versionToken = updatedToken2.ToString(),
+            description = "Updated description with career source",
+            careerSources = new[]
+            {
+                new { atsType = "lever", tenant = "dualaudit", isActive = true }
+            }
+        });
+        Assert.True(csOnlyRes.GetProperty("ok").GetBoolean(), csOnlyRes.ToString());
+
+        var companyUpdateAudits3 = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("operation", "company_update")).ToListAsync();
+        Assert.Equal(2, companyUpdateAudits3.Count); // unchanged
+
+        var csAudits3 = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("operation", "career_source_upsert")).ToListAsync();
+        Assert.Equal(2, csAudits3.Count); // incremented by 1
+    }
+
+
     private static string GetCliDllPath()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "RoleRadar.Cli.dll");
