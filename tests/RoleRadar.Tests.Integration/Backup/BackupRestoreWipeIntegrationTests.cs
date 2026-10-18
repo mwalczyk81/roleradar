@@ -664,6 +664,7 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
     }
 
     [Fact]
+    [Trait("Category", "Slow")]
     public async Task BackupRestoreWipe_WithDefaultComposeCommands_ReturnsIdenticalCounts()
     {
         if (!IsDockerCliAvailable())

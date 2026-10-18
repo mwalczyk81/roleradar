@@ -6,7 +6,7 @@ using Xunit;
 
 namespace RoleRadar.Tests.Contract;
 
-public sealed class TrackingIndexInitializerContractTests : IClassFixture<SharedMongoFixture>, IAsyncLifetime
+public sealed class TrackingIndexInitializerContractTests : IAsyncLifetime
 {
     private readonly SharedMongoFixture _fixture;
     private readonly string _databaseName;

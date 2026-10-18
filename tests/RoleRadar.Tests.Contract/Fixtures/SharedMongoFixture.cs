@@ -3,6 +3,8 @@ using RoleRadar.Infrastructure.Mongo;
 using Testcontainers.MongoDb;
 using Xunit;
 
+[assembly: AssemblyFixture(typeof(RoleRadar.Tests.Contract.Fixtures.SharedMongoFixture))]
+
 namespace RoleRadar.Tests.Contract.Fixtures;
 
 public sealed class SharedMongoFixture : IAsyncLifetime

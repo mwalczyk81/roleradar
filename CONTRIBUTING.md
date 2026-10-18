@@ -35,3 +35,13 @@ dotnet build RoleRadar.sln -c Release -warnaserror
 dotnet test RoleRadar.sln -c Release --collect:"XPlat Code Coverage"
 pre-commit run --all-files
 ```
+
+### Fast Test Loop
+
+During local development, you can run the fast test loop by filtering out slow tests (those requiring Docker compose, Mongo container shutdown, or 8+ concurrent processes):
+
+```powershell
+dotnet test RoleRadar.sln -c Release --filter "Category!=Slow"
+```
+
+Continuous Integration (CI) always runs the complete test suite without filters, executing all fast and slow tests.

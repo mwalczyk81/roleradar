@@ -11,7 +11,7 @@ using Xunit;
 
 namespace RoleRadar.Tests.Contract;
 
-public sealed class TrackerQueryPostingsContractTests : IClassFixture<SharedMongoFixture>, IAsyncLifetime
+public sealed class TrackerQueryPostingsContractTests : IAsyncLifetime
 {
     private readonly SharedMongoFixture _fixture;
     private readonly string _databaseName;

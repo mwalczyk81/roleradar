@@ -81,6 +81,7 @@ public sealed class ShippedHostTrackingIntegrationTests
     }
 
     [Fact]
+    [Trait("Category", "Slow")]
     public async Task ShippedMcpHost_ConcurrentCompanyRecord_RacesN8Processes_ExactlyOneCreatedAndSevenAlreadyExists()
     {
         var mcpDllPath = GetMcpDllPath();
@@ -154,6 +155,7 @@ public sealed class ShippedHostTrackingIntegrationTests
     }
 
     [Fact]
+    [Trait("Category", "Slow")]
     public async Task ShippedMcpHost_ConcurrentPostingRecord_RacesN8Processes_TierA_TierB_TierC()
     {
         var mcpDllPath = GetMcpDllPath();
@@ -371,6 +373,7 @@ public sealed class ShippedHostTrackingIntegrationTests
     }
 
     [Fact]
+    [Trait("Category", "Slow")]
     public async Task ShippedMcpHost_ConcurrentCriterionRevisionRace_ExactlyOneSucceedsAndOthersGetStaleVersionToken()
     {
         var mcpDllPath = GetMcpDllPath();
@@ -460,6 +463,7 @@ public sealed class ShippedHostTrackingIntegrationTests
     }
 
     [Fact]
+    [Trait("Category", "Slow")]
     public async Task ShippedMcpHost_ConcurrentApplicationCreateRace_ExactlyOneSucceedsAndOthersFailWithInvalidTransition()
     {
         var mcpDllPath = GetMcpDllPath();

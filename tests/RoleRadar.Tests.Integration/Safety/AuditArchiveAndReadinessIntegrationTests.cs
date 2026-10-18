@@ -271,6 +271,7 @@ public sealed class AuditArchiveAndReadinessIntegrationTests : IAsyncLifetime, I
     }
 
     [Fact]
+    [Trait("Category", "Slow")]
     public async Task OfflineReadiness_WithMongoStopped_McpToolCallAndCliStatusFailUnder5SecondsWithRemediationScript()
     {
         // Use the dedicated container fixture, NEVER the shared container or dev stack

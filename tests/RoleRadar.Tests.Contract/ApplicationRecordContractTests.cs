@@ -13,7 +13,7 @@ using ApplicationEntity = RoleRadar.Domain.Tracking.Application;
 
 namespace RoleRadar.Tests.Contract;
 
-public sealed class ApplicationRecordContractTests : IClassFixture<SharedMongoFixture>, IAsyncLifetime
+public sealed class ApplicationRecordContractTests : IAsyncLifetime
 {
     private readonly SharedMongoFixture _fixture;
     private readonly string _databaseName;

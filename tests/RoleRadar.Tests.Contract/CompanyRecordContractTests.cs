@@ -13,7 +13,7 @@ using Xunit;
 
 namespace RoleRadar.Tests.Contract;
 
-public sealed class CompanyRecordContractTests : IClassFixture<SharedMongoFixture>, IAsyncLifetime
+public sealed class CompanyRecordContractTests : IAsyncLifetime
 {
     private readonly SharedMongoFixture _fixture;
     private readonly string _databaseName;
