@@ -73,8 +73,8 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T013 [P] [US1] Write failing container image metadata tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerImageMetadataTests.cs` verifying non-root UID `1654`, zero listening network ports (`EXPOSE`), no shell (`/bin/sh` and `/bin/bash` absent), and no package manager (`apt` and `dpkg` absent) in both CLI and MCP container images under `docker run --read-only --tmpfs /tmp` (expected to fail before implementation) [FR-001, FR-003, FR-004, SC-004]
-- [ ] T014 [P] [US1] Write failing cold-start benchmark test in `tests/RoleRadar.Tests.Integration/Hosting/ContainerColdStartBenchmarkTests.cs` asserting elapsed wall-clock time from `docker run` to first valid JSON-RPC response is strictly under 3.0 seconds with pre-pulled images and healthy MongoDB on both amd64 and native arm64 (expected to fail before implementation) [FR-030, SC-003]
+- [x] T013 [P] [US1] Write failing container image metadata tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerImageMetadataTests.cs` verifying non-root UID `1654`, zero listening network ports (`EXPOSE`), no shell (`/bin/sh` and `/bin/bash` absent), and no package manager (`apt` and `dpkg` absent) in both CLI and MCP container images under `docker run --read-only --tmpfs /tmp` (expected to fail before implementation) [FR-001, FR-003, FR-004, SC-004]
+- [x] T014 [P] [US1] Write failing cold-start benchmark test in `tests/RoleRadar.Tests.Integration/Hosting/ContainerColdStartBenchmarkTests.cs` asserting elapsed wall-clock time from `docker run` to first valid JSON-RPC response is strictly under 3.0 seconds with pre-pulled images and healthy MongoDB on both amd64 and native arm64 (expected to fail before implementation) [FR-030, SC-003]
 
 ### Implementation for User Story 1
 
