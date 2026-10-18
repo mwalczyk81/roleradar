@@ -78,12 +78,16 @@ public sealed class TrackingIndexInitializerContractTests : IClassFixture<Shared
         var careerSourcesIndexes = await (await _database.GetCollection<BsonDocument>(TrackingMongoOptions.CareerSourcesCollectionName)
             .Indexes.ListAsync()).ToListAsync();
         var careerSourceNames = careerSourcesIndexes.Select(i => i["name"].AsString).ToArray();
-        Assert.Contains(careerSourceNames, name => name.Contains("company_id") && name.Contains("ats_type"));
+        Assert.Contains("ux_career_sources_composite", careerSourceNames);
+        var compositeCareerSourceIndex = careerSourcesIndexes.First(i => i["name"].AsString == "ux_career_sources_composite");
+        Assert.True(compositeCareerSourceIndex["unique"].AsBoolean);
 
         // 6. Inspect search_runs collection indexes
         var searchRunsIndexes = await (await _database.GetCollection<BsonDocument>(TrackingMongoOptions.SearchRunsCollectionName)
             .Indexes.ListAsync()).ToListAsync();
         var searchRunsIndexNames = searchRunsIndexes.Select(i => i["name"].AsString).ToArray();
-        Assert.Contains(searchRunsIndexNames, name => name.Contains("started_at"));
+        Assert.Contains("ux_search_runs_owner_started", searchRunsIndexNames);
+        var searchRunsIndex = searchRunsIndexes.First(i => i["name"].AsString == "ux_search_runs_owner_started");
+        Assert.True(searchRunsIndex["unique"].AsBoolean);
     }
 }
