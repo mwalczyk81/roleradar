@@ -700,6 +700,185 @@ public sealed class ShippedHostTrackingIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task ShippedMcpHost_ToolsList_InputSchemaParameterNamesEqualContractDoc()
+    {
+        var mcpDllPath = GetMcpDllPath();
+        var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_schema_test");
+        var env = _sharedMongo.CreateProcessEnvironment(uniqueDb);
+
+        await using var client = await McpProcessClient.StartAsync(mcpDllPath, env);
+
+        var listResult = await client.ListToolsAsync();
+        Assert.True(listResult.TryGetProperty("tools", out var toolsArray));
+
+        // Parse contracts/mcp-tools.md for 002 tools and 001 tools
+        var repoRoot = FindRepoRoot();
+        var contract002Path = Path.Combine(repoRoot, "specs", "002-job-search-tracking", "contracts", "mcp-tools.md");
+        var contract001Path = Path.Combine(repoRoot, "specs", "001-memory-replacement", "contracts", "mcp-tools.md");
+
+        Assert.True(File.Exists(contract002Path), $"Missing contract at {contract002Path}");
+        Assert.True(File.Exists(contract001Path), $"Missing contract at {contract001Path}");
+
+        var expectedParametersByTool = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        ParseToolContractParameters(contract001Path, expectedParametersByTool);
+        ParseToolContractParameters(contract002Path, expectedParametersByTool);
+
+        Assert.Equal(12, expectedParametersByTool.Count);
+
+        var actualTools = toolsArray.EnumerateArray().ToList();
+        Assert.Equal(12, actualTools.Count);
+
+        var discrepancies = new List<string>();
+
+        foreach (var toolElem in actualTools)
+        {
+            var toolName = toolElem.GetProperty("name").GetString()!;
+            if (!expectedParametersByTool.TryGetValue(toolName, out var expectedParams))
+            {
+                discrepancies.Add($"Tool '{toolName}' returned by MCP server was not found in contract documents.");
+                continue;
+            }
+
+            var actualParams = new HashSet<string>(StringComparer.Ordinal);
+            if (toolElem.TryGetProperty("inputSchema", out var inputSchema) &&
+                inputSchema.TryGetProperty("properties", out var properties))
+            {
+                foreach (var prop in properties.EnumerateObject())
+                {
+                    actualParams.Add(prop.Name);
+                }
+            }
+
+            // Compare sets
+            var missingInMcp = expectedParams.Except(actualParams).ToList();
+            var extraInMcp = actualParams.Except(expectedParams).ToList();
+
+            if (missingInMcp.Count > 0 || extraInMcp.Count > 0)
+            {
+                discrepancies.Add($"Tool '{toolName}' parameter mismatch. Missing in MCP schema: [{string.Join(", ", missingInMcp)}], Extra in MCP schema: [{string.Join(", ", extraInMcp)}]");
+            }
+        }
+
+        Assert.True(discrepancies.Count == 0, $"Schema contract discrepancies found:\n{string.Join("\n", discrepancies)}");
+    }
+
+    private static string FindRepoRoot()
+    {
+        var current = AppContext.BaseDirectory;
+        while (!string.IsNullOrEmpty(current))
+        {
+            if (Directory.Exists(Path.Combine(current, ".git")))
+            {
+                return current;
+            }
+            current = Directory.GetParent(current)?.FullName;
+        }
+        throw new InvalidOperationException("Could not find repository root containing .git");
+    }
+
+    private static void ParseToolContractParameters(string filePath, Dictionary<string, HashSet<string>> result)
+    {
+        var lines = File.ReadAllLines(filePath);
+        string? currentTool = null;
+        var inInputParameters = false;
+
+        foreach (var rawLine in lines)
+        {
+            var line = rawLine.Trim();
+
+            // Match ## Tool X: `tool_name`
+            if (line.StartsWith("## Tool", StringComparison.OrdinalIgnoreCase))
+            {
+                inInputParameters = false;
+                var backtickStart = line.IndexOf('`');
+                if (backtickStart >= 0)
+                {
+                    var backtickEnd = line.IndexOf('`', backtickStart + 1);
+                    if (backtickEnd > backtickStart)
+                    {
+                        currentTool = line.Substring(backtickStart + 1, backtickEnd - backtickStart - 1);
+                        if (!result.ContainsKey(currentTool))
+                        {
+                            result[currentTool] = new HashSet<string>(StringComparer.Ordinal);
+                        }
+                    }
+                }
+                continue;
+            }
+
+            if (currentTool is null)
+            {
+                continue;
+            }
+
+            if (line.StartsWith("- **Input Parameters**:", StringComparison.OrdinalIgnoreCase))
+            {
+                inInputParameters = true;
+                continue;
+            }
+
+            if (inInputParameters)
+            {
+                // If line starts another top-level section (e.g. - **Behavior** or - **Output) or ##, stop
+                if (line.StartsWith("- **Behavior", StringComparison.Ordinal) ||
+                    line.StartsWith("- **Output", StringComparison.Ordinal) ||
+                    line.StartsWith("##", StringComparison.Ordinal) ||
+                    line.StartsWith("---", StringComparison.Ordinal))
+                {
+                    inInputParameters = false;
+                    continue;
+                }
+
+                // Match top-level parameter: "  - `paramName`" or parameters grouped under sections: "    - `paramName`"
+                // But skip sub-parameters of object/array properties (e.g., careerSources, signals, event items)
+                var trimmed = rawLine.TrimStart();
+                if (trimmed.StartsWith("- `", StringComparison.Ordinal))
+                {
+                    // Check if it is a subfield of an object property (e.g., careerSources or signals or event)
+                    // In mcp-tools.md:
+                    //   careerSources:
+                    //     - `id`
+                    //     - `atsType`
+                    //   signals:
+                    //     - `signalType`
+                    //   event:
+                    //     - `eventType`
+                    // Whereas tracker_log criterion/search parameters have:
+                    //   - **Criterion Parameters** (...):
+                    //     - `key`
+                    //     - `category`
+                    // Let's check indentation: if rawLine starts with 4 spaces ("    - `"), verify whether the preceding section was a bold parameter category or an object property.
+                    var pStart = trimmed.IndexOf('`');
+                    var pEnd = trimmed.IndexOf('`', pStart + 1);
+                    if (pEnd > pStart)
+                    {
+                        var paramName = trimmed.Substring(pStart + 1, pEnd - pStart - 1);
+                        var isObjectSubfield = paramName is "signalType" or "evidence" or "observedAt" or "deadlineDate"
+                            or "atsType" or "tenant" or "slug" or "fetchMethod" or "notes" or "isActive"
+                            or "eventType" or "eventDate" or "eventSource";
+
+                        // If it's a known object subfield (and not a tool parameter like notes on tracker_log or search_run)
+                        if (currentTool == "company_record" && (paramName is "atsType" or "tenant" or "slug" or "fetchMethod" or "notes" or "isActive"))
+                        {
+                            continue;
+                        }
+                        if (currentTool == "posting_record" && (paramName is "signalType" or "evidence" or "observedAt" or "deadlineDate"))
+                        {
+                            continue;
+                        }
+                        if (currentTool == "application_record" && (paramName is "eventType" or "eventDate" or "eventSource" or "notes"))
+                        {
+                            continue;
+                        }
+
+                        result[currentTool].Add(paramName);
+                    }
+                }
+            }
+        }
+    }
+
     private static string GetMcpDllPath()
     {
         var mcpDllPath = typeof(Mcp.Stdio.Program).Assembly.Location;
@@ -797,6 +976,31 @@ public sealed class ShippedHostTrackingIntegrationTests
             });
             await _process.StandardInput.WriteLineAsync(notifJson);
             await _process.StandardInput.FlushAsync();
+        }
+
+        public async Task<JsonElement> ListToolsAsync()
+        {
+            var id = Interlocked.Increment(ref _nextId);
+            var request = JsonSerializer.Serialize(new
+            {
+                jsonrpc = "2.0",
+                id = id,
+                method = "tools/list"
+            });
+
+            await _process.StandardInput.WriteLineAsync(request);
+            await _process.StandardInput.FlushAsync();
+
+            var responseLine = await _process.StandardOutput.ReadLineAsync();
+            Assert.NotNull(responseLine);
+
+            using var doc = JsonDocument.Parse(responseLine);
+            if (!doc.RootElement.TryGetProperty("result", out var resultElement))
+            {
+                throw new InvalidOperationException($"MCP error response: {responseLine}");
+            }
+
+            return resultElement.Clone();
         }
 
         public async Task<JsonElement> CallToolAsync(string name, object arguments)

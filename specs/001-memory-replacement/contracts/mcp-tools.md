@@ -126,6 +126,7 @@
 - **Description**: `"Archives a note so it is excluded from default searches while preserving its full text and revision history intact."`
 - **Input Parameters**:
   - `id` (`Guid`, required): Unique identifier of the note to archive.
+  - `expectedVersionToken` (`Guid`, optional): Optional expected version token for optimistic concurrency control.
 - **Behavior**:
   - Marks `status = "archived"` (idempotent if already archived), preserves `body` and `note_revisions`, and records an `audit_log` entry (`FR-017`, `FR-018`).
 - **Output Payload (JSON)**:
