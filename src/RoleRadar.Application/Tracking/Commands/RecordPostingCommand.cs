@@ -17,7 +17,8 @@ public sealed record PostingDto(
     string? RemoteType = null,
     decimal? Score = null,
     string? CultureLevel = null,
-    DateTimeOffset? LastVerifiedAt = null);
+    DateTimeOffset? LastVerifiedAt = null,
+    bool? CompHighPriority = null);
 
 public sealed record SignalInputDto(
     string SignalType,
@@ -57,7 +58,8 @@ public sealed record RecordPostingCommand(
     Guid? DuplicateOfId = null,
     IReadOnlyList<SignalInputDto>? Signals = null,
     string Actor = "mcp-stdio",
-    string? OwnerId = null) : ICommand<PostingRecordResultDto>;
+    string? OwnerId = null,
+    bool? CompHighPriority = null) : ICommand<PostingRecordResultDto>;
 
 public sealed class RecordPostingCommandValidator : ICommandValidator<RecordPostingCommand>
 {

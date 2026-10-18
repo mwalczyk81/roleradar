@@ -41,6 +41,7 @@ public sealed class Posting
     public string? Location { get; private set; }
     public RemoteType RemoteType { get; private set; } = RemoteType.Unknown;
     public Compensation Compensation { get; private set; } = new();
+    public bool? CompHighPriority { get; private set; }
     public string? PostedDate { get; private set; }
     public DateTimeOffset FirstSeenAt { get; init; }
     public DateTimeOffset LastVerifiedAt { get; private set; }
@@ -82,7 +83,8 @@ public sealed class Posting
         Guid? duplicateOfId = null,
         Guid? screeningNoteId = null,
         Guid? id = null,
-        DateTimeOffset? now = null)
+        DateTimeOffset? now = null,
+        bool? compHighPriority = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
@@ -236,7 +238,8 @@ public sealed class Posting
         Guid? screeningNoteId,
         Guid versionToken,
         DateTimeOffset createdAt,
-        DateTimeOffset updatedAt)
+        DateTimeOffset updatedAt,
+        bool? compHighPriority = null)
     {
         return new Posting
         {
@@ -376,7 +379,8 @@ public sealed class Posting
         string? cultureSummary,
         Guid? duplicateOfId,
         Guid? screeningNoteId,
-        DateTimeOffset timestamp)
+        DateTimeOffset timestamp,
+        bool? compHighPriority = null)
     {
         var changedFields = new List<string>();
 

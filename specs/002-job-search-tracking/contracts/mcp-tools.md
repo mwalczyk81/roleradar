@@ -13,7 +13,7 @@ Every spec-mandated requirement for Feature 002 is mapped to its satisfying MCP 
 
 | Spec Requirement | Feature Area | Satisfying Interface / Mechanism | Traceability Status |
 | :--- | :--- | :--- | :---: |
-| **FR-001** | Posting attributes (IDs, URLs, comp, culture, dates, signals) | `posting_record` | **PASS** |
+| **FR-001** | Posting attributes (IDs, URLs, comp, comp_high_priority, culture, dates, signals) | `posting_record` | **PASS** |
 | **FR-002** | Disposition values (`lead`, `scored`, `applied`, `rejected`, etc.) | `posting_record`, `posting_transition`, `application_record` | **PASS** |
 | **FR-003** | Resurface policy (`never`, `if_reopened`) | `posting_record`, `posting_transition` | **PASS** |
 | **FR-004** | Deduplication tiers A, B, C, D (computed keys + advisory) | `posting_record` | **PASS** |
@@ -110,6 +110,7 @@ All Feature 002 MCP tools return standard JSON matching Feature 001 note tools:
   - `compensationMax` (`decimal`, optional): Maximum base compensation.
   - `compensationCurrency` (`string`, optional, default `"USD"`, 3 chars): Currency code.
   - `compensationText` (`string`, optional, max 300 chars): Verbatim compensation snippet or band notes.
+  - `compHighPriority` (`bool`, optional): Optional flag indicating whether compensation is high priority (`null` = not judged).
   - `postedDate` (`string`, optional, YYYY-MM-DD): Date the role was posted.
   - `score` (`decimal`, optional, 0.0..10.0): Evaluated fit score.
   - `cultureLevel` (`string`, optional, default `"unknown"`): `"stable"`, `"moderate"`, `"high_risk"`, or `"unknown"`.
@@ -129,7 +130,7 @@ All Feature 002 MCP tools return standard JSON matching Feature 001 note tools:
     - Audit entry records the list of changed field names and the posting ID in its summary.
   - **Ingest / Deduplication Match Mode** (no `postingId` provided):
     - Evaluates Tier A (`atsTenant` + `requisitionId`), Tier B (`normalizedUrl`), and Tier C (`companyId` + `requisitionId`).
-    - On a dedup match (Tiers A–C): **fields other than `last_verified_at` are NEVER changed**. If supplied field values differ from stored ones (e.g. different compensation or remote type), the system does NOT mutate them; instead, it returns them in a `differences` list (`field`, `storedValue`, `suppliedValue`).
+    - On a dedup match (Tiers A–C): **fields other than `last_verified_at` are NEVER changed**. If supplied field values differ from stored ones (e.g. different compensation or remote type), the system does NOT mutate them; instead, it returns them in a `differences` list (`field`, `storedValue`, `suppliedValue`). `comp_high_priority` is excluded from differences only if unchanged.
     - `already_tracked`, `already_decided`, and `possible_duplicate` are returned as SUCCESSFUL (`Result.Success`) outcomes with a status field, ensuring the transaction decorator commits any modifications:
       - If active (`lead`, `scored`, `applied`, `unscored`) and re-encountered on a different UTC date: updates `last_verified_at` as a real write, generating an audit entry with a one-field summary (`last_verified_at`), and returns `status: "already_tracked"` (commits).
       - If re-encountered on the same UTC day with identical state: returns `status: "already_tracked"` with zero writes and zero audit entries.
@@ -151,7 +152,8 @@ All Feature 002 MCP tools return standard JSON matching Feature 001 note tools:
         "normalizedTitle": "staff backend engineer",
         "disposition": "lead",
         "resurfacePolicy": "never",
-        "versionToken": "0199f2c0-0000-7000-8000-000000000102"
+        "versionToken": "0199f2c0-0000-7000-8000-000000000102",
+        "compHighPriority": true
       },
       "priorReason": null,
       "canReopen": null,
@@ -391,6 +393,7 @@ All Feature 002 MCP tools return standard JSON matching Feature 001 note tools:
           "companyName": "Acme Corp",
           "disposition": "applied",
           "ghostLikelihood": "low",
+          "compHighPriority": true,
           "lastVerifiedAtUtc": "2026-10-17T18:00:00Z"
         }
       ]

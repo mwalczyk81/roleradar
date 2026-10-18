@@ -130,6 +130,7 @@ Core job opportunity record with multi-tier deduplication and screening memory.
     "currency": "USD",
     "text": "$175,000 - $205,000 + equity + 401(k) match"
   },
+  "comp_high_priority": true,
   "posted_date": "2026-10-15",
   "first_seen_at": "2026-10-16T14:30:00Z",
   "last_verified_at": "2026-10-17T09:00:00Z",
@@ -168,6 +169,7 @@ Core job opportunity record with multi-tier deduplication and screening memory.
 - `location` (string, optional, max 150 chars).
 - `remote_type` (string enum: `remote`, `hybrid`, `onsite`, `unknown`, default: `unknown`).
 - `compensation`: subdocument with `min` (decimal?), `max` (decimal?), `currency` (string, 3 chars, default: `USD`), `text` (string, max 300 chars).
+- `comp_high_priority` (boolean, optional, `null` = not judged, `true` = high-priority compensation, `false` = not high priority).
 - `posted_date` (string, ISO 8601 date-only `YYYY-MM-DD`, optional).
 - `first_seen_at` (UTC timestamp, mandatory).
 - `last_verified_at` (UTC timestamp, mandatory).

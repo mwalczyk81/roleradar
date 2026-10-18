@@ -70,6 +70,7 @@ Record a posting with ATS tenant and requisition ID:
   "compensationMax": 205000,
   "compensationCurrency": "USD",
   "compensationText": "$175,000 - $205,000 + equity",
+  "compHighPriority": true,
   "resurfacePolicy": "if_reopened"
 }
 ```

@@ -16,7 +16,8 @@ public sealed record PostingSummaryItemDto(
     string? Location = null,
     string? RemoteType = null,
     decimal? Score = null,
-    DateTimeOffset? LastVerifiedAt = null);
+    DateTimeOffset? LastVerifiedAt = null,
+    bool? CompHighPriority = null);
 
 public sealed record DecidedPostingSummaryItemDto(
     Guid Id,
@@ -25,7 +26,8 @@ public sealed record DecidedPostingSummaryItemDto(
     string Disposition,
     string? DispositionReason,
     string ResurfacePolicy,
-    DateTimeOffset? DecidedAtUtc);
+    DateTimeOffset? DecidedAtUtc,
+    bool? CompHighPriority = null);
 
 public sealed record CareerSourceSummaryItemDto(
     Guid Id,
