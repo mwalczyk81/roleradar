@@ -249,7 +249,8 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
             command.CultureSummary,
             collapsedDuplicateOfId,
             command.ScreeningNoteId,
-            now);
+            now,
+            command.CompHighPriority);
 
         await _context.Postings.UpsertPostingAsync(posting, cancellationToken);
 
@@ -433,7 +434,8 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
             resurfacePolicy: resurfacePolicy,
             duplicateOfId: collapsedDuplicateOfId,
             screeningNoteId: command.ScreeningNoteId,
-            now: now);
+            now: now,
+            compHighPriority: command.CompHighPriority);
 
         await _context.Postings.UpsertPostingAsync(newPosting, cancellationToken);
 
@@ -512,6 +514,11 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
         if (command.CompensationMax.HasValue && command.CompensationMax != stored.Compensation.Max)
         {
             differences.Add(new PostingDifference("compensation_max", stored.Compensation.Max, command.CompensationMax.Value));
+        }
+
+        if (command.CompHighPriority.HasValue && command.CompHighPriority.Value != stored.CompHighPriority)
+        {
+            differences.Add(new PostingDifference("comp_high_priority", stored.CompHighPriority, command.CompHighPriority.Value));
         }
 
         // 3. UTC date comparison for last_verified_at bump
@@ -612,5 +619,6 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
             RemoteType: p.RemoteType.ToSnakeCase(),
             Score: p.Score,
             CultureLevel: p.CultureLevel.ToSnakeCase(),
-            LastVerifiedAt: p.LastVerifiedAt);
+            LastVerifiedAt: p.LastVerifiedAt,
+            CompHighPriority: p.CompHighPriority);
 }

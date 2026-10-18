@@ -185,7 +185,8 @@ public sealed class TrackerQueryHandler : IQueryHandler<TrackerQueryRequest, Tra
                 Location: p.Location,
                 RemoteType: p.RemoteType.ToSnakeCase(),
                 Score: p.Score,
-                LastVerifiedAt: p.LastVerifiedAt);
+                LastVerifiedAt: p.LastVerifiedAt,
+                CompHighPriority: p.CompHighPriority);
 
             return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto("postings", 1, pageSize, 1, [item]));
         }
@@ -228,7 +229,8 @@ public sealed class TrackerQueryHandler : IQueryHandler<TrackerQueryRequest, Tra
                 Location: p.Location,
                 RemoteType: p.RemoteType.ToSnakeCase(),
                 Score: p.Score,
-                LastVerifiedAt: p.LastVerifiedAt));
+                LastVerifiedAt: p.LastVerifiedAt,
+                CompHighPriority: p.CompHighPriority));
         }
 
         return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto("postings", page, pageSize, totalCount, items));
@@ -259,7 +261,8 @@ public sealed class TrackerQueryHandler : IQueryHandler<TrackerQueryRequest, Tra
                 Disposition: p.Disposition.ToSnakeCase(),
                 DispositionReason: p.DispositionReason,
                 ResurfacePolicy: p.ResurfacePolicy.ToSnakeCase(),
-                DecidedAtUtc: p.DecidedAt));
+                DecidedAtUtc: p.DecidedAt,
+                CompHighPriority: p.CompHighPriority));
         }
 
         return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto("decided_postings", page, pageSize, totalCount, items));
@@ -316,7 +319,8 @@ public sealed class TrackerQueryHandler : IQueryHandler<TrackerQueryRequest, Tra
             Location: p.Location,
             RemoteType: p.RemoteType.ToSnakeCase(),
             Score: p.Score,
-            LastVerifiedAt: p.LastVerifiedAt);
+            LastVerifiedAt: p.LastVerifiedAt,
+            CompHighPriority: p.CompHighPriority);
 
         return Result<TrackerQueryResultDto>.Success(new TrackerQueryResultDto("posting_dedup_lookup", 1, 1, 1, [item]));
     }

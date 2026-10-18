@@ -358,6 +358,7 @@ public sealed class MongoPostingRepository : IPostingRepository
             ["location"] = p.Location is not null ? new BsonString(p.Location) : BsonNull.Value,
             ["remote_type"] = p.RemoteType.ToSnakeCase(),
             ["compensation"] = comp,
+            ["comp_high_priority"] = p.CompHighPriority.HasValue ? new BsonBoolean(p.CompHighPriority.Value) : BsonNull.Value,
             ["posted_date"] = p.PostedDate is not null ? new BsonString(p.PostedDate) : BsonNull.Value,
             ["first_seen_at"] = new BsonDateTime(p.FirstSeenAt.UtcDateTime),
             ["last_verified_at"] = new BsonDateTime(p.LastVerifiedAt.UtcDateTime),
@@ -421,6 +422,10 @@ public sealed class MongoPostingRepository : IPostingRepository
             var text = cDoc.Contains("text") && !cDoc["text"].IsBsonNull ? cDoc["text"].AsString : null;
             comp = new Compensation(min, max, curr, text);
         }
+
+        bool? compHighPriority = doc.Contains("comp_high_priority") && !doc["comp_high_priority"].IsBsonNull
+            ? doc["comp_high_priority"].AsBoolean
+            : null;
 
         var postedDate = doc.Contains("posted_date") && !doc["posted_date"].IsBsonNull ? doc["posted_date"].AsString : null;
         decimal? score = doc.Contains("score") && !doc["score"].IsBsonNull ? Convert.ToDecimal(doc["score"].AsDecimal128, System.Globalization.CultureInfo.InvariantCulture) : null;
@@ -488,6 +493,7 @@ public sealed class MongoPostingRepository : IPostingRepository
             screeningNoteId: screeningNoteId,
             versionToken: versionToken,
             createdAt: createdAt,
-            updatedAt: updatedAt);
+            updatedAt: updatedAt,
+            compHighPriority: compHighPriority);
     }
 }

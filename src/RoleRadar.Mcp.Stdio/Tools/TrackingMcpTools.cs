@@ -94,6 +94,7 @@ public sealed class TrackingMcpTools
         [Description("Resurface policy ('never' or 'if_reopened').")] string? resurfacePolicy = null,
         [Description("Linked narrative screening note identifier.")] Guid? screeningNoteId = null,
         [Description("Pointer to canonical posting if this is a duplicate.")] Guid? duplicateOfId = null,
+        [Description("Optional flag indicating whether compensation is high priority (null = not judged).")] bool? compHighPriority = null,
         CancellationToken cancellationToken = default)
     {
         var command = new RecordPostingCommand(
@@ -117,7 +118,8 @@ public sealed class TrackingMcpTools
             CultureSummary: cultureSummary,
             ResurfacePolicy: resurfacePolicy,
             ScreeningNoteId: screeningNoteId,
-            DuplicateOfId: duplicateOfId);
+            DuplicateOfId: duplicateOfId,
+            CompHighPriority: compHighPriority);
 
         var result = await _recordPostingHandler.HandleAsync(command, cancellationToken);
         return SerializeResult(result);

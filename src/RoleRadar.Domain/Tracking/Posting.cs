@@ -186,6 +186,7 @@ public sealed class Posting
             Location = location?.Trim(),
             RemoteType = remoteType,
             Compensation = compensation ?? new(),
+            CompHighPriority = compHighPriority,
             PostedDate = postedDate,
             FirstSeenAt = timestamp,
             LastVerifiedAt = timestamp,
@@ -259,6 +260,7 @@ public sealed class Posting
             Location = location,
             RemoteType = remoteType,
             Compensation = compensation,
+            CompHighPriority = compHighPriority,
             PostedDate = postedDate,
             FirstSeenAt = firstSeenAt,
             LastVerifiedAt = lastVerifiedAt,
@@ -503,6 +505,12 @@ public sealed class Posting
         {
             ScreeningNoteId = screeningNoteId.Value;
             changedFields.Add("screening_note_id");
+        }
+
+        if (compHighPriority.HasValue && compHighPriority.Value != CompHighPriority)
+        {
+            CompHighPriority = compHighPriority.Value;
+            changedFields.Add("comp_high_priority");
         }
 
         if (changedFields.Count > 0)
