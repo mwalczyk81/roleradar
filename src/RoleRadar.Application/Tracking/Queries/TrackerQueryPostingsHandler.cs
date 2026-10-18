@@ -117,16 +117,23 @@ public sealed class TrackerQueryHandler : IQueryHandler<TrackerQueryRequest, Tra
         var page = Math.Max(1, query.Page);
         var pageSize = Math.Clamp(query.PageSize <= 0 ? 50 : query.PageSize, 1, 200);
 
-        return entity switch
+        try
         {
-            "postings" => await HandlePostingsQueryAsync(query, ownerId, page, pageSize, now, cancellationToken),
-            "decided_postings" => await HandleDecidedPostingsQueryAsync(ownerId, page, pageSize, cancellationToken),
-            "posting_dedup_lookup" => await HandleDedupLookupQueryAsync(query, ownerId, cancellationToken),
-            "companies" => await HandleCompaniesQueryAsync(query, ownerId, page, pageSize, now, cancellationToken),
-            _ => Result<TrackerQueryResultDto>.Failure(
-                ErrorCode.ValidationError,
-                $"Entity discriminator '{query.Entity}' is not supported by tracker_query postings handler.")
-        };
+            return entity switch
+            {
+                "postings" => await HandlePostingsQueryAsync(query, ownerId, page, pageSize, now, cancellationToken),
+                "decided_postings" => await HandleDecidedPostingsQueryAsync(ownerId, page, pageSize, cancellationToken),
+                "posting_dedup_lookup" => await HandleDedupLookupQueryAsync(query, ownerId, cancellationToken),
+                "companies" => await HandleCompaniesQueryAsync(query, ownerId, page, pageSize, now, cancellationToken),
+                _ => Result<TrackerQueryResultDto>.Failure(
+                    ErrorCode.ValidationError,
+                    $"Entity discriminator '{query.Entity}' is not supported by tracker_query postings handler.")
+            };
+        }
+        catch (TrackingIndexValidationException ex)
+        {
+            return Result<TrackerQueryResultDto>.Failure(ErrorCode.ValidationError, ex.Message);
+        }
     }
 
     private async Task<Result<TrackerQueryResultDto>> HandlePostingsQueryAsync(

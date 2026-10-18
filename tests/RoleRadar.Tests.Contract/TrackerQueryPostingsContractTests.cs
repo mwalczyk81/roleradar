@@ -156,6 +156,64 @@ public sealed class TrackerQueryPostingsContractTests : IClassFixture<SharedMong
         Assert.Equal(posting.Id, item.Id);
     }
 
+    [Fact]
+    public async Task TrackerQuery_TrackingIndexValidationException_MapsToValidationError()
+    {
+        var throwingPostingRepo = new ThrowingPostingRepository();
+        var context = new TrackingTransactionContextReal(_companyRepo, throwingPostingRepo);
+        var clock = new SystemUtcClock();
+        var handler = new TrackerQueryHandler(context, clock);
+
+        var query = new TrackerQueryRequest(Entity: "postings", OwnerId: "owner-1");
+        var result = await handler.HandleAsync(query);
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, result.Error!.Value.Code);
+        Assert.Contains("Failed to build tracking index", result.Error.Value.Message);
+    }
+
+    private sealed class ThrowingPostingRepository : IPostingRepository
+    {
+        private static Domain.Tracking.TrackingIndexValidationException CreateEx() =>
+            new("ux_postings_owner_dedup_key_a", "Failed to build tracking index 'ux_postings_owner_dedup_key_a': duplicate keys found.", new InvalidOperationException());
+
+        public Task<Result<Posting?>> GetByIdAsync(string ownerId, Guid id, CancellationToken cancellationToken = default) =>
+            throw CreateEx();
+
+        public Task<Result<IReadOnlyList<Posting>>> ListPostingsAsync(string ownerId, Guid? companyId, PostingDisposition? disposition, int page, int pageSize, CancellationToken cancellationToken = default) =>
+            throw CreateEx();
+
+        public Task<Result<int>> CountPostingsAsync(string ownerId, Guid? companyId, PostingDisposition? disposition, CancellationToken cancellationToken = default) =>
+            throw CreateEx();
+
+        public Task<Result<IReadOnlyList<Posting>>> ListDecidedPostingsAsync(string ownerId, int page, int pageSize, CancellationToken cancellationToken = default) =>
+            throw CreateEx();
+
+        public Task<Result<int>> CountDecidedPostingsAsync(string ownerId, CancellationToken cancellationToken = default) =>
+            throw CreateEx();
+
+        public Task<Result<Posting?>> GetByDedupKeyAAsync(string ownerId, string dedupKeyA, CancellationToken cancellationToken = default) =>
+            throw CreateEx();
+
+        public Task<Result<Posting?>> GetByDedupKeyBAsync(string ownerId, string dedupKeyB, CancellationToken cancellationToken = default) =>
+            throw CreateEx();
+
+        public Task<Result<Posting?>> GetByDedupKeyCAsync(string ownerId, string dedupKeyC, CancellationToken cancellationToken = default) =>
+            throw CreateEx();
+
+        public Task<Result<IReadOnlyList<PostingCandidate>>> FindCandidatesByCompanyAndTitleAsync(string ownerId, Guid companyId, string normalizedTitle, CancellationToken cancellationToken = default) =>
+            throw CreateEx();
+
+        public Task<Result<bool>> UpsertPostingAsync(Posting posting, CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<Result<bool>> AppendSignalAsync(PostingSignal signal, CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+
+        public Task<Result<IReadOnlyList<PostingSignal>>> GetSignalsAsync(string ownerId, Guid postingId, CancellationToken cancellationToken = default) =>
+            throw new NotImplementedException();
+    }
+
     private sealed class TrackingTransactionContextReal : ITrackingTransactionContext
     {
         public TrackingTransactionContextReal(ICompanyRepository companyRepo, IPostingRepository postingRepo)

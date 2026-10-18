@@ -312,6 +312,64 @@ public sealed class ShippedHostTrackingIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task ShippedMcpHost_PreExistingDuplicateDataViolatesIndex_ReturnsValidationErrorAcrossTools()
+    {
+        var mcpDllPath = GetMcpDllPath();
+        var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_dup_idx");
+        var mongoClient = new MongoClient(_sharedMongo.ConnectionString);
+        var db = mongoClient.GetDatabase(uniqueDb);
+
+        try
+        {
+            // Seed duplicate dedup_key_a documents before first use
+            var postingsCol = db.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
+            await postingsCol.InsertManyAsync(
+            [
+                new BsonDocument { ["owner_id"] = "owner-1", ["dedup_key_a"] = "tenant|req1" },
+                new BsonDocument { ["owner_id"] = "owner-1", ["dedup_key_a"] = "tenant|req1" }
+            ]);
+
+            var env = _sharedMongo.CreateProcessEnvironment(uniqueDb);
+            await using var client = await McpProcessClient.StartAsync(mcpDllPath, env);
+
+            // 1. company_record must fail with ValidationError naming the index
+            var companyResp = await client.CallToolAsync("company_record", new
+            {
+                name = "Test Index Failure Corp"
+            });
+            Assert.False(companyResp.GetProperty("ok").GetBoolean());
+            var compErr = companyResp.GetProperty("error");
+            Assert.Equal("ValidationError", compErr.GetProperty("code").GetString());
+            Assert.Contains("ux_postings_owner_dedup_key_a", compErr.GetProperty("message").GetString());
+
+            // 2. posting_record must fail with ValidationError naming the index
+            var postingResp = await client.CallToolAsync("posting_record", new
+            {
+                companyId = Guid.NewGuid(),
+                title = "Backend Engineer"
+            });
+            Assert.False(postingResp.GetProperty("ok").GetBoolean());
+            var postErr = postingResp.GetProperty("error");
+            Assert.Equal("ValidationError", postErr.GetProperty("code").GetString());
+            Assert.Contains("ux_postings_owner_dedup_key_a", postErr.GetProperty("message").GetString());
+
+            // 3. tracker_query must fail with ValidationError naming the index
+            var queryResp = await client.CallToolAsync("tracker_query", new
+            {
+                entity = "postings"
+            });
+            Assert.False(queryResp.GetProperty("ok").GetBoolean());
+            var queryErr = queryResp.GetProperty("error");
+            Assert.Equal("ValidationError", queryErr.GetProperty("code").GetString());
+            Assert.Contains("ux_postings_owner_dedup_key_a", queryErr.GetProperty("message").GetString());
+        }
+        finally
+        {
+            await mongoClient.DropDatabaseAsync(uniqueDb);
+        }
+    }
+
     private static string GetMcpDllPath()
     {
         var mcpDllPath = typeof(RoleRadar.Mcp.Stdio.Program).Assembly.Location;
@@ -442,7 +500,14 @@ public sealed class ShippedHostTrackingIntegrationTests
             var text = content[0].GetProperty("text").GetString();
             Assert.NotNull(text);
 
-            return JsonDocument.Parse(text).RootElement.Clone();
+            try
+            {
+                return JsonDocument.Parse(text).RootElement.Clone();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Failed to parse tool text as JSON. Text was: '{text}'. Host stderr: {GetStderr()}", ex);
+            }
         }
 
         public async ValueTask DisposeAsync()
