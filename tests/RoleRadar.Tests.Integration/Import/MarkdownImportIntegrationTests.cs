@@ -16,7 +16,6 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Import;
 
-[Collection(SharedMongoCollectionDefinition.Name)]
 public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
 {
     private readonly SharedMongoFixture _sharedMongo;

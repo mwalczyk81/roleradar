@@ -12,7 +12,6 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Tracking;
 
-[Collection(SharedMongoCollectionDefinition.Name)]
 public sealed class GhostLikelihoodPersistenceScanIntegrationTests : IAsyncLifetime
 {
     private readonly SharedMongoFixture _sharedMongo;

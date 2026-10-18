@@ -12,7 +12,6 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Cli;
 
-[Collection(Fixtures.SharedMongoCollectionDefinition.Name)]
 public sealed class CliCompositionIntegrationTests
 {
     private readonly Fixtures.SharedMongoFixture _sharedMongo;

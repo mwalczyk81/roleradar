@@ -3,12 +3,17 @@ using RoleRadar.Infrastructure.Mongo;
 using Testcontainers.MongoDb;
 using Xunit;
 
+[assembly: Trait("Category", "Integration")]
+[assembly: AssemblyFixture(typeof(RoleRadar.Tests.Integration.Fixtures.SharedMongoFixture))]
+
 namespace RoleRadar.Tests.Integration.Fixtures;
 
 public sealed class SharedMongoFixture : IAsyncLifetime
 {
     private readonly MongoDbContainer _mongoContainer = new MongoDbBuilder("mongo:8.0.34")
         .WithReplicaSet("rs0")
+        .WithTmpfsMount("/data/db")
+        .WithTmpfsMount("/data/configdb")
         .Build();
 
     public string ConnectionString { get; private set; } = string.Empty;

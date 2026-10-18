@@ -11,6 +11,8 @@ public sealed class SharedMongoFixture : IAsyncLifetime
 {
     private readonly MongoDbContainer _mongoContainer = new MongoDbBuilder("mongo:8.0.34")
         .WithReplicaSet("rs0")
+        .WithTmpfsMount("/data/db")
+        .WithTmpfsMount("/data/configdb")
         .Build();
 
     public string ConnectionString { get; private set; } = string.Empty;

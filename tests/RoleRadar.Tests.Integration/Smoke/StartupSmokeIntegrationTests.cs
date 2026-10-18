@@ -4,7 +4,6 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Smoke;
 
-[Collection(SharedMongoCollectionDefinition.Name)]
 public sealed class StartupSmokeIntegrationTests
 {
     private readonly SharedMongoFixture _sharedMongo;
