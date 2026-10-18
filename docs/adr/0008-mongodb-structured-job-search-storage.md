@@ -13,6 +13,7 @@ In RoleRadar, the data volume for the single owner is modest (hundreds of compan
 - Ingesting an application must transition a posting's disposition to `applied` and append to `audit_log`.
 - An application submission with an override flag for a `screened_out` or `closed` posting must atomically execute reopen-and-apply in a single transaction.
 - Backup and restore procedures must protect the entire database state with authenticated streaming encryption and verifiable non-empty checks.
+- All documents, foreign references, and optimistic concurrency tokens must use standard binary subtype 4 GUIDs (`GuidRepresentation.Standard`) consistent with Feature 001 notes and audit entries.
 
 How should persistence for structured tracking entities be implemented in Feature 002 to guarantee transactional consistency, durability, and operational simplicity?
 
@@ -25,7 +26,7 @@ How should persistence for structured tracking entities be implemented in Featur
 
 ## Considered Options
 
-1. **MongoDB Replica Set Only (Same database `roleradar`, same replica set `rs0`)**: Store structured entities in dedicated collections (`companies`, `career_sources`, `postings`, `posting_signals`, `criteria`, `applications`, `application_events`, `contacts`, `search_runs`), each carrying `owner_id`.
+1. **MongoDB Replica Set Only (Same database `roleradar`, same replica set `rs0`)**: Store structured entities in dedicated collections (`companies`, `career_sources`, `postings`, `posting_signals`, `criteria`, `applications`, `application_events`, `contacts`, `search_runs`), each carrying `owner_id` and using binary subtype 4 GUIDs (`GuidRepresentation.Standard`).
 2. **Polyglot Persistence (PostgreSQL for structured entities, MongoDB for narrative notes)**: Introduce PostgreSQL for relational tables and maintain MongoDB for notes.
 3. **Migrate Entire Solution to PostgreSQL**: Migrate narrative notes, revisions, and audit logs from MongoDB to PostgreSQL.
 
@@ -39,12 +40,13 @@ All structured entities live in dedicated collections within the existing `roler
 
 1. **Single Transaction Boundary**: MongoDB's multi-document ACID transactions (`IClientSessionHandle.WithTransactionAsync`) natively span all collections within the database. Cross-entity workflows (such as application creation updating posting disposition and logging audit records) commit atomically in a single network round-trip.
 2. **Single Encrypted Backup Stream**: `mongodump --archive --gzip` dumps all collections across notes, structured tracking, and audit logs into a single authenticated encrypted stream, preserving referential integrity at rest and during restore.
-3. **Index Optimization**: BSON compound and partial unique indexes provide strict deduplication enforcement (Tiers A, B, and C) and sub-10ms lookup latencies on multi-thousand document collections.
-4. **Zero Infrastructure Bloat**: No additional database container, connection pools, or ORMs (e.g. EF Core) are required.
+3. **Index Optimization**: BSON compound and partial unique indexes (`dedup_key_a`, `dedup_key_b`, `dedup_key_c`, active criteria, career sources) provide strict deduplication enforcement and sub-10ms lookup latencies on multi-thousand document collections.
+4. **Binary GUID Uniformity**: All entities and link fields serialize as binary subtype 4 GUIDs (`GuidRepresentation.Standard`), eliminating string-to-binary serialization mismatches across the repository.
+5. **Zero Infrastructure Bloat**: No additional database container, connection pools, or ORMs (e.g. EF Core) are required.
 
 ### Consequences
 
 - **Good**: 100% atomic write consistency across structured entities and audit entries.
 - **Good**: Zero additional third-party dependencies or container services needed in `deploy/docker-compose.yml`.
 - **Good**: Existing encrypted backup, wipe, and restore scripts cover all new entities without structural changes.
-- **Bad / Trade-off**: Foreign key referential integrity is enforced at the domain/application layer and verified by the integrity verification query rather than by relational database foreign key constraints.
+- **Bad / Trade-off**: Foreign key referential integrity is enforced at the domain/application layer and verified by the CLI referential integrity verification tool (`roleradar verify`) rather than by relational database foreign key constraints.

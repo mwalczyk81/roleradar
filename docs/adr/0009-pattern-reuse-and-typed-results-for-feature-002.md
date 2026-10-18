@@ -13,8 +13,8 @@ Feature 001 established core design patterns for RoleRadar:
 - Append-only collections (`AppendOnlyMongoCollection<T>`) for immutable event logs.
 - Typed results (`Result<T>`, `ErrorCode`, `ResultError`) without throwing exceptions for business outcomes.
 - Sensitive endpoint redaction (`ConnectionStringRedactor`).
-- Optimistic version tokens for concurrency checks.
-- Paged read patterns with size caps and continuation cursors.
+- Optimistic version tokens for concurrency checks (`version_token` as binary GUID).
+- Paged read patterns with size caps and continuation cursors (default 50, max 200 items).
 
 Feature 002 introduces new domain operations (tiered posting deduplication, state transitions, criteria queries, application timeline management). Should Feature 002 introduce new framework abstractions, or strictly reuse and extend the proven patterns from Feature 001?
 
@@ -45,22 +45,17 @@ Chosen option: **Option 1 — Strictly Reuse and Extend Feature 001 Patterns**.
 1. **Handlers & Decorators**:
    - Every Feature 002 use case is implemented as an explicit `ICommandHandler` or `IQueryHandler`.
    - Architecture tests enforce that 100% of command handler registrations are wrapped by `TransactionAndAuditCommandDecorator` and `LoggingCommandDecorator`.
+   - Any write operation, including updating `last_verified_at` across UTC days, is executed as an audited write through `TransactionAndAuditCommandDecorator`. Zero unaudited writes exist anywhere.
 2. **Typed Failures**:
    - `ErrorCode` is expanded to include domain outcomes:
      - `ErrorCode.NotFound`
      - `ErrorCode.AlreadyDecided` (posting in a decided terminal state with resurface policy `never` or `if_reopened` with `can_reopen` indicator)
      - `ErrorCode.AlreadyTracked` (posting actively tracked in `lead`, `scored`, `applied`, `unscored`)
      - `ErrorCode.PossibleDuplicate` (advisory Tier D candidate matches)
-     - `ErrorCode.InvalidTransition` (disallowed state transition)
+     - `ErrorCode.InvalidTransition` (disallowed state transition, e.g. attempting to transition to `applied` via `posting_transition` or applying to decided posting without override)
      - `ErrorCode.Conflict` / `ConcurrencyConflict` (optimistic version token mismatch)
      - `ErrorCode.ValidationError` (input bounds and schema violations)
 3. **Append-Only Event Streams**:
    - `AppendOnlyMongoCollection<T>` is used directly for immutable audit streams, `application_events`, `posting_signals`, and `search_runs`.
 4. **Paging & Size Limits**:
    - Queries enforce default limit 50, maximum limit 200 items, and response byte caps, matching `note_search` and `note_get`.
-
-### Consequences
-
-- **Good**: Zero new external dependencies or licensing risk (maintains MIT compatibility).
-- **Good**: All existing architecture and unit tests continue to validate decorators and layering.
-- **Good**: Consistent error representations across CLI commands, MCP tools, and future REST adapters.

@@ -2,7 +2,7 @@
 
 **Feature**: `002-job-search-tracking`  
 **Date**: 2026-10-17  
-**Status**: Completed (Phase 0 Output)
+**Status**: Completed (Phase 0 Output — Revised)
 
 ---
 
@@ -23,7 +23,7 @@ The structured entities are organized into dedicated MongoDB collections:
 - `search_runs`
 - (existing: `notes`, `note_revisions`, `audit_log`)
 
-Every document in every collection MUST carry `owner_id`.
+Every document in every collection MUST carry `owner_id`. All `_id` and foreign reference fields are binary subtype 4 GUIDs (`GuidRepresentation.Standard`).
 
 ### Rationale
 1. **Multi-Document ACID Transactions**: In Feature 002, writes frequently span multiple aggregates atomically:
@@ -35,26 +35,36 @@ Every document in every collection MUST carry `owner_id`.
 3. **Data Volume Characteristics**: The dataset is small and bounded: ~100 companies, ~150 legacy postings/appendix rows, scaling to ~5,000 postings over several years of searching. MongoDB easily supports sub-10ms queries for this volume when backed by appropriate compound and partial unique indexes.
 4. **Architectural Simplicity (Constitution Principle IV)**: Introducing PostgreSQL alongside MongoDB for a dataset of a few thousand records introduces dual connection management, dual readiness probes, cross-database backup orchestration, and distributed transaction complexity without user benefit.
 
-### Alternatives Considered
-- **Dual Store (PostgreSQL for structured entities + MongoDB for notes)**: Rejected. Splitting stores prevents atomic cross-entity writes (e.g., synchronizing posting state, application state, and audit log), requires dual backup tools (`pg_dump` + `mongodump`), doubles Docker compose memory/container footprint, and adds significant failure surface.
-- **Relational Only (Migrate notes to PostgreSQL)**: Rejected. Feature 001 is already completed, tested, and validated with MongoDB. Rewriting Feature 001 violates scope discipline.
+---
+
+## 2. Legacy Data Compatibility & Schema Fit Check
+
+An inspection of the real legacy tracker data was performed to guarantee that all 78 existing postings and all 149 appendix rows map directly to the Feature 002 data model **without requiring placeholder values, fake URLs, dummy requisition IDs, or synthetic identifiers**:
+
+| Legacy Data Subset | Characteristics | Schema Fit in Feature 002 Data Model | Zero-Placeholder Validation |
+| :--- | :--- | :--- | :--- |
+| **78 Tracked Postings** | Full or partial ATS identifiers; mixed compensation formats (some exact, some ranges, some narrative bands). | Mapped directly to `postings`. Exact/range comp mapped to `compensation.min`/`compensation.max`; narrative bands mapped directly to `compensation.text` (up to 300 chars). URLs normalized; ATS tenant and requisition ID populate `dedup_key_a`. | **PASS**: No dummy compensation numbers or synthetic ATS IDs required. |
+| **125 of 149 Appendix Rows** | Zero requisition IDs; zero URLs; company name and job title only. | Represented in `postings` with `original_url: null`, `normalized_url: null`, `ats_tenant: null`, `requisition_id: null`. `dedup_key_a`, `dedup_key_b`, and `dedup_key_c` remain `null` and are safely skipped by partial unique indexes. Tier D advisory index on `{ owner_id, company_id, normalized_title }` indexes these rows for fuzzy matching. | **PASS**: `url` and `requisition_id` are optional nullable fields; no dummy `https://none` or placeholder IDs needed. |
+| **24 of 149 Appendix Rows** | Has company, title, and normalized URL, but no ATS requisition ID. | Represented in `postings` with `dedup_key_a: null`, `dedup_key_c: null`, and `dedup_key_b: normalized_url`. Enforces Tier B partial unique index. | **PASS**: Normalizes URL and matches cleanly without synthetic requisition IDs. |
+| **~100 Legacy Companies** | Company name, ownership notes, and headquarters context embedded in a legacy "parent" field. | Legacy "parent" string mapped directly to bounded `description` (up to 300 characters). Structured `parent_company` populated only when an actual corporate parent exists. `ownership_type` mapped to enum (`public`, `private`, `pe_backed`, `vc_backed`, `mutual`, `subsidiary`, `nonprofit`, `government`, `unknown`). | **PASS**: Eliminates circular-parent edge cases while preserving 100% of contextual business notes. |
 
 ---
 
-## 2. URL Normalization Specification & Tracking Parameter Denylist
+## 3. URL Normalization Specification & Tracking Parameter Denylist
 
 ### Normalization Pipeline
-Job board aggregators (LinkedIn, Indeed, Google Jobs) and ATS portals (Workday, Greenhouse, Ashby, Lever) append varying tracking parameters, session tokens, and trailing slashes to identical job requisitions. The URL normalizer is a deterministic, pure domain function: `Normalize(string rawUrl) -> string`.
+Job board aggregators and ATS portals append varying tracking parameters, session tokens, and trailing slashes to identical job requisitions. The URL normalizer is a deterministic, pure domain function: `Normalize(string? rawUrl) -> string?`.
 
-1. **Protocol & Host Canonicalization**:
+1. **Null/Empty Handling**: If input is null or whitespace, returns `null` cleanly (supporting URL-less legacy rows).
+2. **Protocol & Host Canonicalization**:
    - Standardize protocol to lowercase (default `https` if missing).
    - Lowercase host name.
    - Strip default ports (`:80` for HTTP, `:443` for HTTPS).
-2. **Path Normalization**:
+3. **Path Normalization**:
    - Resolve dot segments (`.` and `..`).
    - Remove trailing slashes (e.g. `/jobs/123/` -> `/jobs/123`), preserving single `/` for root.
    - Decode unnecessary percent-encoded unreserved characters (`ALPHA / DIGIT / "-" / "." / "_" / "~"`).
-3. **Query Parameter Filtering & Sorting**:
+4. **Query Parameter Filtering & Sorting**:
    - Strip URL fragments (`#...`).
    - Parse query string parameters into key-value pairs (case-insensitive key comparison against tracking denylist).
    - Strip all marketing, tracking, click-id, and session parameters.
@@ -75,11 +85,11 @@ The following query parameter keys (matched case-insensitively, including prefix
 
 ### Invariance & Testing
 - **Idempotence**: `Normalize(Normalize(u)) == Normalize(u)` for all valid URLs.
-- **Property-Based Testing**: Validated using FsCheck with arbitrary URLs, arbitrary parameter interleavings, and casing variations.
+- **Property-Based Testing**: Validated using `FsCheck.Xunit` with arbitrary URLs, parameter interleavings, and casing variations.
 
 ---
 
-## 3. Dynamic Ghost-Likelihood Calculation (On-Read Only)
+## 4. Dynamic Ghost-Likelihood Calculation (On-Read Only)
 
 ### Principle
 Ghost-likelihood is a synthetic, risk-scoring heuristic that flags postings that may be evergreen reposts, phantom listings, or already abandoned roles. To avoid data staleness, scoring schema lock-in, and database migration overhead, **ghost-likelihood is strictly computed dynamically on read and is NEVER persisted in any MongoDB document, field, or backup**.
@@ -116,53 +126,45 @@ An automated integration test asserts that querying the raw MongoDB collection a
 
 ---
 
-## 4. MCP Tool Surface Design & Grouping Alternatives
+## 5. MCP Tool Surface Design & Separation of Concerns
 
 ### Constraints
 - Feature 001 defines 6 tools (`note_create`, `note_get`, `note_append`, `note_replace_section`, `note_search`, `note_archive`).
 - Architecture ceiling: At most 12 total tools exposed across the entire MCP server (at most 6 new tools for Feature 002).
 - Zero delete/remove tools.
 - Strict input length boundaries to prevent agent memory overflow.
-- Narrow tools with neutral, declarative descriptions free of imperative instructions (prompt injection prevention).
+- Narrow tools with neutral, declarative descriptions free of imperative instructions.
+- Third-party confidential contacts and referential integrity verification are strictly CLI-only.
 
-### Alternatives Evaluated
-
-#### Alternative 1: Entity-Per-Tool (18+ Tools)
-Exposing separate `create`, `update`, and `get` tools for all 9 entities (`posting_create`, `posting_update`, `company_create`, `company_update`, `application_create`, etc.).
-- **Verdict**: REJECTED. Violates the mandatory 12-tool ceiling and increases LLM context overhead.
-
-#### Alternative 2: Single Mega-Tool (`tracker_dispatch`)
-A single tool accepting an action discriminator (`action: "record_posting" | "query" | ...`) with a polymorphic payload.
-- **Verdict**: REJECTED. Obscures tool parameter schemas from the Model Context Protocol, degrades agent parameter validation, increases tool hallucination, and makes safety boundaries difficult to enforce.
-
-#### Alternative 3: Aggregate Write Tools + Unified Paged Query Tool (Chosen)
-Define 5 narrow write tools mapped to core aggregate lifecycles, plus 1 unified paged query tool with typed discriminators:
-
-1. `posting_record`: Records or updates a posting with tiered deduplication (Tiers A-D), compensation, culture, disposition, resurface policy, and duplicate link.
-2. `posting_transition`: Explicitly transitions posting disposition (`screened_out`, `closed`, `reopened`) or updates verification status.
+### 6 New Tools Exposed on MCP
+1. `posting_record`: Ingests/updates posting with tiered deduplication (Tiers A-D), compensation, culture, disposition, resurface policy, and duplicate link.
+2. `posting_transition`: Explicitly transitions posting disposition (`screened_out`, `closed`, `reopened`) or updates verification status. Target `applied` is disallowed.
 3. `company_record`: Records or updates a company profile (with bounded 300-char description and ownership type) and associates career sources.
-4. `application_record`: Records a job application (variant pointer, referral), appends timeline events, and supports atomic reopen-and-apply override for decided roles.
-5. `contact_record`: Manages private professional contacts (create, update, or `redact: true` to blank personal details while preserving ID).
-6. `tracker_query`: Paged, bounded read tool with a discriminator (`postings`, `decided_postings`, `companies`, `criteria`, `applications`, `contact`, `integrity_check`).
+4. `application_record`: Records a job application (variant pointer, referral, numeric salary range), appends timeline events (8 types), and supports atomic reopen-and-apply override for decided roles.
+5. `tracker_log`: Appends immutable operational records for screening criteria revisions (closing previous version) and search run execution batches linked to report notes.
+6. `tracker_query`: Paged, bounded read tool (default 50, max 200 items) with a discriminator (`postings`, `decided_postings`, `posting_dedup_lookup`, `companies`, `criteria`, `applications`).
 
-Total new tools: **6**. Total server tools: **12**. Exactly satisfies all constraints.
+Total new tools: **6**. Total server tools: **12**. Satisfies the <=12 constitutional cap and preserves privacy boundaries.
 
 ---
 
-## 5. Deduplication Invariants & Concurrency Resolution
+## 6. Deduplication Invariants & Concurrency Resolution
 
-### Tiered Priority
-1. **Tier A**: `ats_tenant` + `requisition_id` (when both non-null).
-2. **Tier B**: `normalized_url` (when ATS identifiers are missing).
-3. **Tier C**: `company_id` + `requisition_id` (when tenant is missing).
-4. **Tier D (Advisory Only)**: `company_id` + `normalized_title` (fuzzy match). Returns `PossibleDuplicate` candidate list with current dispositions and reasons; **never** alters or auto-merges data.
+### Computed Deduplication Keys & Partial Indexes
+To guarantee performance, avoid duplicate index collisions on null values, and resolve concurrent submissions:
+1. **Tier A**: `dedup_key_a = "{ats_tenant}|{requisition_id}"` when both exist; null otherwise. Unique index with partial filter `{ dedup_key_a: { $type: "string" } }`.
+2. **Tier B**: `dedup_key_b = normalized_url` when present; null otherwise. Unique index with partial filter `{ dedup_key_b: { $type: "string" } }`.
+3. **Tier C**: `dedup_key_c = "{company_id}|{requisition_id}"` when requisition ID exists without tenant; null otherwise. Unique index with partial filter `{ dedup_key_c: { $type: "string" } }`.
+4. **Tier D (Advisory Only)**: Non-unique compound index on `{ owner_id, company_id, normalized_title }`. Queries advisory matches and returns `PossibleDuplicate` candidate list with current dispositions and reasons; **never** alters or auto-merges data.
 
 ### Concurrent Submission Resolution
 When two workers or search agents submit identical postings concurrently:
 1. Both attempt insertion into `postings`.
-2. One succeeds. The second receives a MongoDB unique index duplicate key error (`E11000`) on either `(ats_tenant, requisition_id)`, `normalized_url`, or `(company_id, requisition_id)`.
+2. One succeeds. The second receives a MongoDB unique index duplicate key error (`E11000`) on `dedup_key_a`, `dedup_key_b`, or `dedup_key_c`.
 3. The repository catches `MongoWriteException` with category `DuplicateKey`, re-fetches the winning document inside the transaction, and executes standard re-encounter logic:
-   - If decided with `resurface_policy: never` -> returns typed `AlreadyDecided`.
+   - If decided with `resurface_policy: never` -> returns typed `AlreadyDecided` (`can_reopen: false`).
    - If decided with `resurface_policy: if_reopened` -> returns typed `AlreadyDecided` with `can_reopen: true`.
-   - If active (`lead`, `scored`, `applied`, `unscored`) -> updates `last_verified` and returns `AlreadyTracked`.
-4. This ensures concurrent submissions never crash and never produce duplicate records. Verified with an explicit parallel test.
+   - If active (`lead`, `scored`, `applied`, `unscored`):
+     - If re-encountered on a different UTC date: updates `last_verified_at` as a real write, generating an audit entry with a one-field summary (`last_verified_at`), and returns `AlreadyTracked`.
+     - If on the same UTC day with identical state: returns `AlreadyTracked` with zero writes and zero audit entries.
+4. Concurrent submissions never crash and never produce duplicate records.
