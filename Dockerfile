@@ -5,7 +5,7 @@ FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:0d
 WORKDIR /src
 
 # Copy project files and restore with locked dependencies
-COPY global.json Directory.Build.props Directory.Packages.props ./
+COPY global.json Directory.Build.props Directory.Packages.props .editorconfig ./
 COPY src/RoleRadar.Domain/RoleRadar.Domain.csproj src/RoleRadar.Domain/packages.lock.json src/RoleRadar.Domain/
 COPY src/RoleRadar.Application/RoleRadar.Application.csproj src/RoleRadar.Application/packages.lock.json src/RoleRadar.Application/
 COPY src/RoleRadar.Infrastructure/RoleRadar.Infrastructure.csproj src/RoleRadar.Infrastructure/packages.lock.json src/RoleRadar.Infrastructure/
@@ -18,8 +18,8 @@ RUN dotnet restore src/RoleRadar.Cli/RoleRadar.Cli.csproj --locked-mode && \
 # Copy source code and publish framework-dependent binaries
 COPY src/ src/
 
-RUN dotnet publish src/RoleRadar.Mcp.Stdio/RoleRadar.Mcp.Stdio.csproj -c Release --no-restore /p:NoWarn=CA1822 -o /app/mcp && \
-    dotnet publish src/RoleRadar.Cli/RoleRadar.Cli.csproj -c Release --no-restore /p:NoWarn=CA1822 -o /app/cli
+RUN dotnet publish src/RoleRadar.Mcp.Stdio/RoleRadar.Mcp.Stdio.csproj -c Release --no-restore -o /app/mcp && \
+    dotnet publish src/RoleRadar.Cli/RoleRadar.Cli.csproj -c Release --no-restore -o /app/cli
 
 # Stage 2: Download MongoDB Database Tools 100.19.1 and extract Kerberos shared libraries
 FROM ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac AS tools-downloader
