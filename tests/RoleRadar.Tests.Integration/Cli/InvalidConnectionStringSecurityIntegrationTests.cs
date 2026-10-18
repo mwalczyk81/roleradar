@@ -9,8 +9,7 @@ public sealed class InvalidConnectionStringSecurityIntegrationTests
     private const string TestSecretPassword = "SuperSecretInvalidPassword123!";
 
     public static TheoryData<string> InvalidConnectionStringsWithSecret =>
-        new()
-        {
+        [
             // 1. scheme-less user:pass@host:port
             $"appuser:{TestSecretPassword}@localhost:27017",
 
@@ -25,7 +24,7 @@ public sealed class InvalidConnectionStringSecurityIntegrationTests
 
             // 5. srv with an unresolvable host (must have at least 3 parts for srv, e.g. host.invalid.internal)
             $"mongodb+srv://appuser:{TestSecretPassword}@nonexistent.cluster.invalid"
-        };
+        ];
 
     private static string GetCliDllPath()
     {

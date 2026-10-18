@@ -312,8 +312,8 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
 
             var area = isTargetMatch ? "criteria" : (i % 2 == 0 ? "runbook" : "general");
             var tags = isTargetMatch
-                ? new BsonArray { "dotnet", "kafka", "remote" }
-                : new BsonArray { "general", $"tag-{i % 20}" };
+                ? ["dotnet", "kafka", "remote"]
+                : ["general", $"tag-{i % 20}"];
 
             var noteId = Guid.CreateVersion7();
             var versionToken = Guid.CreateVersion7();
