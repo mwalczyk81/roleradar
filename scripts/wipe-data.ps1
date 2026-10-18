@@ -18,5 +18,5 @@ if (-not [string]::IsNullOrWhiteSpace($Confirm)) {
 }
 $cliArgs += $RemainingArgs
 
-& dotnet run --project "$repoRoot\src\RoleRadar.Cli" --no-build -c Release -- @cliArgs
+& dotnet run --project "$repoRoot/src/RoleRadar.Cli" --no-build -c Release -- @cliArgs
 exit $LASTEXITCODE

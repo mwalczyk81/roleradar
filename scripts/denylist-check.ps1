@@ -11,11 +11,20 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
-if ([string]::IsNullOrWhiteSpace($localAppData)) { $localAppData = $env:LOCALAPPDATA }
-$denylistPath = Join-Path -Path "$localAppData" -ChildPath 'roleradar\private\denylist.txt'
+if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+    $localAppData = [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)
+    if ([string]::IsNullOrWhiteSpace($localAppData)) { $localAppData = $env:LOCALAPPDATA }
+    $denylistPath = Join-Path -Path "$localAppData" -ChildPath 'roleradar\private\denylist.txt'
+} else {
+    $xdgDataHome = $env:XDG_DATA_HOME
+    if ([string]::IsNullOrWhiteSpace($xdgDataHome)) {
+        $homeDir = if (-not [string]::IsNullOrWhiteSpace($env:HOME)) { $env:HOME } else { [Environment]::GetFolderPath([Environment+SpecialFolder]::UserProfile) }
+        $xdgDataHome = Join-Path -Path $homeDir -ChildPath '.local/share'
+    }
+    $denylistPath = Join-Path -Path $xdgDataHome -ChildPath 'roleradar/private/denylist.txt'
+}
 
-if ([string]::IsNullOrWhiteSpace($localAppData) -or -not (Test-Path -LiteralPath $denylistPath -PathType Leaf)) {
+if (-not (Test-Path -LiteralPath $denylistPath -PathType Leaf)) {
     $msg = "LOUD WARNING: Local private denylist not found at '$denylistPath'. Create it (one term per line) or set ROLERADAR_ALLOW_NO_DENYLIST=1 to bypass."
     if ($env:ROLERADAR_ALLOW_NO_DENYLIST -eq '1') { Write-Warning $msg; return }
     throw $msg

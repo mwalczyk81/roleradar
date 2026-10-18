@@ -12,7 +12,7 @@ if ([string]::IsNullOrWhiteSpace($ComposeFile)) {
     $ComposeFile = $env:ROLERADAR_COMPOSE_FILE
 }
 if ([string]::IsNullOrWhiteSpace($ComposeFile)) {
-    $ComposeFile = Join-Path (Split-Path -Parent $scriptDir) 'deploy\docker-compose.yml'
+    $ComposeFile = Join-Path (Split-Path -Parent $scriptDir) 'deploy/docker-compose.yml'
 }
 
 $composeArgs = @('-f', $ComposeFile)

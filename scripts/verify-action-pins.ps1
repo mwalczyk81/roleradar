@@ -5,7 +5,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$workflowDir = Join-Path -Path $repoRoot -ChildPath '.github\workflows'
+$workflowDir = Join-Path -Path $repoRoot -ChildPath '.github/workflows'
 
 if (-not (Test-Path -LiteralPath $workflowDir -PathType Container)) {
     throw "Workflow directory not found at '$workflowDir'."
