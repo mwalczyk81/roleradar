@@ -22,7 +22,7 @@ RUN dotnet publish src/RoleRadar.Mcp.Stdio/RoleRadar.Mcp.Stdio.csproj -c Release
     dotnet publish src/RoleRadar.Cli/RoleRadar.Cli.csproj -c Release --no-restore -o /app/cli
 
 # Stage 2: Download MongoDB Database Tools 100.19.1 and extract Kerberos shared libraries
-FROM ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac AS tools-downloader
+FROM ubuntu:26.04@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944 AS tools-downloader
 ARG TARGETARCH
 # hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/*
