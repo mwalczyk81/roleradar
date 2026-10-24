@@ -12,7 +12,8 @@ namespace RoleRadar.Infrastructure.Mongo;
 public sealed class MongoNoteRepository : INoteRepository, IDisposable
 {
     private static readonly AsyncLocal<AmbientTransactionScope?> CurrentTransactionScope = new();
-    internal static IClientSessionHandle? CurrentSession => CurrentTransactionScope.Value?.Context.Session;
+    internal static IClientSessionHandle? CurrentSession =>
+        CurrentTransactionScope.Value?.Context.Session ?? Repositories.MongoTrackingTransactionScope.CurrentSession;
 
     private readonly IMongoClient _client;
     private readonly IMongoDatabase _database;

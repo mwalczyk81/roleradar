@@ -5,8 +5,19 @@ using RoleRadar.Domain.Audit;
 
 namespace RoleRadar.Infrastructure.Mongo.Repositories;
 
+internal static class MongoTrackingTransactionScope
+{
+    private static readonly AsyncLocal<IClientSessionHandle?> _currentSession = new();
+    internal static IClientSessionHandle? CurrentSession
+    {
+        get => _currentSession.Value;
+        set => _currentSession.Value = value;
+    }
+}
+
 public sealed class MongoTrackingTransactionContext : ITrackingTransactionContext
 {
+    private readonly IMongoClient? _client;
     private readonly ICompanyRepository _companies;
     private readonly IPostingRepository _postings;
     private readonly ICriterionRepository _criteria;
@@ -18,6 +29,7 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
     private readonly IClientSessionHandle? _session;
 
     public MongoTrackingTransactionContext(
+        IMongoClient? client,
         ICompanyRepository companies,
         IPostingRepository postings,
         ICriterionRepository criteria,
@@ -28,6 +40,7 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
         IMongoCollection<BsonDocument>? notesCollection = null,
         IClientSessionHandle? session = null)
     {
+        _client = client;
         _companies = companies ?? throw new ArgumentNullException(nameof(companies));
         _postings = postings ?? throw new ArgumentNullException(nameof(postings));
         _criteria = criteria ?? throw new ArgumentNullException(nameof(criteria));
@@ -37,6 +50,20 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
         _auditCollection = auditCollection ?? throw new ArgumentNullException(nameof(auditCollection));
         _notesCollection = notesCollection;
         _session = session;
+    }
+
+    public MongoTrackingTransactionContext(
+        ICompanyRepository companies,
+        IPostingRepository postings,
+        ICriterionRepository criteria,
+        IApplicationRepository applications,
+        IContactRepository? contacts,
+        ISearchRunRepository? searchRuns,
+        IMongoCollection<BsonDocument> auditCollection,
+        IMongoCollection<BsonDocument>? notesCollection = null,
+        IClientSessionHandle? session = null)
+        : this(null, companies, postings, criteria, applications, contacts, searchRuns, auditCollection, notesCollection, session)
+    {
     }
 
     public MongoTrackingTransactionContext(
@@ -166,6 +193,67 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
             _ => new BsonString(value.ToString() ?? string.Empty)
         };
 
+    public async Task<Result<TResponse>> ExecuteInTransactionAsync<TResponse>(
+        Func<ITrackingTransactionContext, CancellationToken, Task<Result<TResponse>>> work,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(work);
+
+        if (_client is null)
+        {
+            return await work(this, cancellationToken);
+        }
+
+        var existingSession = MongoNoteRepository.CurrentSession;
+        if (existingSession is not null)
+        {
+            return await work(this, cancellationToken);
+        }
+
+        using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
+        var txOptions = new TransactionOptions(
+            readConcern: ReadConcern.Snapshot,
+            writeConcern: WriteConcern.WMajority,
+            readPreference: ReadPreference.Primary);
+
+        Result<TResponse> finalResult = default;
+
+        try
+        {
+            await session.WithTransactionAsync(
+                async (sessionHandle, ct) =>
+                {
+                    MongoTrackingTransactionScope.CurrentSession = sessionHandle;
+                    try
+                    {
+                        var outcome = await work(this, ct);
+                        finalResult = outcome;
+                        if (!outcome.IsSuccess)
+                        {
+                            throw new RollbackOnResultFailureException();
+                        }
+                        return true;
+                    }
+                    finally
+                    {
+                        MongoTrackingTransactionScope.CurrentSession = null;
+                    }
+                },
+                txOptions,
+                cancellationToken);
+
+            return finalResult;
+        }
+        catch (RollbackOnResultFailureException)
+        {
+            return finalResult;
+        }
+        catch (Exception ex)
+        {
+            return Result<TResponse>.Failure(ErrorCode.ValidationError, ex.Message);
+        }
+    }
+
     public async Task<Result<bool>> UpsertNoteAsync(RoleRadar.Domain.Notes.Note note, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(note);
@@ -178,9 +266,10 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
         var doc = MongoNoteRepository.MapNoteToDocument(note);
         var options = new ReplaceOptions { IsUpsert = true };
 
-        if (_session is not null)
+        var session = _session ?? MongoNoteRepository.CurrentSession;
+        if (session is not null)
         {
-            await _notesCollection.ReplaceOneAsync(_session, filter, doc, options, cancellationToken);
+            await _notesCollection.ReplaceOneAsync(session, filter, doc, options, cancellationToken);
         }
         else
         {
@@ -202,10 +291,13 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
             Builders<BsonDocument>.Filter.Eq("title", title),
             Builders<BsonDocument>.Filter.Eq("area", area));
 
-        var count = _session is not null
-            ? await _notesCollection.CountDocumentsAsync(_session, filter, cancellationToken: cancellationToken)
+        var session = _session ?? MongoNoteRepository.CurrentSession;
+        var count = session is not null
+            ? await _notesCollection.CountDocumentsAsync(session, filter, cancellationToken: cancellationToken)
             : await _notesCollection.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
 
         return Result<bool>.Success(count > 0);
     }
+
+    private sealed class RollbackOnResultFailureException : Exception;
 }

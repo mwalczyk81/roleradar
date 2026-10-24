@@ -8,6 +8,7 @@ using RoleRadar.Application.Tracking.Import.Pipeline;
 using RoleRadar.Domain.Audit;
 using RoleRadar.Domain.Tracking;
 using RoleRadar.Infrastructure;
+using RoleRadar.Infrastructure.Mongo;
 using RoleRadar.Tests.Integration.Fixtures;
 using Xunit;
 
@@ -100,5 +101,89 @@ public sealed class CriteriaImportIntegrationTests : IClassFixture<IsolatedConta
 
         // Clean up test database
         await client.DropDatabaseAsync(dbName);
+    }
+
+    [Fact]
+    public async Task TrackerImport_BundleWithFullDates_AndNoDefaultDate_SeedsBothCriteria_IdempotentlyOnRerun()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"rr_crit_nodef_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+        var dbName = $"rrtest_crit_nodef_{Guid.NewGuid():N}";
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir, "company-aliases.csv"), "alias,canonical\r\n");
+            File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\nAcme Corp,target,recruiter,Note,,\r\n");
+
+            // postings.json with explicit full date
+            var postingsJson = """
+                [
+                    { "title": "Senior Engineer", "company": "Acme Corp", "status": "applied", "added": "2026-05-15", "url": "https://example.com/job/1" }
+                ]
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
+            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");
+
+            // applications.csv with explicit full date
+            var appCsv = """
+                kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes
+                application,Acme Corp,Senior Engineer,,2026-05-15,false,,200000,false,fit,tailored,,,Notes,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "applications.csv"), appCsv);
+
+            var services = new ServiceCollection();
+            services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+            services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+
+            RoleRadar.Infrastructure.DependencyInjection.AddRoleRadarInfrastructure(services, opts =>
+            {
+                opts.ConnectionString = _fixture.HostMongoUri;
+                opts.DatabaseName = dbName;
+            });
+            services.AddRoleRadarApplication();
+
+            await using var provider = services.BuildServiceProvider();
+            var coordinator = provider.GetRequiredService<RoleRadar.Application.Tracking.Import.Commands.ITrackerImportCoordinator>();
+
+            // First run: DefaultDate is NULL!
+            var command = new RoleRadar.Application.Tracking.Import.Commands.ImportTrackerCommand(
+                BundleDirectory: tempDir,
+                DefaultDate: null,
+                Apply: true);
+
+            var result = await coordinator.ExecuteAsync(command);
+
+            Assert.True(result.IsSuccess);
+            Assert.Equal(2, result.Value!.CriteriaCreated); // Both seeded!
+
+            var client = new MongoClient(_fixture.HostMongoUri);
+            var db = client.GetDatabase(dbName);
+            var criteriaCol = db.GetCollection<MongoDB.Bson.BsonDocument>(TrackingMongoOptions.CriteriaCollectionName);
+
+            var floor = await criteriaCol.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("key", "comp_preferred_floor")).FirstOrDefaultAsync();
+            var bar = await criteriaCol.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("key", "comp_high_priority_bar")).FirstOrDefaultAsync();
+
+            Assert.NotNull(floor);
+            Assert.Equal("200000", floor["value"].AsString);
+            Assert.Equal("stated", floor["provenance"].AsString);
+
+            Assert.NotNull(bar);
+            Assert.Equal("220000", bar["value"].AsString);
+            Assert.Equal("stated", bar["provenance"].AsString);
+
+            // Second run: also DefaultDate is NULL, idempotent no-op!
+            var secondResult = await coordinator.ExecuteAsync(command);
+            Assert.True(secondResult.IsSuccess);
+            Assert.Equal(0, secondResult.Value!.CriteriaCreated);
+
+            var criteriaCount = await criteriaCol.CountDocumentsAsync(Builders<MongoDB.Bson.BsonDocument>.Filter.Empty);
+            Assert.Equal(2, criteriaCount);
+
+            await client.DropDatabaseAsync(dbName);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
     }
 }

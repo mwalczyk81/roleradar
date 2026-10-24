@@ -56,52 +56,6 @@ public sealed class PostingsJsonStep : ITrackerImportStep
 
             var canonicalName = context.CompanyAliases.TryGetValue(companyName, out var alias) ? alias : companyName;
 
-            // 1. Resolve or auto-create company
-            if (!context.CanonicalCompanies.TryGetValue(canonicalName, out var company))
-            {
-                var existing = await _context.Companies.GetByNormalizedNameAsync(context.OwnerId, canonicalName, cancellationToken);
-                if (existing.IsSuccess && existing.Value is not null)
-                {
-                    company = existing.Value;
-                    context.CanonicalCompanies[canonicalName] = company;
-                }
-                else
-                {
-                    var parentText = element.TryGetProperty("parent", out var parentProp) ? parentProp.GetString()?.Trim() : null;
-                    var description = parentText ?? string.Empty;
-
-                    company = Company.Create(
-                        ownerId: context.OwnerId,
-                        name: canonicalName,
-                        status: CompanyStatus.Neutral,
-                        description: description);
-
-                    var saveCompany = await _context.Companies.UpsertCompanyAsync(company, cancellationToken);
-                    if (saveCompany.IsSuccess)
-                    {
-                        var audit = AuditLogEntry.CreateForTracking(
-                            ownerId: context.OwnerId,
-                            actor: ImportActor,
-                            operation: AuditOperation.ImportCompanyCreate,
-                            entityType: "company",
-                            entityId: company.Id,
-                            resultingVersionToken: company.VersionToken,
-                            occurredAtUtc: DateTime.UtcNow,
-                            details: new AuditDetails(
-                                ChangedFields: ["name", "status", "description"],
-                                After: new Dictionary<string, object?>
-                                {
-                                    ["name"] = company.Name,
-                                    ["status"] = company.Status.ToString()
-                                }));
-                        await _context.AppendAuditEntryAsync(audit, cancellationToken);
-                        context.CanonicalCompanies[canonicalName] = company;
-                        context.Summary.CompaniesCreated++;
-                        context.Summary.AutoCreatedCompanies.Add(canonicalName);
-                    }
-                }
-            }
-
             // 2. Parse Culture and CultureLevel
             string? cultureSummary = null;
             if (element.TryGetProperty("culture", out var cultProp) && cultProp.GetString() is { } cultStr)
@@ -164,73 +118,126 @@ public sealed class PostingsJsonStep : ITrackerImportStep
             var rawStatus = element.TryGetProperty("status", out var stProp) ? stProp.GetString()?.Trim() : null;
             var originalWasApplied = string.Equals(rawStatus, "applied", StringComparison.OrdinalIgnoreCase);
 
-            // Check if posting already exists in repository or context
-            Posting? existingPosting = null;
-            if (!string.IsNullOrWhiteSpace(url))
+            // 1. Resolve or auto-create company, and 2. Save posting atomically inside one transaction per row
+            var autoCreatedCompany = false;
+            Company? newCompany = null;
+            Posting? newPosting = null;
+
+            var rowResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
             {
-                var normUrl = UrlNormalizer.Normalize(url);
-                if (normUrl is not null)
+                Company? resolvedCompany = null;
+                if (!context.CanonicalCompanies.TryGetValue(canonicalName, out resolvedCompany))
                 {
-                    var byUrlRes = await _context.Postings.GetByDedupKeyBAsync(context.OwnerId, normUrl, cancellationToken);
-                    if (byUrlRes.IsSuccess && byUrlRes.Value is not null)
+                    var existing = await txCtx.Companies.GetByNormalizedNameAsync(context.OwnerId, canonicalName, ct);
+                    if (existing.IsSuccess && existing.Value is not null)
                     {
-                        existingPosting = byUrlRes.Value;
+                        resolvedCompany = existing.Value;
+                    }
+                    else
+                    {
+                        var parentText = element.TryGetProperty("parent", out var parentProp) ? parentProp.GetString()?.Trim() : null;
+                        var description = parentText ?? string.Empty;
+
+                        resolvedCompany = Company.Create(
+                            ownerId: context.OwnerId,
+                            name: canonicalName,
+                            status: CompanyStatus.Neutral,
+                            description: description);
+
+                        var saveCompany = await txCtx.Companies.UpsertCompanyAsync(resolvedCompany, ct);
+                        if (!saveCompany.IsSuccess)
+                        {
+                            return Result<bool>.Failure(saveCompany.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to save company"));
+                        }
+
+                        var audit = AuditLogEntry.CreateForTracking(
+                            ownerId: context.OwnerId,
+                            actor: ImportActor,
+                            operation: AuditOperation.ImportCompanyCreate,
+                            entityType: "company",
+                            entityId: resolvedCompany.Id,
+                            resultingVersionToken: resolvedCompany.VersionToken,
+                            occurredAtUtc: DateTime.UtcNow,
+                            details: new AuditDetails(
+                                ChangedFields: ["name", "status", "description"],
+                                After: new Dictionary<string, object?>
+                                {
+                                    ["name"] = resolvedCompany.Name,
+                                    ["status"] = resolvedCompany.Status.ToString()
+                                }));
+                        await txCtx.AppendAuditEntryAsync(audit, ct);
+                        autoCreatedCompany = true;
+                        newCompany = resolvedCompany;
                     }
                 }
-            }
 
-            if (existingPosting is null && !string.IsNullOrWhiteSpace(reqId) && company is not null)
-            {
-                var dedupC = $"{company.Id:D}|{reqId.Trim()}";
-                var byCRes = await _context.Postings.GetByDedupKeyCAsync(context.OwnerId, dedupC, cancellationToken);
-                if (byCRes.IsSuccess && byCRes.Value is not null)
+                // Check existing posting
+                Posting? existingPosting = null;
+                if (!string.IsNullOrWhiteSpace(url))
                 {
-                    existingPosting = byCRes.Value;
-                }
-            }
-
-            if (existingPosting is null && company is not null)
-            {
-                var candRes = await _context.Postings.FindCandidatesByCompanyAndTitleAsync(context.OwnerId, company.Id, TitleNormalizer.Normalize(title), cancellationToken);
-                if (candRes.IsSuccess && candRes.Value is { Count: > 0 } candidates)
-                {
-                    var byIdRes = await _context.Postings.GetByIdAsync(context.OwnerId, candidates[0].Id, cancellationToken);
-                    if (byIdRes.IsSuccess && byIdRes.Value is not null)
+                    var normUrl = UrlNormalizer.Normalize(url);
+                    if (normUrl is not null)
                     {
-                        existingPosting = byIdRes.Value;
+                        var byUrlRes = await txCtx.Postings.GetByDedupKeyBAsync(context.OwnerId, normUrl, ct);
+                        if (byUrlRes.IsSuccess && byUrlRes.Value is not null)
+                        {
+                            existingPosting = byUrlRes.Value;
+                        }
                     }
                 }
-            }
 
-            if (existingPosting is not null)
-            {
-                if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = existingPosting;
-                if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = existingPosting;
-                context.PostingsByCompanyAndTitle[$"{canonicalName}|{existingPosting.NormalizedTitle}"] = existingPosting;
-                context.Summary.PostingsUnchanged++;
-                continue;
-            }
+                if (existingPosting is null && !string.IsNullOrWhiteSpace(reqId) && resolvedCompany is not null)
+                {
+                    var dedupC = $"{resolvedCompany.Id:D}|{reqId.Trim()}";
+                    var byCRes = await txCtx.Postings.GetByDedupKeyCAsync(context.OwnerId, dedupC, ct);
+                    if (byCRes.IsSuccess && byCRes.Value is not null)
+                    {
+                        existingPosting = byCRes.Value;
+                    }
+                }
 
-            var posting = Posting.Create(
-                ownerId: context.OwnerId,
-                companyId: company?.Id ?? Guid.NewGuid(),
-                title: title,
-                sourceKind: SourceKind.Aggregator,
-                originalUrl: url,
-                requisitionId: reqId,
-                remoteType: RemoteType.Unknown,
-                compensation: compText != null ? new Compensation(Text: compText) : null,
-                score: (decimal?)score,
-                cultureLevel: cultureLevel,
-                cultureSummary: cultureSummary,
-                disposition: PostingDisposition.Scored,
-                now: dateOutcome.ResolvedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
-                compHighPriority: compHigh);
+                if (existingPosting is null && resolvedCompany is not null)
+                {
+                    var candRes = await txCtx.Postings.FindCandidatesByCompanyAndTitleAsync(context.OwnerId, resolvedCompany.Id, TitleNormalizer.Normalize(title), ct);
+                    if (candRes.IsSuccess && candRes.Value is { Count: > 0 } candidates)
+                    {
+                        var byIdRes = await txCtx.Postings.GetByIdAsync(context.OwnerId, candidates[0].Id, ct);
+                        if (byIdRes.IsSuccess && byIdRes.Value is not null)
+                        {
+                            existingPosting = byIdRes.Value;
+                        }
+                    }
+                }
 
-            var savePosting = await _context.Postings.UpsertPostingAsync(posting, cancellationToken);
-            if (savePosting.IsSuccess)
-            {
-                var audit = AuditLogEntry.CreateForTracking(
+                if (existingPosting is not null)
+                {
+                    newPosting = existingPosting;
+                    return Result<bool>.Success(true);
+                }
+
+                var posting = Posting.Create(
+                    ownerId: context.OwnerId,
+                    companyId: resolvedCompany?.Id ?? Guid.NewGuid(),
+                    title: title,
+                    sourceKind: SourceKind.Aggregator,
+                    originalUrl: url,
+                    requisitionId: reqId,
+                    remoteType: RemoteType.Unknown,
+                    compensation: compText != null ? new Compensation(Text: compText) : null,
+                    score: (decimal?)score,
+                    cultureLevel: cultureLevel,
+                    cultureSummary: cultureSummary,
+                    disposition: PostingDisposition.Scored,
+                    now: dateOutcome.ResolvedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+                    compHighPriority: compHigh);
+
+                var savePosting = await txCtx.Postings.UpsertPostingAsync(posting, ct);
+                if (!savePosting.IsSuccess)
+                {
+                    return Result<bool>.Failure(savePosting.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to save posting"));
+                }
+
+                var auditP = AuditLogEntry.CreateForTracking(
                     ownerId: context.OwnerId,
                     actor: ImportActor,
                     operation: AuditOperation.ImportPostingCreate,
@@ -245,19 +252,46 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                             ["title"] = posting.Title,
                             ["disposition"] = posting.Disposition.ToString()
                         }));
-                await _context.AppendAuditEntryAsync(audit, cancellationToken);
+                await txCtx.AppendAuditEntryAsync(auditP, ct);
 
-                context.Summary.PostingsCreated++;
+                newPosting = posting;
+                return Result<bool>.Success(true);
+            }, cancellationToken);
 
-                // Track in context lookups for later stages
-                if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = posting;
-                if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = posting;
-                context.PostingsByCompanyAndTitle[$"{canonicalName}|{posting.NormalizedTitle}"] = posting;
+            if (!rowResult.IsSuccess)
+            {
+                context.Summary.Errors.Add(new TrackerImportRowError("postings.json", 0, rowResult.Error?.Message ?? "Failed to save posting"));
+                continue;
+            }
 
-                if (originalWasApplied)
+            if (autoCreatedCompany && newCompany is not null)
+            {
+                context.CanonicalCompanies[canonicalName] = newCompany;
+                context.Summary.CompaniesCreated++;
+                context.Summary.AutoCreatedCompanies.Add(canonicalName);
+            }
+
+            if (newPosting is not null)
+            {
+                if (newPosting.VersionToken != Guid.Empty && !context.PostingsByCompanyAndTitle.ContainsKey($"{canonicalName}|{newPosting.NormalizedTitle}"))
                 {
-                    context.Summary.UnclaimedAppliedPostingTitles.Add(posting.Title);
-                    context.Summary.UnclaimedAppliedPostings++;
+                    if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = newPosting;
+                    if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = newPosting;
+                    context.PostingsByCompanyAndTitle[$"{canonicalName}|{newPosting.NormalizedTitle}"] = newPosting;
+                    context.Summary.PostingsCreated++;
+
+                    if (originalWasApplied)
+                    {
+                        context.Summary.UnclaimedAppliedPostingTitles.Add(newPosting.Title);
+                        context.Summary.UnclaimedAppliedPostings++;
+                    }
+                }
+                else
+                {
+                    if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = newPosting;
+                    if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = newPosting;
+                    context.PostingsByCompanyAndTitle[$"{canonicalName}|{newPosting.NormalizedTitle}"] = newPosting;
+                    context.Summary.PostingsUnchanged++;
                 }
             }
         }

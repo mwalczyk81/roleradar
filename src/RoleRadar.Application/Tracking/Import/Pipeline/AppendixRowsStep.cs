@@ -89,26 +89,45 @@ public sealed class AppendixRowsStep : ITrackerImportStep
 
             var canonicalCompany = context.CompanyAliases.TryGetValue(companyName, out var alias) ? alias : companyName;
 
-            // 1. Resolve company
-            if (!context.CanonicalCompanies.TryGetValue(canonicalCompany, out var company))
-            {
-                var existing = await _context.Companies.GetByNormalizedNameAsync(context.OwnerId, canonicalCompany, cancellationToken);
-                if (existing.IsSuccess && existing.Value is not null)
-                {
-                    company = existing.Value;
-                    context.CanonicalCompanies[canonicalCompany] = company;
-                }
-                else
-                {
-                    company = Company.Create(
-                        ownerId: context.OwnerId,
-                        name: canonicalCompany,
-                        status: CompanyStatus.Neutral,
-                        description: string.Empty);
+            // 2. Parse date
+            var addedRaw = row["added_md"]?.Trim();
+            var dateOutcome = DateInferenceRule.Resolve(addedRaw, defaultDate);
+            if (dateOutcome.Kind == DateResolutionKind.DefaultedBlank) context.Summary.DatesDefaulted++;
+            if (dateOutcome.Kind is DateResolutionKind.InferredRollback or DateResolutionKind.InferredSameYear) context.Summary.DatesInferred++;
+            if (dateOutcome.IsFlagged) context.Summary.DatesFlagged++;
 
-                    var saveCompany = await _context.Companies.UpsertCompanyAsync(company, cancellationToken);
-                    if (saveCompany.IsSuccess)
+            var effectiveDate = dateOutcome.ResolvedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+
+            var autoCreatedCompany = false;
+            Company? newCompany = null;
+            Posting? updatedPosting = null;
+            Posting? createdPosting = null;
+            var isUnchanged = false;
+
+            var rowResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
+            {
+                Company? company = null;
+                if (!context.CanonicalCompanies.TryGetValue(canonicalCompany, out company))
+                {
+                    var existing = await txCtx.Companies.GetByNormalizedNameAsync(context.OwnerId, canonicalCompany, ct);
+                    if (existing.IsSuccess && existing.Value is not null)
                     {
+                        company = existing.Value;
+                    }
+                    else
+                    {
+                        company = Company.Create(
+                            ownerId: context.OwnerId,
+                            name: canonicalCompany,
+                            status: CompanyStatus.Neutral,
+                            description: string.Empty);
+
+                        var saveCompany = await txCtx.Companies.UpsertCompanyAsync(company, ct);
+                        if (!saveCompany.IsSuccess)
+                        {
+                            return Result<bool>.Failure(saveCompany.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to save company"));
+                        }
+
                         var audit = AuditLogEntry.CreateForTracking(
                             ownerId: context.OwnerId,
                             actor: ImportActor,
@@ -124,143 +143,131 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                                     ["name"] = company.Name,
                                     ["status"] = company.Status.ToString()
                                 }));
-                        await _context.AppendAuditEntryAsync(audit, cancellationToken);
-                        context.CanonicalCompanies[canonicalCompany] = company;
-                        context.Summary.CompaniesCreated++;
-                        context.Summary.AutoCreatedCompanies.Add(canonicalCompany);
+                        await txCtx.AppendAuditEntryAsync(audit, ct);
+                        autoCreatedCompany = true;
+                        newCompany = company;
                     }
                 }
-            }
 
-            // 2. Parse date
-            var addedRaw = row["added_md"]?.Trim();
-            var dateOutcome = DateInferenceRule.Resolve(addedRaw, defaultDate);
-            if (dateOutcome.Kind == DateResolutionKind.DefaultedBlank) context.Summary.DatesDefaulted++;
-            if (dateOutcome.Kind is DateResolutionKind.InferredRollback or DateResolutionKind.InferredSameYear) context.Summary.DatesInferred++;
-            if (dateOutcome.IsFlagged) context.Summary.DatesFlagged++;
-
-            var effectiveDate = dateOutcome.ResolvedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-
-            // 3. Resolve or create criterion from reason_primary
-            Guid? criterionId = null;
-            var reasonPrimary = row["reason_primary"]?.Trim();
-            if (!string.IsNullOrWhiteSpace(reasonPrimary))
-            {
-                var critResult = await _criteriaStep.GetOrCreateReasonCriterionAsync(context.OwnerId, reasonPrimary, effectiveDate, cancellationToken);
-                if (critResult.IsSuccess && critResult.Value is not null)
+                // 3. Resolve or create criterion from reason_primary
+                Guid? criterionId = null;
+                var reasonPrimary = row["reason_primary"]?.Trim();
+                if (!string.IsNullOrWhiteSpace(reasonPrimary))
                 {
-                    criterionId = critResult.Value.Id;
+                    var critResult = await _criteriaStep.GetOrCreateReasonCriterionAsync(context.OwnerId, reasonPrimary, effectiveDate, ct);
+                    if (critResult.IsSuccess && critResult.Value is not null)
+                    {
+                        criterionId = critResult.Value.Id;
+                    }
                 }
-            }
 
-            var remoteMentioned = bool.TryParse(row["remote_mentioned"]?.Trim(), out var r) && r;
-            var remoteType = remoteMentioned ? RemoteType.Remote : RemoteType.Unknown;
-            var reqId = row["req_id"]?.Trim();
-            var url = row["url"]?.Trim();
+                var remoteMentioned = bool.TryParse(row["remote_mentioned"]?.Trim(), out var r) && r;
+                var remoteType = remoteMentioned ? RemoteType.Remote : RemoteType.Unknown;
+                var reqId = row["req_id"]?.Trim();
+                var url = row["url"]?.Trim();
 
-            // Resurface policy
-            var proposedResurface = row["proposed_resurface"]?.Trim();
-            var resurfacePolicy = string.Equals(proposedResurface, "if_reopened", StringComparison.OrdinalIgnoreCase)
-                ? ResurfacePolicy.IfReopened
-                : ResurfacePolicy.Never;
+                // Resurface policy
+                var proposedResurface = row["proposed_resurface"]?.Trim();
+                var resurfacePolicy = string.Equals(proposedResurface, "if_reopened", StringComparison.OrdinalIgnoreCase)
+                    ? ResurfacePolicy.IfReopened
+                    : ResurfacePolicy.Never;
 
-            // Duplicate link resolution
-            Guid? duplicateOfId = null;
-            var isDuplicateRow = string.Equals(reasonPrimary, "duplicate", StringComparison.OrdinalIgnoreCase);
-            if (isDuplicateRow)
-            {
-                // Try finding target posting in existing lookups
-                var lookupKey = $"{canonicalCompany}|{TitleNormalizer.Normalize(title)}";
-                if (context.PostingsByCompanyAndTitle.TryGetValue(lookupKey, out var targetPosting))
+                // Duplicate link resolution
+                Guid? duplicateOfId = null;
+                var isDuplicateRow = string.Equals(reasonPrimary, "duplicate", StringComparison.OrdinalIgnoreCase);
+                if (isDuplicateRow)
                 {
-                    duplicateOfId = targetPosting.Id;
+                    var lookupKey = $"{canonicalCompany}|{TitleNormalizer.Normalize(title)}";
+                    if (context.PostingsByCompanyAndTitle.TryGetValue(lookupKey, out var targetPosting))
+                    {
+                        duplicateOfId = targetPosting.Id;
+                    }
+                    else if (company is not null)
+                    {
+                        var candRes = await txCtx.Postings.FindCandidatesByCompanyAndTitleAsync(context.OwnerId, company.Id, TitleNormalizer.Normalize(title), ct);
+                        if (candRes.IsSuccess && candRes.Value is { Count: > 0 } candidates)
+                        {
+                            duplicateOfId = candidates[0].Id;
+                        }
+                    }
                 }
-                else if (company is not null)
+
+                // Match against existing posting in context or repository
+                Posting? existingPosting = null;
+                if (!string.IsNullOrWhiteSpace(reqId) && context.PostingsByReqOrUrl.TryGetValue(reqId, out var byReq))
                 {
-                    var candRes = await _context.Postings.FindCandidatesByCompanyAndTitleAsync(context.OwnerId, company.Id, TitleNormalizer.Normalize(title), cancellationToken);
+                    existingPosting = byReq;
+                }
+                else if (!string.IsNullOrWhiteSpace(url) && context.PostingsByReqOrUrl.TryGetValue(url, out var byUrl))
+                {
+                    existingPosting = byUrl;
+                }
+                else if (!isDuplicateRow)
+                {
+                    var titleKey = $"{canonicalCompany}|{TitleNormalizer.Normalize(title)}";
+                    context.PostingsByCompanyAndTitle.TryGetValue(titleKey, out existingPosting);
+                }
+
+                if (existingPosting is null && !string.IsNullOrWhiteSpace(url))
+                {
+                    var normUrl = UrlNormalizer.Normalize(url);
+                    if (normUrl is not null)
+                    {
+                        var byUrlRes = await txCtx.Postings.GetByDedupKeyBAsync(context.OwnerId, normUrl, ct);
+                        if (byUrlRes.IsSuccess && byUrlRes.Value is not null)
+                        {
+                            existingPosting = byUrlRes.Value;
+                        }
+                    }
+                }
+
+                if (existingPosting is null && !string.IsNullOrWhiteSpace(reqId) && company is not null)
+                {
+                    var dedupC = $"{company.Id:D}|{reqId.Trim()}";
+                    var byCRes = await txCtx.Postings.GetByDedupKeyCAsync(context.OwnerId, dedupC, ct);
+                    if (byCRes.IsSuccess && byCRes.Value is not null)
+                    {
+                        existingPosting = byCRes.Value;
+                    }
+                }
+
+                if (existingPosting is null && !isDuplicateRow && company is not null)
+                {
+                    var candRes = await txCtx.Postings.FindCandidatesByCompanyAndTitleAsync(context.OwnerId, company.Id, TitleNormalizer.Normalize(title), ct);
                     if (candRes.IsSuccess && candRes.Value is { Count: > 0 } candidates)
                     {
-                        duplicateOfId = candidates[0].Id;
+                        var byIdRes = await txCtx.Postings.GetByIdAsync(context.OwnerId, candidates[0].Id, ct);
+                        if (byIdRes.IsSuccess && byIdRes.Value is not null)
+                        {
+                            existingPosting = byIdRes.Value;
+                        }
                     }
                 }
-            }
 
-            // Match against existing posting in context or repository
-            Posting? existingPosting = null;
-            if (!string.IsNullOrWhiteSpace(reqId) && context.PostingsByReqOrUrl.TryGetValue(reqId, out var byReq))
-            {
-                existingPosting = byReq;
-            }
-            else if (!string.IsNullOrWhiteSpace(url) && context.PostingsByReqOrUrl.TryGetValue(url, out var byUrl))
-            {
-                existingPosting = byUrl;
-            }
-            else if (!isDuplicateRow)
-            {
-                var titleKey = $"{canonicalCompany}|{TitleNormalizer.Normalize(title)}";
-                context.PostingsByCompanyAndTitle.TryGetValue(titleKey, out existingPosting);
-            }
-
-            if (existingPosting is null && !string.IsNullOrWhiteSpace(url))
-            {
-                var normUrl = UrlNormalizer.Normalize(url);
-                if (normUrl is not null)
+                if (existingPosting is not null)
                 {
-                    var byUrlRes = await _context.Postings.GetByDedupKeyBAsync(context.OwnerId, normUrl, cancellationToken);
-                    if (byUrlRes.IsSuccess && byUrlRes.Value is not null)
+                    if (existingPosting.Disposition == PostingDisposition.ScreenedOut &&
+                        string.Equals(existingPosting.DispositionReason, reasonPrimary ?? "screened_out", StringComparison.OrdinalIgnoreCase))
                     {
-                        existingPosting = byUrlRes.Value;
+                        isUnchanged = true;
+                        updatedPosting = existingPosting;
+                        return Result<bool>.Success(true);
                     }
-                }
-            }
 
-            if (existingPosting is null && !string.IsNullOrWhiteSpace(reqId) && company is not null)
-            {
-                var dedupC = $"{company.Id:D}|{reqId.Trim()}";
-                var byCRes = await _context.Postings.GetByDedupKeyCAsync(context.OwnerId, dedupC, cancellationToken);
-                if (byCRes.IsSuccess && byCRes.Value is not null)
-                {
-                    existingPosting = byCRes.Value;
-                }
-            }
+                    // Transition existing posting to ScreenedOut
+                    existingPosting.Transition(
+                        PostingDisposition.ScreenedOut,
+                        reason: reasonPrimary ?? "screened_out",
+                        criterionId: criterionId,
+                        resurfacePolicy: resurfacePolicy,
+                        timestamp: effectiveDate);
 
-            if (existingPosting is null && !isDuplicateRow && company is not null)
-            {
-                var candRes = await _context.Postings.FindCandidatesByCompanyAndTitleAsync(context.OwnerId, company.Id, TitleNormalizer.Normalize(title), cancellationToken);
-                if (candRes.IsSuccess && candRes.Value is { Count: > 0 } candidates)
-                {
-                    var byIdRes = await _context.Postings.GetByIdAsync(context.OwnerId, candidates[0].Id, cancellationToken);
-                    if (byIdRes.IsSuccess && byIdRes.Value is not null)
+                    var saveExisting = await txCtx.Postings.UpsertPostingAsync(existingPosting, ct);
+                    if (!saveExisting.IsSuccess)
                     {
-                        existingPosting = byIdRes.Value;
+                        return Result<bool>.Failure(saveExisting.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to transition posting"));
                     }
-                }
-            }
 
-            if (existingPosting is not null)
-            {
-                if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = existingPosting;
-                if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = existingPosting;
-                context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{existingPosting.NormalizedTitle}"] = existingPosting;
-
-                if (existingPosting.Disposition == PostingDisposition.ScreenedOut &&
-                    string.Equals(existingPosting.DispositionReason, reasonPrimary ?? "screened_out", StringComparison.OrdinalIgnoreCase))
-                {
-                    context.Summary.PostingsUnchanged++;
-                    continue;
-                }
-
-                // Transition existing posting to ScreenedOut
-                existingPosting.Transition(
-                    PostingDisposition.ScreenedOut,
-                    reason: reasonPrimary ?? "screened_out",
-                    criterionId: criterionId,
-                    resurfacePolicy: resurfacePolicy,
-                    timestamp: effectiveDate);
-
-                var saveExisting = await _context.Postings.UpsertPostingAsync(existingPosting, cancellationToken);
-                if (saveExisting.IsSuccess)
-                {
                     var audit = AuditLogEntry.CreateForTracking(
                         ownerId: context.OwnerId,
                         actor: ImportActor,
@@ -276,12 +283,11 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                                 ["disposition"] = existingPosting.Disposition.ToString(),
                                 ["reason"] = existingPosting.DispositionReason
                             }));
-                    await _context.AppendAuditEntryAsync(audit, cancellationToken);
-                    context.Summary.PostingsUpdated++;
+                    await txCtx.AppendAuditEntryAsync(audit, ct);
+                    updatedPosting = existingPosting;
+                    return Result<bool>.Success(true);
                 }
-            }
-            else
-            {
+
                 // Create new posting directly with ScreenedOut disposition
                 var newPosting = Posting.Create(
                     ownerId: context.OwnerId,
@@ -299,31 +305,71 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     duplicateOfId: duplicateOfId,
                     now: effectiveDate);
 
-                var saveNew = await _context.Postings.UpsertPostingAsync(newPosting, cancellationToken);
-                if (saveNew.IsSuccess)
+                var saveNew = await txCtx.Postings.UpsertPostingAsync(newPosting, ct);
+                if (!saveNew.IsSuccess)
                 {
-                    var audit = AuditLogEntry.CreateForTracking(
-                        ownerId: context.OwnerId,
-                        actor: ImportActor,
-                        operation: AuditOperation.ImportPostingCreate,
-                        entityType: "posting",
-                        entityId: newPosting.Id,
-                        resultingVersionToken: newPosting.VersionToken,
-                        occurredAtUtc: DateTime.UtcNow,
-                        details: new AuditDetails(
-                            ChangedFields: ["title", "company_id", "disposition"],
-                            After: new Dictionary<string, object?>
-                            {
-                                ["title"] = newPosting.Title,
-                                ["disposition"] = newPosting.Disposition.ToString()
-                            }));
-                    await _context.AppendAuditEntryAsync(audit, cancellationToken);
-                    context.Summary.PostingsCreated++;
-
-                    if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = newPosting;
-                    if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = newPosting;
-                    context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{newPosting.NormalizedTitle}"] = newPosting;
+                    return Result<bool>.Failure(saveNew.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to create posting"));
                 }
+
+                var auditNew = AuditLogEntry.CreateForTracking(
+                    ownerId: context.OwnerId,
+                    actor: ImportActor,
+                    operation: AuditOperation.ImportPostingCreate,
+                    entityType: "posting",
+                    entityId: newPosting.Id,
+                    resultingVersionToken: newPosting.VersionToken,
+                    occurredAtUtc: DateTime.UtcNow,
+                    details: new AuditDetails(
+                        ChangedFields: ["title", "company_id", "disposition"],
+                        After: new Dictionary<string, object?>
+                        {
+                            ["title"] = newPosting.Title,
+                            ["disposition"] = newPosting.Disposition.ToString()
+                        }));
+                await txCtx.AppendAuditEntryAsync(auditNew, ct);
+                createdPosting = newPosting;
+                return Result<bool>.Success(true);
+            }, cancellationToken);
+
+            if (!rowResult.IsSuccess)
+            {
+                context.Summary.Errors.Add(new TrackerImportRowError(
+                    "appendix-rows.csv",
+                    row.LineNumber,
+                    rowResult.Error?.Message ?? "Failed to save appendix row"));
+                continue;
+            }
+
+            if (autoCreatedCompany && newCompany is not null)
+            {
+                context.CanonicalCompanies[canonicalCompany] = newCompany;
+                context.Summary.CompaniesCreated++;
+                context.Summary.AutoCreatedCompanies.Add(canonicalCompany);
+            }
+
+            var rowReqId = row["req_id"]?.Trim();
+            var rowUrl = row["url"]?.Trim();
+
+            if (isUnchanged && updatedPosting is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(rowReqId)) context.PostingsByReqOrUrl[rowReqId] = updatedPosting;
+                if (!string.IsNullOrWhiteSpace(rowUrl)) context.PostingsByReqOrUrl[rowUrl] = updatedPosting;
+                context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{updatedPosting.NormalizedTitle}"] = updatedPosting;
+                context.Summary.PostingsUnchanged++;
+            }
+            else if (updatedPosting is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(rowReqId)) context.PostingsByReqOrUrl[rowReqId] = updatedPosting;
+                if (!string.IsNullOrWhiteSpace(rowUrl)) context.PostingsByReqOrUrl[rowUrl] = updatedPosting;
+                context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{updatedPosting.NormalizedTitle}"] = updatedPosting;
+                context.Summary.PostingsUpdated++;
+            }
+            else if (createdPosting is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(rowReqId)) context.PostingsByReqOrUrl[rowReqId] = createdPosting;
+                if (!string.IsNullOrWhiteSpace(rowUrl)) context.PostingsByReqOrUrl[rowUrl] = createdPosting;
+                context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{createdPosting.NormalizedTitle}"] = createdPosting;
+                context.Summary.PostingsCreated++;
             }
         }
 

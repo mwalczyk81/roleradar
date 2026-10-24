@@ -79,33 +79,42 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                 status: status,
                 description: notes);
 
-            var upsertResult = await _context.Companies.UpsertCompanyAsync(company, cancellationToken);
-            if (!upsertResult.IsSuccess)
+            var rowResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
+            {
+                var upsertResult = await txCtx.Companies.UpsertCompanyAsync(company, ct);
+                if (!upsertResult.IsSuccess)
+                {
+                    return Result<bool>.Failure(upsertResult.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to save company"));
+                }
+
+                var auditEntry = AuditLogEntry.CreateForTracking(
+                    ownerId: context.OwnerId,
+                    actor: ImportActor,
+                    operation: AuditOperation.ImportCompanyCreate,
+                    entityType: "company",
+                    entityId: company.Id,
+                    resultingVersionToken: company.VersionToken,
+                    occurredAtUtc: DateTime.UtcNow,
+                    details: new AuditDetails(
+                        ChangedFields: ["name", "status", "description"],
+                        After: new Dictionary<string, object?>
+                        {
+                            ["name"] = company.Name,
+                            ["status"] = company.Status.ToString()
+                        }));
+
+                await txCtx.AppendAuditEntryAsync(auditEntry, ct);
+                return Result<bool>.Success(true);
+            }, cancellationToken);
+
+            if (!rowResult.IsSuccess)
             {
                 context.Summary.Errors.Add(new TrackerImportRowError(
                     "watchlist-companies.csv",
                     row.LineNumber,
-                    upsertResult.Error?.Message ?? "Failed to save company"));
+                    rowResult.Error?.Message ?? "Failed to save company"));
                 continue;
             }
-
-            var auditEntry = AuditLogEntry.CreateForTracking(
-                ownerId: context.OwnerId,
-                actor: ImportActor,
-                operation: AuditOperation.ImportCompanyCreate,
-                entityType: "company",
-                entityId: company.Id,
-                resultingVersionToken: company.VersionToken,
-                occurredAtUtc: DateTime.UtcNow,
-                details: new AuditDetails(
-                    ChangedFields: ["name", "status", "description"],
-                    After: new Dictionary<string, object?>
-                    {
-                        ["name"] = company.Name,
-                        ["status"] = company.Status.ToString()
-                    }));
-
-            await _context.AppendAuditEntryAsync(auditEntry, cancellationToken);
 
             context.CanonicalCompanies[canonicalName] = company;
             context.Summary.CompaniesCreated++;

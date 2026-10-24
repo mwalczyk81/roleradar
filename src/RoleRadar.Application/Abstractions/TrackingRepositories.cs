@@ -16,6 +16,10 @@ public interface ITrackingTransactionContext
         Task.FromResult(Result<bool>.Success(true));
     Task<Result<bool>> NoteExistsAsync(string ownerId, string title, string area, CancellationToken cancellationToken = default) =>
         Task.FromResult(Result<bool>.Success(false));
+    Task<Result<TResponse>> ExecuteInTransactionAsync<TResponse>(
+        Func<ITrackingTransactionContext, CancellationToken, Task<Result<TResponse>>> work,
+        CancellationToken cancellationToken = default) =>
+        work(this, cancellationToken);
 }
 
 public interface ICompanyRepository

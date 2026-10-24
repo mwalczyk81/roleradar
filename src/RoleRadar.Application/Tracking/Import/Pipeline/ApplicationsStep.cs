@@ -12,11 +12,16 @@ public sealed class ApplicationsStep : ITrackerImportStep
     private const string ImportActor = "cli-import-tracker";
     private readonly ICsvParser _csvParser;
     private readonly ITrackingTransactionContext _context;
+    private readonly Func<int, Task>? _faultInjectionHook;
 
-    public ApplicationsStep(ICsvParser csvParser, ITrackingTransactionContext context)
+    public ApplicationsStep(
+        ICsvParser csvParser,
+        ITrackingTransactionContext context,
+        Func<int, Task>? faultInjectionHook = null)
     {
         _csvParser = csvParser ?? throw new ArgumentNullException(nameof(csvParser));
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _faultInjectionHook = faultInjectionHook;
     }
 
     public async Task<Result<bool>> ExecuteAsync(TrackerImportContext context, CancellationToken cancellationToken = default)
@@ -69,12 +74,36 @@ public sealed class ApplicationsStep : ITrackerImportStep
             // 1. Standalone Note branch
             if (string.Equals(kind, "standalone_note", StringComparison.OrdinalIgnoreCase))
             {
-                await ProcessStandaloneNoteAsync(context, row, defaultDate, cancellationToken);
+                var noteResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
+                {
+                    await ProcessStandaloneNoteAsync(context, row, defaultDate, ct);
+                    return Result<bool>.Success(true);
+                }, cancellationToken);
+
+                if (!noteResult.IsSuccess)
+                {
+                    context.Summary.Errors.Add(new TrackerImportRowError(
+                        "applications.csv",
+                        row.LineNumber,
+                        noteResult.Error?.Message ?? "Failed to save note"));
+                }
                 continue;
             }
 
             // 2. Application branch
-            await ProcessApplicationAsync(context, row, defaultDate, reviewFlags, cancellationToken);
+            var appResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
+            {
+                await ProcessApplicationAsync(context, row, defaultDate, reviewFlags, ct);
+                return Result<bool>.Success(true);
+            }, cancellationToken);
+
+            if (!appResult.IsSuccess)
+            {
+                context.Summary.Errors.Add(new TrackerImportRowError(
+                    "applications.csv",
+                    row.LineNumber,
+                    appResult.Error?.Message ?? "Failed to save application"));
+            }
         }
 
         return Result<bool>.Success(true);
@@ -339,6 +368,11 @@ public sealed class ApplicationsStep : ITrackerImportStep
             now: appliedDateTime);
 
         await _context.Applications.UpsertApplicationAsync(application, cancellationToken);
+
+        if (_faultInjectionHook is not null)
+        {
+            await _faultInjectionHook(row.LineNumber);
+        }
 
         var auditApp = AuditLogEntry.CreateForTracking(
             ownerId: context.OwnerId,

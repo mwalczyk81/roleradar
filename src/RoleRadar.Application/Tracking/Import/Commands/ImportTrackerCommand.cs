@@ -148,7 +148,7 @@ public sealed class TrackerImportCoordinator : ITrackerImportCoordinator
 
             foreach (var row in _csvParser.Read(reader, hasHeader: true))
             {
-                var addedMd = row["added_md"] ?? row["applied_date_md"] ?? row["rejected_date_md"];
+                var addedMd = row["applied_on"] ?? row["added_md"] ?? row["applied_date_md"] ?? row["rejected_date_md"];
                 if (string.IsNullOrWhiteSpace(addedMd) ||
                     (!addedMd.Trim().StartsWith("20", StringComparison.Ordinal) && !addedMd.Trim().StartsWith("19", StringComparison.Ordinal)))
                 {

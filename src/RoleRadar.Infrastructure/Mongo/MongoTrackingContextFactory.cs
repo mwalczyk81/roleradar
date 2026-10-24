@@ -34,6 +34,7 @@ public sealed class MongoTrackingContextFactory : ITrackingContextFactory
         var notesCol = database.GetCollection<BsonDocument>("notes");
 
         return new MongoTrackingTransactionContext(
+            _client,
             companies,
             postings,
             criteria,

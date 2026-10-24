@@ -8,7 +8,7 @@
 
 Feature 004 implements a CLI-only importer (`roleradar tracker-import <bundle-dir>`) that loads historical job-search tracker bundles into RoleRadar's structured collections.
 Key technical highlights:
-- **Zero Persistent Writes in Preview**: Defaults to dry-run mode using an ephemeral scratch database (`roleradar_scratch_<guid>`) cloned from the target database and dropped in a `finally` block, ensuring identical handler/decorator execution, full per-row isolation, and zero persistent side-effects on target state.
+- **Zero Persistent Writes in Preview & Direct Ingestion Path**: Defaults to dry-run mode using an ephemeral scratch database (`roleradar_scratch_<guid>`) cloned from the target database and dropped in a `finally` block, ensuring zero persistent side-effects on target state. Ingestion executes directly via domain entities and repositories inside per-row transactions (`ITrackingTransactionContext.ExecuteInTransactionAsync`) with `import_*` audit operations rather than interactive command handlers because: (1) multi-entity row writes (e.g. application + event + posting transition) require atomic rollback on mid-row failure; (2) interactive handlers in DI cannot execute against dynamic scratch database instances; (3) interactive handlers hardcode interactive audit operations and actor `mcp-stdio`; and (4) staging rules diverge from interactive workflows. Automated parity tests verify document equivalence.
 - **Strict Ingestion Pipeline**: (0) seed compensation criteria (`comp_preferred_floor`, `comp_high_priority_bar`); (1) `company-aliases.csv`; (2) `watchlist-companies.csv`; (3) `postings.json` (auto-creating neutral companies, staging `applied` postings as `scored`); (4) `appendix-rows.csv` (non-duplicates before duplicates, criteria created on first use); (5) `applications.csv` (applications transitioning postings to `applied`, chronology events, standalone notes in `job-search`).
 - **Date Rollback & Stated Notes**: Month-first dates infer their year from `--default-date` with automatic rollback to the preceding year if the date is after `--default-date`. Leading `~` and trailing parentheticals are parsed into ISO dates with notes preserved.
 - **Audit Logging**: Tracker import writes emit `import_*` operation names with actor `cli-import-tracker`. Standalone notes reuse `import_create` (`ImportCreate`). Zero interactive operation names are emitted.
@@ -22,7 +22,7 @@ Key technical highlights:
 **Storage**: MongoDB 8.0 replica set with standard GUID representation and UTC timestamps.  
 **Testing**: xUnit v3 (4.0.2), `Testcontainers.MongoDb` (4.16.0), `FsCheck` (3.4.0), `NetArchTest.Rules` (1.3.2), `coverlet.collector` (10.1.0).  
 **Target Platform**: Linux (containerized `roleradar-cli`) and Windows 11 host.  
-**Project Type**: CLI tool invoking Application command handlers in-process.  
+**Project Type**: CLI tool invoking Application tracker import coordinator in-process.  
 **Performance Goals**: Import ~200 rows and verify within <5 seconds.  
 **Constraints**: MCP tool ceiling stays at 12 (0 new MCP tools). Minimum 85% coverage across Domain and Application layers. Zero real/private data in repository fixtures.
 
@@ -32,7 +32,7 @@ Key technical highlights:
 
 - **Principle I (Privacy First)**: **PASS**. All test fixtures and sample schemas use strictly fictional company names, job titles, salary amounts, and contacts. The external real-name denylist hook passes. `--report` refuses any path within a git work tree. Terminal output displays counts and row numbers only.
 - **Principle II (Test-First Development)**: **PASS**. Tests run against isolated Testcontainers fixtures (`IsolatedContainerMongoFixture`), never touching local developer databases. Dev-stack guard is preserved. Test-first TDD methodology enforced.
-- **Principle III (Test-Enforced Layering)**: **PASS**. Inward dependencies `Domain <- Application <- Infrastructure <- Cli`. CLI invokes `ICommandHandler` in-process. Every command handler registration is wrapped by `TransactionAndAuditCommandDecorator`.
+- **Principle III (Test-Enforced Layering)**: **PASS**. Inward dependencies `Domain <- Application <- Infrastructure <- Cli`. CLI invokes `ITrackerImportCoordinator` in-process. All interactive command handlers remain wrapped by `TransactionAndAuditCommandDecorator`, while the batch import pipeline uses per-row atomic transactions on `ITrackingTransactionContext`.
 - **Principle IV (Named Seams Only)**: **PASS**. Handlers implement `ICommandHandler<TCommand, TResponse>` returning typed `Result<T>`. No mediator libraries or generic repositories introduced. CSV parser is hand-rolled in first-party code (ADR 0014).
 - **Principle V (Agent Safety & Auditability)**: **PASS**. All imported text is treated as untrusted, length-limited input. No new MCP tools added. Every write produces an append-only audit entry with `import_*` operations and actor `cli-import-tracker`. Zero hard deletes.
 - **Principle VI (stdio Protocol Hygiene)**: **PASS**. MCP stdio host is untouched. CLI stdout displays counts; stderr handles logging.
@@ -75,8 +75,7 @@ src/
 │   └── Tracking/
 │       └── Import/
 │           ├── Commands/
-│           │   ├── TrackerImportCommand.cs        # Main import command record
-│           │   └── TrackerImportCommandHandler.cs # Pipeline orchestrator invoking existing handlers
+│           │   └── ImportTrackerCommand.cs        # Pipeline orchestrator using domain entities and repositories inside per-row transactions
 │           ├── DTOs/
 │           │   └── TrackerImportSummaryDto.cs     # Summary statistics and row error DTOs
 │           └── Pipeline/

@@ -31,10 +31,12 @@ public interface ITrackerImportPipelineFactory
 public sealed class TrackerImportPipelineFactory : ITrackerImportPipelineFactory
 {
     private readonly ICsvParser _csvParser;
+    private readonly Func<int, Task>? _applicationsFaultHook;
 
-    public TrackerImportPipelineFactory(ICsvParser csvParser)
+    public TrackerImportPipelineFactory(ICsvParser csvParser, Func<int, Task>? applicationsFaultHook = null)
     {
         _csvParser = csvParser ?? throw new ArgumentNullException(nameof(csvParser));
+        _applicationsFaultHook = applicationsFaultHook;
     }
 
     public TrackerImportPipeline CreatePipeline(ITrackingTransactionContext context)
@@ -46,7 +48,7 @@ public sealed class TrackerImportPipelineFactory : ITrackerImportPipelineFactory
         var companiesStep = new WatchlistCompaniesStep(_csvParser, context);
         var postingsStep = new PostingsJsonStep(context, criteriaStep);
         var appendixStep = new AppendixRowsStep(_csvParser, context, criteriaStep);
-        var applicationsStep = new ApplicationsStep(_csvParser, context);
+        var applicationsStep = new ApplicationsStep(_csvParser, context, _applicationsFaultHook);
 
         var steps = new ITrackerImportStep[]
         {
@@ -73,18 +75,18 @@ internal sealed class CriteriaSeedingPipelineStep : ITrackerImportStep
 
     public async Task<Result<bool>> ExecuteAsync(TrackerImportContext context, CancellationToken cancellationToken = default)
     {
-        if (context.DefaultDate.HasValue)
-        {
-            var seedResult = await _step.SeedPredefinedCriteriaAsync(context.OwnerId, context.DefaultDate.Value, cancellationToken);
-            if (!seedResult.IsSuccess)
-            {
-                return Result<bool>.Failure(seedResult.Error!.Value);
-            }
+        // When --default-date is absent, use today's UTC date as the effective date for seeded criteria.
+        var effectiveDate = context.DefaultDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
 
-            if (seedResult.Value is not null)
-            {
-                context.Summary.CriteriaCreated += seedResult.Value.CreatedCount;
-            }
+        var seedResult = await _step.SeedPredefinedCriteriaAsync(context.OwnerId, effectiveDate, cancellationToken);
+        if (!seedResult.IsSuccess)
+        {
+            return Result<bool>.Failure(seedResult.Error!.Value);
+        }
+
+        if (seedResult.Value is not null)
+        {
+            context.Summary.CriteriaCreated += seedResult.Value.CreatedCount;
         }
 
         return Result<bool>.Success(true);

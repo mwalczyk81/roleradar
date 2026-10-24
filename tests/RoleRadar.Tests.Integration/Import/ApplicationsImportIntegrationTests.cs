@@ -137,7 +137,108 @@ public sealed class ApplicationsImportIntegrationTests : IClassFixture<IsolatedC
         }
     }
 
-    private ServiceProvider BuildServiceProvider(string dbName)
+    [Fact]
+    public async Task ApplicationsImport_RowFailsMidWay_RollsBackEntityAndAudit_AndNextRowStillImports()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"rr_app_tx_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempDir);
+        var dbName = $"rrtest_app_tx_{Guid.NewGuid():N}";
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempDir, "company-aliases.csv"), "alias,canonical\r\n");
+            File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\nAcme Corp,target,recruiter,Note,,\r\n");
+
+            // postings.json: 3 postings
+            var postingsJson = """
+                [
+                    { "title": "Role 1", "company": "Acme Corp", "status": "applied", "url": "https://example.com/job/1" },
+                    { "title": "Role 2", "company": "Acme Corp", "status": "applied", "url": "https://example.com/job/2" },
+                    { "title": "Role 3", "company": "Acme Corp", "status": "applied", "url": "https://example.com/job/3" }
+                ]
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
+            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");
+
+            // applications.csv: 3 rows (Line 2: Role 1, Line 3: Role 2, Line 4: Role 3)
+            var appCsv = """
+                kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes
+                application,Acme Corp,Role 1,,2026-03-10,false,,200000,false,fit,tailored,,,Applied notes,,
+                application,Acme Corp,Role 2,,2026-03-11,false,,210000,false,fit,tailored,,,Applied notes,,
+                application,Acme Corp,Role 3,,2026-03-12,false,,220000,false,fit,tailored,,,Applied notes,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "applications.csv"), appCsv);
+
+            // Hook injects mid-way failure after application entity write on Line 3 (Role 2)
+            var provider = BuildServiceProvider(dbName, faultHook: line =>
+            {
+                if (line == 3)
+                {
+                    throw new InvalidOperationException("Forced mid-way failure on Line 3 after entity write");
+                }
+                return Task.CompletedTask;
+            });
+
+            var coordinator = provider.GetRequiredService<ITrackerImportCoordinator>();
+            var command = new ImportTrackerCommand(
+                BundleDirectory: tempDir,
+                DefaultDate: new DateOnly(2026, 10, 24),
+                Apply: true);
+
+            var result = await coordinator.ExecuteAsync(command);
+
+            Assert.True(result.IsSuccess);
+            var summary = result.Value!;
+            Assert.Equal(2, summary.ApplicationsCreated); // Role 1 and Role 3 created; Role 2 failed and was rolled back
+            Assert.Single(summary.Errors); // Line 3 error recorded
+            Assert.Equal(3, summary.Errors[0].LineNumber);
+
+            var client = new MongoClient(_fixture.HostMongoUri);
+            var db = client.GetDatabase(dbName);
+            var appsCol = db.GetCollection<MongoDB.Bson.BsonDocument>(TrackingMongoOptions.ApplicationsCollectionName);
+            var postingsCol = db.GetCollection<MongoDB.Bson.BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
+            var auditCol = db.GetCollection<MongoDB.Bson.BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
+
+            var role1Posting = await postingsCol.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("title", "Role 1")).FirstOrDefaultAsync();
+            var role2Posting = await postingsCol.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("title", "Role 2")).FirstOrDefaultAsync();
+            var role3Posting = await postingsCol.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("title", "Role 3")).FirstOrDefaultAsync();
+
+            Assert.NotNull(role1Posting);
+            Assert.NotNull(role2Posting);
+            Assert.NotNull(role3Posting);
+
+            // Role 1 and Role 3 transitioned to applied; Role 2 remained scored because the transition and app were rolled back!
+            Assert.Equal("applied", role1Posting["disposition"].AsString);
+            Assert.Equal("scored", role2Posting["disposition"].AsString);
+            Assert.Equal("applied", role3Posting["disposition"].AsString);
+
+            // Application collection: Role 1 and Role 3 exist; Role 2 DOES NOT exist (rolled back!)
+            var app1 = await appsCol.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("posting_id", role1Posting["_id"])).FirstOrDefaultAsync();
+            var app2 = await appsCol.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("posting_id", role2Posting["_id"])).FirstOrDefaultAsync();
+            var app3 = await appsCol.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("posting_id", role3Posting["_id"])).FirstOrDefaultAsync();
+
+            Assert.NotNull(app1);
+            Assert.Null(app2); // ZERO entity remaining for failed row!
+            Assert.NotNull(app3);
+
+            // Audit log collection: zero application or event audit entries for Role 2
+            var app2Audit = await auditCol.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.And(
+                Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("entity_type", "application"),
+                Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("entity_id", role2Posting["_id"]))).FirstOrDefaultAsync();
+            Assert.Null(app2Audit); // ZERO audit entry remaining for failed row!
+
+            var appAudits = await auditCol.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("entity_type", "application")).ToListAsync();
+            Assert.Equal(2, appAudits.Count);
+
+            await client.DropDatabaseAsync(dbName);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    private ServiceProvider BuildServiceProvider(string dbName, Func<int, Task>? faultHook = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
@@ -149,6 +250,15 @@ public sealed class ApplicationsImportIntegrationTests : IClassFixture<IsolatedC
             opts.DatabaseName = dbName;
         });
         services.AddRoleRadarApplication();
+
+        if (faultHook is not null)
+        {
+            services.AddTransient<RoleRadar.Application.Tracking.Import.Pipeline.ITrackerImportPipelineFactory>(sp =>
+            {
+                var csvParser = sp.GetRequiredService<RoleRadar.Application.Abstractions.ICsvParser>();
+                return new RoleRadar.Application.Tracking.Import.Pipeline.TrackerImportPipelineFactory(csvParser, faultHook);
+            });
+        }
 
         return services.BuildServiceProvider();
     }
