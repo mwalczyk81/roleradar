@@ -168,11 +168,22 @@ public static class ContainerTestHarness
         var stdoutBuilder = new StringBuilder();
         var stderrBuilder = new StringBuilder();
 
+        var timeToFirstResponse = TimeSpan.Zero;
+        var responseReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
         process.OutputDataReceived += (_, e) =>
         {
             if (e.Data is not null)
             {
                 stdoutBuilder.AppendLine(e.Data);
+                if (e.Data.Contains("jsonrpc", StringComparison.OrdinalIgnoreCase))
+                {
+                    if (timeToFirstResponse == TimeSpan.Zero)
+                    {
+                        timeToFirstResponse = stopwatch.Elapsed;
+                    }
+                    responseReceived.TrySetResult(true);
+                }
             }
         };
 
@@ -188,30 +199,13 @@ public static class ContainerTestHarness
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
-        var timeToFirstResponse = TimeSpan.Zero;
         if (!string.IsNullOrEmpty(stdinInput))
         {
-            var responseReceived = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            void OnDataReceived(object _, DataReceivedEventArgs args)
-            {
-                if (args.Data?.Contains("jsonrpc", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    if (timeToFirstResponse == TimeSpan.Zero)
-                    {
-                        timeToFirstResponse = stopwatch.Elapsed;
-                    }
-                    responseReceived.TrySetResult(true);
-                }
-            }
-
-            process.OutputDataReceived += OnDataReceived;
-
             await process.StandardInput.WriteAsync(stdinInput);
             await process.StandardInput.FlushAsync();
 
             // Wait for response frame or timeout before closing stdin
-            await Task.WhenAny(responseReceived.Task, Task.Delay(5000));
-            process.OutputDataReceived -= OnDataReceived;
+            await Task.WhenAny(responseReceived.Task, Task.Delay(TimeSpan.FromSeconds(timeoutSeconds)));
         }
 
         process.StandardInput.Close();
