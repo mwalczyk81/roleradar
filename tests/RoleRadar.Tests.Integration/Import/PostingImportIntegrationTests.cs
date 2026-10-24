@@ -104,6 +104,7 @@ public sealed class PostingImportIntegrationTests : IClassFixture<IsolatedContai
             Assert.Equal("scored", p1Doc["disposition"].AsString);
             Assert.True(p1Doc["comp_high_priority"].AsBoolean);
             Assert.True(p1Doc["score"].IsBsonNull);
+            Assert.True(!p1Doc.Contains("ats_tenant") || p1Doc["ats_tenant"].IsBsonNull);
 
             // 2. Postings from Appendix: REQ-1 (target) and REQ-2 (duplicate)
             var origDoc = await postingsCol.Find(Builders<MongoDB.Bson.BsonDocument>.Filter.Eq("requisition_id", "REQ-1")).FirstOrDefaultAsync();

@@ -150,6 +150,9 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                 var rawReasonPrimary = row["reason_primary"]?.Trim();
                 var reasonPrimary = TrackerImportFieldLimiter.LimitDispositionReason(rawReasonPrimary, context.Summary);
 
+                var rawSource = row["source"]?.Trim();
+                var sourceKind = TrackingEnumExtensions.TryParseSourceKind(rawSource, out var parsedSrc) ? parsedSrc : SourceKind.Aggregator;
+
                 var rowResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
                 {
                     Company? company = null;
@@ -361,7 +364,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                         ownerId: context.OwnerId,
                         companyId: company?.Id ?? Guid.NewGuid(),
                         title: title,
-                        sourceKind: SourceKind.Aggregator,
+                        sourceKind: sourceKind,
                         originalUrl: url,
                         requisitionId: reqId,
                         remoteType: remoteType,

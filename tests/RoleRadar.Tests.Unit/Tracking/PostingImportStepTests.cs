@@ -95,11 +95,11 @@ public sealed class PostingImportStepTests
             Assert.True(result.IsSuccess);
             Assert.Equal(3, context.Summary.PostingsCreated);
 
-            // 1. First posting: compHigh true, culture stable, score 9.5, slug in AtsTenant & audit
+            // 1. First posting: compHigh true, culture stable, score 9.5, slug in audit (AtsTenant is null)
             var p1 = inMemoryCtx.SavedPostings.FirstOrDefault(p => p.Title == "Principal Architect");
             Assert.NotNull(p1);
             Assert.True(p1.CompHighPriority);
-            Assert.Equal("acme-principal-architect", p1.AtsTenant);
+            Assert.Null(p1.AtsTenant);
             Assert.Equal("Remote - US", p1.Location);
             Assert.Equal(CultureLevel.Stable, p1.CultureLevel);
             Assert.Equal(9.5m, p1.Score);
@@ -115,7 +115,7 @@ public sealed class PostingImportStepTests
             var p2 = inMemoryCtx.SavedPostings.FirstOrDefault(p => p.Title == "Staff Engineer");
             Assert.NotNull(p2);
             Assert.False(p2.CompHighPriority);
-            Assert.Equal("globex-staff-engineer", p2.AtsTenant);
+            Assert.Null(p2.AtsTenant);
             Assert.Equal(CultureLevel.Unknown, p2.CultureLevel);
             Assert.Null(p2.Score); // Out of range score stored as null
             Assert.True(context.Summary.DatesFlagged > 0); // Flagged count incremented
@@ -132,7 +132,7 @@ public sealed class PostingImportStepTests
             var p3 = inMemoryCtx.SavedPostings.FirstOrDefault(p => p.Title == "Cloud Architect");
             Assert.NotNull(p3);
             Assert.Null(p3.CompHighPriority);
-            Assert.Equal("cyberdyne-cloud-arch", p3.AtsTenant);
+            Assert.Null(p3.AtsTenant);
             Assert.Equal(8.0m, p3.Score);
 
             // Verify unclaimed applied roles tracked (only p1 was applied)
@@ -289,7 +289,122 @@ public sealed class PostingImportStepTests
             Assert.Equal(1, context.Summary.PostingsCreated);
 
             var p = Assert.Single(inMemoryCtx.SavedPostings);
-            Assert.Equal("legacy-slug-1", p.AtsTenant);
+            Assert.Null(p.AtsTenant);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task PostingsJsonStep_AssertsAtsTenantIsNull_ForEveryImportedPosting()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var json = """
+                {
+                    "slug-one": {
+                        "company": "Acme Corp",
+                        "title": "Engineer Alpha",
+                        "status": "lead"
+                    },
+                    "slug-two": {
+                        "company": "Globex",
+                        "title": "Engineer Beta",
+                        "status": "scored"
+                    }
+                }
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "postings.json"), json);
+
+            var inMemoryCtx = new InMemoryPostingContext();
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var step = new PostingsJsonStep(inMemoryCtx, criteriaStep);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result = await step.ExecuteAsync(context);
+            Assert.True(result.IsSuccess);
+            Assert.Equal(2, inMemoryCtx.SavedPostings.Count);
+            Assert.All(inMemoryCtx.SavedPostings, posting => Assert.Null(posting.AtsTenant));
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task PostingsJsonStep_DifferentSlugsSameCompanyAndTitle_CountsAsOneCreatedOneUnchanged_AndRerunCreatesNothing()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            // Two entries in postings.json with different slugs but same company and title
+            var json = """
+                {
+                    "acme-slug-a": {
+                        "company": "Acme Corp",
+                        "title": "Staff Reliability Engineer",
+                        "status": "scored",
+                        "score": 8.0
+                    },
+                    "acme-slug-b": {
+                        "company": "Acme Corp",
+                        "title": "Staff Reliability Engineer",
+                        "status": "scored",
+                        "score": 8.5
+                    }
+                }
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "postings.json"), json);
+
+            var inMemoryCtx = new InMemoryPostingContext();
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var step = new PostingsJsonStep(inMemoryCtx, criteriaStep);
+
+            // First run
+            var context1 = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result1 = await step.ExecuteAsync(context1);
+            Assert.True(result1.IsSuccess);
+            Assert.Equal(1, context1.Summary.PostingsCreated);
+            Assert.Equal(1, context1.Summary.PostingsUnchanged);
+            var recon1 = context1.Summary.FileReconciliations["postings.json"];
+            Assert.Equal(2, recon1.Read);
+            Assert.Equal(1, recon1.Created);
+            Assert.Equal(1, recon1.Unchanged);
+            Assert.Single(inMemoryCtx.SavedPostings);
+
+            // Second run (re-run of the same bundle)
+            var context2 = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result2 = await step.ExecuteAsync(context2);
+            Assert.True(result2.IsSuccess);
+            Assert.Equal(0, context2.Summary.PostingsCreated);
+            Assert.Equal(2, context2.Summary.PostingsUnchanged);
+            var recon2 = context2.Summary.FileReconciliations["postings.json"];
+            Assert.Equal(2, recon2.Read);
+            Assert.Equal(0, recon2.Created);
+            Assert.Equal(2, recon2.Unchanged);
+            Assert.Single(inMemoryCtx.SavedPostings); // Still only one posting in storage
         }
         finally
         {
@@ -465,7 +580,7 @@ public sealed class PostingImportStepTests
             public Task<Result<Company?>> GetByIdAsync(string ownerId, Guid id, CancellationToken cancellationToken = default) =>
                 Task.FromResult(Result<Company?>.Success(_companies.FirstOrDefault(c => c.Id == id)));
             public Task<Result<Company?>> GetByNormalizedNameAsync(string ownerId, string normalizedName, CancellationToken cancellationToken = default) =>
-                Task.FromResult(Result<Company?>.Success(_companies.FirstOrDefault(c => c.NormalizedName == normalizedName)));
+                Task.FromResult(Result<Company?>.Success(_companies.FirstOrDefault(c => string.Equals(c.NormalizedName, normalizedName.Trim(), StringComparison.OrdinalIgnoreCase))));
             public Task<Result<IReadOnlyList<Company>>> ListAsync(string ownerId, CompanyStatus? status = null, CancellationToken cancellationToken = default) =>
                 Task.FromResult(Result<IReadOnlyList<Company>>.Success(_companies));
             public Task<Result<IReadOnlyList<CareerSource>>> GetCareerSourcesAsync(string ownerId, Guid companyId, bool includeInactive = false, CancellationToken cancellationToken = default) =>

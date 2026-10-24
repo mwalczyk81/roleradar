@@ -210,6 +210,13 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                         : (element.TryGetProperty("location", out var locProp2) ? locProp2.GetString()?.Trim() : null);
                     var location = TrackerImportFieldLimiter.LimitLocation(rawLoc, context.Summary);
 
+                    var sourceKind = SourceKind.Aggregator;
+                    if (element.TryGetProperty("source", out var srcProp) &&
+                        TrackingEnumExtensions.TryParseSourceKind(srcProp.GetString(), out var parsedSrc))
+                    {
+                        sourceKind = parsedSrc;
+                    }
+
                     var rawPosted = element.TryGetProperty("posted", out var pProp) ? pProp.GetString()?.Trim() : null;
 
                     var isGhost = element.TryGetProperty("ghost", out var ghostProp) &&
@@ -231,7 +238,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                         Company? resolvedCompany = null;
                         if (!context.CanonicalCompanies.TryGetValue(canonicalName, out resolvedCompany))
                         {
-                            var existing = await txCtx.Companies.GetByNormalizedNameAsync(context.OwnerId, canonicalName, ct);
+                            var existing = await txCtx.Companies.GetByNormalizedNameAsync(context.OwnerId, canonicalName.Trim().ToLowerInvariant(), ct);
                             if (existing.IsSuccess && existing.Value is not null)
                             {
                                 resolvedCompany = existing.Value;
@@ -302,13 +309,21 @@ public sealed class PostingsJsonStep : ITrackerImportStep
 
                         if (existingPosting is null && resolvedCompany is not null)
                         {
-                            var candRes = await txCtx.Postings.FindCandidatesByCompanyAndTitleAsync(context.OwnerId, resolvedCompany.Id, TitleNormalizer.Normalize(title), ct);
-                            if (candRes.IsSuccess && candRes.Value is { Count: > 0 } candidates)
+                            var normTitle = TitleNormalizer.Normalize(title);
+                            if (context.PostingsByCompanyAndTitle.TryGetValue($"{canonicalName}|{normTitle}", out var cached))
                             {
-                                var byIdRes = await txCtx.Postings.GetByIdAsync(context.OwnerId, candidates[0].Id, ct);
-                                if (byIdRes.IsSuccess && byIdRes.Value is not null)
+                                existingPosting = cached;
+                            }
+                            else
+                            {
+                                var candRes = await txCtx.Postings.FindCandidatesByCompanyAndTitleAsync(context.OwnerId, resolvedCompany.Id, normTitle, ct);
+                                if (candRes.IsSuccess && candRes.Value is { Count: > 0 } candidates)
                                 {
-                                    existingPosting = byIdRes.Value;
+                                    var byIdRes = await txCtx.Postings.GetByIdAsync(context.OwnerId, candidates[0].Id, ct);
+                                    if (byIdRes.IsSuccess && byIdRes.Value is not null)
+                                    {
+                                        existingPosting = byIdRes.Value;
+                                    }
                                 }
                             }
                         }
@@ -320,17 +335,13 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                             return Result<bool>.Success(true);
                         }
 
-                        var safeSlug = !string.IsNullOrWhiteSpace(slug)
-                            ? (slug.Length > Posting.MaxAtsTenantLength ? slug[..Posting.MaxAtsTenantLength] : slug)
-                            : null;
-
                         var posting = Posting.Create(
                             ownerId: context.OwnerId,
                             companyId: resolvedCompany?.Id ?? Guid.NewGuid(),
                             title: title,
-                            sourceKind: SourceKind.Aggregator,
+                            sourceKind: sourceKind,
                             originalUrl: url,
-                            atsTenant: safeSlug,
+                            atsTenant: null,
                             requisitionId: reqId,
                             location: location,
                             remoteType: remoteType,
