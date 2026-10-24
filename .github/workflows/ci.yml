@@ -60,8 +60,46 @@ jobs:
           dotnet test tests/RoleRadar.Tests.Unit/RoleRadar.Tests.Unit.csproj -c Release --no-build
           dotnet test tests/RoleRadar.Tests.Architecture/RoleRadar.Tests.Architecture.csproj -c Release --no-build
 
-  ubuntu-integration-and-coverage:
-    name: Ubuntu (Build, Testcontainers, >=85% Coverage & Pre-Commit)
+  macos-verify:
+    name: macOS (Unit, Architecture & Script Portability)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore with locked dependencies
+        run: dotnet restore RoleRadar.sln --locked-mode
+
+      - name: Verify formatting
+        run: dotnet format RoleRadar.sln --verify-no-changes
+
+      - name: Build solution
+        run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
+
+      - name: Run Unit and Architecture tests
+        run: |
+          dotnet test tests/RoleRadar.Tests.Unit/RoleRadar.Tests.Unit.csproj -c Release --no-build
+          dotnet test tests/RoleRadar.Tests.Architecture/RoleRadar.Tests.Architecture.csproj -c Release --no-build
+
+      - name: Run Pester script portability tests
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Module -ListAvailable -Name Pester)) {
+              Install-Module -Name Pester -Scope CurrentUser -Force -SkipPublisherCheck
+          }
+          Invoke-Pester -Script tests/RoleRadar.Tests.Unit/Scripts/ScriptPortability.Tests.ps1 -EnableExit
+
+  ubuntu-build-and-test:
+    name: Ubuntu (Build, Testcontainers, Coverage & Container Suite)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -104,6 +142,10 @@ jobs:
       - name: Build solution
         run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
 
+      - name: Run Database Tools update check
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-tools-release.ps1
+
       - name: Run full test suite (Unit, Architecture, Contract, Integration) with Coverage
         run: dotnet test RoleRadar.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
 
@@ -145,3 +187,44 @@ jobs:
           if ($pct -lt 85.0) {
               throw "Merged line coverage $pct% is below the mandatory 85.0% threshold."
           }
+
+      - name: Build local container images
+        run: |
+          docker build --target cli -t roleradar-cli:local .
+          docker build --target mcp -t roleradar-mcp:local .
+
+      - name: Run launched-host test suites against container images
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-images.ps1
+
+  linux-arm64-verify:
+    name: Native Linux ARM64 (Multi-Stage Build & Image Parity)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore with locked dependencies
+        run: dotnet restore RoleRadar.sln --locked-mode
+
+      - name: Build solution
+        run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
+
+      - name: Build native ARM64 container images
+        run: |
+          docker build --target cli -t roleradar-cli:local .
+          docker build --target mcp -t roleradar-mcp:local .
+
+      - name: Run native ARM64 launched-host container tests
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-images.ps1
+
+      - name: Verify container cold-start timing (<3.0s)
+        run: dotnet test tests/RoleRadar.Tests.Integration/RoleRadar.Tests.Integration.csproj -c Release --no-build --filter "FullyQualifiedName~ContainerColdStartBenchmarkTests"

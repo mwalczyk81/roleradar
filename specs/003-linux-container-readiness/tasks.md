@@ -198,16 +198,16 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T031 [P] [US6] Write failing Pester tests in `tests/RoleRadar.Tests.Unit/Scripts/ScriptPortability.Tests.ps1` invoking all repository scripts under PowerShell Core on Linux/macOS and Windows, asserting zero path separator or backslash failures [FR-017, SC-006]
+- [x] T031 [P] [US6] Write failing Pester tests in `tests/RoleRadar.Tests.Unit/Scripts/ScriptPortability.Tests.ps1` invoking all repository scripts under PowerShell Core on Linux/macOS and Windows, asserting zero path separator or backslash failures [FR-017, SC-006]
 
 ### Implementation for User Story 6
 
-- [ ] T032 [US6] Create multi-OS GitHub Actions workflow in `.github/workflows/ci.yml` defining:
+- [x] T032 [US6] Create multi-OS GitHub Actions workflow in `.github/workflows/ci.yml` defining:
   - `ubuntu-build-and-test` on `ubuntu-latest`: Full build, hadolint, trivy scan, SBOM, launched-host tests against images, compose integration, external DB mode, coverage gate (>=85%)
   - `linux-arm64-verify` on native `ubuntu-24.04-arm` runner: Native multi-stage build, native launched-host test execution under `docker run --read-only --tmpfs /tmp`, cold-start timing (<3.0s)
   - `windows-verify` on `windows-latest`: Build, format, lint, unit tests, architecture tests, PSScriptAnalyzer
   - `macos-verify` on `macos-latest`: Build, format, lint, unit tests, architecture tests, Pester script portability tests (depends on T031 failing first) [FR-002, FR-019, SC-006]
-- [ ] T033 [US6] Implement Database Tools update check script `scripts/check-tools-release.ps1` reading `full.json` for all historical versions and `release.json` for the latest stable release, comparing with Dockerfile pin and outputting update status [FR-006, SC-002]
+- [x] T033 [US6] Implement Database Tools update check script `scripts/check-tools-release.ps1` reading `full.json` for all historical versions and `release.json` for the latest stable release, comparing with Dockerfile pin and outputting update status [FR-006, SC-002]
 
 **Checkpoint**: User Story 6 complete — cross-platform scripts and multi-OS CI workflow matrix established.  
 *Commit*: `ci(workflows): add multi-OS GitHub Actions workflow with native ubuntu-24.04-arm runner`
