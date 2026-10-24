@@ -31,8 +31,7 @@ public sealed class ContainerBackupRestoreTests : IClassFixture<IsolatedContaine
         var uniqueDb = $"rrtest_backup_{Guid.NewGuid():N}";
         var db = client.GetDatabase(uniqueDb);
 
-        var tempBackupDir = Path.Combine(Path.GetTempPath(), $"rr_container_bak_{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempBackupDir);
+        var tempBackupDir = ContainerTestHarness.CreateSharedTempDirectory("rr_container_bak");
         var hostBackupFile = Path.Combine(tempBackupDir, "test.rrbak");
         var containerBackupFile = "/data/backup/test.rrbak";
 
@@ -267,6 +266,78 @@ public sealed class ContainerBackupRestoreTests : IClassFixture<IsolatedContaine
                 // Ignore cleanup error
             }
 
+            ContainerTestHarness.ValidateDatabaseNameForDrop(uniqueDb);
+            await client.DropDatabaseAsync(uniqueDb);
+        }
+    }
+
+    [Fact]
+    public async Task Container_BackupIntoRunnerOwnedDirectory_SucceedsWithHostUserMapping()
+    {
+        var client = new MongoClient(_mongo.HostMongoUri);
+        var uniqueDb = $"rrtest_backup_usr_{Guid.NewGuid():N}";
+        var db = client.GetDatabase(uniqueDb);
+
+        var tempBackupDir = Path.Combine(Path.GetTempPath(), $"rr_user_bak_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempBackupDir);
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            // Set directory to 0700 (drwx------), owned by host runner process.
+            // Default container image user (UID 1654) has zero permissions unless
+            // the harness passes `--user "$(id -u):$(id -g)"`.
+            File.SetUnixFileMode(tempBackupDir, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        var hostBackupFile = Path.Combine(tempBackupDir, "user_test.rrbak");
+        var containerBackupFile = "/data/backup/user_test.rrbak";
+
+        try
+        {
+            // Seed a note in the database
+            await db.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NotesCollectionName).InsertOneAsync(new BsonDocument
+            {
+                ["_id"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
+                ["owner_id"] = "test-owner",
+                ["title"] = "Host User Perms Note",
+                ["body"] = "Verifying host user mapping into 0700 runner directory",
+                ["created_at"] = new BsonDateTime(DateTime.UtcNow),
+                ["updated_at"] = new BsonDateTime(DateTime.UtcNow)
+            });
+
+            var env = new Dictionary<string, string>
+            {
+                ["ROLERADAR_MONGO_CONNECTION_STRING"] = _mongo.ContainerMongoUri,
+                ["ROLERADAR_MONGO_DATABASE"] = uniqueDb,
+                ["BACKUP_PW"] = "HostUserPw123!"
+            };
+
+            var volumes = new[] { $"{tempBackupDir}:/data/backup:rw" };
+
+            // Run backup inside container
+            var backupResult = await ContainerTestHarness.RunCliAsync(
+                ["backup", containerBackupFile, "--passphrase-env", "BACKUP_PW"],
+                environment: env,
+                volumes: volumes,
+                network: _mongo.NetworkName);
+
+            Assert.Equal(0, backupResult.ExitCode);
+            Assert.True(File.Exists(hostBackupFile), $"Expected backup file at {hostBackupFile}");
+        }
+        finally
+        {
+            try
+            {
+                if (Directory.Exists(tempBackupDir))
+                {
+                    Directory.Delete(tempBackupDir, recursive: true);
+                }
+            }
+            catch
+            {
+                // Ignore cleanup error
+            }
+
+            ContainerTestHarness.ValidateDatabaseNameForDrop(uniqueDb);
             await client.DropDatabaseAsync(uniqueDb);
         }
     }
