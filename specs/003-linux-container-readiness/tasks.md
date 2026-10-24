@@ -153,13 +153,13 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T024 [P] [US4] Write containerized concurrency race tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerConcurrencyRaceTests.cs` executing parallel container processes under `docker run --read-only --tmpfs /tmp` asserting search run logging unique constraint and posting deduplication idempotency under race conditions (expected to fail before implementation) [FR-026, SC-004]
-- [ ] T025 [P] [US4] Write containerized contact privacy no-leak scan tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerContactPrivacyNoLeakTests.cs` verifying that confidential contact details never appear in stdout, stderr, logs, or unencrypted backup archives during container operations (expected to fail before implementation) [FR-026, SC-001, SC-004]
-- [ ] T026 [P] [US4] Write containerized 12-tool schema contract tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerMcpToolSchemaContractTests.cs` verifying tool count is exactly 12 with identical schemas and descriptions over the container stdio session (expected to fail before implementation) [FR-004, FR-026, SC-004]
+- [x] T024 [P] [US4] Write containerized concurrency race tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerConcurrencyRaceTests.cs` executing parallel container processes under `docker run --read-only --tmpfs /tmp` asserting search run logging unique constraint and posting deduplication idempotency under race conditions (expected to fail before implementation) [FR-026, SC-004]
+- [x] T025 [P] [US4] Write containerized contact privacy no-leak scan tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerContactPrivacyNoLeakTests.cs` verifying that confidential contact details never appear in stdout, stderr, logs, or unencrypted backup archives during container operations (expected to fail before implementation) [FR-026, SC-001, SC-004]
+- [x] T026 [P] [US4] Write containerized 12-tool schema contract tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerMcpToolSchemaContractTests.cs` verifying tool count is exactly 12 with identical schemas and descriptions over the container stdio session (expected to fail before implementation) [FR-004, FR-026, SC-004]
 
 ### Implementation for User Story 4
 
-- [ ] T027 [US4] Update `tests/RoleRadar.Tests.Integration/Tracking/McpProcessClient.cs` to support invoking the MCP server via `docker run --read-only --tmpfs /tmp` and implement `scripts/test-images.ps1` to run the full existing test suite unchanged against the built container images (depends on T024, T025, T026 failing first) [FR-002, FR-026, SC-004]
+- [x] T027 [US4] Update `tests/RoleRadar.Tests.Integration/Tracking/McpProcessClient.cs` to support invoking the MCP server via `docker run --read-only --tmpfs /tmp` and implement `scripts/test-images.ps1` to run the full existing test suite unchanged against the built container images (depends on T024, T025, T026 failing first) [FR-002, FR-026, SC-004]
 
 **Checkpoint**: User Story 4 complete — launched-host test parity proven across container images on amd64 and arm64.  
 *Commit*: `test(images): extend launched-host test suites to verify container images under read-only tmpfs`

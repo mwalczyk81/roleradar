@@ -19,6 +19,7 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Notes;
 
+[Collection("BenchmarkCollection")]
 public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
 {
     private readonly SharedMongoFixture _sharedMongo;

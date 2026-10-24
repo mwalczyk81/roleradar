@@ -15,6 +15,11 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Tracking;
 
+[CollectionDefinition("BenchmarkCollection", DisableParallelization = true)]
+public class BenchmarkTestCollectionDefinition
+{
+}
+
 [Collection("BenchmarkCollection")]
 public sealed class TrackingBenchmarkTests : IAsyncLifetime
 {

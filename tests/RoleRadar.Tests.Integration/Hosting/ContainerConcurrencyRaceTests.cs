@@ -129,9 +129,8 @@ public sealed class ContainerConcurrencyRaceTests
                 {
                     companyId = compId,
                     title = "Container Senior Distributed Systems Engineer",
-                    originalUrl = "https://example.com/jobs/container-senior-engineer",
-                    requisitionId = "REQ-CONTAINER-123",
-                    disposition = "lead"
+                    atsTenant = "containerats",
+                    requisitionId = "REQ-CONTAINER-123"
                 });
             })).ToArray();
 
@@ -140,14 +139,14 @@ public sealed class ContainerConcurrencyRaceTests
 
             var created = results.Where(r =>
                 r.TryGetProperty("ok", out var ok) && ok.GetBoolean() &&
-                r.GetProperty("data").GetProperty("status").GetString() == "created").ToList();
+                r.GetProperty("data").TryGetProperty("status", out var st) && st.GetString() == "created").ToList();
 
-            var alreadyExists = results.Where(r =>
+            var alreadyTracked = results.Where(r =>
                 r.TryGetProperty("ok", out var ok) && ok.GetBoolean() &&
-                r.GetProperty("data").GetProperty("status").GetString() == "already_exists").ToList();
+                r.GetProperty("data").TryGetProperty("status", out var st) && st.GetString() == "already_tracked").ToList();
 
             Assert.Single(created);
-            Assert.Equal(processCount - 1, alreadyExists.Count);
+            Assert.Equal(processCount - 1, alreadyTracked.Count);
 
             var postingsCol = db.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
             var count = await postingsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);

@@ -28,9 +28,8 @@ public sealed class StartupSmokeIntegrationTests
         var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_smoke_cli");
         var env = _sharedMongo.CreateProcessEnvironment(uniqueDb);
 
-        var (exitCode, stdout, stderr) = await RunProcessAsync(
-            "dotnet",
-            $"\"{cliDllPath}\" status",
+        var (exitCode, stdout, stderr) = await RoleRadar.Tests.Integration.Hosting.LaunchedCliRunner.RunCliAsync(
+            "status",
             env);
 
         Assert.DoesNotContain("Unhandled exception", stderr, StringComparison.OrdinalIgnoreCase);
@@ -38,35 +37,31 @@ public sealed class StartupSmokeIntegrationTests
         Assert.Contains("RoleRadar Store: Ready", stdout, StringComparison.OrdinalIgnoreCase);
 
         // Also smoke test contact command
-        var (contactAddCode, contactAddOut, contactAddErr) = await RunProcessAsync(
-            "dotnet",
-            $"\"{cliDllPath}\" contact add --name \"Smoke Contact\" --role \"Smoke Tester\" --json",
+        var (contactAddCode, contactAddOut, contactAddErr) = await RoleRadar.Tests.Integration.Hosting.LaunchedCliRunner.RunCliAsync(
+            "contact add --name \"Smoke Contact\" --role \"Smoke Tester\" --json",
             env);
         Assert.Equal(0, contactAddCode);
         Assert.DoesNotContain("Unhandled exception", contactAddErr, StringComparison.OrdinalIgnoreCase);
         using var doc = System.Text.Json.JsonDocument.Parse(contactAddOut);
         var contactId = doc.RootElement.GetProperty("data").GetProperty("id").GetString()!;
 
-        var (contactGetCode, contactGetOut, contactGetErr) = await RunProcessAsync(
-            "dotnet",
-            $"\"{cliDllPath}\" contact get --id {contactId} --json",
+        var (contactGetCode, contactGetOut, contactGetErr) = await RoleRadar.Tests.Integration.Hosting.LaunchedCliRunner.RunCliAsync(
+            $"contact get --id {contactId} --json",
             env);
         Assert.Equal(0, contactGetCode);
         Assert.DoesNotContain("Unhandled exception", contactGetErr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Smoke Contact", contactGetOut);
 
-        var (contactRedactCode, contactRedactOut, contactRedactErr) = await RunProcessAsync(
-            "dotnet",
-            $"\"{cliDllPath}\" contact redact --id {contactId} --force --json",
+        var (contactRedactCode, contactRedactOut, contactRedactErr) = await RoleRadar.Tests.Integration.Hosting.LaunchedCliRunner.RunCliAsync(
+            $"contact redact --id {contactId} --force --json",
             env);
         Assert.Equal(0, contactRedactCode);
         Assert.DoesNotContain("Unhandled exception", contactRedactErr, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("redacted", contactRedactOut);
 
         // Also smoke test verify command
-        var (verifyCode, verifyOut, verifyErr) = await RunProcessAsync(
-            "dotnet",
-            $"\"{cliDllPath}\" verify --json",
+        var (verifyCode, verifyOut, verifyErr) = await RoleRadar.Tests.Integration.Hosting.LaunchedCliRunner.RunCliAsync(
+            "verify --json",
             env);
         Assert.Equal(0, verifyCode);
         Assert.DoesNotContain("Unhandled exception", verifyErr, StringComparison.OrdinalIgnoreCase);
@@ -87,93 +82,19 @@ public sealed class StartupSmokeIntegrationTests
         var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_smoke_mcp");
         var env = _sharedMongo.CreateProcessEnvironment(uniqueDb);
 
-        var psi = new ProcessStartInfo
-        {
-            FileName = "dotnet",
-            Arguments = $"\"{mcpDllPath}\"",
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        foreach (var (k, v) in env)
-        {
-            psi.Environment[k] = v;
-        }
-
-        using var proc = Process.Start(psi)!;
-        Assert.NotNull(proc);
-
-        // 1. Send initialize
-        await proc.StandardInput.WriteLineAsync("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"smoke-test\",\"version\":\"1.0.0\"}}}");
-        await proc.StandardInput.FlushAsync();
-
-        var initResponse = await proc.StandardOutput.ReadLineAsync();
-
-        // 2. Send notifications/initialized
-        await proc.StandardInput.WriteLineAsync("{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
-        await proc.StandardInput.FlushAsync();
-
-        // 3. Send tools/list
-        await proc.StandardInput.WriteLineAsync("{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}");
-        await proc.StandardInput.FlushAsync();
-
-        var toolsResponse = await proc.StandardOutput.ReadLineAsync();
-
-        proc.StandardInput.Close();
-        await proc.WaitForExitAsync();
-
-        var stderr = await proc.StandardError.ReadToEndAsync();
+        await using var client = await RoleRadar.Tests.Integration.Tracking.McpProcessClient.StartAsync(mcpDllPath, env);
+        var toolsElement = await client.ListToolsAsync();
+        var stderr = client.GetStderr();
 
         Assert.DoesNotContain("Unhandled exception", stderr, StringComparison.OrdinalIgnoreCase);
-        Assert.NotNull(initResponse);
-        Assert.Contains("\"result\":", initResponse);
-        Assert.NotNull(toolsResponse);
-        Assert.Contains("note_create", toolsResponse);
-        Assert.Contains("note_archive", toolsResponse);
-        Assert.Contains("company_record", toolsResponse);
-        Assert.Contains("posting_record", toolsResponse);
-        Assert.Contains("posting_transition", toolsResponse);
-        Assert.Contains("tracker_query", toolsResponse);
-        Assert.Contains("tracker_log", toolsResponse);
-        Assert.Contains("application_record", toolsResponse);
-    }
-
-    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunProcessAsync(
-        string fileName,
-        string arguments,
-        IReadOnlyDictionary<string, string>? environmentVariables = null)
-    {
-        var psi = new ProcessStartInfo
-        {
-            FileName = fileName,
-            Arguments = arguments,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        if (environmentVariables is not null)
-        {
-            foreach (var (k, v) in environmentVariables)
-            {
-                psi.Environment[k] = v;
-            }
-        }
-
-        using var proc = Process.Start(psi)!;
-        Assert.NotNull(proc);
-
-        var stdoutTask = proc.StandardOutput.ReadToEndAsync();
-        var stderrTask = proc.StandardError.ReadToEndAsync();
-
-        await proc.WaitForExitAsync();
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
-
-        return (proc.ExitCode, stdout, stderr);
+        var toolsArray = toolsElement.GetProperty("tools").EnumerateArray().Select(t => t.GetProperty("name").GetString()!).ToList();
+        Assert.Contains("note_create", toolsArray);
+        Assert.Contains("note_archive", toolsArray);
+        Assert.Contains("company_record", toolsArray);
+        Assert.Contains("posting_record", toolsArray);
+        Assert.Contains("posting_transition", toolsArray);
+        Assert.Contains("tracker_query", toolsArray);
+        Assert.Contains("tracker_log", toolsArray);
+        Assert.Contains("application_record", toolsArray);
     }
 }

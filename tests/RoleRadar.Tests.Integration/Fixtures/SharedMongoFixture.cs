@@ -22,7 +22,15 @@ public sealed class SharedMongoFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         await _mongoContainer.StartAsync();
-        ConnectionString = _mongoContainer.GetConnectionString();
+        var rawConn = _mongoContainer.GetConnectionString();
+        if (!rawConn.Contains("authSource=", StringComparison.OrdinalIgnoreCase))
+        {
+            ConnectionString = rawConn.Contains('?') ? $"{rawConn}&authSource=admin" : $"{rawConn}?authSource=admin";
+        }
+        else
+        {
+            ConnectionString = rawConn;
+        }
     }
 
     public async ValueTask DisposeAsync()
