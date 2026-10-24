@@ -45,3 +45,7 @@ Recommended target: **Azure Container Apps (ACA)**.
 
 > [!NOTE]
 > This decision documents the target architecture for future HTTP milestones (005/006). Neither Azure Container Apps nor AKS resources are provisioned in Feature 003.
+
+### Open Items
+
+Verification of cold-start latency under real ACA consumption plan environments and Azure Blob backup job execution to be completed after running the external-mode suite against a real candidate, with the checklist filled in as far as can be done locally.

@@ -100,7 +100,7 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T017 [P] [US2] Write failing hosting convention tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerHostingConventionTests.cs` verifying:
+- [x] T017 [P] [US2] Write failing hosting convention tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerHostingConventionTests.cs` verifying:
   - Application operates with 100% environment variable configuration and fails gracefully if local config files are absent
   - Diagnostic and log output written strictly to stderr; stdout pure for MCP JSON-RPC frames and CLI output
   - Process intercepts `SIGTERM`, initiates graceful teardown, and terminates within bounded timeout
@@ -109,7 +109,7 @@
 
 ### Implementation for User Story 2
 
-- [ ] T018 [US2] Refactor host bootstrapping in `src/RoleRadar.Cli/Program.cs` and `src/RoleRadar.Mcp.Stdio/Program.cs` to ensure console logging routes strictly to stderr, configuration reads exclusively from environment variables, `PosixSignalRegistration` handles `SIGTERM`/`SIGINT` for bounded graceful cancellation, UTC timestamps are enforced in all formatters, and connection string credentials are masked in all unhandled exception handlers (depends on T017 failing first) [FR-005, FR-010, FR-011, FR-012, FR-029]
+- [x] T018 [US2] Refactor host bootstrapping in `src/RoleRadar.Cli/Program.cs` and `src/RoleRadar.Mcp.Stdio/Program.cs` to ensure console logging routes strictly to stderr, configuration reads exclusively from environment variables, `PosixSignalRegistration` handles `SIGTERM`/`SIGINT` for bounded graceful cancellation, UTC timestamps are enforced in all formatters, and connection string credentials are masked in all unhandled exception handlers (depends on T017 failing first) [FR-005, FR-010, FR-011, FR-012, FR-029]
 
 **Checkpoint**: User Story 2 complete — all hosting-readiness conventions enforced and passing.  
 *Commit*: `feat(hosting): enforce environment configuration, stderr logging, SIGTERM handling, and credential masking`
@@ -126,17 +126,17 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T019 [P] [US3] Write failing in-container credentials security test in `tests/RoleRadar.Tests.Integration/Hosting/ContainerCredentialsSecurityTests.cs` asserting:
+- [x] T019 [P] [US3] Write failing in-container credentials security test in `tests/RoleRadar.Tests.Integration/Hosting/ContainerCredentialsSecurityTests.cs` asserting:
   - Temporary config file `/tmp/rr-tools-<uuid>.conf` has POSIX file mode exactly `0600` at instant of first read
   - Database password NEVER appears in `argv` (`/proc/<pid>/cmdline`), `stdout`, `stderr`, logs, or audit entries
   - No config files remain under `/tmp` after process exit, including when the child is killed by `SIGTERM` and on process failure (expected to fail before implementation) [FR-003, FR-006, FR-011, SC-007]
-- [ ] T020 [P] [US3] Write failing containerized backup, restore, and wipe integration tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerBackupRestoreTests.cs` executing `backup`, `restore`, and `wipe --yes` inside `roleradar-cli` under `docker run --read-only --tmpfs /tmp` against compose MongoDB covering all 12 collections without host Docker socket (expected to fail before implementation) [FR-006, FR-007, FR-008, FR-009, SC-007]
-- [ ] T021 [P] [US3] Write failing legacy 001-format backup restore test in `tests/RoleRadar.Tests.Integration/Hosting/ContainerLegacyBackupCompatibilityTests.cs` verifying that a 001-format archive restores inside the CLI container with audit entries reading as `entity_type: "note"`, tracking indexes created after restore, and dry-run reporting unchanged (expected to fail before implementation) [FR-008, SC-007]
+- [x] T020 [P] [US3] Write failing containerized backup, restore, and wipe integration tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerBackupRestoreTests.cs` executing `backup`, `restore`, and `wipe --yes` inside `roleradar-cli` under `docker run --read-only --tmpfs /tmp` against compose MongoDB covering all 12 collections without host Docker socket (expected to fail before implementation) [FR-006, FR-007, FR-008, FR-009, SC-007]
+- [x] T021 [P] [US3] Write failing legacy 001-format backup restore test in `tests/RoleRadar.Tests.Integration/Hosting/ContainerLegacyBackupCompatibilityTests.cs` verifying that a 001-format archive restores inside the CLI container with audit entries reading as `entity_type: "note"`, tracking indexes created after restore, and dry-run reporting unchanged (expected to fail before implementation) [FR-008, SC-007]
 
 ### Implementation for User Story 3
 
-- [ ] T022 [US3] Update MongoDB Database Tools invocation in `src/RoleRadar.Infrastructure/Backup/MongoDatabaseToolsBackupDriver.cs` (or CLI backup handler) to create temporary config file atomically using .NET `FileStreamOptions { UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite }` with `FileMode.CreateNew`, invoke `mongodump`/`mongorestore` with `--config={configPath}`, and guarantee immediate unlinking in `finally` block and `SIGTERM`/`ProcessExit` handlers (depends on T019, T020, T021 failing first) [FR-006, FR-007, FR-008, FR-009, SC-007]
-- [ ] T023 [US3] Update backup and restore helper scripts (`scripts/backup.ps1`, `scripts/restore.ps1`, `scripts/wipe-data.ps1`) to support container execution via `scripts/roleradar-docker.ps1` with mounted backup directory [FR-007, FR-008, FR-009, SC-007]
+- [x] T022 [US3] Update MongoDB Database Tools invocation in `src/RoleRadar.Infrastructure/Backup/MongoDatabaseToolsBackupDriver.cs` (or CLI backup handler) to create temporary config file atomically using .NET `FileStreamOptions { UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite }` with `FileMode.CreateNew`, invoke `mongodump`/`mongorestore` with `--config={configPath}`, and guarantee immediate unlinking in `finally` block and `SIGTERM`/`ProcessExit` handlers (depends on T019, T020, T021 failing first) [FR-006, FR-007, FR-008, FR-009, SC-007]
+- [x] T023 [US3] Update backup and restore helper scripts (`scripts/backup.ps1`, `scripts/restore.ps1`, `scripts/wipe-data.ps1`) to support container execution via `scripts/roleradar-docker.ps1` with mounted backup directory [FR-007, FR-008, FR-009, SC-007]
 
 **Checkpoint**: User Story 3 complete — in-container backup, restore, wipe, 001 restore, and atomic credential security verified.  
 *Commit*: `feat(backup): bundle Database Tools in CLI container with atomic 0600 config and 12-collection coverage`
@@ -176,12 +176,12 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T028 [P] [US5] Write failing compatibility matrix runner tests in `tests/RoleRadar.Tests.Contract/HostedDatabaseCompatibilityMatrixTests.cs` verifying execution against a local MongoDB instance (with `ROLERADAR_EXTERNAL_TEST_OPT_IN=1`), asserting cross-collection transactions, partial unique indexes, and text search, and validating emitted JSON and markdown reports in `TestResults/database-capability-matrix.json` and `.md` with zero connection string leaks (expected to fail before implementation) [FR-013, FR-014, FR-015, FR-016, SC-005]
+- [x] T028 [P] [US5] Write failing compatibility matrix runner tests in `tests/RoleRadar.Tests.Contract/HostedDatabaseCompatibilityMatrixTests.cs` verifying execution against a local MongoDB instance (with `ROLERADAR_EXTERNAL_TEST_OPT_IN=1`), asserting cross-collection transactions, partial unique indexes, and text search, and validating emitted JSON and markdown reports in `TestResults/database-capability-matrix.json` and `.md` with zero connection string leaks (expected to fail before implementation) [FR-013, FR-014, FR-015, FR-016, SC-005]
 
 ### Implementation for User Story 5
 
-- [ ] T029 [US5] Implement `DatabaseCapabilityMatrixReporter` in `tests/RoleRadar.Tests.Contract/Fixtures/DatabaseCapabilityMatrixReporter.cs` formatting empirical test results into JSON and Markdown matching schemas in `specs/003-linux-container-readiness/data-model.md` sanitized of connection strings, hosts, and credentials (depends on T028 failing first) [FR-016, SC-005]
-- [ ] T030 [US5] Wire `ExternalMongoSafetyGuard` and `DatabaseCapabilityMatrixReporter` into `tests/RoleRadar.Tests.Contract/Fixtures/SharedMongoFixture.cs` to activate when `ROLERADAR_EXTERNAL_TEST_OPT_IN=1`, recording tracked databases and generating capability matrix upon fixture teardown [FR-013, FR-014, FR-015, FR-016, SC-005]
+- [x] T029 [US5] Implement `DatabaseCapabilityMatrixReporter` in `tests/RoleRadar.Tests.Contract/Fixtures/DatabaseCapabilityMatrixReporter.cs` formatting empirical test results into JSON and Markdown matching schemas in `specs/003-linux-container-readiness/data-model.md` sanitized of connection strings, hosts, and credentials (depends on T028 failing first) [FR-016, SC-005]
+- [x] T030 [US5] Wire `ExternalMongoSafetyGuard` and `DatabaseCapabilityMatrixReporter` into `tests/RoleRadar.Tests.Contract/Fixtures/SharedMongoFixture.cs` to activate when `ROLERADAR_EXTERNAL_TEST_OPT_IN=1`, recording tracked databases and generating capability matrix upon fixture teardown [FR-013, FR-014, FR-015, FR-016, SC-005]
 
 **Checkpoint**: User Story 5 complete — external database compatibility test mode and capability matrix generator operational.  
 *Commit*: `feat(compat): implement external database safety guard and capability matrix reporter`

@@ -1,3 +1,4 @@
+using MongoDB.Bson;
 using MongoDB.Driver;
 using RoleRadar.Infrastructure.Mongo;
 using Testcontainers.MongoDb;
@@ -15,21 +16,76 @@ public sealed class SharedMongoFixture : IAsyncLifetime
         .WithTmpfsMount("/data/configdb")
         .Build();
 
+    private bool _isExternalMode;
+    private MongoClient? _mongoClient;
+
     public string ConnectionString { get; private set; } = string.Empty;
 
     public async ValueTask InitializeAsync()
     {
-        await _mongoContainer.StartAsync();
-        ConnectionString = _mongoContainer.GetConnectionString();
+        var optIn = Environment.GetEnvironmentVariable("ROLERADAR_EXTERNAL_TEST_OPT_IN");
+        _isExternalMode = optIn == "1";
+
+        var externalConn = Environment.GetEnvironmentVariable("ROLERADAR_EXTERNAL_MONGO_CONNECTION_STRING");
+        if (_isExternalMode && !string.IsNullOrWhiteSpace(externalConn))
+        {
+            ExternalMongoSafetyGuard.ValidateConnectionString(externalConn, isOptInEnabled: true);
+            ConnectionString = externalConn;
+            _mongoClient = new MongoClient(ConnectionString);
+
+            try
+            {
+                using var cursor = await _mongoClient.ListDatabaseNamesAsync();
+                var dbs = await cursor.ToListAsync();
+                ExternalMongoSafetyGuard.ValidateExistingDatabases(dbs);
+            }
+            catch (Exception ex) when (ex is not ForeignDatabaseDetectedException)
+            {
+                ExternalMongoSafetyGuard.HandleListDatabasesException(ex);
+            }
+        }
+        else
+        {
+            await _mongoContainer.StartAsync();
+            ConnectionString = _mongoContainer.GetConnectionString();
+            _mongoClient = new MongoClient(ConnectionString);
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
-        await _mongoContainer.DisposeAsync();
+        if (_isExternalMode && _mongoClient != null)
+        {
+            try
+            {
+                var testResultsDir = Path.Combine(Directory.GetCurrentDirectory(), "TestResults");
+                Directory.CreateDirectory(testResultsDir);
+                var probeDb = _mongoClient.GetDatabase("admin");
+                await DatabaseCapabilityMatrixReporter.Instance.GenerateReportsAsync(probeDb, testResultsDir);
+            }
+            catch
+            {
+                // Best effort report generation on teardown
+            }
+
+            await ExternalMongoSafetyGuard.DropAllTrackedTestDatabasesAsync(_mongoClient);
+        }
+
+        if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ROLERADAR_EXTERNAL_MONGO_CONNECTION_STRING")))
+        {
+            await _mongoContainer.DisposeAsync();
+        }
     }
 
-    public string CreateDatabaseName(string prefix = "roleradar_contract") =>
-        $"{prefix}_{Guid.CreateVersion7():N}";
+    public string CreateDatabaseName(string prefix = "roleradar_contract")
+    {
+        if (_isExternalMode)
+        {
+            return ExternalMongoSafetyGuard.GenerateAndRegisterTestDatabase();
+        }
+
+        return $"{prefix}_{Guid.CreateVersion7():N}";
+    }
 
     public MongoOptions CreateOptions(string? databaseName = null) => new()
     {
@@ -47,19 +103,19 @@ public sealed class SharedMongoFixture : IAsyncLifetime
 
     public async Task<IMongoDatabase> CreateDatabaseAsync(string prefix = "roleradar_contract")
     {
-        var options = CreateOptions(CreateDatabaseName(prefix));
-        var client = new MongoClient(options.ConnectionString);
-        return client.GetDatabase(options.DatabaseName);
+        var dbName = CreateDatabaseName(prefix);
+        var client = new MongoClient(ConnectionString);
+        await Task.CompletedTask;
+        return client.GetDatabase(dbName);
     }
 
     public async Task DropDatabaseAsync(string databaseName)
     {
-        if (string.IsNullOrWhiteSpace(databaseName))
+        if (string.IsNullOrWhiteSpace(databaseName) || _mongoClient == null)
         {
             return;
         }
 
-        var client = new MongoClient(ConnectionString);
-        await client.DropDatabaseAsync(databaseName);
+        await _mongoClient.DropDatabaseAsync(databaseName);
     }
 }

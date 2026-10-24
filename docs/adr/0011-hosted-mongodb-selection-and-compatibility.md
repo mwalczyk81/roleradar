@@ -47,8 +47,8 @@ Recommended candidate: **MongoDB Atlas on Azure (Shared Tier / M0 initially, M10
 
 ### Open Items (Resolved Empirically via Compatibility Mode)
 
-The following compatibility questions cannot be definitively closed by documentation alone and will be verified by pointing `RoleRadar.Tests.Contract` with `ROLERADAR_EXTERNAL_TEST_OPT_IN=1` at candidate endpoints:
+The following compatibility questions cannot be definitively closed by documentation alone and are to be completed after running the external-mode suite against a real candidate (with the checklist filled in as far as can be done locally):
 
-1. Verify whether Cosmos DB vCore supports partial unique index expressions matching `{"dedup_key_a": {"$exists": true}}` without syntax rejection.
-2. Confirm that `mongodump` and `mongorestore` 100.19.x archive streaming with `--gzip` completes against Cosmos DB vCore without namespace metadata warnings.
-3. Verify that Atlas M0 free tier does not throttle concurrent burst connections during the 8-process parallel search run test.
+1. Verify whether Cosmos DB vCore supports partial unique index expressions matching `{"dedup_key_a": {"$exists": true}}` without syntax rejection (to be completed after running the external-mode suite against a real candidate).
+2. Confirm that `mongodump` and `mongorestore` 100.19.x archive streaming with `--gzip` completes against Cosmos DB vCore without namespace metadata warnings (to be completed after running the external-mode suite against a real candidate).
+3. Verify that Atlas M0 free tier does not throttle concurrent burst connections during the 8-process parallel search run test (to be completed after running the external-mode suite against a real candidate).
