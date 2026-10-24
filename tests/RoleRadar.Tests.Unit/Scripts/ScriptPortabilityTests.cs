@@ -128,4 +128,20 @@ public sealed class ScriptPortabilityTests
             violations.Count == 0,
             $"Found hardcoded Windows backslash paths in scripts:\n{string.Join("\n", violations)}");
     }
+
+    [Fact]
+    public void ScriptPortability_PesterTestFile_ExistsOnDisk()
+    {
+        var repoRoot = FindRepoRoot();
+        var pesterPath = Path.Combine(repoRoot, "tests", "RoleRadar.Tests.Unit", "Scripts", "ScriptPortability.Tests.ps1");
+        Assert.True(File.Exists(pesterPath), $"ScriptPortability.Tests.ps1 not found at: {pesterPath}");
+    }
+
+    [Fact]
+    public void CheckToolsReleaseScript_ExistsInScriptsDirectory()
+    {
+        var repoRoot = FindRepoRoot();
+        var scriptPath = Path.Combine(repoRoot, "scripts", "check-tools-release.ps1");
+        Assert.True(File.Exists(scriptPath), $"check-tools-release.ps1 not found at: {scriptPath}");
+    }
 }
