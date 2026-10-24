@@ -465,7 +465,9 @@ public static class TrackingEnumExtensions
         {
             case "tailored": variant = ResumeVariant.Tailored; return true;
             case "as_is":
-            case "asis": variant = ResumeVariant.AsIs; return true;
+            case "asis":
+            case "not_tailored":
+            case "nottailored": variant = ResumeVariant.AsIs; return true;
             case "ic_framed":
             case "icframed": variant = ResumeVariant.IcFramed; return true;
             default: return false;

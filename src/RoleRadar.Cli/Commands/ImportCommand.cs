@@ -18,7 +18,9 @@ public static class ImportCommand
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        var importCommand = new Command("import", "Import UTF-8 markdown files into RoleRadar notes");
+        var importCommand = new Command(
+            "import",
+            "Import UTF-8 markdown files into RoleRadar notes (writes by default; use --dry-run to preview without writing, unlike tracker-import which previews by default)");
 
         var filesArgument = new Argument<string[]>("files")
         {

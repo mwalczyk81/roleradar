@@ -117,6 +117,8 @@ try {
     }
 
     # 7. Build both container images
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     $null = & docker build --target cli -t "roleradar-cli:review-$cloneGuid" . 2>&1
     $null = & docker build --target mcp -t "roleradar-mcp:review-$cloneGuid" . 2>&1
 
@@ -131,6 +133,7 @@ try {
 
     # Cleanup review images
     $null = & docker rmi -f "roleradar-cli:review-$cloneGuid" "roleradar-mcp:review-$cloneGuid" 2>&1
+    $ErrorActionPreference = $prevEap
 }
 finally {
     Pop-Location

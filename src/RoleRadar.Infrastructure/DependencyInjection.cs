@@ -97,6 +97,11 @@ public static class DependencyInjection
             return new Mongo.Repositories.MongoIntegrityRepository(client, database);
         });
 
+        services.TryAddSingleton<MongoScratchDatabaseManager>();
+        services.TryAddSingleton<ITrackerScratchManager>(sp => sp.GetRequiredService<MongoScratchDatabaseManager>());
+        services.TryAddSingleton<ITrackingContextFactory, MongoTrackingContextFactory>();
+        services.TryAddSingleton<ICsvParser, Csv.Rfc4180CsvParser>();
+
         return services;
     }
 }
