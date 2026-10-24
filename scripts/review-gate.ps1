@@ -70,7 +70,7 @@ try {
     if ($LASTEXITCODE -eq 0) { $gateResults.Build = "PASS" } else { throw "dotnet build (-warnaserror) failed." }
 
     # 5. Run test suite with coverage via scripts/test-all.ps1
-    & docker compose -f deploy/docker-compose.yml up -d mongo 2>&1 | Out-Null
+    & docker compose -f deploy/docker-compose.yml up -d --force-recreate mongo 2>&1 | Out-Null
     $testOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-all.ps1 -NoBuild --collect:"XPlat Code Coverage" --results-directory ./TestResults 2>&1
     if ($LASTEXITCODE -eq 0) {
         $gateResults.Tests = "PASS"
