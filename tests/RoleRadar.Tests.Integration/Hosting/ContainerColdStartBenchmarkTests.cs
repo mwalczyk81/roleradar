@@ -1,9 +1,11 @@
 using System.Reflection;
+using RoleRadar.Tests.Integration.Fixtures;
 using Xunit;
 
 namespace RoleRadar.Tests.Integration.Hosting;
 
-public sealed class ContainerColdStartBenchmarkTests
+[Collection("BenchmarkCollection")]
+public sealed class ContainerColdStartBenchmarkTests : IClassFixture<ContainerImagesFixture>
 {
     [Fact]
     public void ColdStartBenchmark_IsConfiguredWith_BenchmarkCollection()

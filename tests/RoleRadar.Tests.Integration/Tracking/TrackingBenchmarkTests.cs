@@ -16,7 +16,7 @@ using Xunit;
 namespace RoleRadar.Tests.Integration.Tracking;
 
 [CollectionDefinition("BenchmarkCollection", DisableParallelization = true)]
-public class BenchmarkTestCollectionDefinition
+public class BenchmarkTestCollectionDefinition : ICollectionFixture<ContainerImagesFixture>
 {
 }
 
