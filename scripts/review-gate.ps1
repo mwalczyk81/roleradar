@@ -69,12 +69,13 @@ try {
     $null = & dotnet build RoleRadar.sln -c Release --no-restore -warnaserror 2>&1
     if ($LASTEXITCODE -eq 0) { $gateResults.Build = "PASS" } else { throw "dotnet build (-warnaserror) failed." }
 
-    # 5. Run test suite with coverage
-    $testOutput = & dotnet test RoleRadar.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults 2>&1
+    # 5. Run test suite with coverage via scripts/test-all.ps1
+    $testOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-all.ps1 -NoBuild --collect:"XPlat Code Coverage" --results-directory ./TestResults 2>&1
     if ($LASTEXITCODE -eq 0) {
         $gateResults.Tests = "PASS"
     } else {
-        throw "Test execution failed."
+        $failedLines = ($testOutput | Where-Object { $_ -match 'Failed\s+' -or $_ -match 'Error Message:' }) -join '; '
+        throw "Test execution failed: $failedLines"
     }
 
     foreach ($line in $testOutput) {

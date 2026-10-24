@@ -1,7 +1,9 @@
 [CmdletBinding()]
 param(
     [switch]$NoBuild,
-    [string]$Configuration = "Release"
+    [string]$Configuration = "Release",
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$AdditionalArgs
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,6 +15,9 @@ try {
     $testArgs = @("test", "RoleRadar.sln", "-c", $Configuration)
     if ($NoBuild) {
         $testArgs += "--no-build"
+    }
+    if ($AdditionalArgs) {
+        $testArgs += $AdditionalArgs
     }
 
     Write-Output "==> Running all tests for RoleRadar.sln..."
