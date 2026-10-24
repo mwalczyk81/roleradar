@@ -118,4 +118,36 @@ public sealed class ExternalDatabaseGuardUnitTests
         var exception = Record.Exception(() => ExternalMongoSafetyGuard.ValidateExistingDatabases(safeDatabases));
         Assert.Null(exception);
     }
+
+    [Fact]
+    public void DevStackEndpoint_127_0_0_1_27017_RejectedUnlessOverrideSet()
+    {
+        const string uri = "mongodb://127.0.0.1:27017";
+        Assert.Throws<DevStackTargetException>(() => ExternalMongoSafetyGuard.ValidateNotDevStack(uri));
+
+        try
+        {
+            Environment.SetEnvironmentVariable("ROLERADAR_ALLOW_DEV_STACK", "1");
+            var ex = Record.Exception(() => ExternalMongoSafetyGuard.ValidateNotDevStack(uri));
+            Assert.Null(ex);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("ROLERADAR_ALLOW_DEV_STACK", null);
+        }
+    }
+
+    [Fact]
+    public void DevStackEndpoint_Localhost_27017_RejectedUnlessOverrideSet()
+    {
+        const string uri = "mongodb://localhost:27017/?replicaSet=rs0";
+        Assert.Throws<DevStackTargetException>(() => ExternalMongoSafetyGuard.ValidateNotDevStack(uri));
+    }
+
+    [Fact]
+    public void DropDatabase_RefusesToDrop_DefaultDatabase_Roleradar()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            ExternalMongoSafetyGuard.ValidateDatabaseNameForDrop("roleradar"));
+    }
 }
