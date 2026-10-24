@@ -10,6 +10,8 @@ param(
 
     [switch]$PassphraseStdin,
 
+    [switch]$UseDocker,
+
     [Parameter(DontShow = $true)]
     [string]$Passphrase = '',
 
@@ -38,6 +40,11 @@ if ($PassphraseStdin) {
     $cliArgs += '--passphrase-stdin'
 }
 $cliArgs += $RemainingArgs
+
+if ($UseDocker -or $env:ROLERADAR_USE_DOCKER -eq '1') {
+    & (Join-Path $scriptDir 'roleradar-docker.ps1') @cliArgs
+    exit $LASTEXITCODE
+}
 
 & dotnet run --project "$repoRoot/src/RoleRadar.Cli" --no-build -c Release -- @cliArgs
 exit $LASTEXITCODE

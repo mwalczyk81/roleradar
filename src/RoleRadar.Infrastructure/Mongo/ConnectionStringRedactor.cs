@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using MongoDB.Driver;
 
 namespace RoleRadar.Infrastructure.Mongo;
@@ -101,5 +102,37 @@ public static class ConnectionStringRedactor
         }
 
         return $"{server.Host}:{server.Port}";
+    }
+
+    public static string RedactSensitiveText(string? text, string? connectionString = null)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        var result = Regex.Replace(text, @"(mongodb(?:\+srv)?:\/\/)([^:@\s]+):([^@\s]+)@", "$1<redacted>:<redacted>@", RegexOptions.IgnoreCase);
+
+        if (!string.IsNullOrWhiteSpace(connectionString))
+        {
+            try
+            {
+                var url = new MongoUrl(connectionString.Trim());
+                if (!string.IsNullOrEmpty(url.Password))
+                {
+                    result = result.Replace(url.Password, "<redacted>", StringComparison.Ordinal);
+                }
+                if (!string.IsNullOrEmpty(url.Username))
+                {
+                    result = result.Replace(url.Username, "<redacted>", StringComparison.Ordinal);
+                }
+            }
+            catch
+            {
+                // Ignore parse errors
+            }
+        }
+
+        return result;
     }
 }

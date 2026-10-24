@@ -25,7 +25,7 @@ public static class Program
                 options.LogToStandardErrorThreshold = LogLevel.Trace;
             });
 
-            var connectionString = Environment.GetEnvironmentVariable("ROLERADAR_MONGO_CONNECTION_STRING");
+            var connectionString = RoleRadar.Infrastructure.Mongo.MongoConnectionStringSource.Resolve(Environment.GetEnvironmentVariable);
             var databaseName = Environment.GetEnvironmentVariable("ROLERADAR_MONGO_DATABASE");
 
             builder.Services.AddRoleRadarApplication();
