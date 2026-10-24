@@ -188,10 +188,32 @@ jobs:
               throw "Merged line coverage $pct% is below the mandatory 85.0% threshold."
           }
 
+      - name: Lint Dockerfile with hadolint
+        run: docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < Dockerfile
+
       - name: Build local container images
         run: |
           docker build --target cli -t roleradar-cli:local .
           docker build --target mcp -t roleradar-mcp:local .
+
+      - name: Run Trivy vulnerability scan on container images
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --list-all-pkgs --severity CRITICAL --exit-code 1 --ignore-unfixed --format json --output /TestResults/trivy-report-cli.json roleradar-cli:local
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --list-all-pkgs --severity CRITICAL --exit-code 1 --ignore-unfixed --format json --output /TestResults/trivy-report-mcp.json roleradar-mcp:local
+
+      - name: Generate CycloneDX SBOMs for container images
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --format cyclonedx --output /TestResults/sbom-cli.json roleradar-cli:local
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --format cyclonedx --output /TestResults/sbom-mcp.json roleradar-mcp:local
+
+      - name: Upload Security Reports and SBOMs
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: security-artifacts
+          path: |
+            TestResults/trivy-report-*.json
+            TestResults/sbom-*.json
+            TestResults/database-capability-matrix.*
 
       - name: Run launched-host test suites against container images
         shell: pwsh

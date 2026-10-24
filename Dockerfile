@@ -24,9 +24,11 @@ RUN dotnet publish src/RoleRadar.Mcp.Stdio/RoleRadar.Mcp.Stdio.csproj -c Release
 # Stage 2: Download MongoDB Database Tools 100.19.1 and extract Kerberos shared libraries
 FROM ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac AS tools-downloader
 ARG TARGETARCH
+# hadolint ignore=DL3008
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/*
 WORKDIR /tools
 
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN set -eux; \
     if [ "$TARGETARCH" = "arm64" ]; then \
         TOOL_ARCH="arm64"; \

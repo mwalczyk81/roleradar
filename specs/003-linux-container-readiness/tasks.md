@@ -224,14 +224,14 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T034 [P] [US7] Write failing container image content scan tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerImageContentScanTests.cs` extracting container layer filesystems and history to assert zero denylist terms, secrets, `.git`, `.env`, or sensitive build artifacts exist in either image (expected to fail before implementation) [FR-023, FR-024, SC-001]
-- [ ] T035 [P] [US7] Write failing vulnerability scanner package inventory test in `tests/RoleRadar.Tests.Integration/Hosting/ContainerVulnerabilityInventoryTests.cs` asserting that Trivy scan report explicitly lists the Kerberos packages (`libgssapi-krb5-2`, `libkrb5-3`, `libk5crypto3`, `libkrb5support0`, `libkeyutils1`) with exact versions and zero unindexed binaries (expected to fail before implementation) [FR-006, FR-022, SC-002]
+- [x] T034 [P] [US7] Write failing container image content scan tests in `tests/RoleRadar.Tests.Integration/Hosting/ContainerImageContentScanTests.cs` extracting container layer filesystems and history to assert zero denylist terms, secrets, `.git`, `.env`, or sensitive build artifacts exist in either image (expected to fail before implementation) [FR-023, FR-024, SC-001]
+- [x] T035 [P] [US7] Write failing vulnerability scanner package inventory test in `tests/RoleRadar.Tests.Integration/Hosting/ContainerVulnerabilityInventoryTests.cs` asserting that Trivy scan report explicitly lists the Kerberos packages (`libgssapi-krb5-2`, `libkrb5-3`, `libk5crypto3`, `libkrb5support0`, `libkeyutils1`) with exact versions and zero unindexed binaries (expected to fail before implementation) [FR-006, FR-022, SC-002]
 
 ### Implementation for User Story 7
 
-- [ ] T036 [US7] Configure Dockerfile linting (`hadolint`) step and Trivy container vulnerability scanning in `.github/workflows/ci.yml` enforcing zero critical vulnerabilities with available fixes and verifying against `.trivy-allowlist.yaml` (depends on T034, T035 failing first) [FR-020, FR-021, FR-022, SC-002]
-- [ ] T037 [US7] Configure Syft/Trivy SBOM generation in `.github/workflows/ci.yml` producing SPDX/CycloneDX JSON SBOM artifacts for both images [FR-025]
-- [ ] T038 [US7] Pin every GitHub Action in `.github/workflows/*.yml` to immutable commit SHAs, and run `scripts/verify-action-pins.ps1` and `zizmor` pre-commit hook to verify zero supply chain or workflow security warnings [FR-019, SC-006]
+- [x] T036 [US7] Configure Dockerfile linting (`hadolint`) step and Trivy container vulnerability scanning in `.github/workflows/ci.yml` enforcing zero critical vulnerabilities with available fixes and verifying against `.trivy-allowlist.yaml` (depends on T034, T035 failing first) [FR-020, FR-021, FR-022, SC-002]
+- [x] T037 [US7] Configure Syft/Trivy SBOM generation in `.github/workflows/ci.yml` producing SPDX/CycloneDX JSON SBOM artifacts for both images [FR-025]
+- [x] T038 [US7] Pin every GitHub Action in `.github/workflows/*.yml` to immutable commit SHAs, and run `scripts/verify-action-pins.ps1` and `zizmor` pre-commit hook to verify zero supply chain or workflow security warnings [FR-019, SC-006]
 
 **Checkpoint**: User Story 7 complete — supply chain hardened, vulnerability scanning active, zero private data in images.  
 *Commit*: `ci(security): configure hadolint, trivy scanning, SBOM generation, and action SHA pinning`
