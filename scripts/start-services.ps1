@@ -21,7 +21,7 @@ if (-not [string]::IsNullOrWhiteSpace($ProjectName)) {
 }
 
 # Ensure external data volume exists before starting compose services
-$volInspect = & docker volume inspect roleradar-mongo-data 2>&1
+$null = & docker volume inspect roleradar-mongo-data 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Output "Creating external docker volume 'roleradar-mongo-data'..."
     & docker volume create roleradar-mongo-data | Out-Null

@@ -40,7 +40,8 @@ public sealed class ScriptPortabilityTests
         var expectedWindowsPath = Path.Combine(localAppData, "roleradar", "private", "denylist.txt");
 
         // Verify the path formula produced
-        Assert.EndsWith(@"roleradar\private\denylist.txt", expectedWindowsPath, StringComparison.OrdinalIgnoreCase);
+        var expectedSuffix = Path.Combine("roleradar", "private", "denylist.txt");
+        Assert.EndsWith(expectedSuffix, expectedWindowsPath, StringComparison.OrdinalIgnoreCase);
 
         // Verify scripts/denylist-check.ps1 encodes this resolution
         var repoRoot = FindRepoRoot();

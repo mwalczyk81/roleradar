@@ -16,14 +16,14 @@ Push-Location $repoRoot
 try {
     Write-Output "==> [test-images] Verifying Docker container images..."
     if (-not $NoBuild) {
-        $cliInspect = docker image inspect $CliImage 2>&1
+        $null = & docker image inspect $CliImage 2>&1
         if ($LASTEXITCODE -ne 0) {
             Write-Output "==> Building $CliImage..."
             & docker build --target cli -t $CliImage .
             if ($LASTEXITCODE -ne 0) { throw "CLI image build failed with exit code $LASTEXITCODE" }
         }
 
-        $mcpInspect = docker image inspect $McpImage 2>&1
+        $null = & docker image inspect $McpImage 2>&1
         if ($LASTEXITCODE -ne 0) {
             Write-Output "==> Building $McpImage..."
             & docker build --target mcp -t $McpImage .
