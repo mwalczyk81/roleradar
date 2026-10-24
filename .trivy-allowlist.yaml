@@ -1,0 +1,4 @@
+# RoleRadar Container Vulnerability Allowlist
+# Enforces expiration dates and architectural justification for unfixed CVEs.
+# Critical vulnerabilities with available vendor fixes can NEVER be allowlisted.
+allowlist: []

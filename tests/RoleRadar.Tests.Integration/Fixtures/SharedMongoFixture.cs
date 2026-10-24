@@ -22,7 +22,15 @@ public sealed class SharedMongoFixture : IAsyncLifetime
     public async ValueTask InitializeAsync()
     {
         await _mongoContainer.StartAsync();
-        ConnectionString = _mongoContainer.GetConnectionString();
+        var rawConn = _mongoContainer.GetConnectionString();
+        if (!rawConn.Contains("authSource=", StringComparison.OrdinalIgnoreCase))
+        {
+            ConnectionString = rawConn.Contains('?') ? $"{rawConn}&authSource=admin" : $"{rawConn}?authSource=admin";
+        }
+        else
+        {
+            ConnectionString = rawConn;
+        }
     }
 
     public async ValueTask DisposeAsync()
@@ -30,8 +38,13 @@ public sealed class SharedMongoFixture : IAsyncLifetime
         await _mongoContainer.DisposeAsync();
     }
 
-    public string CreateDatabaseName(string prefix = "roleradar_int") =>
-        $"{prefix}_{Guid.CreateVersion7():N}";
+    public string CreateDatabaseName(string prefix = "rrtest_int")
+    {
+        var safePrefix = prefix.StartsWith("rrtest_", StringComparison.Ordinal)
+            ? prefix
+            : $"rrtest_{prefix.Replace("roleradar_", string.Empty)}";
+        return $"{safePrefix}_{Guid.CreateVersion7():N}";
+    }
 
     public MongoOptions CreateOptions(string? databaseName = null) => new()
     {
@@ -58,7 +71,7 @@ public sealed class SharedMongoFixture : IAsyncLifetime
         };
     }
 
-    public async Task<IMongoDatabase> CreateDatabaseAsync(string prefix = "roleradar_int")
+    public async Task<IMongoDatabase> CreateDatabaseAsync(string prefix = "rrtest_int")
     {
         var options = CreateOptions(CreateDatabaseName(prefix));
         var client = new MongoClient(options.ConnectionString);
@@ -70,6 +83,11 @@ public sealed class SharedMongoFixture : IAsyncLifetime
         if (string.IsNullOrWhiteSpace(databaseName))
         {
             return;
+        }
+
+        if (string.Equals(databaseName, "roleradar", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Refusing to drop protected default database 'roleradar' in test cleanup.");
         }
 
         var client = new MongoClient(ConnectionString);

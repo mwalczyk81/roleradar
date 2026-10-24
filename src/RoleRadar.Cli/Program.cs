@@ -13,6 +13,14 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        using var cts = new CancellationTokenSource();
+        using var sigtermReg = OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()
+            ? System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGTERM, _ => cts.Cancel())
+            : null;
+        using var sigintReg = OperatingSystem.IsLinux() || OperatingSystem.IsMacOS()
+            ? System.Runtime.InteropServices.PosixSignalRegistration.Create(System.Runtime.InteropServices.PosixSignal.SIGINT, _ => cts.Cancel())
+            : null;
+
         try
         {
             var isVerbose = args.Any(a => string.Equals(a, "--verbose", StringComparison.OrdinalIgnoreCase)
@@ -40,7 +48,11 @@ public static class Program
                 services.GetRequiredService<IMongoClient>();
             }
 
-            return await parseResult.InvokeAsync(cancellationToken: CancellationToken.None);
+            return await parseResult.InvokeAsync(cancellationToken: cts.Token);
+        }
+        catch (OperationCanceledException) when (cts.IsCancellationRequested)
+        {
+            return 143;
         }
         catch (InvalidOperationException ex) when (ex.Message == RoleRadar.Infrastructure.Mongo.ConnectionStringRedactor.InvalidConnectionStringErrorMessage)
         {
@@ -71,7 +83,7 @@ public static class Program
             });
         });
 
-        var connectionString = Environment.GetEnvironmentVariable("ROLERADAR_MONGO_CONNECTION_STRING");
+        var connectionString = RoleRadar.Infrastructure.Mongo.MongoConnectionStringSource.Resolve(Environment.GetEnvironmentVariable);
         var databaseName = Environment.GetEnvironmentVariable("ROLERADAR_MONGO_DATABASE");
         var backupDumpCommand = Environment.GetEnvironmentVariable("ROLERADAR_BACKUP_DUMP_COMMAND");
         var backupRestoreCommand = Environment.GetEnvironmentVariable("ROLERADAR_BACKUP_RESTORE_COMMAND");

@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -441,11 +442,51 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         }
 
         Process? process = null;
+        string? tempConfigFile = null;
         Task<string>? stderrDrainTask = null;
+
+        EventHandler exitHandler = (_, _) =>
+        {
+            try { if (process is not null && !process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+            try { if (tempConfigFile is not null && File.Exists(tempConfigFile)) File.Delete(tempConfigFile); } catch { }
+            try { if (File.Exists(partialPath)) File.Delete(partialPath); } catch { }
+        };
+        AppDomain.CurrentDomain.ProcessExit += exitHandler;
+
+        PosixSignalRegistration? sigtermReg = null;
+        PosixSignalRegistration? sigintReg = null;
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            Action<PosixSignalContext> signalHandler = _ =>
+            {
+                try { if (process is not null && !process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+                try { if (tempConfigFile is not null && File.Exists(tempConfigFile)) File.Delete(tempConfigFile); } catch { }
+                try { if (File.Exists(partialPath)) File.Delete(partialPath); } catch { }
+            };
+            sigtermReg = PosixSignalRegistration.Create(PosixSignal.SIGTERM, signalHandler);
+            sigintReg = PosixSignalRegistration.Create(PosixSignal.SIGINT, signalHandler);
+        }
 
         try
         {
-            var (cmdExe, cmdArgs) = SplitCommand(_backupOptions.DumpCommand);
+            var isMongoTools = string.Equals(_backupOptions.DumpCommand, "mongodump", StringComparison.OrdinalIgnoreCase) ||
+                               _backupOptions.DumpCommand.StartsWith("mongodump ", StringComparison.OrdinalIgnoreCase) ||
+                               File.Exists("/usr/local/bin/mongodump");
+
+            string cmdExe;
+            string cmdArgs;
+
+            if (isMongoTools)
+            {
+                tempConfigFile = CreateAtomicToolsConfigFile(_mongoOptions.ConnectionString);
+                cmdExe = "mongodump";
+                cmdArgs = $"--config=\"{tempConfigFile}\" --db=\"{_mongoOptions.DatabaseName}\" --archive --gzip";
+            }
+            else
+            {
+                (cmdExe, cmdArgs) = SplitCommand(_backupOptions.DumpCommand);
+            }
+
             var startInfo = new ProcessStartInfo
             {
                 FileName = cmdExe,
@@ -455,6 +496,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+            SanitizeChildEnvironment(startInfo);
 
             try
             {
@@ -464,7 +506,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             {
                 return Result<BackupArchiveSummaryDto>.Failure(
                     ErrorCode.ValidationError,
-                    $"Failed to start mongodump command '{cmdExe}'. Ensure tools are available: {ex.Message}");
+                    $"Failed to start mongodump command '{cmdExe}'. Ensure tools are available: {ConnectionStringRedactor.RedactSensitiveText(ex.Message, _mongoOptions.ConnectionString)}");
             }
 
             if (process is null)
@@ -492,7 +534,8 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                     File.Delete(partialPath);
                 }
 
-                var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
+                var rawStderr = await ReadStderrAsync(stderrDrainTask);
+                var stderr = ConnectionStringRedactor.RedactSensitiveText(rawStderr, _mongoOptions.ConnectionString);
                 return Result<BackupArchiveSummaryDto>.Failure(
                     ErrorCode.ValidationError,
                     $"mongodump produced zero bytes. An empty archive cannot be created: {stderr}");
@@ -506,7 +549,8 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                     File.Delete(partialPath);
                 }
 
-                var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
+                var rawStderr = await ReadStderrAsync(stderrDrainTask);
+                var stderr = ConnectionStringRedactor.RedactSensitiveText(rawStderr, _mongoOptions.ConnectionString);
                 return Result<BackupArchiveSummaryDto>.Failure(
                     ErrorCode.ValidationError,
                     $"mongodump stream is not a valid archive. Decoded stream does not match mongodump archive magic: {stderr}");
@@ -526,7 +570,8 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                         await process.WaitForExitAsync(ct);
                         if (process.ExitCode != 0)
                         {
-                            var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
+                            var rawStderr = await ReadStderrAsync(stderrDrainTask);
+                            var stderr = ConnectionStringRedactor.RedactSensitiveText(rawStderr, _mongoOptions.ConnectionString);
                             return Result<bool>.Failure(
                                 ErrorCode.ValidationError,
                                 $"mongodump failed with exit code {process.ExitCode}: {stderr}");
@@ -553,7 +598,8 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             await process.WaitForExitAsync(cancellationToken);
             if (process.ExitCode != 0)
             {
-                var stderr = stderrDrainTask is not null ? await stderrDrainTask : string.Empty;
+                var rawStderr = await ReadStderrAsync(stderrDrainTask);
+                var stderr = ConnectionStringRedactor.RedactSensitiveText(rawStderr, _mongoOptions.ConnectionString);
                 if (File.Exists(partialPath))
                 {
                     File.Delete(partialPath);
@@ -581,6 +627,14 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         }
         finally
         {
+            AppDomain.CurrentDomain.ProcessExit -= exitHandler;
+            sigtermReg?.Dispose();
+            sigintReg?.Dispose();
+            await TerminateProcessTreeAsync(process);
+            if (tempConfigFile is not null && File.Exists(tempConfigFile))
+            {
+                try { File.Delete(tempConfigFile); } catch { }
+            }
             if (File.Exists(partialPath))
             {
                 try { File.Delete(partialPath); } catch { }
@@ -652,27 +706,67 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
         // Pass 2: Stream decrypted bytes into mongorestore stdin
         Process? process = null;
+        string? tempConfigFile = null;
+
+        EventHandler exitHandler = (_, _) =>
+        {
+            try { if (process is not null && !process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+            try { if (tempConfigFile is not null && File.Exists(tempConfigFile)) File.Delete(tempConfigFile); } catch { }
+        };
+        AppDomain.CurrentDomain.ProcessExit += exitHandler;
+
+        PosixSignalRegistration? sigtermReg = null;
+        PosixSignalRegistration? sigintReg = null;
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            Action<PosixSignalContext> signalHandler = _ =>
+            {
+                try { if (process is not null && !process.HasExited) process.Kill(entireProcessTree: true); } catch { }
+                try { if (tempConfigFile is not null && File.Exists(tempConfigFile)) File.Delete(tempConfigFile); } catch { }
+            };
+            sigtermReg = PosixSignalRegistration.Create(PosixSignal.SIGTERM, signalHandler);
+            sigintReg = PosixSignalRegistration.Create(PosixSignal.SIGINT, signalHandler);
+        }
+
         try
         {
-            var restoreCmdString = _backupOptions.RestoreCommand;
-            if (restoreCmdString.Contains("<db>", StringComparison.OrdinalIgnoreCase))
+            var isMongoTools = string.Equals(_backupOptions.RestoreCommand, "mongorestore", StringComparison.OrdinalIgnoreCase) ||
+                               _backupOptions.RestoreCommand.StartsWith("mongorestore ", StringComparison.OrdinalIgnoreCase) ||
+                               File.Exists("/usr/local/bin/mongorestore");
+
+            string cmdExe;
+            string cmdArgs;
+
+            if (isMongoTools)
             {
-                restoreCmdString = restoreCmdString.Replace("<db>", _mongoOptions.DatabaseName);
+                tempConfigFile = CreateAtomicToolsConfigFile(_mongoOptions.ConnectionString);
+                cmdExe = "mongorestore";
+                var dropFlag = forceOverwrite ? "--drop " : string.Empty;
+                cmdArgs = $"--config=\"{tempConfigFile}\" {dropFlag}--nsInclude=\"{_mongoOptions.DatabaseName}.*\" --archive --gzip";
+            }
+            else
+            {
+                var restoreCmdString = _backupOptions.RestoreCommand;
+                if (restoreCmdString.Contains("<db>", StringComparison.OrdinalIgnoreCase))
+                {
+                    restoreCmdString = restoreCmdString.Replace("<db>", _mongoOptions.DatabaseName);
+                }
+
+                if (restoreCmdString.Contains("--nsInclude", StringComparison.OrdinalIgnoreCase) &&
+                    restoreCmdString.Contains("--oplogReplay", StringComparison.OrdinalIgnoreCase))
+                {
+                    // mongorestore fails if both --oplogReplay and --nsInclude are present
+                    restoreCmdString = Regex.Replace(restoreCmdString, @"\s*--oplogReplay\b", "");
+                }
+
+                if (forceOverwrite && !restoreCmdString.Contains("--drop", StringComparison.OrdinalIgnoreCase))
+                {
+                    restoreCmdString += " --drop";
+                }
+
+                (cmdExe, cmdArgs) = SplitCommand(restoreCmdString);
             }
 
-            if (restoreCmdString.Contains("--nsInclude", StringComparison.OrdinalIgnoreCase) &&
-                restoreCmdString.Contains("--oplogReplay", StringComparison.OrdinalIgnoreCase))
-            {
-                // mongorestore fails if both --oplogReplay and --nsInclude are present
-                restoreCmdString = Regex.Replace(restoreCmdString, @"\s*--oplogReplay\b", "");
-            }
-
-            if (forceOverwrite && !restoreCmdString.Contains("--drop", StringComparison.OrdinalIgnoreCase))
-            {
-                restoreCmdString += " --drop";
-            }
-
-            var (cmdExe, cmdArgs) = SplitCommand(restoreCmdString);
             var startInfo = new ProcessStartInfo
             {
                 FileName = cmdExe,
@@ -682,6 +776,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                 UseShellExecute = false,
                 CreateNoWindow = true
             };
+            SanitizeChildEnvironment(startInfo);
 
             try
             {
@@ -691,7 +786,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             {
                 return Result<RestoreArchiveSummaryDto>.Failure(
                     ErrorCode.ValidationError,
-                    $"Failed to start mongorestore command '{cmdExe}'. Ensure tools are available: {ex.Message}");
+                    $"Failed to start mongorestore command '{cmdExe}'. Ensure tools are available: {ConnectionStringRedactor.RedactSensitiveText(ex.Message, _mongoOptions.ConnectionString)}");
             }
 
             if (process is null)
@@ -701,35 +796,33 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                     "Failed to start mongorestore process.");
             }
 
-            using (process)
+            var stderrTask = Task.Run(async () =>
             {
-                var stderrTask = Task.Run(async () =>
-                {
-                    using var reader = new StreamReader(process.StandardError.BaseStream, Encoding.UTF8);
-                    return await reader.ReadToEndAsync(cancellationToken);
-                }, cancellationToken);
+                using var reader = new StreamReader(process.StandardError.BaseStream, Encoding.UTF8);
+                return await reader.ReadToEndAsync(cancellationToken);
+            }, cancellationToken);
 
-                // Rewind fileStream for Pass 2
-                fileStream.Position = 0;
-                var restoreStdin = process.StandardInput.BaseStream;
-                var decryptResult = await Pass2DecryptAsync(fileStream, restoreStdin, derivedKey, cancellationToken);
-                if (!decryptResult.IsSuccess)
-                {
-                    await TerminateProcessTreeAsync(process);
-                    return Result<RestoreArchiveSummaryDto>.Failure(decryptResult.Error!.Value);
-                }
-                await restoreStdin.FlushAsync(cancellationToken);
+            // Rewind fileStream for Pass 2
+            fileStream.Position = 0;
+            var restoreStdin = process.StandardInput.BaseStream;
+            var decryptResult = await Pass2DecryptAsync(fileStream, restoreStdin, derivedKey, cancellationToken);
+            if (!decryptResult.IsSuccess)
+            {
+                await TerminateProcessTreeAsync(process);
+                return Result<RestoreArchiveSummaryDto>.Failure(decryptResult.Error!.Value);
+            }
+            await restoreStdin.FlushAsync(cancellationToken);
 
-                process.StandardInput.Close();
-                await process.WaitForExitAsync(cancellationToken);
+            process.StandardInput.Close();
+            await process.WaitForExitAsync(cancellationToken);
 
-                if (process.ExitCode != 0)
-                {
-                    var stderr = await stderrTask;
-                    return Result<RestoreArchiveSummaryDto>.Failure(
-                        ErrorCode.ValidationError,
-                        $"mongorestore failed with exit code {process.ExitCode}: {stderr}. The datastore may be partially restored; wipe and retry.");
-                }
+            if (process.ExitCode != 0)
+            {
+                var rawStderr = await ReadStderrAsync(stderrTask);
+                var stderr = ConnectionStringRedactor.RedactSensitiveText(rawStderr, _mongoOptions.ConnectionString);
+                return Result<RestoreArchiveSummaryDto>.Failure(
+                    ErrorCode.ValidationError,
+                    $"mongorestore failed with exit code {process.ExitCode}: {stderr}. The datastore may be partially restored; wipe and retry.");
             }
 
             // Verify indexes and collection counts across all 12 collections
@@ -760,10 +853,19 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         }
         finally
         {
+            AppDomain.CurrentDomain.ProcessExit -= exitHandler;
+            sigtermReg?.Dispose();
+            sigintReg?.Dispose();
+            await TerminateProcessTreeAsync(process);
+            if (tempConfigFile is not null && File.Exists(tempConfigFile))
+            {
+                try { File.Delete(tempConfigFile); } catch { }
+            }
             if (derivedKey is not null)
             {
                 CryptographicOperations.ZeroMemory(derivedKey);
             }
+            process?.Dispose();
         }
     }
 
@@ -793,11 +895,12 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                 var host = server.Host.Trim('[', ']');
                 if (!host.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) &&
                     !host.Equals("localhost", StringComparison.OrdinalIgnoreCase) &&
-                    !host.Equals("::1", StringComparison.OrdinalIgnoreCase))
+                    !host.Equals("::1", StringComparison.OrdinalIgnoreCase) &&
+                    !host.Equals("host.docker.internal", StringComparison.OrdinalIgnoreCase))
                 {
                     return Result<WipeSummaryDto>.Failure(
                         ErrorCode.ValidationError,
-                        $"Wipe is only permitted against loopback MongoDB hosts (127.0.0.1, ::1, localhost). Found host: '{server.Host}'.");
+                        $"Wipe is only permitted against loopback MongoDB hosts (127.0.0.1, ::1, localhost, host.docker.internal). Found host: '{server.Host}'.");
                 }
             }
         }
@@ -913,12 +1016,48 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
-                await process.WaitForExitAsync(CancellationToken.None);
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                await process.WaitForExitAsync(cts.Token);
             }
         }
         catch
         {
             // Process may already have exited
+        }
+    }
+
+    private static async Task<string> ReadStderrAsync(Task<string>? stderrDrainTask)
+    {
+        if (stderrDrainTask is null)
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            var completed = await Task.WhenAny(stderrDrainTask, Task.Delay(2000));
+            if (completed == stderrDrainTask)
+            {
+                return await stderrDrainTask;
+            }
+        }
+        catch
+        {
+            // Ignore drain errors
+        }
+
+        return string.Empty;
+    }
+
+    private static void SanitizeChildEnvironment(ProcessStartInfo startInfo)
+    {
+        var keysToRemove = startInfo.Environment.Keys
+            .Cast<string>()
+            .Where(k => k.StartsWith("ROLERADAR_", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        foreach (var k in keysToRemove)
+        {
+            startInfo.Environment.Remove(k);
         }
     }
 
@@ -932,6 +1071,42 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         }
 
         return targetPath;
+    }
+
+    private static string CreateAtomicToolsConfigFile(string connectionString)
+    {
+        var tempPath = Path.Combine(Path.GetTempPath(), $"rr-tools-{Guid.NewGuid():N}.conf");
+        var fileContent = $"uri: \"{connectionString.Trim()}\"\n";
+        var contentBytes = Encoding.UTF8.GetBytes(fileContent);
+
+        if (OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
+        {
+            var options = new FileStreamOptions
+            {
+                Mode = FileMode.CreateNew,
+                Access = FileAccess.Write,
+                Share = FileShare.None,
+                UnixCreateMode = UnixFileMode.UserRead | UnixFileMode.UserWrite
+            };
+
+            using var fs = new FileStream(tempPath, options);
+            fs.Write(contentBytes);
+            fs.Flush();
+        }
+        else
+        {
+            using var fs = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
+            fs.Write(contentBytes);
+            fs.Flush();
+        }
+
+        // Register for cleanup on unexpected process exit
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
+        };
+
+        return tempPath;
     }
 
     private static (string Exe, string Args) SplitCommand(string command)

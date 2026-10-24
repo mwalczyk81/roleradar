@@ -21,7 +21,7 @@ public sealed class ShippedHostTrackingIntegrationTests
     public async Task ShippedMcpHost_FirstTrackingWrite_InitializesUniquePartialIndexesOnDatabase()
     {
         var mcpDllPath = McpHostLocator.GetMcpDllPath();
-        var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_smoke_track");
+        var uniqueDb = _sharedMongo.CreateDatabaseName("rrtest_smoke_track");
         var env = _sharedMongo.CreateProcessEnvironment(uniqueDb);
 
         await using var client = await McpProcessClient.StartAsync(mcpDllPath, env);
@@ -134,7 +134,7 @@ public sealed class ShippedHostTrackingIntegrationTests
         }
         finally
         {
-            await mongoClient.DropDatabaseAsync(uniqueDb);
+            await _sharedMongo.DropDatabaseAsync(uniqueDb);
         }
     }
 
@@ -143,7 +143,7 @@ public sealed class ShippedHostTrackingIntegrationTests
     public async Task ShippedMcpHost_PostingRecord_Signals_ValidatesPersistsAndAffectsGhostLikelihood()
     {
         var mcpDllPath = McpHostLocator.GetMcpDllPath();
-        var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_shipped_signals");
+        var uniqueDb = _sharedMongo.CreateDatabaseName("rrtest_shipped_signals");
         var env = _sharedMongo.CreateProcessEnvironment(uniqueDb);
         var mongoClient = new MongoClient(_sharedMongo.ConnectionString);
 
@@ -275,7 +275,7 @@ public sealed class ShippedHostTrackingIntegrationTests
         }
         finally
         {
-            await mongoClient.DropDatabaseAsync(uniqueDb);
+            await _sharedMongo.DropDatabaseAsync(uniqueDb);
         }
     }
 

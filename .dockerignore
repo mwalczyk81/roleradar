@@ -1,14 +1,28 @@
-# Ignore build outputs, git state, local secrets, and backup archives in Docker contexts
-[Bb]in/
-[Oo]bj/
-[Tt]est[Rr]esults/
-coverage/
-.git/
-.vs/
-.idea/
-*.log*
-.env*
+# Deny by default
+**
+
+# Allow only source and required build metadata
+!RoleRadar.sln
+!global.json
+!NuGet.Config
+!Directory.Build.props
+!Directory.Packages.props
+!.editorconfig
+!packages.lock.json
+!src/**/packages.lock.json
+!src/**/*.csproj
+!src/**/*.cs
+
+# Explicitly exclude sensitive directories
+import-review/
+private/
+db/
 *.rrbak
-/private/
-/import-review/
-/db/
+*.dump
+*.sql.gz
+*.env
+.git/
+TestResults/
+bin/
+obj/
+dist/

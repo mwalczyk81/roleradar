@@ -34,7 +34,7 @@ public sealed class ContactNoLeakScannerIntegrationTests : IAsyncLifetime
         {
             if (_client is not null && !string.IsNullOrWhiteSpace(_databaseName))
             {
-                await _client.DropDatabaseAsync(_databaseName);
+                await _fixture.DropDatabaseAsync(_databaseName);
             }
         }
         finally
@@ -121,7 +121,8 @@ public sealed class ContactNoLeakScannerIntegrationTests : IAsyncLifetime
         }
 
         // 5. Backup round-trip: .rrbak must NOT leak plaintext of the name or notes
-        var backupFile = Path.Combine(Path.GetTempPath(), $"contact_leak_test_{Guid.NewGuid():N}.rrbak");
+        var tempDir = RoleRadar.Tests.Integration.Hosting.ContainerTestHarness.CreateSharedTempDirectory("contact_leak_test");
+        var backupFile = Path.Combine(tempDir, $"contact_leak_test_{Guid.NewGuid():N}.rrbak");
         try
         {
             const string passphrase = "CorrectHorseBatteryStaple123!";
@@ -143,10 +144,14 @@ public sealed class ContactNoLeakScannerIntegrationTests : IAsyncLifetime
         }
         finally
         {
-            if (File.Exists(backupFile))
+            try
             {
-                File.Delete(backupFile);
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, recursive: true);
+                }
             }
+            catch { }
         }
     }
 
@@ -175,31 +180,6 @@ public sealed class ContactNoLeakScannerIntegrationTests : IAsyncLifetime
         string arguments,
         IReadOnlyDictionary<string, string> env)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = "dotnet",
-            Arguments = $"\"{dllPath}\" {arguments}",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        foreach (var (k, v) in env)
-        {
-            psi.Environment[k] = v;
-        }
-
-        using var proc = Process.Start(psi)!;
-        Assert.NotNull(proc);
-
-        var stdoutTask = proc.StandardOutput.ReadToEndAsync();
-        var stderrTask = proc.StandardError.ReadToEndAsync();
-
-        await proc.WaitForExitAsync();
-        var stdout = await stdoutTask;
-        var stderr = await stderrTask;
-
-        return (proc.ExitCode, stdout, stderr);
+        return await RoleRadar.Tests.Integration.Hosting.LaunchedCliRunner.RunCliAsync(arguments, env);
     }
 }

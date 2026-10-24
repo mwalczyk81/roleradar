@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  schedule:
+    - cron: '0 6 * * 1'
   workflow_dispatch:
 
 concurrency:
@@ -60,9 +62,61 @@ jobs:
           dotnet test tests/RoleRadar.Tests.Unit/RoleRadar.Tests.Unit.csproj -c Release --no-build
           dotnet test tests/RoleRadar.Tests.Architecture/RoleRadar.Tests.Architecture.csproj -c Release --no-build
 
-  ubuntu-integration-and-coverage:
+      - name: Run Pester script portability tests
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Module -ListAvailable Pester | Where-Object Version -eq '5.9.1')) {
+              Install-Module -Name Pester -RequiredVersion 5.9.1 -Scope CurrentUser -Force -SkipPublisherCheck
+          }
+          Import-Module Pester -RequiredVersion 5.9.1
+          Invoke-Pester -Path tests/RoleRadar.Tests.Unit/Scripts/ScriptPortability.Tests.ps1 -CI
+
+  macos-verify:
+    name: macOS (Unit, Architecture & Script Portability)
+    runs-on: macos-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore with locked dependencies
+        run: dotnet restore RoleRadar.sln --locked-mode
+
+      - name: Verify formatting
+        run: dotnet format RoleRadar.sln --verify-no-changes
+
+      - name: Build solution
+        run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
+
+      - name: Run Unit and Architecture tests
+        run: |
+          dotnet test tests/RoleRadar.Tests.Unit/RoleRadar.Tests.Unit.csproj -c Release --no-build
+          dotnet test tests/RoleRadar.Tests.Architecture/RoleRadar.Tests.Architecture.csproj -c Release --no-build
+
+      - name: Run Pester script portability tests
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Module -ListAvailable Pester | Where-Object Version -eq '5.9.1')) {
+              Install-Module -Name Pester -RequiredVersion 5.9.1 -Scope CurrentUser -Force -SkipPublisherCheck
+          }
+          Import-Module Pester -RequiredVersion 5.9.1
+          Invoke-Pester -Path tests/RoleRadar.Tests.Unit/Scripts/ScriptPortability.Tests.ps1 -CI
+
+  ubuntu-build-and-test:
     name: Ubuntu (Build, Testcontainers, >=85% Coverage & Pre-Commit)
-    runs-on: ubuntu-latest
+    # ubuntu-latest recently moved to 26.04 where Testcontainers MongoDB fails ("mongosh or mongo binary could not be found"); pinned to 24.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -104,8 +158,20 @@ jobs:
       - name: Build solution
         run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
 
+      - name: Run Database Tools update check
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-tools-release.ps1
+
+      - name: Record dev stack safety canary baseline
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-devstack-canary.ps1 -Action Record
+
       - name: Run full test suite (Unit, Architecture, Contract, Integration) with Coverage
         run: dotnet test RoleRadar.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
+
+      - name: Verify dev stack safety canary remains untouched
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-devstack-canary.ps1 -Action Verify
 
       - name: Verify >=85% line coverage across RoleRadar.Domain and RoleRadar.Application
         shell: pwsh
@@ -145,3 +211,34 @@ jobs:
           if ($pct -lt 85.0) {
               throw "Merged line coverage $pct% is below the mandatory 85.0% threshold."
           }
+
+      - name: Lint Dockerfile with hadolint
+        run: docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < Dockerfile
+
+      - name: Build local container images
+        run: |
+          docker build --target cli -t roleradar-cli:local .
+          docker build --target mcp -t roleradar-mcp:local .
+
+      - name: Run Trivy vulnerability scan on container images
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --list-all-pkgs --severity CRITICAL --exit-code 1 --ignore-unfixed --format json --output /TestResults/trivy-report-cli.json roleradar-cli:local
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --list-all-pkgs --severity CRITICAL --exit-code 1 --ignore-unfixed --format json --output /TestResults/trivy-report-mcp.json roleradar-mcp:local
+
+      - name: Generate CycloneDX SBOMs for container images
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --format cyclonedx --output /TestResults/sbom-cli.json roleradar-cli:local
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --format cyclonedx --output /TestResults/sbom-mcp.json roleradar-mcp:local
+
+      - name: Upload Security Reports and SBOMs
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: security-artifacts
+          path: |
+            TestResults/trivy-report-*.json
+            TestResults/sbom-*.json
+            TestResults/database-capability-matrix.*
+
+      - name: Run launched-host test suites against container images
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-images.ps1

@@ -459,6 +459,7 @@ public sealed class TrackingBackupSafetyAndCompatibilityTests : IClassFixture<Ba
             {
                 File.Delete(tempBackup);
             }
+            Hosting.ContainerTestHarness.ValidateDatabaseNameForDrop(uniqueDb);
             await client.DropDatabaseAsync(uniqueDb);
         }
     }

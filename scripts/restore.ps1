@@ -12,6 +12,8 @@ param(
 
     [switch]$ForceOverwrite,
 
+    [switch]$UseDocker,
+
     [Parameter(DontShow = $true)]
     [string]$Passphrase = '',
 
@@ -34,6 +36,16 @@ if ([string]::IsNullOrWhiteSpace($File)) {
     exit 1
 }
 
+$targetDb = $env:ROLERADAR_MONGO_DATABASE
+if ([string]::IsNullOrWhiteSpace($targetDb)) {
+    $targetDb = 'roleradar'
+}
+
+if ($ForceOverwrite -and $targetDb -eq 'roleradar' -and $env:ROLERADAR_CONFIRM_OVERWRITE_DEFAULT -ne '1') {
+    [Console]::Error.WriteLine("Refusing to force-overwrite default database 'roleradar' with --drop without explicit confirmation (set ROLERADAR_CONFIRM_OVERWRITE_DEFAULT=1).")
+    exit 1
+}
+
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
 
@@ -49,5 +61,10 @@ if ($ForceOverwrite) {
 }
 $cliArgs += $RemainingArgs
 
-& dotnet run --project "$repoRoot\src\RoleRadar.Cli" --no-build -c Release -- @cliArgs
+if ($UseDocker -or $env:ROLERADAR_USE_DOCKER -eq '1') {
+    & (Join-Path $scriptDir 'roleradar-docker.ps1') @cliArgs
+    exit $LASTEXITCODE
+}
+
+& dotnet run --project "$repoRoot/src/RoleRadar.Cli" --no-build -c Release -- @cliArgs
 exit $LASTEXITCODE

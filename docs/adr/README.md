@@ -14,3 +14,5 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0008](./0008-mongodb-structured-job-search-storage.md) | MongoDB Replica Set Only for Structured Job-Search Storage | Accepted | `002-job-search-tracking` |
 | [ADR-0009](./0009-pattern-reuse-and-typed-results-for-feature-002.md) | Architectural Pattern Reuse and Typed Operational Failures for Feature 002 | Accepted | `002-job-search-tracking` |
 | [ADR-0010](./0010-immutable-auditability-and-zero-hard-deletes.md) | Immutable Auditability, Zero Hard Deletes, and Contact Privacy Isolation | Accepted | `002-job-search-tracking` |
+| [ADR-0011](./0011-hosted-mongodb-selection-and-compatibility.md) | Hosted MongoDB Database Evaluation & Compatibility Checklist | Proposed | `003-linux-container-readiness` |
+| [ADR-0012](./0012-azure-container-runtime-target.md) | Azure Container Runtime Target — Container Apps vs. AKS | Proposed | `003-linux-container-readiness` |

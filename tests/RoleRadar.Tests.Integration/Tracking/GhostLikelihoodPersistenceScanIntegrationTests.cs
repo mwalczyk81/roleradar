@@ -24,7 +24,7 @@ public sealed class GhostLikelihoodPersistenceScanIntegrationTests : IAsyncLifet
     public GhostLikelihoodPersistenceScanIntegrationTests(SharedMongoFixture sharedMongo)
     {
         _sharedMongo = sharedMongo;
-        _databaseName = _sharedMongo.CreateDatabaseName("roleradar_ghost_scan");
+        _databaseName = _sharedMongo.CreateDatabaseName("rrtest_ghost_scan");
     }
 
     public async ValueTask InitializeAsync()
@@ -43,7 +43,7 @@ public sealed class GhostLikelihoodPersistenceScanIntegrationTests : IAsyncLifet
         {
             if (_client is not null && !string.IsNullOrWhiteSpace(_databaseName))
             {
-                await _client.DropDatabaseAsync(_databaseName);
+                await _sharedMongo.DropDatabaseAsync(_databaseName);
             }
         }
         finally

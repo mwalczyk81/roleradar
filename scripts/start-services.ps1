@@ -12,12 +12,19 @@ if ([string]::IsNullOrWhiteSpace($ComposeFile)) {
     $ComposeFile = $env:ROLERADAR_COMPOSE_FILE
 }
 if ([string]::IsNullOrWhiteSpace($ComposeFile)) {
-    $ComposeFile = Join-Path (Split-Path -Parent $scriptDir) 'deploy\docker-compose.yml'
+    $ComposeFile = Join-Path (Split-Path -Parent $scriptDir) 'deploy/docker-compose.yml'
 }
 
 $composeArgs = @('-f', $ComposeFile)
 if (-not [string]::IsNullOrWhiteSpace($ProjectName)) {
     $composeArgs += @('-p', $ProjectName)
+}
+
+# Ensure external data volume exists before starting compose services
+$null = & docker volume inspect roleradar-mongo-data 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Output "Creating external docker volume 'roleradar-mongo-data'..."
+    & docker volume create roleradar-mongo-data | Out-Null
 }
 
 Write-Output "Starting RoleRadar data services using $ComposeFile..."

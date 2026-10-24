@@ -19,15 +19,26 @@ public static class WipeCommand
         {
             Description = $"Explicit confirmation token required to execute wipe ('{ConfirmationToken}')."
         };
+        var yesOption = new Option<bool>("--yes")
+        {
+            Description = $"Confirm wipe directly ('{ConfirmationToken}')."
+        };
 
         wipeCommand.Add(confirmOption);
+        wipeCommand.Add(yesOption);
 
         wipeCommand.SetAction(async (ParseResult parseResult, CancellationToken ct) =>
         {
             var confirm = parseResult.GetValue(confirmOption);
+            var yes = parseResult.GetValue(yesOption);
+            if (yes)
+            {
+                confirm = ConfirmationToken;
+            }
+
             if (string.IsNullOrWhiteSpace(confirm))
             {
-                Console.Error.WriteLine($"Wipe refused: requires explicit confirmation '--confirm {ConfirmationToken}'.");
+                Console.Error.WriteLine($"Wipe refused: requires explicit confirmation '--confirm {ConfirmationToken}' or '--yes'.");
                 return 1;
             }
 

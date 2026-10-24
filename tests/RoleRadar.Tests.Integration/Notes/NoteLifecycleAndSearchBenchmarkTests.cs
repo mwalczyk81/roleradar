@@ -19,6 +19,7 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Notes;
 
+[Collection("BenchmarkCollection")]
 public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
 {
     private readonly SharedMongoFixture _sharedMongo;
@@ -43,7 +44,7 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
         {
             if (_client != null)
             {
-                await _client.DropDatabaseAsync(_databaseName);
+                await _sharedMongo.DropDatabaseAsync(_databaseName);
             }
         }
         finally

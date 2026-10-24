@@ -38,22 +38,58 @@ internal sealed class McpProcessClient : IAsyncDisposable
         }
     }
 
-    public static async Task<McpProcessClient> StartAsync(string mcpDllPath, IReadOnlyDictionary<string, string> env)
+    public static async Task<McpProcessClient> StartAsync(string mcpDllPath, IReadOnlyDictionary<string, string> env, bool? forceContainer = null)
     {
-        var psi = new ProcessStartInfo
-        {
-            FileName = "dotnet",
-            Arguments = $"\"{mcpDllPath}\"",
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
+        var runInContainer = forceContainer ?? (Environment.GetEnvironmentVariable("ROLERADAR_TEST_IMAGE") == "1");
 
-        foreach (var (k, v) in env)
+        ProcessStartInfo psi;
+        if (runInContainer)
         {
-            psi.Environment[k] = v;
+            var image = Environment.GetEnvironmentVariable("ROLERADAR_MCP_IMAGE")
+                ?? Environment.GetEnvironmentVariable("ROLERADAR_IMAGE_TAG")
+                ?? "roleradar-mcp:test";
+
+            var runArgs = new System.Text.StringBuilder("run -i --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop ALL --security-opt no-new-privileges --add-host host.docker.internal:host-gateway ");
+            foreach (var (k, v) in env)
+            {
+                var val = v;
+                if (k.Equals("ROLERADAR_MONGO_CONNECTION_STRING", StringComparison.OrdinalIgnoreCase))
+                {
+                    Hosting.ContainerTestHarness.ValidateNotDevStack(v);
+                    val = val.Replace("127.0.0.1", "host.docker.internal").Replace("localhost", "host.docker.internal");
+                }
+                runArgs.Append(System.Globalization.CultureInfo.InvariantCulture, $"-e {k}=\"{val}\" ");
+            }
+            runArgs.Append(image);
+
+            psi = new ProcessStartInfo
+            {
+                FileName = "docker",
+                Arguments = runArgs.ToString().Trim(),
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+        }
+        else
+        {
+            psi = new ProcessStartInfo
+            {
+                FileName = "dotnet",
+                Arguments = $"\"{mcpDllPath}\"",
+                RedirectStandardInput = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            foreach (var (k, v) in env)
+            {
+                psi.Environment[k] = v;
+            }
         }
 
         var proc = Process.Start(psi)!;
@@ -201,7 +237,19 @@ internal sealed class McpProcessClient : IAsyncDisposable
         try
         {
             _process.StandardInput.Close();
-            await _process.WaitForExitAsync();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await _process.WaitForExitAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                _process.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                // Process already terminated
+            }
         }
         finally
         {

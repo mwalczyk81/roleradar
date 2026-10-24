@@ -38,7 +38,7 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
         {
             if (_client != null)
             {
-                await _client.DropDatabaseAsync(_databaseName);
+                await _sharedMongo.DropDatabaseAsync(_databaseName);
             }
         }
         finally

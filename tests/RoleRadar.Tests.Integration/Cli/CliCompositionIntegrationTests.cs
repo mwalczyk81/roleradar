@@ -32,7 +32,7 @@ public sealed class CliCompositionIntegrationTests
             {
                 if (string.IsNullOrWhiteSpace(opt.ConnectionString))
                 {
-                    opt.ConnectionString = "mongodb://127.0.0.1:27017";
+                    opt.ConnectionString = _sharedMongo.ConnectionString;
                 }
             });
         });
