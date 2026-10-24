@@ -3,6 +3,7 @@ using RoleRadar.Application.Tracking.Import;
 using RoleRadar.Application.Tracking.Import.Pipeline;
 using RoleRadar.Domain.Audit;
 using RoleRadar.Domain.Common;
+using RoleRadar.Domain.Notes;
 using RoleRadar.Domain.Tracking;
 using RoleRadar.Infrastructure.Csv;
 using Xunit;
@@ -143,6 +144,159 @@ public sealed class PostingImportStepTests
             var recon = context.Summary.FileReconciliations["postings.json"];
             Assert.Equal(3, recon.Read);
             Assert.Equal(recon.Read, recon.Created + recon.Updated + recon.Unchanged + recon.TotalSkipped + recon.Errored);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task PostingsJsonStep_HtmlEntitiesDecoded_And_CultureLevelVariantsNormalized()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var json = """
+                {
+                    "fan-club-lead-arch": {
+                        "company": "Fan &amp; Club Products",
+                        "title": "Fan &amp; Club Products",
+                        "comp": "$180,000 &ndash; $210,000",
+                        "href": "https://example.com/job?id=101&amp;ref=tracker",
+                        "culture": "Fast&mdash;moving team &middot; high autonomy",
+                        "cultureLevel": "high-risk",
+                        "loc": "Austin, TX &amp; Remote",
+                        "parent": "Fan &amp; Club Holdings",
+                        "note": "Candidate &quot;A&quot; feedback",
+                        "status": "applied",
+                        "added": "2026-03-01"
+                    },
+                    "second-role": {
+                        "company": "Another &amp; Co",
+                        "title": "Platform Lead",
+                        "comp": "$220,000 &ndash; $250,000",
+                        "cultureLevel": "High Risk",
+                        "status": "scored",
+                        "added": "2026-03-02"
+                    }
+                }
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "postings.json"), json);
+
+            var inMemoryCtx = new InMemoryPostingContext();
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var step = new PostingsJsonStep(inMemoryCtx, criteriaStep);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result = await step.ExecuteAsync(context);
+
+            Assert.True(result.IsSuccess);
+            Assert.Equal(2, context.Summary.PostingsCreated);
+            Assert.Equal(0, context.Summary.CultureUnmapped);
+
+            // 1. First posting: Fan & Club Products
+            var p1 = inMemoryCtx.SavedPostings.FirstOrDefault(p => p.Title == "Fan & Club Products");
+            Assert.NotNull(p1);
+            Assert.Equal("Fan & Club Products", p1.Title);
+            Assert.Equal("Austin, TX & Remote", p1.Location);
+            Assert.Equal("Fast—moving team · high autonomy", p1.CultureSummary);
+            Assert.Equal(CultureLevel.HighRisk, p1.CultureLevel);
+            Assert.Equal("https://example.com/job?id=101&ref=tracker", p1.OriginalUrl);
+            Assert.NotNull(p1.Compensation);
+            Assert.Equal(180000m, p1.Compensation.Min);
+            Assert.Equal(210000m, p1.Compensation.Max);
+            Assert.Equal("$180,000 – $210,000", p1.Compensation.Text);
+
+            var c1 = inMemoryCtx.SavedCompanies.FirstOrDefault(c => c.Name == "Fan & Club Products");
+            Assert.NotNull(c1);
+            Assert.Equal("Fan & Club Holdings", c1.Description);
+
+            // Dedup/matching cache has decoded company and title
+            var matchKey = $"Fan & Club Products|{TitleNormalizer.Normalize("Fan & Club Products")}";
+            Assert.True(context.PostingsByCompanyAndTitle.ContainsKey(matchKey));
+
+            // 2. Second posting: High Risk cultureLevel variant normalized
+            var p2 = inMemoryCtx.SavedPostings.FirstOrDefault(p => p.Title == "Platform Lead");
+            Assert.NotNull(p2);
+            Assert.Equal(CultureLevel.HighRisk, p2.CultureLevel);
+            Assert.NotNull(p2.Compensation);
+            Assert.Equal(220000m, p2.Compensation.Min);
+            Assert.Equal(250000m, p2.Compensation.Max);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task PostingsJson_And_ApplicationsCsv_MatchAcrossHtmlEntities_ClaimedAndNotCreatedTwice()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var postingsJson = """
+                {
+                    "fan-club-arch": {
+                        "company": "Fan &amp; Club Products",
+                        "title": "Lead Architect",
+                        "status": "applied",
+                        "added": "2026-03-01",
+                        "href": "https://example.com/job?id=101&amp;ref=tracker"
+                    }
+                }
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
+
+            var applicationsCsv = """
+                decision,company,title,kind,applied_on,rejected,rejected_date_md,req,referral,fit,resume_variant,raw,notes,corrected_notes,people_detected,review_flags,contains_people
+                ,Fan & Club Products,Lead Architect,application,2026-03-05,,,,,,,,,,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "applications.csv"), applicationsCsv);
+
+            var inMemoryCtx = new InMemoryPostingContext();
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var postingsStep = new PostingsJsonStep(inMemoryCtx, criteriaStep);
+            var csvParser = new Rfc4180CsvParser();
+            var applicationsStep = new ApplicationsStep(csvParser, inMemoryCtx);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            // Run postings.json step
+            var postingsResult = await postingsStep.ExecuteAsync(context);
+            Assert.True(postingsResult.IsSuccess);
+            Assert.Equal(1, context.Summary.PostingsCreated);
+            Assert.Equal(1, context.Summary.UnclaimedAppliedPostings);
+            Assert.Contains("Lead Architect", context.Summary.UnclaimedAppliedPostingTitles);
+
+            // Run applications.csv step
+            var appResult = await applicationsStep.ExecuteAsync(context);
+            Assert.True(appResult.IsSuccess);
+
+            // Verify posting was claimed, NOT created twice
+            Assert.Equal(1, context.Summary.PostingsCreated); // Still 1!
+            Assert.Single(inMemoryCtx.SavedPostings); // Exactly 1 posting in DB
+            Assert.Equal(1, context.Summary.ApplicationsCreated);
+            Assert.Equal(1, context.Summary.PostingsUpdated);
+            Assert.Equal(0, context.Summary.UnclaimedAppliedPostings); // Claimed!
+            Assert.Empty(context.Summary.UnclaimedAppliedPostingTitles);
+
+            var posting = inMemoryCtx.SavedPostings[0];
+            Assert.Equal("Lead Architect", posting.Title);
+            Assert.Equal(PostingDisposition.Applied, posting.Disposition);
+            Assert.Contains(posting.Id, context.ClaimedPostingIds);
         }
         finally
         {
@@ -559,11 +713,14 @@ public sealed class PostingImportStepTests
         public List<PostingSignal> SavedSignals { get; } = new();
         public List<Criterion> SavedCriteria { get; } = new();
         public List<AuditLogEntry> AppendedAuditEntries { get; } = new();
+        public List<RoleRadar.Domain.Tracking.Application> SavedApplications { get; } = new();
+        public List<ApplicationEvent> SavedEvents { get; } = new();
+        public List<Note> SavedNotes { get; } = new();
 
         public ICompanyRepository Companies => new FakeCompanyRepository(SavedCompanies);
         public IPostingRepository Postings => new FakePostingRepository(SavedPostings, SavedSignals);
         public ICriterionRepository Criteria => new FakeCriterionRepository(SavedCriteria);
-        public IApplicationRepository Applications => throw new NotImplementedException();
+        public IApplicationRepository Applications => new FakeApplicationRepository(SavedApplications, SavedEvents);
         public IContactRepository Contacts => throw new NotImplementedException();
         public ISearchRunRepository SearchRuns => throw new NotImplementedException();
 
@@ -571,6 +728,18 @@ public sealed class PostingImportStepTests
         {
             AppendedAuditEntries.Add(entry);
             return Task.CompletedTask;
+        }
+
+        public Task<Result<bool>> UpsertNoteAsync(Note note, CancellationToken cancellationToken = default)
+        {
+            SavedNotes.Add(note);
+            return Task.FromResult(Result<bool>.Success(true));
+        }
+
+        public Task<Result<bool>> NoteExistsAsync(string ownerId, string title, string area, CancellationToken cancellationToken = default)
+        {
+            var exists = SavedNotes.Any(n => n.OwnerId == ownerId && n.Title == title && n.Area == area);
+            return Task.FromResult(Result<bool>.Success(exists));
         }
 
         private sealed class FakeCompanyRepository : ICompanyRepository
@@ -667,6 +836,47 @@ public sealed class PostingImportStepTests
                 else _criteria.Add(criterion);
                 return Task.FromResult(Result<bool>.Success(true));
             }
+        }
+
+        private sealed class FakeApplicationRepository : IApplicationRepository
+        {
+            private readonly List<RoleRadar.Domain.Tracking.Application> _applications;
+            private readonly List<ApplicationEvent> _events;
+
+            public FakeApplicationRepository(List<RoleRadar.Domain.Tracking.Application> applications, List<ApplicationEvent> events)
+            {
+                _applications = applications;
+                _events = events;
+            }
+
+            public Task<Result<RoleRadar.Domain.Tracking.Application?>> GetByIdAsync(string ownerId, Guid id, CancellationToken cancellationToken = default) =>
+                Task.FromResult(Result<RoleRadar.Domain.Tracking.Application?>.Success(_applications.FirstOrDefault(a => a.Id == id)));
+
+            public Task<Result<RoleRadar.Domain.Tracking.Application?>> GetByPostingIdAsync(string ownerId, Guid postingId, CancellationToken cancellationToken = default) =>
+                Task.FromResult(Result<RoleRadar.Domain.Tracking.Application?>.Success(_applications.FirstOrDefault(a => a.PostingId == postingId)));
+
+            public Task<Result<bool>> UpsertApplicationAsync(RoleRadar.Domain.Tracking.Application application, CancellationToken cancellationToken = default)
+            {
+                var index = _applications.FindIndex(a => a.Id == application.Id);
+                if (index >= 0) _applications[index] = application;
+                else _applications.Add(application);
+                return Task.FromResult(Result<bool>.Success(true));
+            }
+
+            public Task<Result<bool>> AppendEventAsync(ApplicationEvent appEvent, CancellationToken cancellationToken = default)
+            {
+                _events.Add(appEvent);
+                return Task.FromResult(Result<bool>.Success(true));
+            }
+
+            public Task<Result<IReadOnlyList<ApplicationEvent>>> GetEventsAsync(string ownerId, Guid applicationId, CancellationToken cancellationToken = default) =>
+                Task.FromResult(Result<IReadOnlyList<ApplicationEvent>>.Success(_events.Where(e => e.ApplicationId == applicationId).ToList()));
+
+            public Task<Result<IReadOnlyList<RoleRadar.Domain.Tracking.Application>>> ListApplicationsAsync(string ownerId, string? outcome = null, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default) =>
+                Task.FromResult(Result<IReadOnlyList<RoleRadar.Domain.Tracking.Application>>.Success(_applications));
+
+            public Task<Result<int>> CountApplicationsAsync(string ownerId, string? outcome = null, CancellationToken cancellationToken = default) =>
+                Task.FromResult(Result<int>.Success(_applications.Count));
         }
     }
 }

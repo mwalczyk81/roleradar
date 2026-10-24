@@ -1,3 +1,4 @@
+using System.Net;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Domain.Common;
 
@@ -50,8 +51,8 @@ public sealed class CompanyAliasesStep : ITrackerImportStep
                 continue;
             }
 
-            var alias = row["alias"]?.Trim();
-            var canonical = row["canonical"]?.Trim();
+            var alias = Decode(row["alias"])?.Trim();
+            var canonical = Decode(row["canonical"])?.Trim();
 
             if (!string.IsNullOrWhiteSpace(alias) && !string.IsNullOrWhiteSpace(canonical))
             {
@@ -66,4 +67,7 @@ public sealed class CompanyAliasesStep : ITrackerImportStep
 
         return Task.FromResult(Result<bool>.Success(true));
     }
+
+    private static string? Decode(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? value : WebUtility.HtmlDecode(value);
 }

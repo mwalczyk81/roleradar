@@ -1,4 +1,7 @@
+using System.Globalization;
+using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Domain.Audit;
 using RoleRadar.Domain.Common;
@@ -77,13 +80,13 @@ public sealed class PostingsJsonStep : ITrackerImportStep
             IEnumerable<(string? Slug, JsonElement Element)> entries;
             if (doc.RootElement.ValueKind == JsonValueKind.Object)
             {
-                entries = doc.RootElement.EnumerateObject().Select(p => ((string?)p.Name, p.Value));
+                entries = doc.RootElement.EnumerateObject().Select(p => ((string?)Decode(p.Name), p.Value));
             }
             else
             {
                 entries = doc.RootElement.EnumerateArray().Select(e =>
                 {
-                    string? slug = e.TryGetProperty("slug", out var sProp) ? sProp.GetString() : null;
+                    string? slug = e.TryGetProperty("slug", out var sProp) && sProp.GetString() is { } ss ? Decode(ss) : null;
                     return (slug, e);
                 });
             }
@@ -110,8 +113,12 @@ public sealed class PostingsJsonStep : ITrackerImportStep
 
                 try
                 {
-                    var rawTitle = element.TryGetProperty("title", out var titleProp) ? titleProp.GetString()?.Trim() : null;
-                    var rawCompanyName = element.TryGetProperty("company", out var compProp) ? compProp.GetString()?.Trim() : null;
+                    var rawTitle = element.TryGetProperty("title", out var titleProp) && titleProp.GetString() is { } ts
+                        ? Decode(ts)?.Trim()
+                        : null;
+                    var rawCompanyName = element.TryGetProperty("company", out var compProp) && compProp.GetString() is { } cs
+                        ? Decode(cs)?.Trim()
+                        : null;
 
                     if (string.IsNullOrWhiteSpace(rawTitle) || string.IsNullOrWhiteSpace(rawCompanyName))
                     {
@@ -132,35 +139,44 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                     string? cultureSummary = null;
                     if (element.TryGetProperty("culture", out var cultProp) && cultProp.GetString() is { } cultStr)
                     {
-                        cultureSummary = TrackerImportFieldLimiter.LimitCultureSummary(cultStr, context.Summary);
+                        var decodedCult = Decode(cultStr);
+                        cultureSummary = TrackerImportFieldLimiter.LimitCultureSummary(decodedCult, context.Summary);
                     }
 
                     var cultureLevel = CultureLevel.Unknown;
                     if (element.TryGetProperty("cultureLevel", out var cultLvlProp) && cultLvlProp.GetString() is { } cultLvlStr)
                     {
-                        var s = cultLvlStr.Trim().ToLowerInvariant();
-                        cultureLevel = s switch
+                        var decodedCultLvl = Decode(cultLvlStr);
+                        if (!string.IsNullOrWhiteSpace(decodedCultLvl))
                         {
-                            "stable" => CultureLevel.Stable,
-                            "moderate" => CultureLevel.Moderate,
-                            "high_risk" or "highrisk" => CultureLevel.HighRisk,
-                            "unknown" => CultureLevel.Unknown,
-                            _ => FallbackCultureLevel(context, cultLvlStr)
-                        };
+                            var s = decodedCultLvl.Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
+                            cultureLevel = s switch
+                            {
+                                "stable" => CultureLevel.Stable,
+                                "moderate" => CultureLevel.Moderate,
+                                "high_risk" or "highrisk" => CultureLevel.HighRisk,
+                                "unknown" => CultureLevel.Unknown,
+                                _ => FallbackCultureLevel(context, cultLvlStr)
+                            };
+                        }
                     }
 
                     var remoteType = RemoteType.Unknown;
                     if (element.TryGetProperty("remoteType", out var remProp) && remProp.GetString() is { } remStr)
                     {
-                        var s = remStr.Trim().ToLowerInvariant();
-                        remoteType = s switch
+                        var decodedRem = Decode(remStr);
+                        if (!string.IsNullOrWhiteSpace(decodedRem))
                         {
-                            "remote" => RemoteType.Remote,
-                            "hybrid" => RemoteType.Hybrid,
-                            "onsite" => RemoteType.Onsite,
-                            "unknown" => RemoteType.Unknown,
-                            _ => FallbackRemoteType(context, remStr)
-                        };
+                            var s = decodedRem.Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
+                            remoteType = s switch
+                            {
+                                "remote" => RemoteType.Remote,
+                                "hybrid" => RemoteType.Hybrid,
+                                "onsite" => RemoteType.Onsite,
+                                "unknown" => RemoteType.Unknown,
+                                _ => FallbackRemoteType(context, remStr)
+                            };
+                        }
                     }
 
                     // 3. Parse Score (flag and store empty if out of range, do not clamp)
@@ -179,17 +195,20 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                     }
 
                     // 4. Parse Dates
-                    var addedRaw = element.TryGetProperty("added", out var addedProp)
-                        ? addedProp.GetString()
-                        : (element.TryGetProperty("first", out var firstProp) ? firstProp.GetString() : null);
+                    var addedRaw = element.TryGetProperty("added", out var addedProp) && addedProp.GetString() is { } as1
+                        ? Decode(as1)?.Trim()
+                        : (element.TryGetProperty("first", out var firstProp) && firstProp.GetString() is { } as2 ? Decode(as2)?.Trim() : null);
 
                     var dateOutcome = DateInferenceRule.Resolve(addedRaw, defaultDate);
                     if (dateOutcome.Kind == DateResolutionKind.DefaultedBlank) context.Summary.DatesDefaulted++;
                     if (dateOutcome.Kind is DateResolutionKind.InferredRollback or DateResolutionKind.InferredSameYear) context.Summary.DatesInferred++;
                     if (dateOutcome.IsFlagged) context.Summary.DatesFlagged++;
 
-                    var rawCompText = element.TryGetProperty("comp", out var cProp) ? cProp.GetString() : null;
+                    var rawCompText = element.TryGetProperty("comp", out var cProp) && cProp.GetString() is { } cp
+                        ? Decode(cp)?.Trim()
+                        : null;
                     var compText = TrackerImportFieldLimiter.LimitCompensationText(rawCompText, context.Summary);
+                    var (compMin, compMax) = TryParseCompensationRange(compText);
 
                     bool? compHigh = null;
                     if (element.TryGetProperty("compHigh", out var chProp) &&
@@ -198,33 +217,44 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                         compHigh = chProp.GetBoolean();
                     }
 
-                    var rawReqId = element.TryGetProperty("req_id", out var reqProp) ? reqProp.GetString()?.Trim()
-                        : (element.TryGetProperty("requisitionId", out var reqProp2) ? reqProp2.GetString()?.Trim() : null);
+                    var rawReqId = element.TryGetProperty("req_id", out var reqProp) && reqProp.GetString() is { } rs1
+                        ? Decode(rs1)?.Trim()
+                        : (element.TryGetProperty("requisitionId", out var reqProp2) && reqProp2.GetString() is { } rs2 ? Decode(rs2)?.Trim() : null);
                     var reqId = TrackerImportFieldLimiter.LimitRequisitionId(rawReqId, context.Summary);
 
-                    var rawUrl = element.TryGetProperty("href", out var hrefProp) ? hrefProp.GetString()?.Trim()
-                        : (element.TryGetProperty("url", out var urlProp) ? urlProp.GetString()?.Trim() : null);
+                    var rawUrl = element.TryGetProperty("href", out var hrefProp) && hrefProp.GetString() is { } us1
+                        ? Decode(us1)?.Trim()
+                        : (element.TryGetProperty("url", out var urlProp) && urlProp.GetString() is { } us2 ? Decode(us2)?.Trim() : null);
                     var url = TrackerImportFieldLimiter.LimitUrl(rawUrl, context.Summary);
 
-                    var rawLoc = element.TryGetProperty("loc", out var locProp) ? locProp.GetString()?.Trim()
-                        : (element.TryGetProperty("location", out var locProp2) ? locProp2.GetString()?.Trim() : null);
+                    var rawLoc = element.TryGetProperty("loc", out var locProp) && locProp.GetString() is { } ls1
+                        ? Decode(ls1)?.Trim()
+                        : (element.TryGetProperty("location", out var locProp2) && locProp2.GetString() is { } ls2 ? Decode(ls2)?.Trim() : null);
                     var location = TrackerImportFieldLimiter.LimitLocation(rawLoc, context.Summary);
 
                     var sourceKind = SourceKind.Aggregator;
-                    if (element.TryGetProperty("source", out var srcProp) &&
-                        TrackingEnumExtensions.TryParseSourceKind(srcProp.GetString(), out var parsedSrc))
+                    if (element.TryGetProperty("source", out var srcProp) && srcProp.GetString() is { } srcStr &&
+                        TrackingEnumExtensions.TryParseSourceKind(Decode(srcStr)?.Trim(), out var parsedSrc))
                     {
                         sourceKind = parsedSrc;
                     }
 
-                    var rawPosted = element.TryGetProperty("posted", out var pProp) ? pProp.GetString()?.Trim() : null;
+                    var rawPosted = element.TryGetProperty("posted", out var pProp) && pProp.GetString() is { } ps
+                        ? Decode(ps)?.Trim()
+                        : null;
+
+                    var rawNote = element.TryGetProperty("note", out var noteProp) && noteProp.GetString() is { } ns
+                        ? Decode(ns)?.Trim()
+                        : null;
 
                     var isGhost = element.TryGetProperty("ghost", out var ghostProp) &&
                                   ghostProp.ValueKind == JsonValueKind.True &&
                                   ghostProp.GetBoolean();
 
                     // Postings with status "applied" are imported with disposition "scored"
-                    var rawStatus = element.TryGetProperty("status", out var stProp) ? stProp.GetString()?.Trim() : null;
+                    var rawStatus = element.TryGetProperty("status", out var stProp) && stProp.GetString() is { } stStr
+                        ? Decode(stStr)?.Trim()
+                        : null;
                     var originalWasApplied = string.Equals(rawStatus, "applied", StringComparison.OrdinalIgnoreCase);
 
                     // 1. Resolve or auto-create company, and 2. Save posting atomically inside one transaction per row
@@ -245,7 +275,9 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                             }
                             else
                             {
-                                var parentText = element.TryGetProperty("parent", out var parentProp) ? parentProp.GetString()?.Trim() : null;
+                                var parentText = element.TryGetProperty("parent", out var parentProp) && parentProp.GetString() is { } parStr
+                                    ? Decode(parStr)?.Trim()
+                                    : null;
                                 var rawDescription = parentText ?? string.Empty;
                                 var description = TrackerImportFieldLimiter.LimitCompanyDescription(rawDescription, context.Summary) ?? string.Empty;
 
@@ -345,7 +377,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                             requisitionId: reqId,
                             location: location,
                             remoteType: remoteType,
-                            compensation: compText != null ? new Compensation(Text: compText) : null,
+                            compensation: compText != null ? new Compensation(compMin, compMax, "USD", compText) : null,
                             postedDate: rawPosted,
                             score: (decimal?)score,
                             cultureLevel: cultureLevel,
@@ -370,6 +402,11 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                         {
                             changedFields.Add("slug");
                             afterDetails["slug"] = slug;
+                        }
+                        if (!string.IsNullOrWhiteSpace(rawNote))
+                        {
+                            changedFields.Add("note");
+                            afterDetails["note"] = rawNote;
                         }
 
                         var auditP = AuditLogEntry.CreateForTracking(
@@ -473,6 +510,52 @@ public sealed class PostingsJsonStep : ITrackerImportStep
         }
 
         return Result<bool>.Success(true);
+    }
+
+    private static string? Decode(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? value : WebUtility.HtmlDecode(value);
+
+    public static (decimal? Min, decimal? Max) TryParseCompensationRange(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return (null, null);
+
+        var match = Regex.Match(text, @"(?:^|[^\d])(?:\$)?\s*(?<min>\d+(?:,\d{3})*(?:\.\d+)?)\s*(?<minUnit>k|m)?\s*(?:-|–|—|to)\s*(?:\$)?\s*(?<max>\d+(?:,\d{3})*(?:\.\d+)?)\s*(?<maxUnit>k|m)?", RegexOptions.IgnoreCase);
+        if (match.Success)
+        {
+            var minVal = ParseCompNumber(match.Groups["min"].Value, match.Groups["minUnit"].Value, match.Groups["maxUnit"].Value);
+            var maxVal = ParseCompNumber(match.Groups["max"].Value, match.Groups["maxUnit"].Value, null);
+            if (minVal.HasValue && maxVal.HasValue)
+            {
+                return (minVal.Value, maxVal.Value);
+            }
+        }
+
+        var singleMatch = Regex.Match(text, @"(?:^|[^\d])(?:\$)?\s*(?<val>\d+(?:,\d{3})*(?:\.\d+)?)\s*(?<unit>k|m)?", RegexOptions.IgnoreCase);
+        if (singleMatch.Success)
+        {
+            var val = ParseCompNumber(singleMatch.Groups["val"].Value, singleMatch.Groups["unit"].Value, null);
+            if (val.HasValue)
+            {
+                return (val.Value, null);
+            }
+        }
+
+        return (null, null);
+    }
+
+    private static decimal? ParseCompNumber(string numStr, string unit, string? fallbackUnit)
+    {
+        numStr = numStr.Replace(",", "");
+        if (!decimal.TryParse(numStr, NumberStyles.Number, CultureInfo.InvariantCulture, out var num))
+            return null;
+
+        var effectiveUnit = !string.IsNullOrEmpty(unit) ? unit : fallbackUnit;
+        if (string.Equals(effectiveUnit, "k", StringComparison.OrdinalIgnoreCase))
+            num *= 1000m;
+        else if (string.Equals(effectiveUnit, "m", StringComparison.OrdinalIgnoreCase))
+            num *= 1000000m;
+
+        return num;
     }
 
     private static CultureLevel FallbackCultureLevel(TrackerImportContext context, string rawValue)

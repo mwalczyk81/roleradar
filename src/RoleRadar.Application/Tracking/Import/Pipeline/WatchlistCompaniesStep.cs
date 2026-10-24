@@ -1,3 +1,4 @@
+using System.Net;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Domain.Audit;
 using RoleRadar.Domain.Common;
@@ -58,7 +59,7 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                     continue;
                 }
 
-                var companyName = row["company"]?.Trim();
+                var companyName = Decode(row["company"])?.Trim();
                 if (string.IsNullOrWhiteSpace(companyName))
                 {
                     // If row has any non-blank field, missing company is a validation error
@@ -71,7 +72,7 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                     continue;
                 }
 
-                var decision = row["decision"]?.Trim();
+                var decision = Decode(row["decision"])?.Trim();
                 if (string.Equals(decision, "skip", StringComparison.OrdinalIgnoreCase))
                 {
                     context.Summary.CompaniesUnchanged++;
@@ -90,14 +91,14 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                     continue;
                 }
 
-                var tier = row["tier"]?.Trim();
+                var tier = Decode(row["tier"])?.Trim();
                 var status = MapStatus(tier, context);
 
-                var rawNotes = !string.IsNullOrWhiteSpace(row["corrected_notes"])
+                var rawNotes = Decode(!string.IsNullOrWhiteSpace(row["corrected_notes"])
                     ? row["corrected_notes"]!.Trim()
                     : (!string.IsNullOrWhiteSpace(row["text"])
                         ? row["text"]!.Trim()
-                        : row["notes"]?.Trim() ?? string.Empty);
+                        : row["notes"]?.Trim() ?? string.Empty));
 
                 var canonicalName = context.CompanyAliases.TryGetValue(companyName, out var alias) ? alias : companyName;
 
@@ -205,4 +206,7 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
         context.Summary.RecordUnmappedValue("tier", rawTier);
         return CompanyStatus.Neutral;
     }
+
+    private static string? Decode(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? value : WebUtility.HtmlDecode(value);
 }

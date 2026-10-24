@@ -1,3 +1,4 @@
+using System.Net;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Domain.Audit;
 using RoleRadar.Domain.Common;
@@ -58,8 +59,8 @@ public sealed class AppendixRowsStep : ITrackerImportStep
 
         foreach (var row in records)
         {
-            var reasonPrimary = row["reason_primary"]?.Trim();
-            var reasonAll = row["reason_all"]?.Trim();
+            var reasonPrimary = Decode(row["reason_primary"])?.Trim();
+            var reasonAll = Decode(row["reason_all"])?.Trim();
             var isDuplicate = string.Equals(reasonPrimary, "duplicate", StringComparison.OrdinalIgnoreCase) ||
                               (reasonAll is not null && reasonAll.Contains("duplicate", StringComparison.OrdinalIgnoreCase));
 
@@ -89,8 +90,8 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     continue;
                 }
 
-                var companyName = row["company"]?.Trim();
-                var title = row["title"]?.Trim();
+                var companyName = Decode(row["company"])?.Trim();
+                var title = Decode(row["title"])?.Trim();
 
                 if (string.IsNullOrWhiteSpace(companyName) || string.IsNullOrWhiteSpace(title))
                 {
@@ -103,7 +104,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     continue;
                 }
 
-                var decision = row["decision"]?.Trim();
+                var decision = Decode(row["decision"])?.Trim();
                 if (string.Equals(decision, "skip", StringComparison.OrdinalIgnoreCase))
                 {
                     context.Summary.PostingsUnchanged++;
@@ -129,7 +130,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                 title = TrackerImportFieldLimiter.LimitTitle(title, context.Summary)!;
 
                 // 2. Parse date
-                var addedRaw = row["added_md"]?.Trim();
+                var addedRaw = Decode(row["added_md"])?.Trim();
                 var dateOutcome = DateInferenceRule.Resolve(addedRaw, defaultDate);
                 if (dateOutcome.Kind == DateResolutionKind.DefaultedBlank) context.Summary.DatesDefaulted++;
                 if (dateOutcome.Kind is DateResolutionKind.InferredRollback or DateResolutionKind.InferredSameYear) context.Summary.DatesInferred++;
@@ -143,14 +144,14 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                 Posting? createdPosting = null;
                 var isUnchanged = false;
 
-                var rawReqId = row["req_id"]?.Trim();
+                var rawReqId = Decode(row["req_id"])?.Trim();
                 var reqId = TrackerImportFieldLimiter.LimitRequisitionId(rawReqId, context.Summary);
-                var rawUrl = row["url"]?.Trim();
+                var rawUrl = Decode(row["url"])?.Trim();
                 var url = TrackerImportFieldLimiter.LimitUrl(rawUrl, context.Summary);
-                var rawReasonPrimary = row["reason_primary"]?.Trim();
+                var rawReasonPrimary = Decode(row["reason_primary"])?.Trim();
                 var reasonPrimary = TrackerImportFieldLimiter.LimitDispositionReason(rawReasonPrimary, context.Summary);
 
-                var rawSource = row["source"]?.Trim();
+                var rawSource = Decode(row["source"])?.Trim();
                 var sourceKind = TrackingEnumExtensions.TryParseSourceKind(rawSource, out var parsedSrc) ? parsedSrc : SourceKind.Aggregator;
 
                 var rowResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
@@ -209,7 +210,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                         }
                     }
 
-                    var remoteRaw = row["remote_mentioned"]?.Trim() ?? row["remote_type"]?.Trim();
+                    var remoteRaw = (Decode(row["remote_mentioned"]) ?? Decode(row["remote_type"]))?.Trim();
                     var remoteType = RemoteType.Unknown;
                     if (!string.IsNullOrWhiteSpace(remoteRaw))
                     {
@@ -238,7 +239,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     }
 
                     // Resurface policy
-                    var proposedResurface = row["proposed_resurface"]?.Trim();
+                    var proposedResurface = Decode(row["proposed_resurface"])?.Trim();
                     var resurfacePolicy = string.Equals(proposedResurface, "if_reopened", StringComparison.OrdinalIgnoreCase)
                         ? ResurfacePolicy.IfReopened
                         : ResurfacePolicy.Never;
@@ -458,4 +459,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
 
         return Result<bool>.Success(true);
     }
+
+    private static string? Decode(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? value : WebUtility.HtmlDecode(value);
 }
