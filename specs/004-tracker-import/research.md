@@ -24,11 +24,12 @@ Key constraints:
 ### Decision
 **Option A: Ephemeral Scratch Database** (recorded in [ADR 0013](../../docs/adr/0013-tracker-import-dry-run-scratch-database.md)).
 
-### Rationale
-- MongoDB multi-document transactions do not support savepoints/nested transactions. If any row fails a unique index or database constraint under Option B, the entire transaction is irreversibly marked aborted, breaking per-row error isolation.
-- Option A preserves handlers and transaction decorators 100% unchanged. Each handler executes its normal transaction in the scratch database.
-- Multi-document transactions in MongoDB have lifetime limits (default 60 seconds). A large bundle could exceed this timeout. Option A has no transaction duration limits.
-- Target database remains 100% untouched.
+### Rationale & Invariants
+- **Handler Invariance**: Preserves handlers and transaction decorators 100% unchanged. Each handler executes its normal transaction in the scratch database.
+- **Savepoints & Per-Row Isolation**: MongoDB multi-document transactions do not support savepoints. If any row fails under Option B, the entire transaction is irreversibly marked aborted. Option A isolates failures per row.
+- **Cloning & Index Parity**: The scratch database clones existing collections from the target database using per-collection `$merge` aggregation pipelines, followed by executing the host's complete index initialization (`EnsureIndexesOnceAsync`) so all deduplication tiers (partial unique indexes) and text indexes are active during dry-run.
+- **Deterministic Name & Cleanup Guard**: Scratch database names match `^roleradar_scratch_[0-9a-f]{32}$`. The `finally`-block drop validates this regex and asserts `scratchDbName != targetDbName`. Orphan cleanup runs exclusively at the start of a subsequent `tracker-import` (or explicit flag), matching `^roleradar_scratch_[0-9a-f]{32}$`, skipping any database created less than 1 hour ago, and never dropping the configured target database.
+- **Target Invariance**: Asserted by tests showing target collection counts and `audit_log` remain completely unchanged on success, validation error, or failure/kill.
 
 ---
 
@@ -39,19 +40,21 @@ The bundle contains four CSV files with up to 18 columns, containing quoted text
 
 ### Options Evaluated
 1. **Option A: Hand-Rolled RFC 4180 Parser (`Rfc4180CsvReader`)**:
-   Implement a first-party streaming parser in `RoleRadar.Domain.Tracking` using .NET BCL primitives (`ReadOnlySpan<char>`, `StreamReader`).
+   Implement a first-party streaming parser in `RoleRadar.Infrastructure.Csv` using .NET BCL primitives (`ReadOnlySpan<char>`, `StreamReader`). Keeping file parsing in Infrastructure preserves `RoleRadar.Domain` purity.
 2. **Option B: `CsvHelper` (v33.1.0)**:
    External NuGet dependency.
 3. **Option C: `Sylvan.Data.Csv` (v1.4.4)**:
    Lightweight external NuGet dependency.
 
 ### Decision
-**Option A: Hand-Rolled RFC 4180 Parser** (recorded in [ADR 0014](../../docs/adr/0014-csv-parsing-strategy.md)).
+**Option A: Hand-Rolled RFC 4180 Parser in `RoleRadar.Infrastructure.Csv`** (recorded in [ADR 0014](../../docs/adr/0014-csv-parsing-strategy.md)).
 
-### Rationale
+### Rationale & Test Coverage
 - Zero third-party dependencies aligns with Constitution Principle IV ("Named Seams Only") and keeps dependencies pinned.
+- Keeps `RoleRadar.Domain` free of file-format code, complying with layering architecture tests.
 - Standard RFC 4180 is straightforward to implement (~120 lines) and supports custom row numbering (critical for accurate error isolation and reporting).
 - Character length limits and untrusted data checks (Principle V) are applied during tokenization.
+- **Unit Test Suite**: Covers UTF-8 BOM, standard CRLF (`\r\n`), Unix LF (`\n`), quoted fields with embedded newlines, embedded escaped quotes (`""`), ragged rows, and row-number tracking across single-line and multiline records.
 
 ---
 

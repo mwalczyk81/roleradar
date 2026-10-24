@@ -70,8 +70,6 @@ src/
 │   ├── Audit/
 │   │   └── AuditOperation.cs        # Add import_* operation constants and update IsValid allowlist
 │   └── Tracking/
-│       ├── Csv/
-│       │   └── Rfc4180CsvReader.cs  # Hand-rolled RFC 4180 CSV streaming reader
 │       └── DateInferenceRule.cs     # Partial date rollback and approximation parsing
 ├── RoleRadar.Application/
 │   └── Tracking/
@@ -88,8 +86,10 @@ src/
 │               ├── AppendixRowsStep.cs
 │               └── ApplicationsStep.cs
 ├── RoleRadar.Infrastructure/
+│   ├── Csv/
+│   │   └── Rfc4180CsvReader.cs                    # Hand-rolled RFC 4180 CSV streaming reader (kept in Infrastructure)
 │   └── Mongo/
-│       └── MongoScratchDatabaseManager.cs         # Scratch database creation, collection cloning, drop
+│       └── MongoScratchDatabaseManager.cs         # Scratch database creation ($merge cloning, index init, regex guard, orphan cleanup)
 └── RoleRadar.Cli/
     └── Commands/
         └── TrackerImportCommand.cs                # Top-level 'tracker-import' command registration
@@ -97,7 +97,6 @@ src/
 tests/
 ├── RoleRadar.Domain.Tests/
 │   ├── Tracking/
-│   │   ├── Rfc4180CsvReaderTests.cs               # RFC 4180 RFC compliance, quotes, multiline fuzzing
 │   │   └── DateInferenceRuleTests.cs              # Rollback, impossible dates, ~ and parentheticals
 │   └── Audit/
 │       └── AuditOperationTests.cs                 # Allowlist and import_* operation verification
@@ -105,10 +104,14 @@ tests/
 │   └── Tracking/
 │       └── TrackerImportPipelineTests.cs          # Pipeline step sequencing, staging, and criteria seeding
 ├── RoleRadar.Infrastructure.Tests/
+│   ├── Csv/
+│   │   └── Rfc4180CsvReaderTests.cs               # RFC 4180 compliance, UTF-8 BOM, CRLF, LF, quoted newlines, embedded quotes, ragged rows, line-number tracking
+│   ├── Mongo/
+│   │   └── MongoScratchDatabaseManagerTests.cs    # $merge cloning, index init, orphan cleanup (>1h old), regex guard, failed dry-run target invariance
 │   └── Architecture/
-│       └── AuditOperationArchitectureTests.cs     # Verify all write operations produce allowed audit ops
+│       └── LayeringAndAppendOnlyArchitectureTests.cs # Verify Domain has 0 CSV types; all writes produce allowed audit ops
 └── RoleRadar.Cli.Tests/
-    ├── TrackerImportCliTests.cs                   # Dry-run parity, idempotency, work-tree report refusal
+    ├── TrackerImportCliTests.cs                   # Dry-run parity, idempotency, dedup enforcement, failed/killed invariance, work-tree report refusal
     ├── Snapshot/
     │   └── CliHelpSnapshotTests.cs                # Verify tracker-import registered in root CLI help
     └── Integration/
@@ -118,17 +121,17 @@ tests/
 ## Phase Overview
 
 - **Phase 0: Research & Foundation (Complete)**
-  - ADR 0013 accepted (Scratch database for dry-run).
-  - ADR 0014 accepted (Hand-rolled RFC 4180 parser).
+  - ADR 0013 accepted (Scratch database with $merge cloning, index initialization, strict regex guard, orphan cleanup).
+  - ADR 0014 accepted (Hand-rolled RFC 4180 parser in Infrastructure, keeping Domain pure).
   - Research completed on partial date rollbacks, container mounts, and test fixtures.
 - **Phase 1: Design & Contracts (Complete)**
   - `data-model.md`, `contracts/`, and `quickstart.md` created.
 - **Phase 2: Implementation (Follows in `/speckit-tasks`)**
-  - Task 1: Domain RFC 4180 CSV parser & date inference rule with comprehensive unit tests.
-  - Task 2: Domain AuditOperation additions & architecture test updates.
-  - Task 3: Infrastructure scratch database manager & collection clone helper.
-  - Task 4: Application tracker import command handler, pipeline steps, and criteria seeding.
+  - Task 1: Infrastructure RFC 4180 CSV parser (UTF-8 BOM, CRLF/LF, quoted newlines, embedded quotes, ragged rows, line tracking) and Domain date inference rule with comprehensive unit tests.
+  - Task 2: Domain AuditOperation additions & architecture test updates (verifying Domain has zero file-format/CSV code).
+  - Task 3: Infrastructure scratch database manager (per-collection `$merge` cloning, host index initialization, strict name check `^roleradar_scratch_[0-9a-f]{32}$`, orphan cleanup for >1h old databases, and target invariance tests).
+  - Task 4: Application tracker import command handler, pipeline steps, unclaimed `applied` role handling, and criteria seeding.
   - Task 5: Application execution report generator with git work-tree guard.
   - Task 6: CLI top-level `tracker-import` command and help snapshot tests.
-  - Task 7: Integration test suite: fictional bundle dry-run equals apply, idempotency, backup/restore, verify, and container read-only execution.
-  - Task 8: Coverage and denylist privacy verification.
+  - Task 7: Integration test suite: fictional bundle dry-run equals apply, dedup enforcement during dry-run, idempotent re-run against already-imported DB, failed/killed dry-run target invariance, backup/restore, verify, and container read-only execution.
+  - Task 8: Coverage (Domain+Application >=85%) and denylist privacy verification.

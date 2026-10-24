@@ -18,7 +18,7 @@ In accordance with Constitution Principle IV ("Named Seams Only", no unnecessary
 ## Considered Options
 
 1. **Option A: Hand-Rolled RFC 4180 CSV Parser (`Rfc4180CsvReader`)**
-   A dedicated parser in `RoleRadar.Domain.Tracking` (~120 lines of C#) implementing standard RFC 4180 rules (commas, double quotes, escaped quotes `""`, multiline quoted fields, header row mapping, line numbering).
+   A dedicated parser in `RoleRadar.Infrastructure.Csv` (~120 lines of C#) implementing standard RFC 4180 rules (commas, double quotes, escaped quotes `""`, multiline quoted fields, header row mapping, line numbering). Keeping file format parsing in Infrastructure keeps `RoleRadar.Domain` purely focused on business logic and entity invariants.
 2. **Option B: `CsvHelper` (v33.1.0)**
    The standard .NET CSV library from NuGet.
 3. **Option C: `Sylvan.Data.Csv` (v1.4.4)**
@@ -47,3 +47,14 @@ Chosen option: **Option A: Hand-Rolled RFC 4180 CSV Parser (`Rfc4180CsvReader`)*
    - The specification mandates that all validation errors and skips report exact source file row numbers (e.g. `appendix-rows.csv:42`). A tailored parser tracks line/record numbers natively across multiline fields.
 3. **Untrusted Data Boundaries**:
    - Per Constitution Principle V, imported text is untrusted. The hand-rolled parser enforces max field length limits and clean string allocations directly during streaming tokenization.
+
+## Implementation & Testing Strategy
+
+- **Namespace & Assembly**: Located in `RoleRadar.Infrastructure.Csv` under `src/RoleRadar.Infrastructure/Csv/Rfc4180CsvReader.cs`. Architecture tests in `RoleRadar.Tests.Architecture` verify that `RoleRadar.Domain` contains zero file format or CSV parsing types.
+- **Unit Test Coverage Requirements**: Dedicated unit tests in `tests/RoleRadar.Infrastructure.Tests/Csv/Rfc4180CsvReaderTests.cs` covering:
+  - UTF-8 with and without Byte Order Mark (BOM)
+  - Standard CRLF (`\r\n`) and Unix LF (`\n`) line endings
+  - Quoted fields containing embedded newlines
+  - Embedded escaped quotes (`""`)
+  - Ragged rows (rows with missing or extra delimiters)
+  - Exact source file line/row number tracking across single-line and multiline records
