@@ -277,7 +277,7 @@ public static class ContainerTestHarness
         }
     }
 
-    private static string FindRepoRoot()
+    public static string FindRepoRoot()
     {
         var current = AppContext.BaseDirectory;
         while (!string.IsNullOrEmpty(current))
