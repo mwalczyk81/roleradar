@@ -167,6 +167,52 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
     }
 
     [Fact]
+    public void AuditOperation_Allowlist_MustIncludeAllRecognizedTrackerImportOperations()
+    {
+        string[] expectedImportOperations =
+        [
+            "import_posting_create",
+            "import_posting_transition",
+            "import_posting_signal_append",
+            "import_company_create",
+            "import_company_update",
+            "import_application_create",
+            "import_application_event_append",
+            "import_criterion_revision"
+        ];
+
+        var auditType = typeof(RoleRadar.Domain.Audit.AuditOperation);
+        var constFields = auditType.GetFields(BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy)
+            .Where(f => f.IsLiteral && !f.IsInitOnly && f.FieldType == typeof(string))
+            .ToDictionary(f => f.Name, f => (string)f.GetValue(null)!);
+
+        foreach (var expected in expectedImportOperations)
+        {
+            Assert.Contains(expected, constFields.Values);
+            Assert.True(RoleRadar.Domain.Audit.AuditOperation.IsValid(expected), $"AuditOperation.IsValid must return true for {expected}");
+        }
+
+        Assert.False(RoleRadar.Domain.Audit.AuditOperation.IsValid("unknown_operation"));
+        Assert.False(RoleRadar.Domain.Audit.AuditOperation.IsValid(""));
+    }
+
+    [Fact]
+    public void Domain_MustNotContain_FileFormatOrCsvTypes()
+    {
+        var domainTypes = DomainAssembly.GetTypes();
+
+        var violatingTypes = domainTypes
+            .Where(t => t.Name.Contains("Csv", StringComparison.OrdinalIgnoreCase) ||
+                        t.Name.Contains("Json", StringComparison.OrdinalIgnoreCase) ||
+                        (t.Namespace is not null && (t.Namespace.Contains(".Csv", StringComparison.OrdinalIgnoreCase) ||
+                                                    t.Namespace.Contains(".Json", StringComparison.OrdinalIgnoreCase))))
+            .Select(t => t.FullName)
+            .ToArray();
+
+        Assert.Empty(violatingTypes);
+    }
+
+    [Fact]
     public void MongoNoteRepository_MustTouchRevisionsAndAuditCollections_ExclusivelyThrough_AppendOnlyMongoCollection()
     {
         // 1. Verify AppendOnlyMongoCollection exposes ONLY insert and find operations (no delete, update, replace, or bulk-write)

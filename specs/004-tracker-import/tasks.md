@@ -10,13 +10,13 @@
 
 **Purpose**: Establish audit operation allowlists, CSV parsing, date inference rules, and Domain purity before database work.
 
-- [ ] T001 [P] Architecture tests for AuditOperation allowlist in `tests/RoleRadar.Tests.Architecture/LayeringAndAppendOnlyArchitectureTests.cs` (expected to fail before constants are added)
-- [ ] T002 [P] Define `import_*` constants (`import_posting_create`, `import_posting_transition`, `import_posting_signal_append`, `import_company_create`, `import_company_update`, `import_application_create`, `import_application_event_append`, `import_criterion_revision`) and update `IsValid` in `src/RoleRadar.Domain/Audit/AuditOperation.cs`
-- [ ] T003 [P] Unit tests for RFC 4180 CSV parsing in `tests/RoleRadar.Tests.Unit/Infrastructure/Rfc4180CsvReaderTests.cs` covering UTF-8 BOM, CRLF, LF, quoted newlines, embedded quotes `""`, ragged rows, and line-number tracking (expected to fail before implementation)
-- [ ] T004 [P] Implement hand-rolled RFC 4180 streaming reader in `src/RoleRadar.Infrastructure/Csv/Rfc4180CsvReader.cs` keeping `RoleRadar.Domain` free of file-format code
-- [ ] T005 [P] Unit tests for partial date rollback, impossible dates, `~` prefixes, and parentheticals in `tests/RoleRadar.Tests.Unit/Domain/DateInferenceRuleTests.cs` (expected to fail before implementation)
-- [ ] T006 [P] Implement date inference and rollback rules (`DateInferenceRule`) in `src/RoleRadar.Domain/Tracking/DateInferenceRule.cs`
-- [ ] T007 Architecture test in `tests/RoleRadar.Tests.Architecture/LayeringAndAppendOnlyArchitectureTests.cs` verifying `RoleRadar.Domain` contains zero file-format or CSV types
+- [X] T001 [P] Architecture tests for AuditOperation allowlist in `tests/RoleRadar.Tests.Architecture/LayeringAndAppendOnlyArchitectureTests.cs` (expected to fail before constants are added)
+- [X] T002 [P] Define `import_*` constants (`import_posting_create`, `import_posting_transition`, `import_posting_signal_append`, `import_company_create`, `import_company_update`, `import_application_create`, `import_application_event_append`, `import_criterion_revision`) and update `IsValid` in `src/RoleRadar.Domain/Audit/AuditOperation.cs`
+- [X] T003 [P] Unit tests for RFC 4180 CSV parsing in `tests/RoleRadar.Tests.Unit/Infrastructure/Rfc4180CsvReaderTests.cs` covering UTF-8 BOM, CRLF, LF, quoted newlines, embedded quotes `""`, ragged rows, and line-number tracking (expected to fail before implementation)
+- [X] T004 [P] Implement hand-rolled RFC 4180 streaming reader in `src/RoleRadar.Infrastructure/Csv/Rfc4180CsvReader.cs` keeping `RoleRadar.Domain` free of file-format code
+- [X] T005 [P] Unit tests for partial date rollback, impossible dates, `~` prefixes, and parentheticals in `tests/RoleRadar.Tests.Unit/Domain/DateInferenceRuleTests.cs` (expected to fail before implementation)
+- [X] T006 [P] Implement date inference and rollback rules (`DateInferenceRule`) in `src/RoleRadar.Domain/Tracking/DateInferenceRule.cs`
+- [X] T007 Architecture test in `tests/RoleRadar.Tests.Architecture/LayeringAndAppendOnlyArchitectureTests.cs` verifying `RoleRadar.Domain` contains zero file-format or CSV types
 
 ---
 
@@ -26,8 +26,8 @@
 
 **⚠️ CRITICAL**: T008 and T009 (scratch database guard and tests) MUST be implemented and pass before any code that can drop a database is written!
 
-- [ ] T008 [P] Unit tests for scratch database name guard in `tests/RoleRadar.Tests.Unit/Mongo/MongoScratchDatabaseGuardTests.cs` (expected to fail before implementation) asserting strict name regex `^roleradar_scratch_[0-9a-f]{32}$`, refusal of target database name, and refusal of databases created <1 hour ago
-- [ ] T009 [P] Implement `MongoScratchDatabaseGuard` in `src/RoleRadar.Infrastructure/Mongo/MongoScratchDatabaseGuard.cs` with validation regex `^roleradar_scratch_[0-9a-f]{32}$`, target database equality check, and 1-hour age filter
+- [ ] T008 [P] Unit tests for scratch database name guard in `tests/RoleRadar.Tests.Unit/Mongo/MongoScratchDatabaseGuardTests.cs` (expected to fail before implementation) asserting strict name regex `^roleradar_scratch_[0-9a-f]{32}\z`, refusal of target database name, refusal of trailing newlines, and refusal of databases created <1 hour ago
+- [ ] T009 [P] Implement `MongoScratchDatabaseGuard` in `src/RoleRadar.Infrastructure/Mongo/MongoScratchDatabaseGuard.cs` with validation regex `^roleradar_scratch_[0-9a-f]{32}\z`, target database equality check, and 1-hour age filter
 - [ ] T010 [P] Integration tests in `tests/RoleRadar.Tests.Integration/Mongo/MongoScratchDatabaseManagerTests.cs` using `IsolatedContainerMongoFixture` (expected to fail before implementation) verifying a failed, aborted, or process-killed dry-run leaves target collection document counts and `audit_log` unchanged, and a later `tracker-import` run cleans up the orphaned scratch database per the guard rules
 - [ ] T011 Integration tests for scratch database lifecycle in `tests/RoleRadar.Tests.Integration/Mongo/MongoScratchDatabaseManagerTests.cs` using `IsolatedContainerMongoFixture` (expected to fail before implementation) verifying per-collection `$merge` cloning, host index initialization (`EnsureIndexesOnceAsync`), and `finally`-block drop
 - [ ] T012 Implement `MongoScratchDatabaseManager` in `src/RoleRadar.Infrastructure/Mongo/MongoScratchDatabaseManager.cs` implementing `$merge` collection cloning, index initialization, guarded drop, and startup orphan cleanup

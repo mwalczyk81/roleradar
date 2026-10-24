@@ -32,6 +32,16 @@ public static class AuditOperation
     public const string ContactAdd = "contact_add";
     public const string ContactRedact = "contact_redact";
 
+    // Tracker import operations (004)
+    public const string ImportPostingCreate = "import_posting_create";
+    public const string ImportPostingTransition = "import_posting_transition";
+    public const string ImportPostingSignalAppend = "import_posting_signal_append";
+    public const string ImportCompanyCreate = "import_company_create";
+    public const string ImportCompanyUpdate = "import_company_update";
+    public const string ImportApplicationCreate = "import_application_create";
+    public const string ImportApplicationEventAppend = "import_application_event_append";
+    public const string ImportCriterionRevision = "import_criterion_revision";
+
     public static bool IsValid(string operation) =>
         operation is NoteCreate or NoteAppend or NoteReplaceSection or NoteArchive or ImportCreate or ImportOverwrite
             or CompanyCreate or CompanyUpdate or CareerSourceUpsert
@@ -39,5 +49,9 @@ public static class AuditOperation
             or ApplicationCreate or ApplicationEventAppend
             or CriterionRevision or CriterionDeactivate
             or SearchRunLog
-            or ContactAdd or ContactRedact;
+            or ContactAdd or ContactRedact
+            or ImportPostingCreate or ImportPostingTransition or ImportPostingSignalAppend
+            or ImportCompanyCreate or ImportCompanyUpdate
+            or ImportApplicationCreate or ImportApplicationEventAppend
+            or ImportCriterionRevision;
 }
