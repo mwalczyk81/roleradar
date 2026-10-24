@@ -397,7 +397,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
         return body[..maxLen];
     }
 
-    private static BsonDocument MapNoteToDocument(Note note)
+    internal static BsonDocument MapNoteToDocument(Note note)
     {
         var doc = new BsonDocument
         {

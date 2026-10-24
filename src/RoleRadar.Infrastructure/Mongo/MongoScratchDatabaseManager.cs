@@ -1,5 +1,6 @@
 using MongoDB.Bson;
 using MongoDB.Driver;
+using RoleRadar.Application.Abstractions;
 
 namespace RoleRadar.Infrastructure.Mongo;
 
@@ -7,7 +8,7 @@ namespace RoleRadar.Infrastructure.Mongo;
 /// Scoped lifetime handle for an ephemeral scratch database. Dropping the database
 /// is guaranteed when the scope is disposed.
 /// </summary>
-public sealed class ScratchDatabaseScope : IAsyncDisposable
+public sealed class ScratchDatabaseScope : ITrackerScratchScope
 {
     private readonly MongoScratchDatabaseManager _manager;
     private int _disposed;
@@ -36,7 +37,7 @@ public sealed class ScratchDatabaseScope : IAsyncDisposable
 /// per-collection $merge cloning from the target database, host index initialization,
 /// strictly guarded drops, and startup orphan cleanup.
 /// </summary>
-public sealed class MongoScratchDatabaseManager
+public sealed class MongoScratchDatabaseManager : ITrackerScratchManager
 {
     private readonly IMongoClient _client;
 
@@ -137,6 +138,9 @@ public sealed class MongoScratchDatabaseManager
         var scratchDbName = await CreateScratchDatabaseAsync(targetDatabaseName, cancellationToken);
         return new ScratchDatabaseScope(this, scratchDbName, targetDatabaseName);
     }
+
+    async Task<ITrackerScratchScope> ITrackerScratchManager.CreateScopeAsync(string targetDatabaseName, CancellationToken cancellationToken)
+        => await CreateScopeAsync(targetDatabaseName, cancellationToken);
 
     /// <summary>
     /// Drops an ephemeral scratch database with safety verification against the target database and regex pattern.

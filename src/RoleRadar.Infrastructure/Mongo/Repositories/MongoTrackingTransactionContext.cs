@@ -14,6 +14,7 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
     private readonly IContactRepository? _contacts;
     private readonly ISearchRunRepository? _searchRuns;
     private readonly IMongoCollection<BsonDocument> _auditCollection;
+    private readonly IMongoCollection<BsonDocument>? _notesCollection;
     private readonly IClientSessionHandle? _session;
 
     public MongoTrackingTransactionContext(
@@ -24,6 +25,7 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
         IContactRepository? contacts,
         ISearchRunRepository? searchRuns,
         IMongoCollection<BsonDocument> auditCollection,
+        IMongoCollection<BsonDocument>? notesCollection = null,
         IClientSessionHandle? session = null)
     {
         _companies = companies ?? throw new ArgumentNullException(nameof(companies));
@@ -33,7 +35,21 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
         _contacts = contacts;
         _searchRuns = searchRuns;
         _auditCollection = auditCollection ?? throw new ArgumentNullException(nameof(auditCollection));
+        _notesCollection = notesCollection;
         _session = session;
+    }
+
+    public MongoTrackingTransactionContext(
+        ICompanyRepository companies,
+        IPostingRepository postings,
+        ICriterionRepository criteria,
+        IApplicationRepository applications,
+        IContactRepository? contacts,
+        ISearchRunRepository? searchRuns,
+        IMongoCollection<BsonDocument> auditCollection,
+        IClientSessionHandle? session)
+        : this(companies, postings, criteria, applications, contacts, searchRuns, auditCollection, null, session)
+    {
     }
 
     public MongoTrackingTransactionContext(
@@ -149,4 +165,47 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
             IEnumerable<string> strSeq => new BsonArray(strSeq),
             _ => new BsonString(value.ToString() ?? string.Empty)
         };
+
+    public async Task<Result<bool>> UpsertNoteAsync(RoleRadar.Domain.Notes.Note note, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(note);
+        if (_notesCollection is null)
+        {
+            return Result<bool>.Success(true);
+        }
+
+        var filter = Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(note.Id, GuidRepresentation.Standard));
+        var doc = MongoNoteRepository.MapNoteToDocument(note);
+        var options = new ReplaceOptions { IsUpsert = true };
+
+        if (_session is not null)
+        {
+            await _notesCollection.ReplaceOneAsync(_session, filter, doc, options, cancellationToken);
+        }
+        else
+        {
+            await _notesCollection.ReplaceOneAsync(filter, doc, options, cancellationToken);
+        }
+
+        return Result<bool>.Success(true);
+    }
+
+    public async Task<Result<bool>> NoteExistsAsync(string ownerId, string title, string area, CancellationToken cancellationToken = default)
+    {
+        if (_notesCollection is null)
+        {
+            return Result<bool>.Success(false);
+        }
+
+        var filter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
+            Builders<BsonDocument>.Filter.Eq("title", title),
+            Builders<BsonDocument>.Filter.Eq("area", area));
+
+        var count = _session is not null
+            ? await _notesCollection.CountDocumentsAsync(_session, filter, cancellationToken: cancellationToken)
+            : await _notesCollection.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
+
+        return Result<bool>.Success(count > 0);
+    }
 }

@@ -1,0 +1,332 @@
+using RoleRadar.Application.Abstractions;
+using RoleRadar.Domain.Audit;
+using RoleRadar.Domain.Common;
+using RoleRadar.Domain.Tracking;
+
+namespace RoleRadar.Application.Tracking.Import.Pipeline;
+
+public sealed class AppendixRowsStep : ITrackerImportStep
+{
+    private const string ImportActor = "cli-import-tracker";
+    private readonly ICsvParser _csvParser;
+    private readonly ITrackingTransactionContext _context;
+    private readonly CriteriaSeedingStep _criteriaStep;
+
+    public AppendixRowsStep(ICsvParser csvParser, ITrackingTransactionContext context, CriteriaSeedingStep criteriaStep)
+    {
+        _csvParser = csvParser ?? throw new ArgumentNullException(nameof(csvParser));
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _criteriaStep = criteriaStep ?? throw new ArgumentNullException(nameof(criteriaStep));
+    }
+
+    public async Task<Result<bool>> ExecuteAsync(TrackerImportContext context, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var filePath = Path.Combine(context.BundleDirectory, "appendix-rows.csv");
+        if (!File.Exists(filePath))
+        {
+            return Result<bool>.Success(true);
+        }
+
+        var records = new List<ICsvRecord>();
+        using (var reader = new StreamReader(filePath))
+        {
+            records.AddRange(_csvParser.Read(reader, hasHeader: true));
+        }
+
+        // Partition records: non-duplicates before duplicates so duplicate_of_id can resolve
+        var nonDuplicates = new List<ICsvRecord>();
+        var duplicates = new List<ICsvRecord>();
+
+        foreach (var row in records)
+        {
+            var reasonPrimary = row["reason_primary"]?.Trim();
+            var reasonAll = row["reason_all"]?.Trim();
+            var isDuplicate = string.Equals(reasonPrimary, "duplicate", StringComparison.OrdinalIgnoreCase) ||
+                              (reasonAll is not null && reasonAll.Contains("duplicate", StringComparison.OrdinalIgnoreCase));
+
+            if (isDuplicate)
+            {
+                duplicates.Add(row);
+            }
+            else
+            {
+                nonDuplicates.Add(row);
+            }
+        }
+
+        var defaultDate = context.DefaultDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+
+        // Process non-duplicates first, then duplicates
+        foreach (var row in nonDuplicates.Concat(duplicates))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            var companyName = row["company"]?.Trim();
+            var title = row["title"]?.Trim();
+
+            if (string.IsNullOrWhiteSpace(companyName) || string.IsNullOrWhiteSpace(title))
+            {
+                continue;
+            }
+
+            var decision = row["decision"]?.Trim();
+            if (string.Equals(decision, "skip", StringComparison.OrdinalIgnoreCase))
+            {
+                context.Summary.PostingsUnchanged++;
+                continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(decision))
+            {
+                context.Summary.Errors.Add(new TrackerImportRowError(
+                    "appendix-rows.csv",
+                    row.LineNumber,
+                    $"Invalid decision value '{decision}'. Expected blank or 'skip'."));
+                continue;
+            }
+
+            var canonicalCompany = context.CompanyAliases.TryGetValue(companyName, out var alias) ? alias : companyName;
+
+            // 1. Resolve company
+            if (!context.CanonicalCompanies.TryGetValue(canonicalCompany, out var company))
+            {
+                var existing = await _context.Companies.GetByNormalizedNameAsync(context.OwnerId, canonicalCompany, cancellationToken);
+                if (existing.IsSuccess && existing.Value is not null)
+                {
+                    company = existing.Value;
+                    context.CanonicalCompanies[canonicalCompany] = company;
+                }
+                else
+                {
+                    company = Company.Create(
+                        ownerId: context.OwnerId,
+                        name: canonicalCompany,
+                        status: CompanyStatus.Neutral,
+                        description: string.Empty);
+
+                    var saveCompany = await _context.Companies.UpsertCompanyAsync(company, cancellationToken);
+                    if (saveCompany.IsSuccess)
+                    {
+                        var audit = AuditLogEntry.CreateForTracking(
+                            ownerId: context.OwnerId,
+                            actor: ImportActor,
+                            operation: AuditOperation.ImportCompanyCreate,
+                            entityType: "company",
+                            entityId: company.Id,
+                            resultingVersionToken: company.VersionToken,
+                            occurredAtUtc: DateTime.UtcNow,
+                            details: new AuditDetails(
+                                ChangedFields: ["name", "status"],
+                                After: new Dictionary<string, object?>
+                                {
+                                    ["name"] = company.Name,
+                                    ["status"] = company.Status.ToString()
+                                }));
+                        await _context.AppendAuditEntryAsync(audit, cancellationToken);
+                        context.CanonicalCompanies[canonicalCompany] = company;
+                        context.Summary.CompaniesCreated++;
+                        context.Summary.AutoCreatedCompanies.Add(canonicalCompany);
+                    }
+                }
+            }
+
+            // 2. Parse date
+            var addedRaw = row["added_md"]?.Trim();
+            var dateOutcome = DateInferenceRule.Resolve(addedRaw, defaultDate);
+            if (dateOutcome.Kind == DateResolutionKind.DefaultedBlank) context.Summary.DatesDefaulted++;
+            if (dateOutcome.Kind is DateResolutionKind.InferredRollback or DateResolutionKind.InferredSameYear) context.Summary.DatesInferred++;
+            if (dateOutcome.IsFlagged) context.Summary.DatesFlagged++;
+
+            var effectiveDate = dateOutcome.ResolvedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+
+            // 3. Resolve or create criterion from reason_primary
+            Guid? criterionId = null;
+            var reasonPrimary = row["reason_primary"]?.Trim();
+            if (!string.IsNullOrWhiteSpace(reasonPrimary))
+            {
+                var critResult = await _criteriaStep.GetOrCreateReasonCriterionAsync(context.OwnerId, reasonPrimary, effectiveDate, cancellationToken);
+                if (critResult.IsSuccess && critResult.Value is not null)
+                {
+                    criterionId = critResult.Value.Id;
+                }
+            }
+
+            var remoteMentioned = bool.TryParse(row["remote_mentioned"]?.Trim(), out var r) && r;
+            var remoteType = remoteMentioned ? RemoteType.Remote : RemoteType.Unknown;
+            var reqId = row["req_id"]?.Trim();
+            var url = row["url"]?.Trim();
+
+            // Resurface policy
+            var proposedResurface = row["proposed_resurface"]?.Trim();
+            var resurfacePolicy = string.Equals(proposedResurface, "if_reopened", StringComparison.OrdinalIgnoreCase)
+                ? ResurfacePolicy.IfReopened
+                : ResurfacePolicy.Never;
+
+            // Duplicate link resolution
+            Guid? duplicateOfId = null;
+            var isDuplicateRow = string.Equals(reasonPrimary, "duplicate", StringComparison.OrdinalIgnoreCase);
+            if (isDuplicateRow)
+            {
+                // Try finding target posting in existing lookups
+                var lookupKey = $"{canonicalCompany}|{TitleNormalizer.Normalize(title)}";
+                if (context.PostingsByCompanyAndTitle.TryGetValue(lookupKey, out var targetPosting))
+                {
+                    duplicateOfId = targetPosting.Id;
+                }
+                else if (company is not null)
+                {
+                    var candRes = await _context.Postings.FindCandidatesByCompanyAndTitleAsync(context.OwnerId, company.Id, TitleNormalizer.Normalize(title), cancellationToken);
+                    if (candRes.IsSuccess && candRes.Value is { Count: > 0 } candidates)
+                    {
+                        duplicateOfId = candidates[0].Id;
+                    }
+                }
+            }
+
+            // Match against existing posting in context or repository
+            Posting? existingPosting = null;
+            if (!string.IsNullOrWhiteSpace(reqId) && context.PostingsByReqOrUrl.TryGetValue(reqId, out var byReq))
+            {
+                existingPosting = byReq;
+            }
+            else if (!string.IsNullOrWhiteSpace(url) && context.PostingsByReqOrUrl.TryGetValue(url, out var byUrl))
+            {
+                existingPosting = byUrl;
+            }
+            else if (!isDuplicateRow)
+            {
+                var titleKey = $"{canonicalCompany}|{TitleNormalizer.Normalize(title)}";
+                context.PostingsByCompanyAndTitle.TryGetValue(titleKey, out existingPosting);
+            }
+
+            if (existingPosting is null && !string.IsNullOrWhiteSpace(url))
+            {
+                var normUrl = UrlNormalizer.Normalize(url);
+                if (normUrl is not null)
+                {
+                    var byUrlRes = await _context.Postings.GetByDedupKeyBAsync(context.OwnerId, normUrl, cancellationToken);
+                    if (byUrlRes.IsSuccess && byUrlRes.Value is not null)
+                    {
+                        existingPosting = byUrlRes.Value;
+                    }
+                }
+            }
+
+            if (existingPosting is null && !string.IsNullOrWhiteSpace(reqId) && company is not null)
+            {
+                var dedupC = $"{company.Id:D}|{reqId.Trim()}";
+                var byCRes = await _context.Postings.GetByDedupKeyCAsync(context.OwnerId, dedupC, cancellationToken);
+                if (byCRes.IsSuccess && byCRes.Value is not null)
+                {
+                    existingPosting = byCRes.Value;
+                }
+            }
+
+            if (existingPosting is null && !isDuplicateRow && company is not null)
+            {
+                var candRes = await _context.Postings.FindCandidatesByCompanyAndTitleAsync(context.OwnerId, company.Id, TitleNormalizer.Normalize(title), cancellationToken);
+                if (candRes.IsSuccess && candRes.Value is { Count: > 0 } candidates)
+                {
+                    var byIdRes = await _context.Postings.GetByIdAsync(context.OwnerId, candidates[0].Id, cancellationToken);
+                    if (byIdRes.IsSuccess && byIdRes.Value is not null)
+                    {
+                        existingPosting = byIdRes.Value;
+                    }
+                }
+            }
+
+            if (existingPosting is not null)
+            {
+                if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = existingPosting;
+                if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = existingPosting;
+                context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{existingPosting.NormalizedTitle}"] = existingPosting;
+
+                if (existingPosting.Disposition == PostingDisposition.ScreenedOut &&
+                    string.Equals(existingPosting.DispositionReason, reasonPrimary ?? "screened_out", StringComparison.OrdinalIgnoreCase))
+                {
+                    context.Summary.PostingsUnchanged++;
+                    continue;
+                }
+
+                // Transition existing posting to ScreenedOut
+                existingPosting.Transition(
+                    PostingDisposition.ScreenedOut,
+                    reason: reasonPrimary ?? "screened_out",
+                    criterionId: criterionId,
+                    resurfacePolicy: resurfacePolicy,
+                    timestamp: effectiveDate);
+
+                var saveExisting = await _context.Postings.UpsertPostingAsync(existingPosting, cancellationToken);
+                if (saveExisting.IsSuccess)
+                {
+                    var audit = AuditLogEntry.CreateForTracking(
+                        ownerId: context.OwnerId,
+                        actor: ImportActor,
+                        operation: AuditOperation.ImportPostingTransition,
+                        entityType: "posting",
+                        entityId: existingPosting.Id,
+                        resultingVersionToken: existingPosting.VersionToken,
+                        occurredAtUtc: DateTime.UtcNow,
+                        details: new AuditDetails(
+                            ChangedFields: ["disposition", "disposition_reason", "disposition_criterion_id"],
+                            After: new Dictionary<string, object?>
+                            {
+                                ["disposition"] = existingPosting.Disposition.ToString(),
+                                ["reason"] = existingPosting.DispositionReason
+                            }));
+                    await _context.AppendAuditEntryAsync(audit, cancellationToken);
+                    context.Summary.PostingsUpdated++;
+                }
+            }
+            else
+            {
+                // Create new posting directly with ScreenedOut disposition
+                var newPosting = Posting.Create(
+                    ownerId: context.OwnerId,
+                    companyId: company?.Id ?? Guid.NewGuid(),
+                    title: title,
+                    sourceKind: SourceKind.Aggregator,
+                    originalUrl: url,
+                    requisitionId: reqId,
+                    remoteType: remoteType,
+                    disposition: PostingDisposition.ScreenedOut,
+                    dispositionReason: reasonPrimary ?? "screened_out",
+                    dispositionCriterionId: criterionId,
+                    resurfacePolicy: resurfacePolicy,
+                    decidedAt: effectiveDate,
+                    duplicateOfId: duplicateOfId,
+                    now: effectiveDate);
+
+                var saveNew = await _context.Postings.UpsertPostingAsync(newPosting, cancellationToken);
+                if (saveNew.IsSuccess)
+                {
+                    var audit = AuditLogEntry.CreateForTracking(
+                        ownerId: context.OwnerId,
+                        actor: ImportActor,
+                        operation: AuditOperation.ImportPostingCreate,
+                        entityType: "posting",
+                        entityId: newPosting.Id,
+                        resultingVersionToken: newPosting.VersionToken,
+                        occurredAtUtc: DateTime.UtcNow,
+                        details: new AuditDetails(
+                            ChangedFields: ["title", "company_id", "disposition"],
+                            After: new Dictionary<string, object?>
+                            {
+                                ["title"] = newPosting.Title,
+                                ["disposition"] = newPosting.Disposition.ToString()
+                            }));
+                    await _context.AppendAuditEntryAsync(audit, cancellationToken);
+                    context.Summary.PostingsCreated++;
+
+                    if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = newPosting;
+                    if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = newPosting;
+                    context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{newPosting.NormalizedTitle}"] = newPosting;
+                }
+            }
+        }
+
+        return Result<bool>.Success(true);
+    }
+}

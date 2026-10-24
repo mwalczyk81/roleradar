@@ -38,8 +38,8 @@
 
 **Purpose**: Seed predefined compensation criteria (`comp_preferred_floor=200000`, `comp_high_priority_bar=220000`) with `stated` provenance and provide criteria registration service for subsequent posting and appendix steps.
 
-- [ ] T013 [P] Unit tests in `tests/RoleRadar.Tests.Unit/Tracking/CriteriaImportStepTests.cs` and integration tests in `tests/RoleRadar.Tests.Integration/Import/CriteriaImportIntegrationTests.cs` using `IsolatedContainerMongoFixture` verifying idempotent seeding of `comp_preferred_floor=200000` and `comp_high_priority_bar=220000` with provenance `stated`, auto-creation of `reason_primary` criteria with provenance `inferred`, and linking `disposition_criterion_id` (expected to fail before implementation)
-- [ ] T014 Implement criteria seeding and first-use registration service in `src/RoleRadar.Application/Tracking/Import/Pipeline/CriteriaSeedingStep.cs` emitting `import_criterion_revision` with actor `cli-import-tracker` and providing criteria resolution for subsequent steps
+- [X] T013 [P] Unit tests in `tests/RoleRadar.Tests.Unit/Tracking/CriteriaImportStepTests.cs` and integration tests in `tests/RoleRadar.Tests.Integration/Import/CriteriaImportIntegrationTests.cs` using `IsolatedContainerMongoFixture` verifying idempotent seeding of `comp_preferred_floor=200000` and `comp_high_priority_bar=220000` with provenance `stated`, auto-creation of `reason_primary` criteria with provenance `inferred`, and linking `disposition_criterion_id` (expected to fail before implementation)
+- [X] T014 Implement criteria seeding and first-use registration service in `src/RoleRadar.Application/Tracking/Import/Pipeline/CriteriaSeedingStep.cs` emitting `import_criterion_revision` with actor `cli-import-tracker` and providing criteria resolution for subsequent steps
 
 ---
 
@@ -51,13 +51,13 @@
 
 ### Tests for User Story 1 (MANDATORY - Test-First per Principle II) ⚠️
 
-- [ ] T015 [P] [US1] Unit parsing tests in `tests/RoleRadar.Tests.Unit/Cli/TrackerImportCliParsingTests.cs` and integration tests in `tests/RoleRadar.Tests.Integration/Import/TrackerImportCliTests.cs` using `IsolatedContainerMongoFixture` for dry-run preview default, `--apply` requirement, `--default-date` missing error naming file and affected row count, per-row error isolation, and second `--apply` idempotent no-op (expected to fail before implementation)
+- [X] T015 [P] [US1] Unit parsing tests in `tests/RoleRadar.Tests.Unit/Cli/TrackerImportCliParsingTests.cs` and integration tests in `tests/RoleRadar.Tests.Integration/Import/TrackerImportCliTests.cs` using `IsolatedContainerMongoFixture` for dry-run preview default, `--apply` requirement, `--default-date` missing error naming file and affected row count, per-row error isolation, and second `--apply` idempotent no-op (expected to fail before implementation)
 
 ### Implementation for User Story 1
 
-- [ ] T016 [P] [US1] Create command and summary DTOs in `src/RoleRadar.Application/Tracking/Import/DTOs/TrackerImportSummaryDto.cs` and `src/RoleRadar.Application/Tracking/Import/Commands/TrackerImportCommand.cs`
-- [ ] T017 [US1] Implement `TrackerImportCommandHandler` in `src/RoleRadar.Application/Tracking/Import/Commands/TrackerImportCommandHandler.cs` orchestrating the multi-stage pipeline across target or scratch databases with per-row failure isolation
-- [ ] T018 [US1] Register top-level CLI command `roleradar tracker-import <bundle-directory> [--default-date <YYYY-MM-DD>] [--apply] [--report <path>]` in `src/RoleRadar.Cli/Commands/TrackerImportCommand.cs` and connect in `src/RoleRadar.Cli/Program.cs`
+- [X] T016 [P] [US1] Create command and summary DTOs in `src/RoleRadar.Application/Tracking/Import/DTOs/TrackerImportSummaryDto.cs` and `src/RoleRadar.Application/Tracking/Import/Commands/TrackerImportCommand.cs`
+- [X] T017 [US1] Implement `TrackerImportCommandHandler` in `src/RoleRadar.Application/Tracking/Import/Commands/TrackerImportCommandHandler.cs` orchestrating the multi-stage pipeline across target or scratch databases with per-row failure isolation
+- [X] T018 [US1] Register top-level CLI command `roleradar tracker-import <bundle-directory> [--default-date <YYYY-MM-DD>] [--apply] [--report <path>]` in `src/RoleRadar.Cli/Commands/TrackerImportCommand.cs` and connect in `src/RoleRadar.Cli/Program.cs`
 
 ---
 
@@ -69,12 +69,12 @@
 
 ### Tests for User Story 2 (MANDATORY - Test-First per Principle II) ⚠️
 
-- [ ] T019 [P] [US2] Unit tests in `tests/RoleRadar.Tests.Unit/Tracking/CompanyImportStepTests.cs` and integration tests in `tests/RoleRadar.Tests.Integration/Import/CompanyImportIntegrationTests.cs` using `IsolatedContainerMongoFixture` for exact alias matching via `company-aliases.csv`, watchlist `watch` and `avoid` status assignment, unlisted company auto-creation as `neutral` with blank description (never `watch`), and decision `skip` (expected to fail before implementation)
+- [X] T019 [P] [US2] Unit tests in `tests/RoleRadar.Tests.Unit/Tracking/CompanyImportStepTests.cs` and integration tests in `tests/RoleRadar.Tests.Integration/Import/CompanyImportIntegrationTests.cs` using `IsolatedContainerMongoFixture` for exact alias matching via `company-aliases.csv`, watchlist `watch` and `avoid` status assignment, unlisted company auto-creation as `neutral` with blank description (never `watch`), and decision `skip` (expected to fail before implementation)
 
 ### Implementation for User Story 2
 
-- [ ] T020 [P] [US2] Implement `AliasResolutionStep` in `src/RoleRadar.Application/Tracking/Import/Pipeline/AliasResolutionStep.cs` loading `company-aliases.csv` into an exact match dictionary
-- [ ] T021 [US2] Implement `WatchlistCompanyStep` in `src/RoleRadar.Application/Tracking/Import/Pipeline/WatchlistCompanyStep.cs` processing `watchlist-companies.csv` via `RecordCompanyCommand`, appending description text ("max 300 characters"), respecting `decision: skip`, and replacing text with `corrected_notes` if non-empty
+- [X] T020 [P] [US2] Implement `AliasResolutionStep` in `src/RoleRadar.Application/Tracking/Import/Pipeline/AliasResolutionStep.cs` loading `company-aliases.csv` into an exact match dictionary
+- [X] T021 [US2] Implement `WatchlistCompanyStep` in `src/RoleRadar.Application/Tracking/Import/Pipeline/WatchlistCompanyStep.cs` processing `watchlist-companies.csv` via `RecordCompanyCommand`, appending description text ("max 300 characters"), respecting `decision: skip`, and replacing text with `corrected_notes` if non-empty
 
 ---
 
@@ -86,12 +86,12 @@
 
 ### Tests for User Story 3 (MANDATORY - Test-First per Principle II) ⚠️
 
-- [ ] T022 [P] [US3] Unit tests in `tests/RoleRadar.Tests.Unit/Tracking/PostingImportStepTests.cs` and integration tests in `tests/RoleRadar.Tests.Integration/Import/PostingImportIntegrationTests.cs` using `IsolatedContainerMongoFixture` for dropping `tier`, mapping `compHigh` to `comp_high_priority`, mapping `cultureLevel` with fallback to `unknown`, mapping `ghost: true` to `SignalType.Phantom`, staging status `applied` as `scored`, flagging and storing out-of-range scores (>10.0 or <0.0) as empty without clamping, non-duplicates before duplicates in `appendix-rows.csv`, linking `duplicate_of_id`, and per-row error isolation on invalid transitions (expected to fail before implementation)
+- [X] T022 [P] [US3] Unit tests in `tests/RoleRadar.Tests.Unit/Tracking/PostingImportStepTests.cs` and integration tests in `tests/RoleRadar.Tests.Integration/Import/PostingImportIntegrationTests.cs` using `IsolatedContainerMongoFixture` for dropping `tier`, mapping `compHigh` to `comp_high_priority`, mapping `cultureLevel` with fallback to `unknown`, mapping `ghost: true` to `SignalType.Phantom`, staging status `applied` as `scored`, flagging and storing out-of-range scores (>10.0 or <0.0) as empty without clamping, non-duplicates before duplicates in `appendix-rows.csv`, linking `duplicate_of_id`, and per-row error isolation on invalid transitions (expected to fail before implementation)
 
 ### Implementation for User Story 3
 
-- [ ] T023 [P] [US3] Implement `PostingsJsonStep` in `src/RoleRadar.Application/Tracking/Import/Pipeline/PostingsJsonStep.cs` parsing `postings.json`, auto-creating neutral companies, appending `parent` text to company descriptions, flagging out-of-range scores (>10.0 or <0.0) to store as empty without clamping, truncating `culture` text to 500 characters, and invoking `RecordPostingCommand` with actor `cli-import-tracker` and operation `import_posting_create`
-- [ ] T024 [US3] Implement `AppendixRowsStep` in `src/RoleRadar.Application/Tracking/Import/Pipeline/AppendixRowsStep.cs` sorting non-duplicates before duplicates, matching by company + normalized title when req/URL missing, mapping `dismissed` to `screened_out` (`never`), linking `duplicate_of_id` if target exists (or `screened_out` reason "duplicate" if target missing), registering `reason_primary` criteria via the criteria service on first use, and emitting `import_posting_create` or `import_posting_transition`
+- [X] T023 [P] [US3] Implement `PostingsJsonStep` in `src/RoleRadar.Application/Tracking/Import/Pipeline/PostingsJsonStep.cs` parsing `postings.json`, auto-creating neutral companies, appending `parent` text to company descriptions, flagging out-of-range scores (>10.0 or <0.0) to store as empty without clamping, truncating `culture` text to 500 characters, and invoking `RecordPostingCommand` with actor `cli-import-tracker` and operation `import_posting_create`
+- [X] T024 [US3] Implement `AppendixRowsStep` in `src/RoleRadar.Application/Tracking/Import/Pipeline/AppendixRowsStep.cs` sorting non-duplicates before duplicates, matching by company + normalized title when req/URL missing, mapping `dismissed` to `screened_out` (`never`), linking `duplicate_of_id` if target exists (or `screened_out` reason "duplicate" if target missing), registering `reason_primary` criteria via the criteria service on first use, and emitting `import_posting_create` or `import_posting_transition`
 
 ---
 
@@ -103,11 +103,11 @@
 
 ### Tests for User Story 4 (MANDATORY - Test-First per Principle II) ⚠️
 
-- [ ] T025 [P] [US4] Unit tests in `tests/RoleRadar.Tests.Unit/Tracking/ApplicationsImportStepTests.cs` and integration tests in `tests/RoleRadar.Tests.Integration/Import/ApplicationsImportIntegrationTests.cs` using `IsolatedContainerMongoFixture` verifying application creation transitioning posting to `applied`, unclaimed `postings.json` roles with status `applied` staying in `scored`, rejection timeline event appending, `date_is_stated_not_submitted` notes recording, `standalone_note` import into area `job-search` with `import_create`, and zero auto-created contacts (expected to fail before implementation)
+- [X] T025 [P] [US4] Unit tests in `tests/RoleRadar.Tests.Unit/Tracking/ApplicationsImportStepTests.cs` and integration tests in `tests/RoleRadar.Tests.Integration/Import/ApplicationsImportIntegrationTests.cs` using `IsolatedContainerMongoFixture` verifying application creation transitioning posting to `applied`, unclaimed `postings.json` roles with status `applied` staying in `scored`, rejection timeline event appending, `date_is_stated_not_submitted` notes recording, `standalone_note` import into area `job-search` with `import_create`, and zero auto-created contacts (expected to fail before implementation)
 
 ### Implementation for User Story 4
 
-- [ ] T026 [US4] Implement `ApplicationsStep` in `src/RoleRadar.Application/Tracking/Import/Pipeline/ApplicationsStep.cs` invoking `CreateApplicationCommand` with actor `cli-import-tracker` and operation `import_application_create`, appending rejection events with `import_application_event_append`, creating standalone notes via `CreateNoteCommand` (`import_create`), tracking unclaimed `applied` postings, and extracting `people_detected` for manual reporting
+- [X] T026 [US4] Implement `ApplicationsStep` in `src/RoleRadar.Application/Tracking/Import/Pipeline/ApplicationsStep.cs` invoking `CreateApplicationCommand` with actor `cli-import-tracker` and operation `import_application_create`, appending rejection events with `import_application_event_append`, creating standalone notes via `CreateNoteCommand` (`import_create`), tracking unclaimed `applied` postings, and extracting `people_detected` for manual reporting
 
 ---
 

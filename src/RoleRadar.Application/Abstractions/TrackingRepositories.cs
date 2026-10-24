@@ -12,6 +12,10 @@ public interface ITrackingTransactionContext
     IContactRepository Contacts { get; }
     ISearchRunRepository SearchRuns { get; }
     Task AppendAuditEntryAsync(AuditLogEntry entry, CancellationToken cancellationToken = default);
+    Task<Result<bool>> UpsertNoteAsync(RoleRadar.Domain.Notes.Note note, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result<bool>.Success(true));
+    Task<Result<bool>> NoteExistsAsync(string ownerId, string title, string area, CancellationToken cancellationToken = default) =>
+        Task.FromResult(Result<bool>.Success(false));
 }
 
 public interface ICompanyRepository

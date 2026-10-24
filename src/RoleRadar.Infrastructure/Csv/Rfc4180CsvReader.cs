@@ -1,12 +1,13 @@
 using System.Runtime.CompilerServices;
 using System.Text;
+using RoleRadar.Application.Abstractions;
 
 namespace RoleRadar.Infrastructure.Csv;
 
 /// <summary>
 /// Represents a single parsed row in an RFC 4180 compliant CSV stream.
 /// </summary>
-public sealed class CsvRow
+public sealed class CsvRow : ICsvRecord
 {
     private readonly IReadOnlyDictionary<string, int>? _headerIndex;
 
@@ -222,4 +223,10 @@ public static class Rfc4180CsvReader
             }
         }
     }
+}
+
+public sealed class Rfc4180CsvParser : ICsvParser
+{
+    public IEnumerable<ICsvRecord> Read(TextReader reader, bool hasHeader = true)
+        => Rfc4180CsvReader.Read(reader, hasHeader);
 }

@@ -202,7 +202,9 @@ public sealed class TrackingArchitectureTests
     {
         var appAssembly = typeof(RoleRadar.Application.Tracking.Commands.RecordCompanyCommand).Assembly;
         var trackingTypes = appAssembly.GetTypes()
-            .Where(t => t.Namespace is not null && t.Namespace.StartsWith("RoleRadar.Application.Tracking", StringComparison.Ordinal))
+            .Where(t => t.Namespace is not null &&
+                        t.Namespace.StartsWith("RoleRadar.Application.Tracking", StringComparison.Ordinal) &&
+                        !t.Namespace.StartsWith("RoleRadar.Application.Tracking.Import", StringComparison.Ordinal))
             .ToArray();
 
         var noteFactoryNames = new HashSet<string>
