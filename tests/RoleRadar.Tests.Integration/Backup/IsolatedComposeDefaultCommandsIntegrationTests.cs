@@ -73,6 +73,21 @@ public sealed class IsolatedComposeDefaultCommandsIntegrationTests
             // DO NOT set opts.DumpCommand or opts.RestoreCommand - verify defaults!
             await using var provider = services.BuildServiceProvider();
 
+            // Wait for replica set election to complete and report writable primary
+            var probe = provider.GetRequiredService<MongoReadinessProbe>();
+            var ready = false;
+            for (var attempt = 0; attempt < 30; attempt++)
+            {
+                var check = await probe.CheckAsync();
+                if (check.IsSuccess && check.Value?.IsReady == true)
+                {
+                    ready = true;
+                    break;
+                }
+                await Task.Delay(500);
+            }
+            Assert.True(ready, "Replica set did not achieve writable primary status within 15 seconds.");
+
             var createHandler = provider.GetRequiredService<ICommandHandler<CreateNoteCommand, NoteCreatedDto>>();
             var createResult = await createHandler.HandleAsync(new CreateNoteCommand(
                 Title: "Defaults Roundtrip Note",
