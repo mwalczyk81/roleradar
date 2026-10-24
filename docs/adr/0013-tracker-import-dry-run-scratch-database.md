@@ -46,21 +46,21 @@ Chosen option: **Option A: Ephemeral Scratch Database**.
 2. **True Per-Row Error Isolation**: MongoDB multi-document transactions do not support savepoints. Under Option B, a single row failure in a batch of 150 rows would abort the outer transaction, preventing any subsequent rows from being evaluated. Under Option A, each row runs in its own transaction within the scratch database; a bad row fails and is isolated without poisoning subsequent rows.
 3. **Avoids Multi-Document Transaction Timeouts**: Bundles with ~200+ entities and cross-collection lookups running in a single ambient transaction could exceed MongoDB's `transactionLifetimeLimitSeconds`. Option A eliminates this risk.
 4. **Guaranteed Cleanup & Safety Invariants**:
-   - The scratch database name strictly matches the format `^roleradar_scratch_[0-9a-f]{32}$` (e.g. `roleradar_scratch_` followed by 32 hex digits from a UUIDv7/GUID `N` format).
-   - In the `finally` block, the drop routine validates the name against `^roleradar_scratch_[0-9a-f]{32}$` and asserts it does not match the configured target database name before executing `DropDatabaseAsync`.
+   - The scratch database name strictly matches the format `^roleradar_scratch_[0-9a-f]{32}\z` (e.g. `roleradar_scratch_` followed by 32 hex digits from a UUIDv7/GUID `N` format, terminating with `\z` to forbid trailing newlines).
+   - In the `finally` block (or on initialization failure), the drop routine validates the name against `^roleradar_scratch_[0-9a-f]{32}\z` and asserts it does not match the configured target database name before executing `DropDatabaseAsync`.
    - Orphan cleanup does NOT run during normal application startup or wipe commands. Instead, orphan cleanup runs exclusively at the start of a subsequent `tracker-import` execution (or an explicit `--cleanup-scratch` flag).
-   - The orphan cleanup scanner lists all databases on the cluster, matches names strictly against `^roleradar_scratch_[0-9a-f]{32}$`, verifies the name is never the configured target database, and skips any scratch database created less than 1 hour ago (protecting concurrent runs).
+   - The orphan cleanup scanner lists all databases on the cluster, matches names strictly against `^roleradar_scratch_[0-9a-f]{32}\z`, verifies the name is never the configured target database, and skips any scratch database created less than 1 hour ago (protecting concurrent runs).
 
 ## Implementation Details
 
 - When `roleradar tracker-import` runs without `--apply`:
-  1. **Orphan Cleanup**: Inspect cluster databases, match names against `^roleradar_scratch_[0-9a-f]{32}$`, skip databases created within the last 1 hour, ensure none match the target database, and drop stale orphaned scratch databases.
-  2. **Generate Scratch Name**: Formulate `roleradar_scratch_{Guid.NewGuid():N}` matching `^roleradar_scratch_[0-9a-f]{32}$`.
-  3. **Collection Cloning**: For each existing collection in the target database (`companies`, `postings`, `applications`, `criteria`, `notes`, `audit_log`, `search_runs`), clone existing documents into the scratch database using an aggregation `$merge` pipeline (`aggregate([ { $match: {} }, { $merge: { into: { db: scratchDbName, coll: collectionName } } } ])`) or empty collection creation if target is empty.
-  4. **Index Initialization**: Execute the host's complete index initialization routine (`EnsureIndexesOnceAsync`) against the scratch database so all partial unique deduplication indexes (Tier A, Tier B, Tier C), text indexes, and versioning constraints are fully active in the scratch database.
+  1. **Orphan Cleanup**: Inspect cluster databases, match names against `^roleradar_scratch_[0-9a-f]{32}\z`, skip databases created within the last 1 hour, ensure none match the target database, and drop stale orphaned scratch databases.
+  2. **Generate Scratch Name**: Formulate `roleradar_scratch_{Guid.NewGuid():N}` matching `^roleradar_scratch_[0-9a-f]{32}\z`.
+  3. **Collection Cloning**: Clone only collections the pipeline reads or writes (`notes`, `audit_log`, `companies`, `career_sources`, `postings`, `posting_signals`, `criteria`, `applications`, `application_events`, `search_runs`); exclude `contacts` and `note_revisions`. Clone existing documents into the scratch database using an aggregation `$merge` pipeline (`aggregate([ { $match: {} }, { $merge: { into: { db: scratchDbName, coll: collectionName } } } ])`) or empty collection creation if target is empty.
+  4. **Index Initialization**: Execute the host's complete index initialization routine (`EnsureIndexesOnceAsync`) against the scratch database so all partial unique deduplication indexes (Tier A, Tier B, Tier C), text indexes, and versioning constraints are fully active in the scratch database. If cloning or index initialization throws, immediately drop the scratch database through the guard before rethrowing.
   5. **Pipeline Execution**: Build the DI scope configured with `options.DatabaseName = scratchDbName` and execute the 5-stage import pipeline using standard `ICommandHandler` invocations.
   6. **Collect Statistics**: Accumulate counts of created, updated, and skipped entities, row errors, and report details.
-  7. **Guaranteed Tear-Down**: In a `finally` block, validate `scratchDbName` against `^roleradar_scratch_[0-9a-f]{32}$`, verify `scratchDbName != targetDbName`, and call `IMongoClient.DropDatabaseAsync(scratchDbName)`.
+  7. **Guaranteed Tear-Down**: In a `finally` block, validate `scratchDbName` against `^roleradar_scratch_[0-9a-f]{32}\z`, verify `scratchDbName != targetDbName`, and call `IMongoClient.DropDatabaseAsync(scratchDbName)`.
   8. **Target Invariance Assertion**: Assert and verify that target database collection document counts and `audit_log` entries remain 100% unchanged.
 
 ## Testing Strategy

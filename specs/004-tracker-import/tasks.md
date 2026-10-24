@@ -26,11 +26,11 @@
 
 **⚠️ CRITICAL**: T008 and T009 (scratch database guard and tests) MUST be implemented and pass before any code that can drop a database is written!
 
-- [ ] T008 [P] Unit tests for scratch database name guard in `tests/RoleRadar.Tests.Unit/Mongo/MongoScratchDatabaseGuardTests.cs` (expected to fail before implementation) asserting strict name regex `^roleradar_scratch_[0-9a-f]{32}\z`, refusal of target database name, refusal of trailing newlines, and refusal of databases created <1 hour ago
-- [ ] T009 [P] Implement `MongoScratchDatabaseGuard` in `src/RoleRadar.Infrastructure/Mongo/MongoScratchDatabaseGuard.cs` with validation regex `^roleradar_scratch_[0-9a-f]{32}\z`, target database equality check, and 1-hour age filter
-- [ ] T010 [P] Integration tests in `tests/RoleRadar.Tests.Integration/Mongo/MongoScratchDatabaseManagerTests.cs` using `IsolatedContainerMongoFixture` (expected to fail before implementation) verifying a failed, aborted, or process-killed dry-run leaves target collection document counts and `audit_log` unchanged, and a later `tracker-import` run cleans up the orphaned scratch database per the guard rules
-- [ ] T011 Integration tests for scratch database lifecycle in `tests/RoleRadar.Tests.Integration/Mongo/MongoScratchDatabaseManagerTests.cs` using `IsolatedContainerMongoFixture` (expected to fail before implementation) verifying per-collection `$merge` cloning, host index initialization (`EnsureIndexesOnceAsync`), and `finally`-block drop
-- [ ] T012 Implement `MongoScratchDatabaseManager` in `src/RoleRadar.Infrastructure/Mongo/MongoScratchDatabaseManager.cs` implementing `$merge` collection cloning, index initialization, guarded drop, and startup orphan cleanup
+- [X] T008 [P] Unit tests for scratch database name guard in `tests/RoleRadar.Tests.Unit/Mongo/MongoScratchDatabaseGuardTests.cs` (expected to fail before implementation) asserting strict name regex `^roleradar_scratch_[0-9a-f]{32}\z`, refusal of target database name, refusal of trailing newlines, and refusal of databases created <1 hour ago
+- [X] T009 [P] Implement `MongoScratchDatabaseGuard` in `src/RoleRadar.Infrastructure/Mongo/MongoScratchDatabaseGuard.cs` with validation regex `^roleradar_scratch_[0-9a-f]{32}\z`, target database equality check, and 1-hour age filter
+- [X] T010 [P] Integration tests in `tests/RoleRadar.Tests.Integration/Mongo/MongoScratchDatabaseManagerTests.cs` using `IsolatedContainerMongoFixture` (expected to fail before implementation) verifying a failed, aborted, or process-killed dry-run leaves target collection document counts and `audit_log` unchanged, and a later `tracker-import` run cleans up the orphaned scratch database per the guard rules
+- [X] T011 Integration tests for scratch database lifecycle in `tests/RoleRadar.Tests.Integration/Mongo/MongoScratchDatabaseManagerTests.cs` using `IsolatedContainerMongoFixture` (expected to fail before implementation) verifying per-collection `$merge` cloning, host index initialization (`EnsureIndexesOnceAsync`), and `finally`-block drop
+- [X] T012 Implement `MongoScratchDatabaseManager` in `src/RoleRadar.Infrastructure/Mongo/MongoScratchDatabaseManager.cs` implementing `$merge` collection cloning, index initialization, guarded drop, and startup orphan cleanup
 
 ---
 
