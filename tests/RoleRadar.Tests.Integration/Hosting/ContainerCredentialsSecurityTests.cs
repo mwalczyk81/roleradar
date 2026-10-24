@@ -215,6 +215,7 @@ public sealed class ContainerCredentialsSecurityTests : IClassFixture<IsolatedCo
         public required string Password { get; init; }
         public required string Passphrase { get; init; }
         public required string HostMongoUri { get; init; }
+        public string HolderUser => ContainerTestHarness.HostUserAndGroup ?? "1654:1654";
         public string HolderConfig { get; private set; } = string.Empty;
         private RunningProcess? _holder;
 
@@ -350,8 +351,8 @@ public sealed class ContainerCredentialsSecurityTests : IClassFixture<IsolatedCo
             Assert.DoesNotContain("ROLERADAR_", p.ChildEnviron, StringComparison.Ordinal);
             AssertNoSecret(p.ChildEnviron, "child /proc/<pid>/environ");
 
-            // Config file: created 0600 and owned by the unprivileged app user.
-            Assert.Equal("600 1654:1654", p.ConfigStat);
+            // Config file: created 0600 and owned by the holder user.
+            Assert.Equal($"600 {HolderUser}", p.ConfigStat);
         }
 
         public async Task SignalAsync(int pid)
@@ -427,7 +428,8 @@ public sealed class ContainerCredentialsSecurityTests : IClassFixture<IsolatedCo
 
         private Task<ProcessResult> Sidecar(string[] scriptAndArgs)
         {
-            var args = new List<string> { "run", "--rm", "--network", "none", $"--pid=container:{Name}", "--user", "1654:1654" };
+            var user = HolderUser;
+            var args = new List<string> { "run", "--rm", "--network", "none", $"--pid=container:{Name}", "--user", user };
             args.AddRange(HardeningFlags);
             args.AddRange(["-v", $"{ProbeDir}:/probe:ro", SidecarImage, "bash", $"/probe/{scriptAndArgs[0]}"]);
             args.AddRange(scriptAndArgs.Skip(1));
@@ -509,7 +511,8 @@ public sealed class ContainerCredentialsSecurityTests : IClassFixture<IsolatedCo
                 """);
             WriteLf(Path.Combine(dir, "list-tmp.sh"), """
                 #!/bin/bash
-                ls -1A /proc/1/root/tmp | grep '^rr-tools-' || true
+                set -o pipefail
+                ls -1A /proc/1/root/tmp | grep '^rr-tools-'
                 """);
         }
     }

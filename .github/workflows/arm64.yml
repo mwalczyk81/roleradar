@@ -1,0 +1,60 @@
+name: ARM64
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'deploy/**'
+      - 'scripts/**'
+      - '.github/workflows/arm64.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Dockerfile'
+      - 'deploy/**'
+      - 'scripts/**'
+      - '.github/workflows/arm64.yml'
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: arm64-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux-arm64-verify:
+    name: Native Linux ARM64 (Multi-Stage Build & Image Parity)
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore with locked dependencies
+        run: dotnet restore RoleRadar.sln --locked-mode
+
+      - name: Build solution
+        run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
+
+      - name: Build native ARM64 container images
+        run: |
+          docker build --target cli -t roleradar-cli:local .
+          docker build --target mcp -t roleradar-mcp:local .
+
+      - name: Run native ARM64 launched-host container tests
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-images.ps1
+
+      - name: Verify container cold-start timing (<3.0s)
+        run: dotnet test tests/RoleRadar.Tests.Integration/RoleRadar.Tests.Integration.csproj -c Release --no-build --filter "FullyQualifiedName~ContainerColdStartBenchmarkTests"

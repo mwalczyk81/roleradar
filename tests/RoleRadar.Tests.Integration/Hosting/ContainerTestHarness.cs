@@ -70,7 +70,11 @@ public static class ContainerTestHarness
         }
     }
 
-    public static string? HostUserAndGroup { get; } = ResolveHostUserAndGroup();
+    private static readonly string? _resolvedHostUserAndGroup = ResolveHostUserAndGroup();
+
+    public static string? HostUserAndGroup =>
+        Environment.GetEnvironmentVariable("ROLERADAR_OVERRIDE_HOST_USER")
+        ?? _resolvedHostUserAndGroup;
 
     private static string? ResolveHostUserAndGroup()
     {
