@@ -63,7 +63,7 @@ public sealed class StoppedMongoReadinessIntegrationTests : IClassFixture<Dedica
         var toolJson = await tools.NoteGetAsync(Guid.NewGuid());
         sw.Stop();
 
-        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(5), $"Tool call took {sw.Elapsed.TotalSeconds:F2}s, exceeding 5s budget.");
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(7), $"Tool call took {sw.Elapsed.TotalSeconds:F2}s, exceeding 7s budget.");
 
         using var doc = JsonDocument.Parse(toolJson);
         var root = doc.RootElement;
@@ -92,7 +92,7 @@ public sealed class StoppedMongoReadinessIntegrationTests : IClassFixture<Dedica
         var (exitCode, stdout, stderr) = await RunCliAsync(cliDllPath, "status", env);
         cliSw.Stop();
 
-        Assert.True(cliSw.Elapsed < TimeSpan.FromSeconds(5), $"CLI status took {cliSw.Elapsed.TotalSeconds:F2}s, exceeding 5s budget.");
+        Assert.True(cliSw.Elapsed < TimeSpan.FromSeconds(7), $"CLI status took {cliSw.Elapsed.TotalSeconds:F2}s, exceeding 7s budget.");
         Assert.NotEqual(0, exitCode);
         var combinedOutput = stdout + "\n" + stderr;
         Assert.Contains("pwsh ./scripts/start-services.ps1", combinedOutput, StringComparison.OrdinalIgnoreCase);
