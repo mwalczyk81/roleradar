@@ -37,14 +37,14 @@ public sealed class TrackerImportContainerTests : IClassFixture<IsolatedContaine
 
             File.WriteAllText(Path.Combine(tempBundleDir, "postings.json"),
                 """
-                [
-                  {
+                {
+                  "acme-container-eng": {
                     "company": "Acme Corp",
                     "title": "Container Systems Engineer",
-                    "url": "https://example.com/job/container1",
+                    "href": "https://example.com/job/container1",
                     "score": 8.5
                   }
-                ]
+                }
                 """);
 
             File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"),

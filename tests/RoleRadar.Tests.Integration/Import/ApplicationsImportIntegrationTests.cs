@@ -41,20 +41,24 @@ public sealed class ApplicationsImportIntegrationTests : IClassFixture<IsolatedC
             // Role 1 (Claimed Role) will be claimed by applications.csv and reach Applied
             // Role 2 (Unclaimed Role) will NOT be claimed and must stay Scored
             var postingsJson = """
-                [
-                    {
+                {
+                    "acme-claimed-role": {
                         "title": "Claimed Role",
                         "company": "Acme Corp",
                         "status": "applied",
-                        "url": "https://example.com/job/501"
+                        "href": "https://example.com/job/501",
+                        "ghost": false,
+                        "compHigh": true
                     },
-                    {
+                    "acme-unclaimed-role": {
                         "title": "Unclaimed Role",
                         "company": "Acme Corp",
                         "status": "applied",
-                        "url": "https://example.com/job/502"
+                        "href": "https://example.com/job/502",
+                        "ghost": false,
+                        "compHigh": false
                     }
-                ]
+                }
                 """;
             File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
             File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");
@@ -149,13 +153,13 @@ public sealed class ApplicationsImportIntegrationTests : IClassFixture<IsolatedC
             File.WriteAllText(Path.Combine(tempDir, "company-aliases.csv"), "alias,canonical\r\n");
             File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\nAcme Corp,target,recruiter,Note,,\r\n");
 
-            // postings.json: 3 postings
+            // postings.json: 3 postings (object keyed by slug)
             var postingsJson = """
-                [
-                    { "title": "Role 1", "company": "Acme Corp", "status": "applied", "url": "https://example.com/job/1" },
-                    { "title": "Role 2", "company": "Acme Corp", "status": "applied", "url": "https://example.com/job/2" },
-                    { "title": "Role 3", "company": "Acme Corp", "status": "applied", "url": "https://example.com/job/3" }
-                ]
+                {
+                    "acme-role-1": { "title": "Role 1", "company": "Acme Corp", "status": "applied", "href": "https://example.com/job/1" },
+                    "acme-role-2": { "title": "Role 2", "company": "Acme Corp", "status": "applied", "href": "https://example.com/job/2" },
+                    "acme-role-3": { "title": "Role 3", "company": "Acme Corp", "status": "applied", "href": "https://example.com/job/3" }
+                }
                 """;
             File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
             File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");

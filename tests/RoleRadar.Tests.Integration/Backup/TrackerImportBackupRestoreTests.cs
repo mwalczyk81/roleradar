@@ -53,40 +53,70 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
                 "Initech,Initech Corp\r\n" +
                 "Cyberdyne,Cyberdyne Systems\r\n");
 
-            // 3. postings.json (oversized culture > 500 chars, out-of-range score > 10.0, applied unclaimed, alias resolution)
+            // 3. postings.json (object keyed by slug, full field set: compHigh true/false/missing, ghost true/false, status applied/scored)
             var oversizedCulture = new string('A', 525);
             File.WriteAllText(Path.Combine(tempBundleDir, "postings.json"),
                 $$"""
-                [
-                  {
-                    "company": "Initech",
-                    "title": "Lead Systems Architect",
-                    "status": "applied",
-                    "req_id": "REQ-101",
-                    "url": "https://example.com/job/101",
-                    "score": 8.5,
-                    "culture": "{{oversizedCulture}}",
+                {
+                  "initech-lead-systems-arch": {
+                    "added": "2026-03-01",
                     "comp": "$210,000",
-                    "compHigh": true
-                  },
-                  {
-                    "company": "Cyberdyne",
-                    "title": "Autonomous Systems Engineer",
+                    "compHigh": true,
+                    "company": "Initech",
+                    "culture": "{{oversizedCulture}}",
+                    "cultureLevel": "stable",
+                    "first": "2026-02-28",
+                    "ghost": false,
+                    "href": "https://example.com/job/101",
+                    "loc": "Remote",
+                    "note": "Screening note",
+                    "order": 1,
+                    "parent": "Initech Corp Parent",
+                    "posted": "2026-02-25",
+                    "score": 8.5,
                     "status": "applied",
-                    "req_id": "REQ-102",
-                    "url": "https://example.com/job/102",
-                    "score": 14.5,
-                    "culture": "Stable robotics research culture"
+                    "tier": "tier-1",
+                    "title": "Lead Systems Architect"
                   },
-                  {
+                  "cyberdyne-autonomous-systems-eng": {
+                    "added": "2026-03-05",
+                    "comp": "$230,000",
+                    "compHigh": false,
+                    "company": "Cyberdyne",
+                    "culture": "Stable robotics research culture",
+                    "cultureLevel": "moderate",
+                    "first": "2026-03-04",
+                    "ghost": true,
+                    "href": "https://example.com/job/102",
+                    "loc": "Austin, TX",
+                    "note": "AI research note",
+                    "order": 2,
+                    "parent": "Cyberdyne Systems",
+                    "posted": "2026-03-04",
+                    "score": 14.5,
+                    "status": "applied",
+                    "tier": "tier-2",
+                    "title": "Autonomous Systems Engineer"
+                  },
+                  "umbrella-bioinformatics-eng": {
+                    "added": "2026-03-08",
                     "company": "Umbrella Corp",
-                    "title": "Bioinformatics Engineer",
-                    "status": "lead",
-                    "req_id": "REQ-103",
-                    "url": "https://example.com/job/103",
-                    "score": 7.0
+                    "culture": "Advanced biological research",
+                    "cultureLevel": "stable",
+                    "first": "2026-03-07",
+                    "ghost": false,
+                    "href": "https://example.com/job/103",
+                    "loc": "Raccoon City",
+                    "note": "Genetics note",
+                    "order": 3,
+                    "parent": "Umbrella Pharmaceuticals",
+                    "posted": "2026-03-06",
+                    "score": 7.0,
+                    "status": "scored",
+                    "tier": "tier-3",
+                    "title": "Bioinformatics Engineer"
                   }
-                ]
+                }
                 """);
 
             // 4. appendix-rows.csv (screened_out, date rollback, ~ date prefix, duplicate linking)
@@ -119,6 +149,11 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
             Assert.True(drySummary.IsDryRun);
             Assert.Equal(1, drySummary.CultureTruncations);
             Assert.Equal(1, drySummary.UnclaimedAppliedPostings);
+            Assert.Contains("Autonomous Systems Engineer", drySummary.UnclaimedAppliedPostingTitles);
+
+            var postingsRecon = drySummary.FileReconciliations["postings.json"];
+            Assert.Equal(3, postingsRecon.Read);
+            Assert.Equal(postingsRecon.Read, postingsRecon.Created + postingsRecon.Updated + postingsRecon.Unchanged + postingsRecon.TotalSkipped + postingsRecon.Errored);
 
             // Target DB must be untouched after dry-run
             var client = new MongoClient(_fixture.HostMongoUri);
@@ -159,6 +194,11 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
             // Verify out-of-range score stored as null / empty
             var scoreOutOfRangePosting = postings.First(p => p["title"].AsString == "Autonomous Systems Engineer");
             Assert.True(!scoreOutOfRangePosting.Contains("score") || scoreOutOfRangePosting["score"].IsBsonNull);
+
+            // Verify phantom signal was appended for ghost: true
+            var signalsCol = targetDb.GetCollection<BsonDocument>(TrackingMongoOptions.PostingSignalsCollectionName);
+            var signals = await signalsCol.Find(Builders<BsonDocument>.Filter.Empty).ToListAsync();
+            Assert.Contains(signals, s => s["signal_type"].AsString.Equals("phantom", StringComparison.OrdinalIgnoreCase));
 
             Assert.True(applySummary.StandaloneNotesCreated > 0,
                 $"StandaloneNotesCreated is {applySummary.StandaloneNotesCreated}. Errors: {string.Join("; ", applySummary.Errors.Select(e => $"{e.SourceFile}:{e.LineNumber} {e.ErrorCode}: {e.Message}"))}");

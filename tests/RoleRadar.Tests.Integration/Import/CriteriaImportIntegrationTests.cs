@@ -115,11 +115,11 @@ public sealed class CriteriaImportIntegrationTests : IClassFixture<IsolatedConta
             File.WriteAllText(Path.Combine(tempDir, "company-aliases.csv"), "alias,canonical\r\n");
             File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\nAcme Corp,target,recruiter,Note,,\r\n");
 
-            // postings.json with explicit full date
+            // postings.json with explicit full date (object keyed by slug)
             var postingsJson = """
-                [
-                    { "title": "Senior Engineer", "company": "Acme Corp", "status": "applied", "added": "2026-05-15", "url": "https://example.com/job/1" }
-                ]
+                {
+                    "acme-senior-engineer": { "title": "Senior Engineer", "company": "Acme Corp", "status": "applied", "added": "2026-05-15", "href": "https://example.com/job/1" }
+                }
                 """;
             File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
             File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");

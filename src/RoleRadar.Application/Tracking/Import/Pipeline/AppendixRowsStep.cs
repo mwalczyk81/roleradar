@@ -24,13 +24,30 @@ public sealed class AppendixRowsStep : ITrackerImportStep
         ArgumentNullException.ThrowIfNull(context);
 
         var filePath = Path.Combine(context.BundleDirectory, "appendix-rows.csv");
+        var recon = context.Summary.GetOrCreateFileReconciliation("appendix-rows.csv");
+
         if (!File.Exists(filePath))
         {
+            recon.IsAbsent = true;
             return Result<bool>.Success(true);
         }
 
+        recon.IsAbsent = false;
+
+        var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            recon.RecordErrored();
+            context.Summary.Errors.Add(new TrackerImportRowError(
+                "appendix-rows.csv",
+                1,
+                ErrorCode.ValidationError.ToString(),
+                "File is present but empty."));
+            return Result<bool>.Failure(ErrorCode.ValidationError, "appendix-rows.csv is present but empty.");
+        }
+
         var records = new List<ICsvRecord>();
-        using (var reader = new StreamReader(filePath))
+        using (var reader = new StringReader(content))
         {
             records.AddRange(_csvParser.Read(reader, hasHeader: true));
         }
@@ -56,7 +73,6 @@ public sealed class AppendixRowsStep : ITrackerImportStep
             }
         }
 
-        var recon = context.Summary.GetOrCreateFileReconciliation("appendix-rows.csv");
         var defaultDate = context.DefaultDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
 
         // Process non-duplicates first, then duplicates

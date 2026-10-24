@@ -44,19 +44,19 @@ public sealed class TrackerImportRowIsolationTests : IClassFixture<IsolatedConta
             // 2. postings.json: Entry 1 is valid; Entry 2 has missing required column (missing company)
             await File.WriteAllTextAsync(Path.Combine(tempBundleDir, "postings.json"),
                 $$"""
-                [
-                  {
+                {
+                  "iso-valid-1": {
                     "company": "{{validCompany}}",
                     "title": "{{validTitle1}}",
-                    "url": "https://example.com/job/iso-valid1",
+                    "href": "https://example.com/job/iso-valid1",
                     "score": 8.0,
                     "culture": "Moderate risk"
                   },
-                  {
+                  "iso-invalid-2": {
                     "title": "Missing Company Role",
-                    "url": "https://example.com/job/missing-company"
+                    "href": "https://example.com/job/missing-company"
                   }
-                ]
+                }
                 """);
 
             // 3. appendix-rows.csv: Row 2 is valid; Row 3 has malformed date

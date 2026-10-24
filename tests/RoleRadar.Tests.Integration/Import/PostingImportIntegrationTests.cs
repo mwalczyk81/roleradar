@@ -37,21 +37,30 @@ public sealed class PostingImportIntegrationTests : IClassFixture<IsolatedContai
             File.WriteAllText(Path.Combine(tempDir, "company-aliases.csv"), "alias,canonical\r\n");
             File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\nAcme Corp,target,recruiter,Leading firm,,\r\n");
 
-            // postings.json with status "applied", compHigh=true, out-of-range score=15.0
+            // postings.json with status "applied", compHigh=true, out-of-range score=15.0 (object keyed by slug)
             var postingsJson = """
-                [
-                    {
-                        "title": "Principal Architect",
-                        "company": "Acme Corp",
-                        "tier": "A",
+                {
+                    "acme-principal-architect": {
+                        "added": "2026-03-01",
                         "comp": "240k",
                         "compHigh": true,
+                        "company": "Acme Corp",
+                        "culture": "Engineering-first culture",
                         "cultureLevel": "stable",
+                        "first": "2026-02-28",
+                        "ghost": false,
+                        "href": "https://example.com/job/401",
+                        "loc": "Remote",
+                        "note": "Screening notes",
+                        "order": 1,
+                        "parent": "Acme Global",
+                        "posted": "2026-02-25",
                         "score": 15.0,
                         "status": "applied",
-                        "url": "https://example.com/job/401"
+                        "tier": "A",
+                        "title": "Principal Architect"
                     }
-                ]
+                }
                 """;
             File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
 
@@ -79,6 +88,10 @@ public sealed class PostingImportIntegrationTests : IClassFixture<IsolatedContai
             Assert.Equal(3, summary.PostingsCreated); // 1 from JSON, 2 from Appendix
             Assert.Equal(1, summary.UnclaimedAppliedPostings); // 1 unclaimed applied role remaining scored
             Assert.True(summary.DatesFlagged > 0); // Out of range score flagged
+
+            var postingsRecon = summary.FileReconciliations["postings.json"];
+            Assert.Equal(1, postingsRecon.Read);
+            Assert.Equal(postingsRecon.Read, postingsRecon.Created + postingsRecon.Updated + postingsRecon.Unchanged + postingsRecon.TotalSkipped + postingsRecon.Errored);
 
             // Verify postings in MongoDB
             var client = new MongoClient(_fixture.HostMongoUri);

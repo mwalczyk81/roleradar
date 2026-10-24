@@ -22,14 +22,29 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
         ArgumentNullException.ThrowIfNull(context);
 
         var filePath = Path.Combine(context.BundleDirectory, "watchlist-companies.csv");
+        var recon = context.Summary.GetOrCreateFileReconciliation("watchlist-companies.csv");
+
         if (!File.Exists(filePath))
         {
+            recon.IsAbsent = true;
             return Result<bool>.Success(true);
         }
 
-        var recon = context.Summary.GetOrCreateFileReconciliation("watchlist-companies.csv");
+        recon.IsAbsent = false;
 
-        using var reader = new StreamReader(filePath);
+        var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            recon.RecordErrored();
+            context.Summary.Errors.Add(new TrackerImportRowError(
+                "watchlist-companies.csv",
+                1,
+                ErrorCode.ValidationError.ToString(),
+                "File is present but empty."));
+            return Result<bool>.Failure(ErrorCode.ValidationError, "watchlist-companies.csv is present but empty.");
+        }
+
+        using var reader = new StringReader(content);
         foreach (var row in _csvParser.Read(reader, hasHeader: true))
         {
             cancellationToken.ThrowIfCancellationRequested();

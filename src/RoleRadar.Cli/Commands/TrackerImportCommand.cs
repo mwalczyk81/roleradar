@@ -107,7 +107,14 @@ public static class TrackerImportCommand
                     Console.WriteLine(new string('-', 81));
                     foreach (var file in summary.FileReconciliations.Values.OrderBy(f => f.FileName, StringComparer.OrdinalIgnoreCase))
                     {
-                        Console.WriteLine($"{file.FileName,-25} {file.Read,8} {file.Created,8} {file.Updated,8} {file.Unchanged,10} {file.TotalSkipped,8} {file.Errored,8}");
+                        if (file.IsAbsent)
+                        {
+                            Console.WriteLine($"{file.FileName,-25} {"absent",8} {"-",8} {"-",8} {"-",10} {"-",8} {"-",8}");
+                        }
+                        else
+                        {
+                            Console.WriteLine($"{file.FileName,-25} {file.Read,8} {file.Created,8} {file.Updated,8} {file.Unchanged,10} {file.TotalSkipped,8} {file.Errored,8}");
+                        }
                     }
                 }
 

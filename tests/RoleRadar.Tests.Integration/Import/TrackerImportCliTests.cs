@@ -133,6 +133,34 @@ public sealed class TrackerImportCliTests : IClassFixture<IsolatedContainerMongo
         }
     }
 
+    [Fact]
+    public async Task TrackerImport_PresentEmptyPostingsJson_FailsWithValidationErrorAndExitCode1()
+    {
+        var tempBundleDir = CreateFictionalBundleDirectory(includePartialDate: false);
+        // Overwrite postings.json with empty content
+        File.WriteAllText(Path.Combine(tempBundleDir, "postings.json"), "   \r\n  ");
+
+        try
+        {
+            var dbName = $"rrtest_empty_postings_{Guid.NewGuid():N}";
+            var provider = BuildServiceProvider(dbName);
+            var coordinator = provider.GetRequiredService<ITrackerImportCoordinator>();
+
+            var result = await coordinator.ExecuteAsync(new ImportTrackerCommand(tempBundleDir, new DateOnly(2026, 10, 24)));
+
+            Assert.False(result.IsSuccess);
+            Assert.Equal(ErrorCode.ValidationError, result.Error!.Value.Code);
+            Assert.Contains("postings.json is present but empty", result.Error!.Value.Message);
+
+            var client = new MongoClient(_fixture.HostMongoUri);
+            await client.DropDatabaseAsync(dbName);
+        }
+        finally
+        {
+            Directory.Delete(tempBundleDir, true);
+        }
+    }
+
     private ServiceProvider BuildServiceProvider(string dbName)
     {
         var services = new ServiceCollection();
@@ -158,7 +186,7 @@ public sealed class TrackerImportCliTests : IClassFixture<IsolatedContainerMongo
 
         File.WriteAllText(Path.Combine(dir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\nAcme Corp,target,recruiter,Fictional note,,");
         File.WriteAllText(Path.Combine(dir, "company-aliases.csv"), "alias,canonical\r\nAcme,Acme Corp");
-        File.WriteAllText(Path.Combine(dir, "postings.json"), "[]");
+        File.WriteAllText(Path.Combine(dir, "postings.json"), "{}");
         File.WriteAllText(Path.Combine(dir, "appendix-rows.csv"), $"req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n101,Acme Corp,Software Architect,true,Details,{dateField},no-remote,no-remote,never,false,https://example.com/job/101,,");
         File.WriteAllText(Path.Combine(dir, "applications.csv"), "req_id,company,role,applied_date_md,fit,interview_lead,notes,raw,outcome,status,rejected_date_md,reason_rejected,rejected_stage,contains_people,decision,corrected_notes\r\n");
 

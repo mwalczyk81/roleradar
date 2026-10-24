@@ -9,6 +9,7 @@ public sealed record TrackerImportRowError(
 public sealed class FileReconciliationSummary
 {
     public required string FileName { get; init; }
+    public bool IsAbsent { get; set; }
     public int Read { get; set; }
     public int Created { get; set; }
     public int Updated { get; set; }

@@ -1,4 +1,5 @@
 using RoleRadar.Application.Abstractions;
+using RoleRadar.Domain.Common;
 
 namespace RoleRadar.Application.Tracking.Import.Pipeline;
 
@@ -16,14 +17,29 @@ public sealed class CompanyAliasesStep : ITrackerImportStep
         ArgumentNullException.ThrowIfNull(context);
 
         var aliasesPath = Path.Combine(context.BundleDirectory, "company-aliases.csv");
+        var recon = context.Summary.GetOrCreateFileReconciliation("company-aliases.csv");
+
         if (!File.Exists(aliasesPath))
         {
+            recon.IsAbsent = true;
             return Task.FromResult(Result<bool>.Success(true));
         }
 
-        var recon = context.Summary.GetOrCreateFileReconciliation("company-aliases.csv");
+        recon.IsAbsent = false;
 
-        using var reader = new StreamReader(aliasesPath);
+        var content = File.ReadAllText(aliasesPath);
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            recon.RecordErrored();
+            context.Summary.Errors.Add(new TrackerImportRowError(
+                "company-aliases.csv",
+                1,
+                ErrorCode.ValidationError.ToString(),
+                "File is present but empty."));
+            return Task.FromResult(Result<bool>.Failure(ErrorCode.ValidationError, "company-aliases.csv is present but empty."));
+        }
+
+        using var reader = new StringReader(content);
         foreach (var row in _csvParser.Read(reader, hasHeader: true))
         {
             recon.RecordRead();

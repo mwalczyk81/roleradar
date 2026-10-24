@@ -29,15 +29,31 @@ public sealed class ApplicationsStep : ITrackerImportStep
         ArgumentNullException.ThrowIfNull(context);
 
         var filePath = Path.Combine(context.BundleDirectory, "applications.csv");
+        var recon = context.Summary.GetOrCreateFileReconciliation("applications.csv");
+
         if (!File.Exists(filePath))
         {
+            recon.IsAbsent = true;
             return Result<bool>.Success(true);
         }
 
-        var recon = context.Summary.GetOrCreateFileReconciliation("applications.csv");
+        recon.IsAbsent = false;
+
+        var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            recon.RecordErrored();
+            context.Summary.Errors.Add(new TrackerImportRowError(
+                "applications.csv",
+                1,
+                ErrorCode.ValidationError.ToString(),
+                "File is present but empty."));
+            return Result<bool>.Failure(ErrorCode.ValidationError, "applications.csv is present but empty.");
+        }
+
         _standaloneNoteOrdinal = 0;
 
-        using var reader = new StreamReader(filePath);
+        using var reader = new StringReader(content);
         var defaultDate = context.DefaultDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
 
         foreach (var row in _csvParser.Read(reader, hasHeader: true))

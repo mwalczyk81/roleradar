@@ -48,14 +48,14 @@ public sealed class CompanyImportIntegrationTests : IClassFixture<IsolatedContai
 
             // 3. Postings referencing unlisted company 'Soylent Foods' (must auto-create as Neutral, never Watch)
             var postingsJson = """
-                [
-                    {
+                {
+                    "soylent-principal-reliability-eng": {
                         "title": "Principal Reliability Engineer",
                         "company": "Soylent Foods",
                         "status": "applied",
-                        "url": "https://example.com/job/201"
+                        "href": "https://example.com/job/201"
                     }
-                ]
+                }
                 """;
             File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
             File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");

@@ -47,15 +47,15 @@ public sealed class TrackerImportReportingTests : IClassFixture<IsolatedContaine
 
             File.WriteAllText(Path.Combine(tempBundleDir, "postings.json"),
                 $$"""
-                [
-                  {
+                {
+                  "sentinel-entry": {
                     "company": "{{sentinelCompany}}",
                     "title": "{{sentinelRole}}",
-                    "url": "https://example.com/job/sentinel1",
+                    "href": "https://example.com/job/sentinel1",
                     "score": 14.5,
                     "culture": "{{sentinelCulture}}"
                   }
-                ]
+                }
                 """);
 
             File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"),
@@ -137,17 +137,17 @@ public sealed class TrackerImportReportingTests : IClassFixture<IsolatedContaine
             // Element 1 is valid, element 2 is missing company and title (row error)
             File.WriteAllText(Path.Combine(tempBundleDir, "postings.json"),
                 """
-                [
-                  {
+                {
+                  "valid-slug-1": {
                     "company": "Valid Company",
                     "title": "Valid Role",
-                    "url": "https://example.com/job/valid1"
+                    "href": "https://example.com/job/valid1"
                   },
-                  {
+                  "invalid-slug-2": {
                     "company": "",
                     "title": ""
                   }
-                ]
+                }
                 """);
 
             var dbName = $"rrtest_ordinal_{Guid.NewGuid():N}";
@@ -189,7 +189,7 @@ public sealed class TrackerImportReportingTests : IClassFixture<IsolatedContaine
         {
             File.WriteAllText(Path.Combine(tempBundleDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\n");
             File.WriteAllText(Path.Combine(tempBundleDir, "company-aliases.csv"), "alias,canonical\r\n");
-            File.WriteAllText(Path.Combine(tempBundleDir, "postings.json"), "[]");
+            File.WriteAllText(Path.Combine(tempBundleDir, "postings.json"), "{}");
             File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");
             File.WriteAllText(Path.Combine(tempBundleDir, "applications.csv"), "req_id,company,role,applied_date_md,fit,interview_lead,notes,raw,outcome,status,rejected_date_md,reason_rejected,rejected_stage,contains_people,decision,corrected_notes\r\n");
 
@@ -231,17 +231,17 @@ public sealed class TrackerImportReportingTests : IClassFixture<IsolatedContaine
             File.WriteAllText(Path.Combine(tempBundleDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\n");
             File.WriteAllText(Path.Combine(tempBundleDir, "company-aliases.csv"), "alias,canonical\r\n");
 
-            // Postings has an auto-created neutral company, and an unclaimed applied posting
+            // Postings has an auto-created neutral company, and an unclaimed applied posting (object keyed by slug)
             File.WriteAllText(Path.Combine(tempBundleDir, "postings.json"),
                 """
-                [
-                  {
+                {
+                  "unlisted-tech-principal-arch": {
                     "company": "Unlisted Tech Corp",
                     "title": "Principal Architect",
                     "status": "applied",
-                    "url": "https://example.com/job/unlisted1"
+                    "href": "https://example.com/job/unlisted1"
                   }
-                ]
+                }
                 """);
 
             File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");

@@ -99,21 +99,28 @@ public static class TrackerImportReportGenerator
             sb.AppendLine(new string('-', 81));
             foreach (var f in summary.FileReconciliations.Values.OrderBy(x => x.FileName, StringComparer.OrdinalIgnoreCase))
             {
-                sb.AppendLine(string.Format(inv, "{0,-25} {1,8} {2,8} {3,8} {4,10} {5,8} {6,8}", f.FileName, f.Read, f.Created, f.Updated, f.Unchanged, f.TotalSkipped, f.Errored));
-                if (f.SkippedByReason.Count > 0)
+                if (f.IsAbsent)
                 {
-                    sb.AppendLine("    Skipped Breakdown:");
-                    foreach (var (reason, count) in f.SkippedByReason.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
-                    {
-                        sb.AppendLine(inv, $"      - {reason}: {count}");
-                    }
+                    sb.AppendLine(string.Format(inv, "{0,-25} {1,8} {2,8} {3,8} {4,10} {5,8} {6,8}", f.FileName, "absent", "-", "-", "-", "-", "-"));
                 }
-                if (f.UnchangedByReason.Count > 0)
+                else
                 {
-                    sb.AppendLine("    Unchanged Breakdown:");
-                    foreach (var (reason, count) in f.UnchangedByReason.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+                    sb.AppendLine(string.Format(inv, "{0,-25} {1,8} {2,8} {3,8} {4,10} {5,8} {6,8}", f.FileName, f.Read, f.Created, f.Updated, f.Unchanged, f.TotalSkipped, f.Errored));
+                    if (f.SkippedByReason.Count > 0)
                     {
-                        sb.AppendLine(inv, $"      - {reason}: {count}");
+                        sb.AppendLine("    Skipped Breakdown:");
+                        foreach (var (reason, count) in f.SkippedByReason.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+                        {
+                            sb.AppendLine(inv, $"      - {reason}: {count}");
+                        }
+                    }
+                    if (f.UnchangedByReason.Count > 0)
+                    {
+                        sb.AppendLine("    Unchanged Breakdown:");
+                        foreach (var (reason, count) in f.UnchangedByReason.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+                        {
+                            sb.AppendLine(inv, $"      - {reason}: {count}");
+                        }
                     }
                 }
             }

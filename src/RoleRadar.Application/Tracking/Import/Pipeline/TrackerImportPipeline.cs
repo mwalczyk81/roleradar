@@ -108,6 +108,25 @@ public sealed class TrackerImportPipeline
     {
         ArgumentNullException.ThrowIfNull(context);
 
+        var knownFiles = new[]
+        {
+            "company-aliases.csv",
+            "watchlist-companies.csv",
+            "postings.json",
+            "appendix-rows.csv",
+            "applications.csv"
+        };
+
+        foreach (var file in knownFiles)
+        {
+            var fullPath = Path.Combine(context.BundleDirectory, file);
+            var recon = context.Summary.GetOrCreateFileReconciliation(file);
+            if (!File.Exists(fullPath))
+            {
+                recon.IsAbsent = true;
+            }
+        }
+
         foreach (var step in _steps)
         {
             var result = await step.ExecuteAsync(context, cancellationToken);
