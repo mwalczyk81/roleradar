@@ -55,12 +55,24 @@ public static partial class DateInferenceRule
             text = text[1..].Trim();
         }
 
-        // Check for trailing parenthetical e.g. "(stated date, may differ from submit date)"
+        // Check for parenthetical e.g. "2026-10-15 (stated date)" or entirely parenthesized "(10/15)"
         var match = ParentheticalRegex().Match(text);
         if (match.Success)
         {
-            note = match.Groups[1].Value.Trim();
-            text = text.Remove(match.Index, match.Length).Trim();
+            var inner = match.Groups[1].Value.Trim();
+            var remaining = text.Remove(match.Index, match.Length).Trim();
+            if (string.IsNullOrWhiteSpace(remaining))
+            {
+                // The entire date was wrapped in parentheses e.g. "(10/15)"
+                text = inner;
+                isApproximate = true;
+                note = "stated date in parentheses";
+            }
+            else
+            {
+                note = inner;
+                text = remaining;
+            }
         }
 
         // 1. Try full ISO date YYYY-MM-DD
