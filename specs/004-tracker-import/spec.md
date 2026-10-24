@@ -8,6 +8,16 @@
 
 **Input**: User description: "Feature 004-tracker-import: a CLI-only importer that loads a previous job-search tracker into RoleRadar's structured collections. No new MCP tools (ceiling stays 12). Contacts stay CLI-only and are never created from free text."
 
+## Clarifications
+
+### Session 2026-10-24
+
+- Q: How should the importer handle companies referenced in `postings.json`, `appendix-rows.csv`, or `applications.csv` that are not listed in `watchlist-companies.csv` or `company-aliases.csv`? → A: Match by existing normalized company name first, then `company-aliases.csv`, and only then auto-create (status `neutral`, blank description). The dry-run `--report` lists every company that WOULD be auto-created so aliases can be remediated before `--apply`. Terminal output stays counts only; no fuzzy matching; no status `watch` on auto-created companies; watchlist statuses (`watch` or `avoid`) are strictly preserved.
+- Q: How should the importer resolve partial date strings like `added_md` or `rejected_date_md` that specify only month and day (e.g. `03-15` or `3/15`)? → A: Month-first format `M/D`, `MM/DD`, or `M-D`. Year is derived from `--default-date` with a rollback rule: if the resulting date would be after `--default-date`, roll back to the preceding calendar year (e.g. "12/15" with `--default-date 2026-10-24` becomes `2025-12-15`). Impossible dates (e.g. `2/30`) are treated as missing, flagged, and default to `--default-date`. Fully blank date columns use `--default-date` and increment the defaulted count. Full ISO `YYYY-MM-DD` dates with a leading `~` or trailing parentheticals (e.g. `(stated date, may differ from submit date)`) are parsed cleanly, recording the approximation or stated-date flag in event notes without failing the row. Reports separately state counts of inferred, defaulted, and flagged dates. Fictional fixtures cover rollback, impossible dates, `~` prefixes, and parentheticals.
+- Q: What exact naming convention should be used for the import-specific audit operation names? → A: Use distinct constants added to `AuditOperation` and the `IsValid` allowlist: `import_posting_create`, `import_posting_transition`, `import_posting_signal_append`, `import_company_create`, `import_company_update`, `import_application_create`, `import_application_event_append`, `import_criterion_revision`. Standalone notes reuse the existing `import_create` (`ImportCreate`) operation. Actor is `cli-import-tracker` for all tracker import writes (the markdown notes importer retains `cli-import`). Audit-operation lists in contracts and architecture tests are updated to remain in sync. Automated tests assert every write the importer makes carries an `import_*` operation name and actor `cli-import-tracker`, and never emits an interactive operation name.
+- Q: In what strict sequence should the importer process the files within the import bundle to satisfy cross-entity dependencies? → A: Strict pipeline: (0) seed criteria `comp_preferred_floor` and `comp_high_priority_bar` first, idempotently; (1) `company-aliases.csv` (load alias mapping); (2) `watchlist-companies.csv` (curate company statuses); (3) `postings.json` (ingest base postings and company descriptors, auto-creating neutral companies as needed; postings with status `applied` are imported as `scored` and reach `applied` only through step 5 applications, never by writing applied state directly); (4) `appendix-rows.csv` (process non-duplicate rows before duplicate rows so `duplicate_of_id` resolves; create `reason_primary` criteria on first use); (5) `applications.csv` (link applications to existing postings advancing them to `applied`, record events, and import standalone notes). Dry-run executes this identical pipeline with all writes discarded/rolled-back so later stages observe earlier planned writes, guaranteeing dry-run counts equal apply counts. Automated tests verify cases where an application references a posting existing only in `postings.json` or only in `appendix-rows.csv` produce identical outcome counts in dry-run and apply.
+- Q: What should the exact CLI command syntax and argument signature be for invoking the tracker import? → A: Dedicated top-level command: `roleradar tracker-import <bundle-directory> [--default-date <YYYY-MM-DD>] [--apply] [--report <path>]`. The existing `import` command and its argument parsing remain untouched. Dry-run is the default and `--apply` is required to write (the inverse of `import`, which writes unless `--dry-run`); this behavioral difference is documented in both commands' help text and quickstart. When rows lack a usable date, `--default-date` validation errors explicitly identify the file name and count of affected rows. The command is added to the CLI help snapshot test, and a container integration test asserts `tracker-import` runs successfully from the `roleradar-cli` image against a read-only mounted fictional bundle.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Safe Ingestion & Execution Modes (Priority: P1)
@@ -20,10 +30,10 @@ As a job searcher migrating historical records, I want the importer to default t
 
 **Acceptance Scenarios**:
 
-1. **Given** a valid import bundle directory, **When** the import command is executed without `--apply`, **Then** the system parses and validates all files, computes proposed creations and transitions, and outputs summary counts and row numbers without executing any database writes or generating audit records.
-2. **Given** an import bundle processed in dry-run mode, **When** the same bundle is executed with `--apply`, **Then** the counts of created, updated, and skipped entities exactly match the counts calculated in the dry-run execution.
+1. **Given** a valid import bundle directory, **When** `roleradar tracker-import <bundle-directory>` is executed without `--apply`, **Then** the system executes the identical multi-stage pipeline with all writes discarded/rolled back, enabling later stages to resolve against earlier planned writes, and outputs summary counts and row numbers without executing any committed database writes or generating audit records.
+2. **Given** an import bundle processed in dry-run mode, **When** the same bundle is executed with `--apply`, **Then** the counts of created, updated, and skipped entities exactly match the counts calculated in the dry-run execution, including cross-file references between `applications.csv`, `postings.json`, and `appendix-rows.csv`.
 3. **Given** an import bundle successfully applied to the database, **When** the import command is re-executed with `--apply` against the same bundle without modifications, **Then** the system detects that all records are already reconciled, commits zero database modifications, writes zero audit entries, and explicitly reports that zero changes were made.
-4. **Given** an import bundle where one or more rows lack explicit date fields, **When** executed without a `--default-date` argument, **Then** the command refuses to run and reports a validation error requiring `--default-date`; **When** `--default-date` is supplied, **Then** all undated rows use that date and the summary output reports the exact number of defaulted rows.
+4. **Given** an import bundle where one or more rows lack explicit full date fields, **When** executed without a `--default-date` argument, **Then** the command refuses to run and reports a validation error naming the specific file and count of rows lacking usable dates; **When** `--default-date` is supplied, **Then** partial dates (month-first `M/D`, `MM/DD`, or `M-D`) derive their year from `--default-date` applying the rollback rule (rolling back to the previous year if the date falls after `--default-date`), impossible dates (e.g., `2/30`) are treated as missing/flagged and receive `--default-date`, completely blank date columns use `--default-date`, and the summary output reports exact counts of inferred, defaulted, and flagged dates.
 5. **Given** an import bundle containing a row with invalid or unparsable values, **When** executed, **Then** the failure is isolated to that specific row, the row number and validation error are recorded in the error report, and processing continues for all remaining rows without aborting the batch.
 
 ---
@@ -44,6 +54,8 @@ As a job searcher, I want company records created, matched, and updated with wat
 4. **Given** a row with non-empty `corrected_notes`, **When** imported, **Then** the corrected notes content replaces the row's original descriptive text.
 5. **Given** an optional `company-aliases.csv` file mapping aliases to canonical company names, **When** postings or appendix rows reference an alias, **Then** the system resolves the record to the canonical company; **When** a name cannot be resolved, **Then** the system reports the unmatched name and never makes fuzzy or probabilistic guesses.
 6. **Given** a posting with a `parent` field containing descriptive organization text, **When** imported, **Then** the text is stored as company summary/background text rather than creating a hierarchical posting link.
+7. **Given** a posting, appendix row, or application referencing a company not in `watchlist-companies.csv`, **When** processed, **Then** the system resolves by existing normalized company name first, then `company-aliases.csv`, and only then auto-creates the company with status `neutral` and blank description (never `watch`); in dry-run mode, `--report` lists every company that would be auto-created so aliases can be remediated before `--apply`; terminal output displays only counts.
+8. **Given** a company marked with status `watch` or `avoid` in `watchlist-companies.csv`, **When** referenced elsewhere in the bundle, **Then** its curated status is preserved and never overwritten by auto-creation defaults.
 
 ---
 
@@ -57,12 +69,12 @@ As a job searcher, I want historical postings from `postings.json` and legacy se
 
 **Acceptance Scenarios**:
 
-1. **Given** postings in `postings.json`, **When** imported, **Then** `tier` is dropped; `compHigh` maps to `comp_high_priority`; `cultureLevel` maps to the culture level enum (`stable`, `moderate`, `high_risk`, `unknown`) defaulting unmapped values to `unknown` with a reported warning count; `culture` text maps to `culture_summary` (truncated to length limit with count reported); and `ghost` flags map to an existing ghost signal (`phantom`) or a screening note line without adding new signal types.
+1. **Given** postings in `postings.json`, **When** imported, **Then** `tier` is dropped; `compHigh` maps to `comp_high_priority`; `cultureLevel` maps to the culture level enum (`stable`, `moderate`, `high_risk`, `unknown`) defaulting unmapped values to `unknown` with a reported warning count; `culture` text maps to `culture_summary` (truncated to length limit with count reported); `ghost` flags map to an existing ghost signal (`phantom`) or a screening note line without adding new signal types; and postings with status `applied` are imported as `scored` and advance to `applied` only via application creation in the application import stage, never by directly writing the `applied` disposition.
 2. **Given** rows in `appendix-rows.csv` without requisition ID or URL, **When** imported, **Then** the importer matches existing postings using company name and normalized title.
 3. **Given** an appendix row with `proposed_disposition` marked `dismissed`, **When** imported, **Then** the posting is created or updated in disposition `screened_out` with resurface policy `never`.
-4. **Given** an appendix row identified as a duplicate where the target posting exists, **When** imported, **Then** it links `duplicate_of_id` to the target posting; **When** the target posting does not exist, **Then** it imports as `screened_out` with reason `"duplicate"`.
+4. **Given** rows in `appendix-rows.csv`, **When** imported, **Then** non-duplicate rows are processed before duplicate rows so that target postings exist; an appendix row identified as a duplicate links `duplicate_of_id` to the target posting if found, or imports as `screened_out` with reason `"duplicate"` if no target exists.
 5. **Given** an appendix row whose proposed disposition requires a transition forbidden by the posting state machine, **When** imported, **Then** the importer rejects the invalid transition, leaves the existing posting intact, and logs a validation error naming the row.
-6. **Given** an imported posting write, **When** committed under `--apply`, **Then** the operation generates exactly one audit entry with an import-specific operation name and per-row isolation.
+6. **Given** an imported posting write, **When** committed under `--apply`, **Then** the operation generates exactly one audit entry carrying an import-specific operation name (`import_posting_create`, `import_posting_transition`, or `import_posting_signal_append`) and actor `cli-import-tracker`, with per-row isolation.
 
 ---
 
@@ -94,7 +106,7 @@ As a job searcher, I want historical application submissions, outcomes, and job-
 
 1. **Given** a row in `applications.csv` with `kind: application`, **When** imported with `--apply`, **Then** the parent posting transitions to `applied`, an application record is created capturing applied date, desired salary, referral indicator, fit rating, and resume variant (`tailored`, `as_is`, `ic_framed`).
 2. **Given** an application row with `rejected: true` and `rejected_date_md`, **When** imported, **Then** a `rejected` event is appended to the application's timeline and the posting transitions to `rejected`.
-3. **Given** an application row flagged with `review_flags` containing `date_is_stated_not_submitted`, **When** imported, **Then** the application retains the stated date as applied date, and the flag and explanation are recorded in the event/application notes.
+3. **Given** an application row with a full date carrying a leading `~` prefix or trailing parenthetical (such as `(stated date, may differ from submit date)`) or flagged `date_is_stated_not_submitted`, **When** imported, **Then** the application parses and retains the clean ISO date, records the approximation or stated-date flag in the event/application notes, and does not fail the row.
 4. **Given** an application row with `kind: standalone_note`, **When** imported, **Then** a note is created in area `job-search` containing the row's text and metadata.
 5. **Given** rows in `applications.csv` flagged `contains_people` or containing text in `people_detected`, **When** imported, **Then** zero contacts are created automatically, and the detected names and row numbers are listed in the execution report for manual entry via `roleradar contact add`.
 
@@ -197,6 +209,8 @@ aggregator,screened_out,Initech Systems,Senior Platform Engineer,,180000,false,t
 referral,applied,Soylent Corporation,Backend Systems Developer,REQ-404,210000,false,true,Direct submission,2026-03-10,,,,true,,Submitted via internal portal,,
 direct,dismissed,Hooli Cloud,Principal DevOps Engineer,,240000,true,false,Career portal check,2026-03-12,on_site_mandate,on_site_mandate,never,false,,Requires 5 days onsite,skip,Skipped per review
 portal,duplicate,Umbrella Corp,Distributed Systems Engineer,,195000,false,true,Aggregator repost,2026-03-15,duplicate,duplicate,never,true,,Matches previously evaluated posting,,Updated notes for duplicate role
+aggregator,screened_out,Stark Industries,Systems Reliability Architect,,220000,false,true,Board repost,11/15,on_site_mandate,on_site_mandate,never,false,,Rollback example: 11/15 rolls back to 2025-11-15 when default date is 2026-10-24,,
+portal,screened_out,Wayne Enterprises,Security Lead Engineer,,210000,false,true,Scraped role,02/30,comp_below_floor,comp_below_floor,never,false,,Impossible date example: 02/30 flagged and uses default-date,,
 ```
 
 - **Field Rules**:
@@ -213,6 +227,8 @@ Application history and interaction milestones.
 kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes
 application,Soylent Corporation,Backend Systems Developer,REQ-404,2026-03-10,false,,215000,true,strong_fit,tailored,Jane Doe (Hiring Mgr),contains_people,Applied via referral,,
 application,Initech Systems,Site Reliability Engineer,,2026-02-15,true,2026-03-01,195000,false,moderate_fit,as_is,,date_is_stated_not_submitted,Formal confirmation dated 2026-02-20,,Corrected date notes
+application,Tyrell Corporation,Robotics Infrastructure Lead,,~2026-01-15,false,,230000,false,strong_fit,tailored,,,Approximate date with tilde prefix,,
+application,Oscorp Industries,Platform Security Lead,,2026-04-01 (stated date, may differ from submit date),false,,225000,false,moderate_fit,as_is,,,Stated date with trailing parenthetical explanation,,
 standalone_note,Massive Dynamic,General Inquiry,,2026-03-08,,,,,,,,,Informational interview notes regarding robotics division,
 ```
 
@@ -252,19 +268,19 @@ Cyberdyne,Cyberdyne Systems
 
 ### Functional Requirements
 
-- **FR-001**: System MUST provide a dedicated CLI command `roleradar import tracker <bundle-directory>` for importing historical tracker bundles.
-- **FR-002**: System MUST default to a dry-run execution mode with zero database writes and zero audit logs unless the `--apply` flag is explicitly provided.
-- **FR-003**: System MUST require the `--default-date` parameter whenever one or more imported rows lack an explicit date, and MUST report the count of records that used the default date.
+- **FR-001**: System MUST provide a dedicated top-level CLI command `roleradar tracker-import <bundle-directory> [--default-date <YYYY-MM-DD>] [--apply] [--report <path>]` for importing historical tracker bundles, leaving the existing `import` command untouched.
+- **FR-002**: System MUST default to a dry-run execution mode with zero committed database writes and zero audit logs unless the `--apply` flag is explicitly provided (with help text and quickstart documenting that `tracker-import` defaults to dry-run while `import` defaults to write); dry-run MUST execute the identical pipeline with writes discarded/rolled-back so downstream stages resolve against earlier planned writes.
+- **FR-003**: System MUST require the `--default-date` parameter whenever one or more imported rows lack an explicit full date, naming the affected file and row count in the validation error; MUST parse partial dates (`M/D`, `MM/DD`, `M-D`) deriving the year from `--default-date` and applying the rollback rule (rolling back to the previous year if the date is later than `--default-date`); MUST treat impossible dates (e.g. `2/30`) as missing/flagged and default to `--default-date`; and MUST separately report counts of inferred, defaulted, and flagged dates.
 - **FR-004**: System MUST perform all write operations through existing Application command handlers (`ICommandHandler`), applying standard transaction and audit decorators.
-- **FR-005**: System MUST record one append-only audit entry per write with an import-specific operation name.
+- **FR-005**: System MUST record one append-only audit entry per write with actor `cli-import-tracker` and import-specific operation names (`import_posting_create`, `import_posting_transition`, `import_posting_signal_append`, `import_company_create`, `import_company_update`, `import_application_create`, `import_application_event_append`, `import_criterion_revision`), while standalone notes reuse `import_create` (`ImportCreate`). No imported write may emit an interactive operation name.
 - **FR-006**: System MUST enforce per-row failure isolation such that a validation or mapping failure on a single row is recorded as an error and does not terminate the import process for remaining valid rows.
 - **FR-007**: System MUST support the `decision` column in CSV files: blank accepts the proposed action; `"skip"` ignores the row and records it as skipped; any other value triggers a validation error identifying the row number.
 - **FR-008**: System MUST replace a row's original descriptive or reason notes with the content of `corrected_notes` whenever `corrected_notes` is non-empty.
 - **FR-009**: System MUST match postings lacking a requisition ID and URL using the canonical company name and normalized title.
 - **FR-010**: System MUST guarantee idempotent re-runs: re-running `--apply` against an identical bundle MUST produce zero changes, zero audit entries, and report zero modifications.
-- **FR-011**: System MUST map `proposed_disposition` onto existing `PostingDisposition` states and reject any transition that violates the disposition state machine without bypassing validation.
+- **FR-011**: System MUST map `proposed_disposition` onto existing `PostingDisposition` states and reject any transition that violates the disposition state machine without bypassing validation; postings in `postings.json` with status `applied` MUST be imported as `scored` and reach `applied` only through application creation in the application import stage.
 - **FR-012**: System MUST map `dismissed` dispositions to `screened_out` with resurface policy `never`.
-- **FR-013**: System MUST resolve duplicate rows against existing postings, linking `duplicate_of_id` if the target posting is found, or importing as `screened_out` with reason `"duplicate"` if no target posting exists.
+- **FR-013**: System MUST process non-duplicate rows in `appendix-rows.csv` before duplicate rows, resolving duplicates against existing postings and linking `duplicate_of_id` if found, or importing as `screened_out` with reason `"duplicate"` if no target posting exists.
 - **FR-014**: System MUST automatically create new screening criteria on first use from `reason_primary` values with inferred provenance (`inferred`), and link the posting's `disposition_criterion_id` to the criterion.
 - **FR-015**: System MUST seed predefined criteria `comp_preferred_floor=200000` and `comp_high_priority_bar=220000` with provenance `stated` if they do not exist.
 - **FR-016**: System MUST map `compHigh` to `comp_high_priority` boolean and ignore `tier` in `postings.json`.
@@ -275,11 +291,11 @@ Cyberdyne,Cyberdyne Systems
 - **FR-021**: System MUST treat all imported text as untrusted data, enforcing character length limits and storing content without script or query evaluation.
 - **FR-022**: System MUST list all rows flagged `contains_people` or containing `people_detected` text in the execution report for manual entry via `roleradar contact add`, and MUST NEVER create contact records automatically.
 - **FR-023**: System MUST import rows in `applications.csv` with `kind: standalone_note` as notes in the `job-search` area.
-- **FR-024**: System MUST record the `date_is_stated_not_submitted` flag in event/application notes while preserving the stated date on the application.
+- **FR-024**: System MUST parse full dates with a leading `~` prefix or trailing parentheticals (such as `(stated date, may differ from submit date)`), recording the approximation or stated-date flag in event notes without failing the row; and MUST preserve stated dates for rows flagged `date_is_stated_not_submitted` while recording the flag in event notes.
 - **FR-025**: System MUST emit console output consisting exclusively of outcome counts and row numbers, never printing company names, job titles, or imported text.
 - **FR-026**: System MUST support an optional `--report <path>` flag to write a detailed report, and MUST refuse execution if `<path>` resides inside a git working tree.
 - **FR-027**: System MUST NOT add any new MCP tools, keeping the total MCP tool ceiling at 12.
-- **FR-028**: System MUST resolve aliases from `company-aliases.csv` using exact matching, and MUST report all unmatched company names without applying fuzzy or heuristic matching.
+- **FR-028**: System MUST resolve company names by matching existing normalized company names first, then exact alias matching via `company-aliases.csv`, and finally auto-creating unlisted companies with status `neutral` and blank description (never `watch`). Explicit watchlist statuses (`watch` or `avoid`) MUST be preserved. In dry-run mode, `--report` MUST list all companies that would be auto-created for alias review before `--apply`. Terminal output MUST remain counts only, and no fuzzy or heuristic matching is permitted.
 
 ### Key Entities
 
@@ -295,15 +311,16 @@ Cyberdyne,Cyberdyne Systems
 ### Measurable Outcomes
 
 - **SC-001**: Fictional test fixtures cover 100% of defined schema mappings, valid transitions, and error paths.
-- **SC-002**: Dry-run summary counts (created, updated, skipped) exactly equal apply summary counts when executed against the same bundle.
+- **SC-002**: Dry-run summary counts (created, updated, skipped) exactly equal apply summary counts when executed against the same bundle; automated tests verify cross-file references from postings existing only in `postings.json` or only in `appendix-rows.csv` produce identical outcome counts in dry-run and apply modes.
 - **SC-003**: Executing `--apply` a second time against an identical bundle results in 0 created records, 0 updated records, 0 audit entries, and explicitly reports an idempotent no-op.
 - **SC-004**: The system integrity check (`roleradar verify`) exits with status code 0 (clean) after importing the bundle.
 - **SC-005**: Executing database backup followed by restore round-trips 100% of the imported data without loss or corruption.
-- **SC-006**: The importer runs successfully from the `roleradar-cli` container image against a read-only mounted import bundle directory.
+- **SC-006**: The importer runs successfully from the `roleradar-cli` container image against a read-only mounted fictional import bundle directory, and `roleradar tracker-import` is recorded in the CLI help snapshot test suite.
 - **SC-007**: Combined code coverage across `Domain` and `Application` test suites remains at or above 85%.
 - **SC-008**: The repository privacy denylist pre-commit hook passes with zero detections of private or real-name data.
 - **SC-009**: Console output contains zero occurrences of company names, job titles, salary figures, or free text across all run modes.
 - **SC-010**: Invoking `--report` with any path inside the git work tree fails immediately with exit code 1 and writes no files.
+- **SC-011**: Automated tests verify that 100% of audit entries generated by the tracker importer carry an `import_*` operation name (or `import_create` for standalone notes) and actor `cli-import-tracker`, and zero entries carry interactive operation names.
 
 ## Assumptions
 
