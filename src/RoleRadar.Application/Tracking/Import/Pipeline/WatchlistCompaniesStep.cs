@@ -32,94 +32,124 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var companyName = row["company"]?.Trim();
-            if (string.IsNullOrWhiteSpace(companyName))
+            try
             {
-                continue;
-            }
+                var companyName = row["company"]?.Trim();
+                if (string.IsNullOrWhiteSpace(companyName))
+                {
+                    // If row has any non-blank field, missing company is a validation error
+                    if (row.Fields.Any(f => !string.IsNullOrWhiteSpace(f)))
+                    {
+                        context.Summary.Errors.Add(new TrackerImportRowError(
+                            "watchlist-companies.csv",
+                            row.LineNumber,
+                            ErrorCode.ValidationError.ToString(),
+                            "Missing required 'company' column value."));
+                    }
+                    continue;
+                }
 
-            var decision = row["decision"]?.Trim();
-            if (string.Equals(decision, "skip", StringComparison.OrdinalIgnoreCase))
-            {
-                context.Summary.CompaniesUnchanged++;
-                continue;
-            }
+                var decision = row["decision"]?.Trim();
+                if (string.Equals(decision, "skip", StringComparison.OrdinalIgnoreCase))
+                {
+                    context.Summary.CompaniesUnchanged++;
+                    continue;
+                }
 
-            if (!string.IsNullOrWhiteSpace(decision))
+                if (!string.IsNullOrWhiteSpace(decision))
+                {
+                    context.Summary.Errors.Add(new TrackerImportRowError(
+                        "watchlist-companies.csv",
+                        row.LineNumber,
+                        ErrorCode.ValidationError.ToString(),
+                        $"Invalid decision value '{decision}'. Expected blank or 'skip'."));
+                    continue;
+                }
+
+                var tier = row["tier"]?.Trim();
+                var status = MapStatus(tier);
+
+                var rawNotes = !string.IsNullOrWhiteSpace(row["corrected_notes"])
+                    ? row["corrected_notes"]!.Trim()
+                    : (!string.IsNullOrWhiteSpace(row["text"])
+                        ? row["text"]!.Trim()
+                        : row["notes"]?.Trim() ?? string.Empty);
+
+                var canonicalName = context.CompanyAliases.TryGetValue(companyName, out var alias) ? alias : companyName;
+
+                // Enforce domain limits via shared limiter
+                canonicalName = TrackerImportFieldLimiter.LimitRequired(canonicalName, TrackerImportFieldLimiter.CompanyNameLimit, "company_name", context.Summary);
+                var notes = TrackerImportFieldLimiter.LimitCompanyDescription(rawNotes, context.Summary) ?? string.Empty;
+
+                var existing = await _context.Companies.GetByNormalizedNameAsync(context.OwnerId, canonicalName, cancellationToken);
+                if (existing.IsSuccess && existing.Value is not null)
+                {
+                    var existingCompany = existing.Value;
+                    context.CanonicalCompanies[canonicalName] = existingCompany;
+                    context.Summary.CompaniesUnchanged++;
+                    continue;
+                }
+
+                Company? createdCompany = null;
+                var rowResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
+                {
+                    var company = Company.Create(
+                        ownerId: context.OwnerId,
+                        name: canonicalName,
+                        status: status,
+                        description: notes);
+
+                    var upsertResult = await txCtx.Companies.UpsertCompanyAsync(company, ct);
+                    if (!upsertResult.IsSuccess)
+                    {
+                        return Result<bool>.Failure(upsertResult.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to save company"));
+                    }
+
+                    var auditEntry = AuditLogEntry.CreateForTracking(
+                        ownerId: context.OwnerId,
+                        actor: ImportActor,
+                        operation: AuditOperation.ImportCompanyCreate,
+                        entityType: "company",
+                        entityId: company.Id,
+                        resultingVersionToken: company.VersionToken,
+                        occurredAtUtc: DateTime.UtcNow,
+                        details: new AuditDetails(
+                            ChangedFields: ["name", "status", "description"],
+                            After: new Dictionary<string, object?>
+                            {
+                                ["name"] = company.Name,
+                                ["status"] = company.Status.ToString()
+                            }));
+
+                    await txCtx.AppendAuditEntryAsync(auditEntry, ct);
+                    createdCompany = company;
+                    return Result<bool>.Success(true);
+                }, cancellationToken);
+
+                if (!rowResult.IsSuccess)
+                {
+                    context.Summary.Errors.Add(new TrackerImportRowError(
+                        "watchlist-companies.csv",
+                        row.LineNumber,
+                        rowResult.Error?.Code.ToString() ?? ErrorCode.ValidationError.ToString(),
+                        rowResult.Error?.Message ?? "Failed to save company"));
+                    continue;
+                }
+
+                if (createdCompany is not null)
+                {
+                    context.CanonicalCompanies[canonicalName] = createdCompany;
+                    context.Summary.CompaniesCreated++;
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 context.Summary.Errors.Add(new TrackerImportRowError(
                     "watchlist-companies.csv",
                     row.LineNumber,
                     ErrorCode.ValidationError.ToString(),
-                    $"Invalid decision value '{decision}'. Expected blank or 'skip'."));
-                continue;
+                    ex.Message));
             }
-
-            var tier = row["tier"]?.Trim();
-            var status = MapStatus(tier);
-
-            var notes = !string.IsNullOrWhiteSpace(row["corrected_notes"])
-                ? row["corrected_notes"]!.Trim()
-                : (!string.IsNullOrWhiteSpace(row["text"])
-                    ? row["text"]!.Trim()
-                    : row["notes"]?.Trim() ?? string.Empty);
-            var canonicalName = context.CompanyAliases.TryGetValue(companyName, out var alias) ? alias : companyName;
-
-            var existing = await _context.Companies.GetByNormalizedNameAsync(context.OwnerId, canonicalName, cancellationToken);
-            if (existing.IsSuccess && existing.Value is not null)
-            {
-                var existingCompany = existing.Value;
-                context.CanonicalCompanies[canonicalName] = existingCompany;
-                context.Summary.CompaniesUnchanged++;
-                continue;
-            }
-
-            var company = Company.Create(
-                ownerId: context.OwnerId,
-                name: canonicalName,
-                status: status,
-                description: notes);
-
-            var rowResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
-            {
-                var upsertResult = await txCtx.Companies.UpsertCompanyAsync(company, ct);
-                if (!upsertResult.IsSuccess)
-                {
-                    return Result<bool>.Failure(upsertResult.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to save company"));
-                }
-
-                var auditEntry = AuditLogEntry.CreateForTracking(
-                    ownerId: context.OwnerId,
-                    actor: ImportActor,
-                    operation: AuditOperation.ImportCompanyCreate,
-                    entityType: "company",
-                    entityId: company.Id,
-                    resultingVersionToken: company.VersionToken,
-                    occurredAtUtc: DateTime.UtcNow,
-                    details: new AuditDetails(
-                        ChangedFields: ["name", "status", "description"],
-                        After: new Dictionary<string, object?>
-                        {
-                            ["name"] = company.Name,
-                            ["status"] = company.Status.ToString()
-                        }));
-
-                await txCtx.AppendAuditEntryAsync(auditEntry, ct);
-                return Result<bool>.Success(true);
-            }, cancellationToken);
-
-            if (!rowResult.IsSuccess)
-            {
-                context.Summary.Errors.Add(new TrackerImportRowError(
-                    "watchlist-companies.csv",
-                    row.LineNumber,
-                    rowResult.Error?.Code.ToString() ?? ErrorCode.ValidationError.ToString(),
-                    rowResult.Error?.Message ?? "Failed to save company"));
-                continue;
-            }
-
-            context.CanonicalCompanies[canonicalName] = company;
-            context.Summary.CompaniesCreated++;
         }
 
         return Result<bool>.Success(true);
@@ -137,7 +167,8 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
             "target" => CompanyStatus.Target,
             "watch" => CompanyStatus.Watch,
             "avoid" => CompanyStatus.Avoid,
-            _ => CompanyStatus.Neutral
+            "neutral" => CompanyStatus.Neutral,
+            _ => throw new ArgumentException($"Invalid company status tier '{tier}'. Expected 'target', 'watch', 'avoid', or 'neutral'.", nameof(tier))
         };
     }
 }

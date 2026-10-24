@@ -44,70 +44,81 @@ public static class TrackerImportCommand
 
         command.SetAction(async (ParseResult parseResult, CancellationToken ct) =>
         {
-            var bundleDir = parseResult.GetRequiredValue(bundleDirArgument);
-            var defaultDateStr = parseResult.GetValue(defaultDateOption);
-            var apply = parseResult.GetValue(applyOption);
-            var reportPath = parseResult.GetValue(reportOption);
-
-            DateOnly? defaultDate = null;
-            if (!string.IsNullOrWhiteSpace(defaultDateStr))
+            try
             {
-                if (!DateOnly.TryParseExact(defaultDateStr.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+                var bundleDir = parseResult.GetRequiredValue(bundleDirArgument);
+                var defaultDateStr = parseResult.GetValue(defaultDateOption);
+                var apply = parseResult.GetValue(applyOption);
+                var reportPath = parseResult.GetValue(reportOption);
+
+                DateOnly? defaultDate = null;
+                if (!string.IsNullOrWhiteSpace(defaultDateStr))
                 {
-                    await Console.Error.WriteLineAsync($"Invalid --default-date '{defaultDateStr}'. Expected ISO format 'YYYY-MM-DD'.");
+                    if (!DateOnly.TryParseExact(defaultDateStr.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+                    {
+                        await Console.Error.WriteLineAsync($"Invalid --default-date '{defaultDateStr}'. Expected ISO format 'YYYY-MM-DD'.");
+                        return 1;
+                    }
+                    defaultDate = parsed;
+                }
+
+                using var scope = services.CreateScope();
+                var coordinator = scope.ServiceProvider.GetRequiredService<ITrackerImportCoordinator>();
+
+                var importCommand = new ImportTrackerCommand(
+                    BundleDirectory: bundleDir,
+                    DefaultDate: defaultDate,
+                    Apply: apply,
+                    ReportPath: reportPath);
+
+                var result = await coordinator.ExecuteAsync(importCommand, ct);
+                if (!result.IsSuccess)
+                {
+                    var error = result.Error!.Value;
+                    await Console.Error.WriteLineAsync($"Tracker import failed: {error.Code}");
                     return 1;
                 }
-                defaultDate = parsed;
+
+                var summary = result.Value!;
+                Console.WriteLine(summary.IsDryRun
+                    ? "=== RoleRadar Tracker Import (Dry Run) ==="
+                    : "=== RoleRadar Tracker Import ===");
+
+                Console.WriteLine($"Companies Created:       {summary.CompaniesCreated}");
+                Console.WriteLine($"Companies Updated:       {summary.CompaniesUpdated}");
+                Console.WriteLine($"Companies Unchanged:     {summary.CompaniesUnchanged}");
+                Console.WriteLine($"Postings Created:        {summary.PostingsCreated}");
+                Console.WriteLine($"Postings Updated:        {summary.PostingsUpdated}");
+                Console.WriteLine($"Postings Unchanged:      {summary.PostingsUnchanged}");
+                Console.WriteLine($"Applications Created:    {summary.ApplicationsCreated}");
+                Console.WriteLine($"Standalone Notes:        {summary.StandaloneNotesCreated}");
+                Console.WriteLine($"Criteria Created:        {summary.CriteriaCreated}");
+                Console.WriteLine($"Dates Inferred:          {summary.DatesInferred}");
+                Console.WriteLine($"Dates Defaulted:         {summary.DatesDefaulted}");
+                Console.WriteLine($"Dates Flagged:           {summary.DatesFlagged}");
+                Console.WriteLine($"Unclaimed Applied Roles: {summary.UnclaimedAppliedPostings}");
+                Console.WriteLine($"Errors Encountered:      {summary.Errors.Count}");
+
+                if (summary.Errors.Count > 0)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Encountered Row Errors:");
+                    foreach (var err in summary.Errors)
+                    {
+                        Console.WriteLine($"  [{err.SourceFile}:{err.LineNumber}] {err.ErrorCode}");
+                    }
+
+                    return 1;
+                }
+
+                return 0;
             }
-
-            using var scope = services.CreateScope();
-            var coordinator = scope.ServiceProvider.GetRequiredService<ITrackerImportCoordinator>();
-
-            var importCommand = new ImportTrackerCommand(
-                BundleDirectory: bundleDir,
-                DefaultDate: defaultDate,
-                Apply: apply,
-                ReportPath: reportPath);
-
-            var result = await coordinator.ExecuteAsync(importCommand, ct);
-            if (!result.IsSuccess)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                var error = result.Error!.Value;
-                await Console.Error.WriteLineAsync($"Tracker import failed: {error.Code}");
+                var correlationHint = Guid.NewGuid().ToString("N")[..8];
+                await Console.Error.WriteLineAsync($"Tracker import failed unexpectedly with {ex.GetType().Name} (ref: {correlationHint}). Inspect logs or rerun with diagnostic logging.");
                 return 1;
             }
-
-            var summary = result.Value!;
-            Console.WriteLine(summary.IsDryRun
-                ? "=== RoleRadar Tracker Import (Dry Run) ==="
-                : "=== RoleRadar Tracker Import ===");
-
-            Console.WriteLine($"Companies Created:       {summary.CompaniesCreated}");
-            Console.WriteLine($"Companies Updated:       {summary.CompaniesUpdated}");
-            Console.WriteLine($"Companies Unchanged:     {summary.CompaniesUnchanged}");
-            Console.WriteLine($"Postings Created:        {summary.PostingsCreated}");
-            Console.WriteLine($"Postings Updated:        {summary.PostingsUpdated}");
-            Console.WriteLine($"Postings Unchanged:      {summary.PostingsUnchanged}");
-            Console.WriteLine($"Applications Created:    {summary.ApplicationsCreated}");
-            Console.WriteLine($"Standalone Notes:        {summary.StandaloneNotesCreated}");
-            Console.WriteLine($"Criteria Created:        {summary.CriteriaCreated}");
-            Console.WriteLine($"Dates Inferred:          {summary.DatesInferred}");
-            Console.WriteLine($"Dates Defaulted:         {summary.DatesDefaulted}");
-            Console.WriteLine($"Dates Flagged:           {summary.DatesFlagged}");
-            Console.WriteLine($"Unclaimed Applied Roles: {summary.UnclaimedAppliedPostings}");
-            Console.WriteLine($"Errors Encountered:      {summary.Errors.Count}");
-
-            if (summary.Errors.Count > 0)
-            {
-                Console.WriteLine();
-                Console.WriteLine("Encountered Row Errors:");
-                foreach (var err in summary.Errors)
-                {
-                    Console.WriteLine($"  [{err.SourceFile}:{err.LineNumber}] {err.ErrorCode}");
-                }
-            }
-
-            return 0;
         });
 
         return command;

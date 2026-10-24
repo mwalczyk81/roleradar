@@ -108,7 +108,8 @@ public sealed class CriteriaSeedingStep
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         ArgumentException.ThrowIfNullOrWhiteSpace(reasonPrimary);
 
-        var key = reasonPrimary.Trim();
+        var rawKey = reasonPrimary.Trim();
+        var key = TrackerImportFieldLimiter.Limit(rawKey, TrackerImportFieldLimiter.CriteriaKeyLimit, "criteria_key", new TrackerImportSummary())!;
         if (_cache.TryGetValue(key, out var cached))
         {
             return Result<Criterion>.Success(cached);

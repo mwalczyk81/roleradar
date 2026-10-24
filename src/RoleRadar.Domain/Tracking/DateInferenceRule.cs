@@ -127,12 +127,7 @@ public static partial class DateInferenceRule
                 Note: note);
         }
 
-        // Any other unrecognized format defaults to defaultDate and is flagged
-        return new ResolvedDateOutcome(
-            ResolvedDate: defaultDate,
-            Kind: DateResolutionKind.DefaultedImpossible,
-            IsApproximate: isApproximate,
-            IsFlagged: true,
-            Note: note);
+        // Any unrecognized or malformed date format throws ArgumentException for caller validation handling
+        throw new ArgumentException($"Malformed date: '{rawInput}'. Expected ISO 'YYYY-MM-DD' or month-day 'M/D'.", nameof(rawInput));
     }
 }

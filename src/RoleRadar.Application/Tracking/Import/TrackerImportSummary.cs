@@ -26,6 +26,19 @@ public sealed class TrackerImportSummary
     public int CultureUnmapped { get; set; }
     public int UnclaimedAppliedPostings { get; set; }
 
+    public Dictionary<string, int> FieldTruncations { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public void RecordFieldTruncation(string fieldName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        FieldTruncations.TryGetValue(fieldName, out var count);
+        FieldTruncations[fieldName] = count + 1;
+        if (string.Equals(fieldName, "culture_summary", StringComparison.OrdinalIgnoreCase))
+        {
+            CultureTruncations++;
+        }
+    }
+
     public List<string> AutoCreatedCompanies { get; } = new();
     public List<string> UnclaimedAppliedPostingTitles { get; } = new();
     public List<string> PeopleDetected { get; } = new();

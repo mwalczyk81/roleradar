@@ -72,8 +72,17 @@ public static class TrackerImportReportGenerator
         sb.AppendLine(inv, $"Dates Flagged (or Scores Flagged):     {summary.DatesFlagged}");
         sb.AppendLine(inv, $"Culture Summaries Truncated (>500):    {summary.CultureTruncations}");
         sb.AppendLine(inv, $"Culture Levels Unmapped:               {summary.CultureUnmapped}");
+        sb.AppendLine(inv, $"Total Field Truncations:               {summary.FieldTruncations.Values.Sum()}");
         sb.AppendLine(inv, $"Unclaimed Applied Roles Remaining:     {summary.UnclaimedAppliedPostings}");
         sb.AppendLine(inv, $"Total Row Errors Encountered:          {summary.Errors.Count}");
+        if (summary.FieldTruncations.Count > 0)
+        {
+            sb.AppendLine("  Field Truncation Breakdown:");
+            foreach (var (field, count) in summary.FieldTruncations.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                sb.AppendLine(inv, $"    - {field}: {count}");
+            }
+        }
         sb.AppendLine();
 
         // 3. Companies Requiring Alias Review
