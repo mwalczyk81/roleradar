@@ -146,8 +146,16 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/check-tools-release.ps1
 
+      - name: Record dev stack safety canary baseline
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-devstack-canary.ps1 -Action Record
+
       - name: Run full test suite (Unit, Architecture, Contract, Integration) with Coverage
         run: dotnet test RoleRadar.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
+
+      - name: Verify dev stack safety canary remains untouched
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-devstack-canary.ps1 -Action Verify
 
       - name: Verify >=85% line coverage across RoleRadar.Domain and RoleRadar.Application
         shell: pwsh

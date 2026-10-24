@@ -18,3 +18,4 @@ services:
 volumes:
   roleradar-mongo-data:
     name: roleradar-mongo-data
+    external: true

@@ -35,6 +35,7 @@ public sealed class BackupIntegrationMongoFixture : IAsyncLifetime
         {
             if (dbName != "admin" && dbName != "config" && dbName != "local")
             {
+                Hosting.ContainerTestHarness.ValidateDatabaseNameForDrop(dbName);
                 await client.DropDatabaseAsync(dbName);
             }
         }

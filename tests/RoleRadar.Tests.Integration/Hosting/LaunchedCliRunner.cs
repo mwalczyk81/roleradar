@@ -60,6 +60,7 @@ internal static class LaunchedCliRunner
                 var val = v;
                 if (k.Equals("ROLERADAR_MONGO_CONNECTION_STRING", StringComparison.OrdinalIgnoreCase))
                 {
+                    ContainerTestHarness.ValidateNotDevStack(v);
                     val = val.Replace("127.0.0.1", "host.docker.internal").Replace("localhost", "host.docker.internal");
                 }
                 runArgs.Append(System.Globalization.CultureInfo.InvariantCulture, $"-e {k}=\"{val}\" ");

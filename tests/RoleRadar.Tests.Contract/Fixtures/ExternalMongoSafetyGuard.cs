@@ -11,6 +11,7 @@ public class TlsRequiredException(string message) : InvalidOperationException(me
 public class ConflictingTlsParametersException(string message) : ArgumentException(message);
 public class RedactedPermissionException(string message) : UnauthorizedAccessException(message);
 public class ForeignDatabaseDetectedException(string message) : InvalidOperationException(message);
+public class DevStackTargetException(string message) : InvalidOperationException(message);
 
 public static class ExternalMongoSafetyGuard
 {
@@ -54,6 +55,8 @@ public static class ExternalMongoSafetyGuard
             throw new ConflictingTlsParametersException(
                 "Conflicting TLS/SSL parameters specified in connection URI (e.g. tls=false with ssl=true).");
         }
+
+        ValidateNotDevStack(connectionString);
 
         var mongoUrl = new MongoUrl(connectionString);
 
@@ -144,13 +147,62 @@ public static class ExternalMongoSafetyGuard
         return dbName;
     }
 
+    public static void ValidateNotDevStack(string connectionString)
+    {
+        if (Environment.GetEnvironmentVariable("ROLERADAR_ALLOW_DEV_STACK") == "1")
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return;
+        }
+
+        var mongoUrl = new MongoUrl(connectionString);
+        foreach (var server in mongoUrl.Servers)
+        {
+            var isPort27017 = server.Port == 27017 || !connectionString.Contains(':', StringComparison.Ordinal);
+            if (isPort27017)
+            {
+                var h = server.Host.Trim('[', ']');
+                if (h.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+                    h.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                    h.Equals("host.docker.internal", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new DevStackTargetException(
+                        $"Targeting the local developer MongoDB stack ({server.Host}:{server.Port}) is strictly forbidden in tests to prevent data loss. Use isolated Testcontainers or set ROLERADAR_ALLOW_DEV_STACK=1 to override.");
+                }
+            }
+        }
+    }
+
+    public static void ValidateDatabaseNameForDrop(string databaseName)
+    {
+        if (string.IsNullOrWhiteSpace(databaseName))
+        {
+            throw new ArgumentException("Database name cannot be null or empty.", nameof(databaseName));
+        }
+
+        if (string.Equals(databaseName, "roleradar", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                "Refusing to drop protected default database 'roleradar' in test cleanup.");
+        }
+    }
+
     public static async Task DropAllTrackedTestDatabasesAsync(IMongoClient client)
     {
         while (TrackedDatabases.TryTake(out var dbName))
         {
             try
             {
+                ValidateDatabaseNameForDrop(dbName);
                 await client.DropDatabaseAsync(dbName);
+            }
+            catch (InvalidOperationException)
+            {
+                throw;
             }
             catch
             {

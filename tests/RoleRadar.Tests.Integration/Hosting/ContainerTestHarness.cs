@@ -30,6 +30,44 @@ public static class ContainerTestHarness
         ?? Environment.GetEnvironmentVariable("ROLERADAR_IMAGE_TAG")
         ?? DefaultMcpImage;
 
+    public static void ValidateNotDevStack(string connectionString)
+    {
+        if (Environment.GetEnvironmentVariable("ROLERADAR_ALLOW_DEV_STACK") == "1")
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return;
+        }
+
+        var mongoUrl = new MongoDB.Driver.MongoUrl(connectionString);
+        foreach (var server in mongoUrl.Servers)
+        {
+            var isPort27017 = server.Port == 27017 || !connectionString.Contains(':', StringComparison.Ordinal);
+            if (isPort27017)
+            {
+                var h = server.Host.Trim('[', ']');
+                if (h.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+                    h.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+                    h.Equals("host.docker.internal", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException(
+                        $"Targeting the local developer MongoDB stack ({server.Host}:{server.Port}) is strictly forbidden in tests to prevent data loss. Use isolated Testcontainers or set ROLERADAR_ALLOW_DEV_STACK=1 to override.");
+                }
+            }
+        }
+    }
+
+    public static void ValidateDatabaseNameForDrop(string databaseName)
+    {
+        if (string.Equals(databaseName, "roleradar", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("Refusing to drop protected default database 'roleradar' in test cleanup.");
+        }
+    }
+
     public static async Task EnsureImagesBuiltAsync()
     {
         if (_imagesBuilt)
@@ -96,10 +134,11 @@ public static class ContainerTestHarness
         IDictionary<string, string>? environment = null,
         string? stdinInput = null,
         int timeoutSeconds = 30,
-        IEnumerable<string>? volumes = null)
+        IEnumerable<string>? volumes = null,
+        string? network = null)
     {
         await EnsureImagesBuiltAsync();
-        return await RunRawAsync(ResolveCliImage(), arguments, environment, stdinInput, timeoutSeconds, volumes: volumes);
+        return await RunRawAsync(ResolveCliImage(), arguments, environment, stdinInput, timeoutSeconds, volumes: volumes, network: network);
     }
 
     public static async Task<ContainerExecutionResult> RunMcpAsync(
@@ -118,10 +157,16 @@ public static class ContainerTestHarness
         string? stdinInput = null,
         int timeoutSeconds = 30,
         string? entrypoint = null,
-        IEnumerable<string>? volumes = null)
+        IEnumerable<string>? volumes = null,
+        string? network = null)
     {
         var runArgs = new StringBuilder("run --rm -i ");
         runArgs.Append("--read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop ALL --security-opt no-new-privileges ");
+
+        if (!string.IsNullOrWhiteSpace(network))
+        {
+            runArgs.Append(System.Globalization.CultureInfo.InvariantCulture, $"--network {network} ");
+        }
 
         if (!string.IsNullOrEmpty(entrypoint))
         {
@@ -140,6 +185,11 @@ public static class ContainerTestHarness
         {
             foreach (var (k, v) in environment)
             {
+                if (k.Equals("ROLERADAR_MONGO_CONNECTION_STRING", StringComparison.OrdinalIgnoreCase))
+                {
+                    ValidateNotDevStack(v);
+                }
+
                 // Escape quotes if needed
                 runArgs.Append(System.Globalization.CultureInfo.InvariantCulture, $"-e {k}=\"{v}\" ");
             }

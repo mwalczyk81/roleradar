@@ -36,6 +36,16 @@ if ([string]::IsNullOrWhiteSpace($File)) {
     exit 1
 }
 
+$targetDb = $env:ROLERADAR_MONGO_DATABASE
+if ([string]::IsNullOrWhiteSpace($targetDb)) {
+    $targetDb = 'roleradar'
+}
+
+if ($ForceOverwrite -and $targetDb -eq 'roleradar' -and $env:ROLERADAR_CONFIRM_OVERWRITE_DEFAULT -ne '1') {
+    [Console]::Error.WriteLine("Refusing to force-overwrite default database 'roleradar' with --drop without explicit confirmation (set ROLERADAR_CONFIRM_OVERWRITE_DEFAULT=1).")
+    exit 1
+}
+
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
 

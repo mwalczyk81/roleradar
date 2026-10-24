@@ -24,7 +24,7 @@ public sealed class ShippedHostRaceIntegrationTests
     public async Task ShippedMcpHost_ConcurrentCompanyRecord_RacesN8Processes_ExactlyOneCreatedAndSevenAlreadyExists()
     {
         var mcpDllPath = McpHostLocator.GetMcpDllPath();
-        var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_race_company");
+        var uniqueDb = _sharedMongo.CreateDatabaseName("rrtest_race_company");
         var env = _sharedMongo.CreateProcessEnvironment(uniqueDb);
 
         const int processCount = 8;
@@ -258,7 +258,7 @@ public sealed class ShippedHostRaceIntegrationTests
     public async Task ShippedMcpHost_ConcurrentCriterionRevisionRace_ExactlyOneSucceedsAndOthersGetStaleVersionToken()
     {
         var mcpDllPath = McpHostLocator.GetMcpDllPath();
-        var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_criterion_race");
+        var uniqueDb = _sharedMongo.CreateDatabaseName("rrtest_criterion_race");
         var mongoClient = new MongoClient(_sharedMongo.ConnectionString);
         var db = mongoClient.GetDatabase(uniqueDb);
 
@@ -344,7 +344,7 @@ public sealed class ShippedHostRaceIntegrationTests
                 await client.DisposeAsync();
             }
 
-            await mongoClient.DropDatabaseAsync(uniqueDb);
+            await _sharedMongo.DropDatabaseAsync(uniqueDb);
         }
     }
 
@@ -442,7 +442,7 @@ public sealed class ShippedHostRaceIntegrationTests
                 await client.DisposeAsync();
             }
 
-            await mongoClient.DropDatabaseAsync(uniqueDb);
+            await _sharedMongo.DropDatabaseAsync(uniqueDb);
         }
     }
 
@@ -451,7 +451,7 @@ public sealed class ShippedHostRaceIntegrationTests
     public async Task ShippedMcpHost_ConcurrentSearchRunRace_ExactlyOneCreatedSevenAlreadyLoggedAndOneAuditEntry()
     {
         var mcpDllPath = McpHostLocator.GetMcpDllPath();
-        var uniqueDb = _sharedMongo.CreateDatabaseName("roleradar_searchrun_race");
+        var uniqueDb = _sharedMongo.CreateDatabaseName("rrtest_searchrun_race");
         var mongoClient = new MongoClient(_sharedMongo.ConnectionString);
         var db = mongoClient.GetDatabase(uniqueDb);
 
@@ -515,7 +515,7 @@ public sealed class ShippedHostRaceIntegrationTests
                 await client.DisposeAsync();
             }
 
-            await mongoClient.DropDatabaseAsync(uniqueDb);
+            await _sharedMongo.DropDatabaseAsync(uniqueDb);
         }
     }
 }

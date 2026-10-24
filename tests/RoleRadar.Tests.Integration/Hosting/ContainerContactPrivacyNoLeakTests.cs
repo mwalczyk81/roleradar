@@ -34,7 +34,7 @@ public sealed class ContainerContactPrivacyNoLeakTests : IAsyncLifetime
         {
             if (_client is not null && !string.IsNullOrWhiteSpace(_databaseName))
             {
-                await _client.DropDatabaseAsync(_databaseName);
+                await _fixture.DropDatabaseAsync(_databaseName);
             }
         }
         finally

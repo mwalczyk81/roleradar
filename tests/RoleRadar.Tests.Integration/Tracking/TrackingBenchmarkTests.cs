@@ -30,7 +30,7 @@ public sealed class TrackingBenchmarkTests : IAsyncLifetime
     public TrackingBenchmarkTests(SharedMongoFixture sharedMongo)
     {
         _sharedMongo = sharedMongo;
-        _databaseName = $"roleradar_benchmark_{Guid.CreateVersion7():N}";
+        _databaseName = _sharedMongo.CreateDatabaseName("rrtest_benchmark");
     }
 
     public ValueTask InitializeAsync()
@@ -45,7 +45,7 @@ public sealed class TrackingBenchmarkTests : IAsyncLifetime
         {
             if (_client != null)
             {
-                await _client.DropDatabaseAsync(_databaseName);
+                await _sharedMongo.DropDatabaseAsync(_databaseName);
             }
         }
         finally

@@ -657,6 +657,7 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
                 File.Delete(backupFile);
             }
 
+            Hosting.ContainerTestHarness.ValidateDatabaseNameForDrop(dbBName);
             await mongoClient.DropDatabaseAsync(dbBName);
         }
     }

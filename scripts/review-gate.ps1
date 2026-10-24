@@ -70,13 +70,18 @@ try {
     if ($LASTEXITCODE -eq 0) { $gateResults.Build = "PASS" } else { throw "dotnet build (-warnaserror) failed." }
 
     # 5. Run test suite with coverage via scripts/test-all.ps1
-    & docker compose -f deploy/docker-compose.yml up -d --force-recreate mongo 2>&1 | Out-Null
+    $null = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "verify-devstack-canary.ps1") -Action Record 2>&1
     $testOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-all.ps1 -NoBuild --collect:"XPlat Code Coverage" --results-directory ./TestResults 2>&1
     if ($LASTEXITCODE -eq 0) {
         $gateResults.Tests = "PASS"
     } else {
         $failedLines = ($testOutput | Where-Object { $_ -match 'Failed\s+' -or $_ -match 'Error Message:' }) -join '; '
         throw "Test execution failed: $failedLines"
+    }
+
+    $canaryOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "verify-devstack-canary.ps1") -Action Verify 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "Dev stack canary check failed: $canaryOutput"
     }
 
     foreach ($line in $testOutput) {

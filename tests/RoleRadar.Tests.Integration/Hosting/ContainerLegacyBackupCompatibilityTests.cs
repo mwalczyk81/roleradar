@@ -5,21 +5,27 @@ using RoleRadar.Application.Abstractions;
 using RoleRadar.Cli.Commands;
 using RoleRadar.Domain.Common;
 using RoleRadar.Infrastructure.Mongo;
+using RoleRadar.Tests.Integration.Fixtures;
 using Xunit;
 
 namespace RoleRadar.Tests.Integration.Hosting;
 
-public sealed class ContainerLegacyBackupCompatibilityTests
+[Collection("ContainerIsolatedCollection")]
+public sealed class ContainerLegacyBackupCompatibilityTests : IClassFixture<IsolatedContainerMongoFixture>
 {
-    private const string HostMongoUri = "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true";
-    private const string ContainerMongoUri = "mongodb://host.docker.internal:27017/?replicaSet=rs0&directConnection=true";
+    private readonly IsolatedContainerMongoFixture _mongo;
+
+    public ContainerLegacyBackupCompatibilityTests(IsolatedContainerMongoFixture mongo)
+    {
+        _mongo = mongo;
+    }
 
     [Fact]
     public async Task Container_Restores001LegacyBackup_WithNoteEntityTypeAndTrackingIndexes()
     {
         await ContainerTestHarness.EnsureImagesBuiltAsync();
 
-        var client = new MongoClient(HostMongoUri);
+        var client = new MongoClient(_mongo.HostMongoUri);
         var uniqueDb = $"rrtest_legacy001_{Guid.NewGuid():N}";
         var db = client.GetDatabase(uniqueDb);
 
@@ -72,7 +78,7 @@ public sealed class ContainerLegacyBackupCompatibilityTests
 
             var env = new Dictionary<string, string>
             {
-                ["ROLERADAR_MONGO_CONNECTION_STRING"] = ContainerMongoUri,
+                ["ROLERADAR_MONGO_CONNECTION_STRING"] = _mongo.ContainerMongoUri,
                 ["ROLERADAR_MONGO_DATABASE"] = uniqueDb,
                 ["BACKUP_PW"] = "LegacyPass123!"
             };
@@ -83,20 +89,23 @@ public sealed class ContainerLegacyBackupCompatibilityTests
             var backupResult = await ContainerTestHarness.RunCliAsync(
                 ["backup", containerBackupFile, "--passphrase-env", "BACKUP_PW"],
                 environment: env,
-                volumes: volumes);
+                volumes: volumes,
+                network: _mongo.NetworkName);
             Assert.Equal(0, backupResult.ExitCode);
 
             // 2. Wipe database inside container
             var wipeResult = await ContainerTestHarness.RunCliAsync(
                 ["wipe", "--yes"],
-                environment: env);
+                environment: env,
+                network: _mongo.NetworkName);
             Assert.Equal(0, wipeResult.ExitCode);
 
             // 3. Restore 001 archive inside container
             var restoreResult = await ContainerTestHarness.RunCliAsync(
                 ["restore", containerBackupFile, "--passphrase-env", "BACKUP_PW"],
                 environment: env,
-                volumes: volumes);
+                volumes: volumes,
+                network: _mongo.NetworkName);
             Assert.Equal(0, restoreResult.ExitCode);
 
             // 4. Verify tracking indexes exist on restored empty collections
@@ -122,6 +131,7 @@ public sealed class ContainerLegacyBackupCompatibilityTests
                 // Ignore cleanup error
             }
 
+            ContainerTestHarness.ValidateDatabaseNameForDrop(uniqueDb);
             await client.DropDatabaseAsync(uniqueDb);
         }
     }

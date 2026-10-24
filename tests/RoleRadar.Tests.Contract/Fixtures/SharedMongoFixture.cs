@@ -77,14 +77,17 @@ public sealed class SharedMongoFixture : IAsyncLifetime
         }
     }
 
-    public string CreateDatabaseName(string prefix = "roleradar_contract")
+    public string CreateDatabaseName(string prefix = "rrtest_contract")
     {
         if (_isExternalMode)
         {
             return ExternalMongoSafetyGuard.GenerateAndRegisterTestDatabase();
         }
 
-        return $"{prefix}_{Guid.CreateVersion7():N}";
+        var safePrefix = prefix.StartsWith("rrtest_", StringComparison.Ordinal)
+            ? prefix
+            : $"rrtest_{prefix.Replace("roleradar_", string.Empty)}";
+        return $"{safePrefix}_{Guid.CreateVersion7():N}";
     }
 
     public MongoOptions CreateOptions(string? databaseName = null) => new()
@@ -116,6 +119,7 @@ public sealed class SharedMongoFixture : IAsyncLifetime
             return;
         }
 
+        ExternalMongoSafetyGuard.ValidateDatabaseNameForDrop(databaseName);
         await _mongoClient.DropDatabaseAsync(databaseName);
     }
 }

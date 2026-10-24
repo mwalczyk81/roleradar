@@ -31,9 +31,9 @@ public sealed class IsolatedComposeDefaultCommandsIntegrationTests
 
         var freePort = GetFreePort();
         var testId = Guid.CreateVersion7().ToString("N")[..12];
-        var containerName = $"roleradar-mongo-test-{testId}";
-        var volumeName = $"roleradar-mongo-data-test-{testId}";
-        var projectName = $"roleradar-test-{testId}";
+        var containerName = $"rrtest-mongo-{testId}";
+        var volumeName = $"rrtest-vol-{testId}";
+        var projectName = $"rrtest-proj-{testId}";
 
         var originalComposePath = BackupOptions.ResolveDefaultComposePath();
         var composeYaml = await File.ReadAllTextAsync(originalComposePath);
@@ -53,10 +53,11 @@ public sealed class IsolatedComposeDefaultCommandsIntegrationTests
         Environment.SetEnvironmentVariable("ROLERADAR_COMPOSE_FILE", tempComposePath);
 
         var composeConnString = $"mongodb://127.0.0.1:{freePort}/?replicaSet=rs0&directConnection=true";
-        var composeDbName = $"roleradar_defaults_test_{testId}";
+        var composeDbName = $"rrtest_defaults_test_{testId}";
 
         try
         {
+            await RunProcessAsync("docker", $"volume create {volumeName}", timeoutSeconds: 30);
             await RunProcessAsync("docker", $"compose -f \"{tempComposePath}\" up -d --wait", timeoutSeconds: 90);
 
             var services = new ServiceCollection();
@@ -138,7 +139,14 @@ public sealed class IsolatedComposeDefaultCommandsIntegrationTests
         {
             try
             {
-                await RunProcessAsync("docker", $"compose -f \"{tempComposePath}\" down -v", timeoutSeconds: 30);
+                if (projectName != "roleradar" && tempComposePath != originalComposePath)
+                {
+                    await RunProcessAsync("docker", $"compose -f \"{tempComposePath}\" down -v", timeoutSeconds: 30);
+                    if (volumeName != "roleradar-mongo-data")
+                    {
+                        await RunProcessAsync("docker", $"volume rm -f {volumeName}", timeoutSeconds: 30);
+                    }
+                }
             }
             catch { }
 

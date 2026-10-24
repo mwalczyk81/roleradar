@@ -44,7 +44,7 @@ public sealed class NoteLifecycleAndSearchBenchmarkTests : IAsyncLifetime
         {
             if (_client != null)
             {
-                await _client.DropDatabaseAsync(_databaseName);
+                await _sharedMongo.DropDatabaseAsync(_databaseName);
             }
         }
         finally

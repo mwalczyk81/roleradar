@@ -7,21 +7,27 @@ using RoleRadar.Cli.Commands;
 using RoleRadar.Domain.Common;
 using RoleRadar.Domain.Tracking;
 using RoleRadar.Infrastructure.Mongo;
+using RoleRadar.Tests.Integration.Fixtures;
 using Xunit;
 
 namespace RoleRadar.Tests.Integration.Hosting;
 
-public sealed class ContainerBackupRestoreTests
+[Collection("ContainerIsolatedCollection")]
+public sealed class ContainerBackupRestoreTests : IClassFixture<IsolatedContainerMongoFixture>
 {
-    private const string HostMongoUri = "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true";
-    private const string ContainerMongoUri = "mongodb://host.docker.internal:27017/?replicaSet=rs0&directConnection=true";
+    private readonly IsolatedContainerMongoFixture _mongo;
+
+    public ContainerBackupRestoreTests(IsolatedContainerMongoFixture mongo)
+    {
+        _mongo = mongo;
+    }
 
     [Fact]
     public async Task Container_ExecutesBackupRestoreAndWipe_CoveringAll12Collections()
     {
         await ContainerTestHarness.EnsureImagesBuiltAsync();
 
-        var client = new MongoClient(HostMongoUri);
+        var client = new MongoClient(_mongo.HostMongoUri);
         var uniqueDb = $"rrtest_backup_{Guid.NewGuid():N}";
         var db = client.GetDatabase(uniqueDb);
 
@@ -201,7 +207,7 @@ public sealed class ContainerBackupRestoreTests
 
             var env = new Dictionary<string, string>
             {
-                ["ROLERADAR_MONGO_CONNECTION_STRING"] = ContainerMongoUri,
+                ["ROLERADAR_MONGO_CONNECTION_STRING"] = _mongo.ContainerMongoUri,
                 ["ROLERADAR_MONGO_DATABASE"] = uniqueDb,
                 ["BACKUP_PW"] = "SuperSecretContainerPW123!"
             };
@@ -212,7 +218,8 @@ public sealed class ContainerBackupRestoreTests
             var backupResult = await ContainerTestHarness.RunCliAsync(
                 ["backup", containerBackupFile, "--passphrase-env", "BACKUP_PW"],
                 environment: env,
-                volumes: volumes);
+                volumes: volumes,
+                network: _mongo.NetworkName);
 
             Assert.Equal(0, backupResult.ExitCode);
             Assert.True(File.Exists(hostBackupFile), $"Expected backup file at {hostBackupFile}");
@@ -220,7 +227,8 @@ public sealed class ContainerBackupRestoreTests
             // 2. Run roleradar wipe inside container with --yes
             var wipeResult = await ContainerTestHarness.RunCliAsync(
                 ["wipe", "--yes"],
-                environment: env);
+                environment: env,
+                network: _mongo.NetworkName);
 
             Assert.Equal(0, wipeResult.ExitCode);
             foreach (var col in all12)
@@ -233,7 +241,8 @@ public sealed class ContainerBackupRestoreTests
             var restoreResult = await ContainerTestHarness.RunCliAsync(
                 ["restore", containerBackupFile, "--passphrase-env", "BACKUP_PW"],
                 environment: env,
-                volumes: volumes);
+                volumes: volumes,
+                network: _mongo.NetworkName);
 
             Assert.Equal(0, restoreResult.ExitCode);
 

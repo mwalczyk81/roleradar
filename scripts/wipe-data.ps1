@@ -11,6 +11,16 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+$targetDb = $env:ROLERADAR_MONGO_DATABASE
+if ([string]::IsNullOrWhiteSpace($targetDb)) {
+    $targetDb = 'roleradar'
+}
+
+if ($targetDb -eq 'roleradar' -and $Confirm -ne 'WIPE-ALL-ROLERADAR-DATA') {
+    [Console]::Error.WriteLine("Refusing to wipe default database 'roleradar' without explicit confirmation '-Confirm WIPE-ALL-ROLERADAR-DATA'.")
+    exit 1
+}
+
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptDir
 

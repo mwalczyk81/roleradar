@@ -33,7 +33,7 @@ public sealed class ExternalDatabaseGuardUnitTests
     [Fact]
     public void Case03_DockerInternalTreatedAsNonLoopback_RejectedWithTlsRequiredException()
     {
-        const string uri = "mongodb://host.docker.internal:27017/?tls=false";
+        const string uri = "mongodb://host.docker.internal:27018/?tls=false";
         Assert.Throws<TlsRequiredException>(() => ExternalMongoSafetyGuard.ValidateConnectionString(uri, isOptInEnabled: true));
     }
 
@@ -56,7 +56,7 @@ public sealed class ExternalDatabaseGuardUnitTests
     [Fact]
     public void Case06_LocalhostLoopback_AllowedWithoutTls()
     {
-        const string uri = "mongodb://localhost:27017";
+        const string uri = "mongodb://localhost:27018";
         var exception = Record.Exception(() => ExternalMongoSafetyGuard.ValidateConnectionString(uri, isOptInEnabled: true));
         Assert.Null(exception);
     }

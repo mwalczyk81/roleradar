@@ -26,7 +26,7 @@ public sealed class AuditArchiveAndReadinessIntegrationTests : IAsyncLifetime
     {
         ArgumentNullException.ThrowIfNull(sharedMongo);
         _sharedMongo = sharedMongo;
-        _databaseName = $"roleradar_phase6_{Guid.CreateVersion7():N}";
+        _databaseName = _sharedMongo.CreateDatabaseName("rrtest_phase6");
     }
 
     public ValueTask InitializeAsync()
@@ -41,7 +41,7 @@ public sealed class AuditArchiveAndReadinessIntegrationTests : IAsyncLifetime
         {
             if (_sharedClient != null)
             {
-                await _sharedClient.DropDatabaseAsync(_databaseName);
+                await _sharedMongo.DropDatabaseAsync(_databaseName);
             }
         }
         finally

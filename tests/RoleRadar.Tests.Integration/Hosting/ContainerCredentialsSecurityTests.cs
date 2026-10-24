@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Text;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using RoleRadar.Tests.Integration.Fixtures;
 using Xunit;
 
 namespace RoleRadar.Tests.Integration.Hosting;
@@ -10,32 +11,22 @@ namespace RoleRadar.Tests.Integration.Hosting;
 /// T019 / FR-003, FR-006, FR-011, SC-007: credential handling of the bundled Database Tools inside the
 /// CLI image, observed from outside the process under the exact supported run mode
 /// (<c>--read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges</c>).
-///
-/// How the observation works:
-///  * A "holder" CLI container runs as PID 1 (a backup against a blackholed address, so it stays alive).
-///    Keeping PID 1 alive keeps the container's tmpfs <c>/tmp</c> alive, so cleanup can be checked
-///    AFTER a second CLI process exits. If the process under test were PID 1, its exit would destroy the
-///    tmpfs and "no file remains" would be vacuously true.
-///  * The process under test is started with <c>docker exec</c> (test tooling only; the product never
-///    touches a Docker socket).
-///  * A sidecar (<c>ubuntu:24.04</c>, same UID 1654, same hardening flags, <c>--network none</c>) joins the
-///    holder's PID namespace and reads <c>/proc/&lt;pid&gt;/cmdline</c>, <c>/proc/&lt;pid&gt;/environ</c> and
-///    <c>/proc/1/root/tmp</c> WHILE the child tool is running, and delivers SIGTERM.
-///  * The database URI carries a real credential: a per-test MongoDB user (created on the compose
-///    server; auth is not enforced there, but the driver and tools still authenticate with SCRAM, so the
-///    credential is genuinely used). It is delivered through a read-only mounted file
-///    (<c>ROLERADAR_MONGO_CONNECTION_STRING_FILE</c>), never through <c>-e</c>, so it cannot reach
-///    <c>docker inspect</c>. The archive passphrase is delivered on stdin for the same reason.
 /// </summary>
-public sealed class ContainerCredentialsSecurityTests
+[Collection("ContainerIsolatedCollection")]
+public sealed class ContainerCredentialsSecurityTests : IClassFixture<IsolatedContainerMongoFixture>
 {
-    private const string HostMongoUri = "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true";
+    private readonly IsolatedContainerMongoFixture _mongo;
     private const string SidecarImage = "ubuntu:24.04@sha256:68ee22004a9109b44973313b02ff7b1de250f1de0f5ecb628d73f579aaff33ac";
 
     private static readonly string[] HardeningFlags =
     [
         "--read-only", "--tmpfs", "/tmp:rw,noexec,nosuid,size=64m", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"
     ];
+
+    public ContainerCredentialsSecurityTests(IsolatedContainerMongoFixture mongo)
+    {
+        _mongo = mongo;
+    }
 
     // ------------------------------------------------------------------------------------------------
     // Backup
@@ -44,7 +35,7 @@ public sealed class ContainerCredentialsSecurityTests
     [Fact]
     public async Task Backup_ChildArgvEnvironAndConfigMode_AreSafe_AndSigtermToCliLeavesNoConfig()
     {
-        await using var s = await Scenario.StartAsync();
+        await using var s = await Scenario.StartAsync(_mongo);
 
         await using var cli = s.ExecCli(["backup", "/tmp/sigterm.rrbak", "--passphrase-stdin"], "hang_uri");
         var probe = await s.ProbeToolChildAsync("mongodump");
@@ -64,7 +55,7 @@ public sealed class ContainerCredentialsSecurityTests
     [Fact]
     public async Task Backup_ChildKilledBySigterm_LeavesNoConfig()
     {
-        await using var s = await Scenario.StartAsync();
+        await using var s = await Scenario.StartAsync(_mongo);
 
         await using var cli = s.ExecCli(["backup", "/tmp/childterm.rrbak", "--passphrase-stdin"], "hang_uri");
         var probe = await s.ProbeToolChildAsync("mongodump");
@@ -81,7 +72,7 @@ public sealed class ContainerCredentialsSecurityTests
     [Fact]
     public async Task Backup_ChildFailure_LeavesNoConfig_AndRedactsOutput()
     {
-        await using var s = await Scenario.StartAsync();
+        await using var s = await Scenario.StartAsync(_mongo);
 
         // fail_uri points at the blackholed address with a 2 s server selection timeout: mongodump exits non-zero on its own.
         await using var cli = s.ExecCli(["backup", "/tmp/fail.rrbak", "--passphrase-stdin"], "fail_uri");
@@ -100,7 +91,7 @@ public sealed class ContainerCredentialsSecurityTests
     [Fact]
     public async Task CredentialedRoundTrip_LeavesNoSecretInOutputsAuditFilesInspectOrHistory()
     {
-        await using var s = await Scenario.StartAsync();
+        await using var s = await Scenario.StartAsync(_mongo);
         await s.SeedAsync();
 
         var backup = await RunToEnd(s.ExecCli(["backup", "/data/backup/ok.rrbak", "--passphrase-stdin"], "good_uri"));
@@ -142,7 +133,7 @@ public sealed class ContainerCredentialsSecurityTests
     [Fact]
     public async Task Restore_ChildArgvEnvironAndConfigMode_AreSafe_AndSigtermToCliLeavesNoConfig()
     {
-        await using var s = await Scenario.StartAsync();
+        await using var s = await Scenario.StartAsync(_mongo);
         await s.SeedAsync();
         var backup = await RunToEnd(s.ExecCli(["backup", "/data/backup/r.rrbak", "--passphrase-stdin"], "good_uri"));
         Assert.True(backup.ExitCode == 0, $"backup failed: {backup.StandardError}");
@@ -167,7 +158,7 @@ public sealed class ContainerCredentialsSecurityTests
     [Fact]
     public async Task Restore_ChildKilledBySigterm_LeavesNoConfig()
     {
-        await using var s = await Scenario.StartAsync();
+        await using var s = await Scenario.StartAsync(_mongo);
         await s.SeedAsync();
         var backup = await RunToEnd(s.ExecCli(["backup", "/data/backup/r2.rrbak", "--passphrase-stdin"], "good_uri"));
         Assert.True(backup.ExitCode == 0, $"backup failed: {backup.StandardError}");
@@ -223,6 +214,7 @@ public sealed class ContainerCredentialsSecurityTests
         public required string User { get; init; }
         public required string Password { get; init; }
         public required string Passphrase { get; init; }
+        public required string HostMongoUri { get; init; }
         public string HolderConfig { get; private set; } = string.Empty;
         private RunningProcess? _holder;
 
@@ -230,7 +222,7 @@ public sealed class ContainerCredentialsSecurityTests
         private string BackupDir => Path.Combine(Root, "backup");
         private string ProbeDir => Path.Combine(Root, "probe");
 
-        public static async Task<Scenario> StartAsync()
+        public static async Task<Scenario> StartAsync(IsolatedContainerMongoFixture mongo)
         {
             await ContainerTestHarness.EnsureImagesBuiltAsync();
 
@@ -242,15 +234,16 @@ public sealed class ContainerCredentialsSecurityTests
                 Database = $"rrtest_credsec_{id[..12]}",
                 User = $"rrsec_{id[..8]}",
                 Password = $"RrSecPw{id[..16]}",
-                Passphrase = $"ArchivePhrase{id[..12]}"
+                Passphrase = $"ArchivePhrase{id[..12]}",
+                HostMongoUri = mongo.HostMongoUri
             };
 
             Directory.CreateDirectory(s.SecretsDir);
             Directory.CreateDirectory(s.BackupDir);
             Directory.CreateDirectory(s.ProbeDir);
 
-            // Per-test credential on the compose server (removed in DisposeAsync).
-            var admin = new MongoClient(HostMongoUri).GetDatabase("admin");
+            // Per-test credential on the isolated server (removed in DisposeAsync).
+            var admin = new MongoClient(s.HostMongoUri).GetDatabase("admin");
             await admin.RunCommandAsync<BsonDocument>(new BsonDocument
             {
                 ["createUser"] = s.User,
@@ -260,7 +253,7 @@ public sealed class ContainerCredentialsSecurityTests
 
             var cred = $"{s.User}:{s.Password}";
             WriteLf(Path.Combine(s.SecretsDir, "good_uri"),
-                $"mongodb://{cred}@host.docker.internal:27017/?replicaSet=rs0&directConnection=true&authSource=admin");
+                $"mongodb://{cred}@host.docker.internal:27018/?replicaSet=rs0&directConnection=true&authSource=admin");
             WriteLf(Path.Combine(s.SecretsDir, "hang_uri"),
                 $"mongodb://{cred}@192.0.2.1:27017/?authSource=admin&connectTimeoutMS=1000&serverSelectionTimeoutMS=300000");
             WriteLf(Path.Combine(s.SecretsDir, "fail_uri"),
@@ -271,7 +264,7 @@ public sealed class ContainerCredentialsSecurityTests
             var args = new List<string> { "run", "--rm", "-i", "--name", s.Name };
             args.AddRange(HardeningFlags);
             args.AddRange([
-                "--add-host", "host.docker.internal:host-gateway",
+                "--network", mongo.NetworkName,
                 "-v", $"{s.SecretsDir}:/run/secrets:ro",
                 "-v", $"{s.BackupDir}:/data/backup:rw",
                 "-e", "ROLERADAR_MONGO_CONNECTION_STRING_FILE=/run/secrets/hang_uri",
@@ -448,6 +441,7 @@ public sealed class ContainerCredentialsSecurityTests
             {
                 var client = new MongoClient(HostMongoUri);
                 await client.GetDatabase("admin").RunCommandAsync<BsonDocument>(new BsonDocument("dropUser", User));
+                ContainerTestHarness.ValidateDatabaseNameForDrop(Database);
                 await client.DropDatabaseAsync(Database);
             }
             catch (MongoException)

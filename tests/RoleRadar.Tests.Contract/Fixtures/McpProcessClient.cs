@@ -49,15 +49,10 @@ internal sealed class McpProcessClient : IAsyncDisposable
                 ?? Environment.GetEnvironmentVariable("ROLERADAR_IMAGE_TAG")
                 ?? "roleradar-mcp:test";
 
-            var runArgs = new System.Text.StringBuilder("run -i --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop ALL --security-opt no-new-privileges --add-host host.docker.internal:host-gateway ");
+            var runArgs = new System.Text.StringBuilder("run -i --rm --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop ALL --security-opt no-new-privileges ");
             foreach (var (k, v) in env)
             {
-                var val = v;
-                if (k.Equals("ROLERADAR_MONGO_CONNECTION_STRING", StringComparison.OrdinalIgnoreCase))
-                {
-                    val = val.Replace("127.0.0.1", "host.docker.internal").Replace("localhost", "host.docker.internal");
-                }
-                runArgs.Append(System.Globalization.CultureInfo.InvariantCulture, $"-e {k}=\"{val}\" ");
+                runArgs.Append(System.Globalization.CultureInfo.InvariantCulture, $"-e {k}=\"{v}\" ");
             }
             runArgs.Append(image);
 

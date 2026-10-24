@@ -86,7 +86,7 @@ public sealed class ContainerConcurrencyRaceTests
                 await client.DisposeAsync();
             }
 
-            await mongoClient.DropDatabaseAsync(uniqueDb);
+            await _sharedMongo.DropDatabaseAsync(uniqueDb);
         }
     }
 
@@ -159,7 +159,7 @@ public sealed class ContainerConcurrencyRaceTests
                 await client.DisposeAsync();
             }
 
-            await mongoClient.DropDatabaseAsync(uniqueDb);
+            await _sharedMongo.DropDatabaseAsync(uniqueDb);
         }
     }
 }
