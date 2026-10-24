@@ -16,3 +16,5 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0010](./0010-immutable-auditability-and-zero-hard-deletes.md) | Immutable Auditability, Zero Hard Deletes, and Contact Privacy Isolation | Accepted | `002-job-search-tracking` |
 | [ADR-0011](./0011-hosted-mongodb-selection-and-compatibility.md) | Hosted MongoDB Database Evaluation & Compatibility Checklist | Proposed | `003-linux-container-readiness` |
 | [ADR-0012](./0012-azure-container-runtime-target.md) | Azure Container Runtime Target — Container Apps vs. AKS | Proposed | `003-linux-container-readiness` |
+| [ADR-0013](./0013-tracker-import-dry-run-scratch-database.md) | Tracker Import Dry-Run Mechanism — Ephemeral Scratch Database vs. Outer Rolled-Back Transaction | Accepted | `004-tracker-import` |
+| [ADR-0014](./0014-csv-parsing-strategy.md) | CSV Parsing Strategy — Hand-Rolled RFC 4180 Parser vs. External Library | Accepted | `004-tracker-import` |

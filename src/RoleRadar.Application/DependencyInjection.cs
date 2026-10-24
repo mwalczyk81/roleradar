@@ -50,6 +50,10 @@ public static class DependencyInjection
         services.AddQueryHandler<Tracking.Queries.GetContactQuery, Tracking.Queries.ContactDto?, Tracking.Queries.GetContactQueryHandler>();
         services.AddQueryHandler<Integrity.VerifyIntegrityQuery, Integrity.VerifyIntegrityResultDto, Integrity.VerifyIntegrityQueryHandler>();
 
+        // Feature 004: Tracker Import
+        services.AddTransient<Tracking.Import.Pipeline.ITrackerImportPipelineFactory, Tracking.Import.Pipeline.TrackerImportPipelineFactory>();
+        services.AddTransient<Tracking.Import.Commands.ITrackerImportCoordinator, Tracking.Import.Commands.TrackerImportCoordinator>();
+
         return services;
     }
 

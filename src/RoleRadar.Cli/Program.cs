@@ -35,6 +35,7 @@ public static class Program
             rootCommand.Add(RestoreCommand.Create(services));
             rootCommand.Add(WipeCommand.Create(services));
             rootCommand.Add(ContactCommand.Create(services));
+            rootCommand.Add(TrackerImportCommand.Create(services));
             rootCommand.Add(VerifyCommand.Create(services));
 
             var parseResult = rootCommand.Parse(args);

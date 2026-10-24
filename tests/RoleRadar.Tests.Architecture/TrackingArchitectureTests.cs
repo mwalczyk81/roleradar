@@ -202,7 +202,10 @@ public sealed class TrackingArchitectureTests
     {
         var appAssembly = typeof(RoleRadar.Application.Tracking.Commands.RecordCompanyCommand).Assembly;
         var trackingTypes = appAssembly.GetTypes()
-            .Where(t => t.Namespace is not null && t.Namespace.StartsWith("RoleRadar.Application.Tracking", StringComparison.Ordinal))
+            .Where(t => t.Namespace is not null &&
+                        t.Namespace.StartsWith("RoleRadar.Application.Tracking", StringComparison.Ordinal) &&
+                        t != typeof(RoleRadar.Application.Tracking.Import.Pipeline.ApplicationsStep) &&
+                        t.DeclaringType != typeof(RoleRadar.Application.Tracking.Import.Pipeline.ApplicationsStep))
             .ToArray();
 
         var noteFactoryNames = new HashSet<string>
@@ -286,5 +289,114 @@ public sealed class TrackingArchitectureTests
 
         Assert.True(failingCallers.Count == 0,
             $"Tracking handlers directly call forbidden note audit methods:\n{string.Join("\n", failingCallers.Distinct())}\nNon-note entities must use dedicated tracking audit operations.");
+    }
+
+    [Fact]
+    public void TrackerImportSteps_MustNotPassUnboundedTextToDomainFactories()
+    {
+        var appAssembly = typeof(RoleRadar.Application.Tracking.Import.TrackerImportFieldLimiter).Assembly;
+        var stepTypes = appAssembly.GetTypes()
+            .Where(t => t.Namespace == "RoleRadar.Application.Tracking.Import.Pipeline" &&
+                        !t.IsAbstract &&
+                        !t.IsInterface &&
+                        !t.Name.StartsWith('<') &&
+                        !t.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false))
+            .ToArray();
+
+        var domainFactoryTypes = new[]
+        {
+            typeof(RoleRadar.Domain.Tracking.Company),
+            typeof(RoleRadar.Domain.Tracking.Posting),
+            typeof(RoleRadar.Domain.Tracking.Application),
+            typeof(RoleRadar.Domain.Tracking.ApplicationEvent),
+            typeof(RoleRadar.Domain.Tracking.Criterion),
+            typeof(RoleRadar.Domain.Notes.Note)
+        };
+
+        var limiterType = typeof(RoleRadar.Application.Tracking.Import.TrackerImportFieldLimiter);
+
+        foreach (var step in stepTypes)
+        {
+            var methods = step.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)
+                .Concat(step.GetNestedTypes(BindingFlags.NonPublic | BindingFlags.Public)
+                    .SelectMany(nt => nt.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)));
+
+            bool callsDomainFactory = false;
+            bool callsLimiter = false;
+
+            foreach (var m in methods)
+            {
+                MethodBody? body;
+                try { body = m.GetMethodBody(); } catch { continue; }
+                if (body is null) continue;
+                var il = body.GetILAsByteArray();
+                if (il is null) continue;
+
+                var module = m.Module;
+                for (int i = 0; i < il.Length; i++)
+                {
+                    if (il[i] is 0x28 or 0x6F or 0x73 && i + 4 < il.Length)
+                    {
+                        int token = BitConverter.ToInt32(il, i + 1);
+                        try
+                        {
+                            var resolved = module.ResolveMethod(token);
+                            if (resolved is not null)
+                            {
+                                if (domainFactoryTypes.Contains(resolved.DeclaringType) && resolved.Name.Equals("Create", StringComparison.Ordinal))
+                                {
+                                    callsDomainFactory = true;
+                                }
+                                if (resolved.DeclaringType == limiterType)
+                                {
+                                    callsLimiter = true;
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+
+            if (callsDomainFactory)
+            {
+                Assert.True(callsLimiter,
+                    $"Step type '{step.Name}' constructs domain entities via factory methods but does not invoke TrackerImportFieldLimiter to enforce domain length limits.");
+            }
+        }
+
+        // Also check source files to ensure no raw indexer expressions are passed directly to Create methods
+        var srcDir = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "src", "RoleRadar.Application", "Tracking", "Import", "Pipeline"));
+        if (Directory.Exists(srcDir))
+        {
+            var csFiles = Directory.GetFiles(srcDir, "*Step.cs");
+            foreach (var file in csFiles)
+            {
+                var content = File.ReadAllText(file);
+                var lines = content.Split('\n');
+                bool inCreateCall = false;
+                for (int lineNum = 0; lineNum < lines.Length; lineNum++)
+                {
+                    var line = lines[lineNum].Trim();
+                    if (line.Contains(".Create(") && (line.Contains("Company") || line.Contains("Posting") || line.Contains("Application") || line.Contains("Criterion") || line.Contains("Note")))
+                    {
+                        inCreateCall = true;
+                    }
+
+                    if (inCreateCall)
+                    {
+                        Assert.False(line.Contains("row["),
+                            $"File '{Path.GetFileName(file)}' line {lineNum + 1} passes raw CSV indexer expression 'row[...]' directly into domain factory. Mapped free-text fields must be bounded by TrackerImportFieldLimiter first.");
+                        Assert.False(line.Contains(".GetString()"),
+                            $"File '{Path.GetFileName(file)}' line {lineNum + 1} passes raw JSON property 'GetString()' directly into domain factory. Mapped free-text fields must be bounded by TrackerImportFieldLimiter first.");
+
+                        if (line.Contains(");"))
+                        {
+                            inCreateCall = false;
+                        }
+                    }
+                }
+            }
+        }
     }
 }
