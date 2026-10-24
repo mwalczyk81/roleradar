@@ -107,6 +107,135 @@ public sealed class ApplicationsImportStepTests
         }
     }
 
+    [Fact]
+    public async Task ApplicationsStep_ThreeBlankTitleNoteRows_CreateThreeDistinctNotes_AndSecondRunIsIdempotent()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var csv = """
+                kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes
+                standalone_note,,,,2026-03-01,,,,,,,,,Discussion on initial phone screen,,
+                standalone_note,,,,2026-03-02,,,,,,,,,Follow-up with senior recruiter,,
+                standalone_note,,,,2026-03-03,,,,,,,,,Third interview technical wrap up,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "applications.csv"), csv);
+
+            var inMemoryCtx = new InMemoryApplicationContext();
+            var parser = new Rfc4180CsvParser();
+            var step = new ApplicationsStep(parser, inMemoryCtx);
+
+            var context1 = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            // Run 1: All 3 notes created with deterministic unique titles
+            var result1 = await step.ExecuteAsync(context1);
+            Assert.True(result1.IsSuccess);
+            Assert.Equal(3, context1.Summary.StandaloneNotesCreated);
+            Assert.Equal(3, inMemoryCtx.SavedNotes.Count);
+
+            Assert.Contains(inMemoryCtx.SavedNotes, n => n.Title == "Imported note 1: Discussion on initial phone screen");
+            Assert.Contains(inMemoryCtx.SavedNotes, n => n.Title == "Imported note 2: Follow-up with senior recruiter");
+            Assert.Contains(inMemoryCtx.SavedNotes, n => n.Title == "Imported note 3: Third interview technical wrap up");
+
+            var recon1 = context1.Summary.FileReconciliations["applications.csv"];
+            Assert.Equal(3, recon1.Read);
+            Assert.Equal(3, recon1.Created);
+            Assert.Equal(0, recon1.Unchanged);
+            Assert.Equal(0, recon1.Errored);
+            Assert.Equal(recon1.Read, recon1.Created + recon1.Updated + recon1.Unchanged + recon1.TotalSkipped + recon1.Errored);
+
+            // Run 2 on same context: Idempotent no-op, 0 notes created, 3 unchanged
+            var context2 = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result2 = await step.ExecuteAsync(context2);
+            Assert.True(result2.IsSuccess);
+            Assert.Equal(0, context2.Summary.StandaloneNotesCreated);
+            Assert.Equal(3, inMemoryCtx.SavedNotes.Count); // Count unchanged in storage
+
+            var recon2 = context2.Summary.FileReconciliations["applications.csv"];
+            Assert.Equal(3, recon2.Read);
+            Assert.Equal(0, recon2.Created);
+            Assert.Equal(3, recon2.Unchanged);
+            Assert.Equal(0, recon2.Errored);
+            Assert.Equal(recon2.Read, recon2.Created + recon2.Updated + recon2.Unchanged + recon2.TotalSkipped + recon2.Errored);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task ApplicationsStep_ParsesResumeVariantNotTailored_ParsesFitWithTrailingDot_AndRecordsUnmappedValuesWithoutFailingRow()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var csv = """
+                kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes
+                application,Acme Corp,Software Engineer,REQ-201,2026-03-10,false,,200000,true,6.0.,not_tailored,,,Applied as-is,,
+                application,Beta Corp,Cloud Architect,REQ-202,2026-03-11,false,,210000,false,4.5.,junk_variant,,,Applied with junk variant,,
+                application,Gamma Corp,Data Engineer,REQ-203,2026-03-12,unrecognized_flag,,unparseable_salary,maybe_contact,999.0.,ic_framed,,,Applied with bad flags,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "applications.csv"), csv);
+
+            var inMemoryCtx = new InMemoryApplicationContext();
+            var parser = new Rfc4180CsvParser();
+            var step = new ApplicationsStep(parser, inMemoryCtx);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result = await step.ExecuteAsync(context);
+            Assert.True(result.IsSuccess);
+            Assert.Empty(context.Summary.Errors); // No row errors!
+            Assert.Equal(3, context.Summary.ApplicationsCreated);
+
+            // Assert resume_variant mappings
+            var app1 = inMemoryCtx.SavedApplications.FirstOrDefault(a => a.PostingId == inMemoryCtx.SavedPostings.First(p => p.Title == "Software Engineer").Id);
+            Assert.NotNull(app1);
+            Assert.Equal(ResumeVariant.AsIs, app1.ResumeVariant); // "not_tailored" mapped to AsIs!
+
+            var app2 = inMemoryCtx.SavedApplications.FirstOrDefault(a => a.PostingId == inMemoryCtx.SavedPostings.First(p => p.Title == "Cloud Architect").Id);
+            Assert.NotNull(app2);
+            Assert.Equal(ResumeVariant.Tailored, app2.ResumeVariant); // Unknown "junk_variant" defaulted to Tailored!
+
+            var app3 = inMemoryCtx.SavedApplications.FirstOrDefault(a => a.PostingId == inMemoryCtx.SavedPostings.First(p => p.Title == "Data Engineer").Id);
+            Assert.NotNull(app3);
+            Assert.Equal(ResumeVariant.IcFramed, app3.ResumeVariant);
+
+            // Assert unmapped value counters
+            Assert.Equal(1, context.Summary.UnmappedValues["resume_variant"]);
+            Assert.Equal(1, context.Summary.UnmappedValues["fit"]); // 999.0 is out of range
+            Assert.Equal(1, context.Summary.UnmappedValues["referral"]); // maybe_contact
+            Assert.Equal(1, context.Summary.UnmappedValues["rejected"]); // unrecognized_flag
+
+            // Assert reconciliation invariant
+            var recon = context.Summary.FileReconciliations["applications.csv"];
+            Assert.Equal(3, recon.Read);
+            Assert.Equal(3, recon.Created);
+            Assert.Equal(recon.Read, recon.Created + recon.Updated + recon.Unchanged + recon.TotalSkipped + recon.Errored);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
     private static string CreateTempDir()
     {
         var path = Path.Combine(Path.GetTempPath(), $"rr_app_test_{Guid.NewGuid():N}");

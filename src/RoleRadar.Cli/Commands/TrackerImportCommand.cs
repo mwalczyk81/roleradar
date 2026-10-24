@@ -99,6 +99,38 @@ public static class TrackerImportCommand
                 Console.WriteLine($"Unclaimed Applied Roles: {summary.UnclaimedAppliedPostings}");
                 Console.WriteLine($"Errors Encountered:      {summary.Errors.Count}");
 
+                if (summary.FileReconciliations.Count > 0)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("File Reconciliation:");
+                    Console.WriteLine($"{"File",-25} {"Read",8} {"Created",8} {"Updated",8} {"Unchanged",10} {"Skipped",8} {"Errored",8}");
+                    Console.WriteLine(new string('-', 81));
+                    foreach (var file in summary.FileReconciliations.Values.OrderBy(f => f.FileName, StringComparer.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"{file.FileName,-25} {file.Read,8} {file.Created,8} {file.Updated,8} {file.Unchanged,10} {file.TotalSkipped,8} {file.Errored,8}");
+                    }
+                }
+
+                if (summary.UnmappedValues.Count > 0)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Unmapped Values:");
+                    foreach (var (field, count) in summary.UnmappedValues.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"  {field}: {count}");
+                    }
+                }
+
+                if (summary.FieldTruncations.Count > 0)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Field Truncations:");
+                    foreach (var (field, count) in summary.FieldTruncations.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"  {field}: {count}");
+                    }
+                }
+
                 if (summary.Errors.Count > 0)
                 {
                     Console.WriteLine();

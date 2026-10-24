@@ -56,28 +56,34 @@ public sealed class AppendixRowsStep : ITrackerImportStep
             }
         }
 
+        var recon = context.Summary.GetOrCreateFileReconciliation("appendix-rows.csv");
         var defaultDate = context.DefaultDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
 
         // Process non-duplicates first, then duplicates
         foreach (var row in nonDuplicates.Concat(duplicates))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            recon.RecordRead();
 
             try
             {
+                if (!row.Fields.Any(f => !string.IsNullOrWhiteSpace(f)))
+                {
+                    recon.RecordSkipped("empty_row");
+                    continue;
+                }
+
                 var companyName = row["company"]?.Trim();
                 var title = row["title"]?.Trim();
 
                 if (string.IsNullOrWhiteSpace(companyName) || string.IsNullOrWhiteSpace(title))
                 {
-                    if (row.Fields.Any(f => !string.IsNullOrWhiteSpace(f)))
-                    {
-                        context.Summary.Errors.Add(new TrackerImportRowError(
-                            "appendix-rows.csv",
-                            row.LineNumber,
-                            ErrorCode.ValidationError.ToString(),
-                            "Missing required company or title."));
-                    }
+                    context.Summary.Errors.Add(new TrackerImportRowError(
+                        "appendix-rows.csv",
+                        row.LineNumber,
+                        ErrorCode.ValidationError.ToString(),
+                        "Missing required company or title."));
+                    recon.RecordErrored();
                     continue;
                 }
 
@@ -85,6 +91,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                 if (string.Equals(decision, "skip", StringComparison.OrdinalIgnoreCase))
                 {
                     context.Summary.PostingsUnchanged++;
+                    recon.RecordSkipped("decision_skip");
                     continue;
                 }
 
@@ -95,6 +102,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                         row.LineNumber,
                         ErrorCode.ValidationError.ToString(),
                         $"Invalid decision value '{decision}'. Expected blank or 'skip'."));
+                    recon.RecordErrored();
                     continue;
                 }
 
@@ -182,8 +190,33 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                         }
                     }
 
-                    var remoteMentioned = bool.TryParse(row["remote_mentioned"]?.Trim(), out var r) && r;
-                    var remoteType = remoteMentioned ? RemoteType.Remote : RemoteType.Unknown;
+                    var remoteRaw = row["remote_mentioned"]?.Trim() ?? row["remote_type"]?.Trim();
+                    var remoteType = RemoteType.Unknown;
+                    if (!string.IsNullOrWhiteSpace(remoteRaw))
+                    {
+                        var s = remoteRaw.Trim().ToLowerInvariant();
+                        if (s is "true" or "yes" or "1" or "remote")
+                        {
+                            remoteType = RemoteType.Remote;
+                        }
+                        else if (s is "false" or "no" or "0" or "none" or "unknown")
+                        {
+                            remoteType = RemoteType.Unknown;
+                        }
+                        else if (s is "hybrid")
+                        {
+                            remoteType = RemoteType.Hybrid;
+                        }
+                        else if (s is "onsite" or "in_office" or "inoffice")
+                        {
+                            remoteType = RemoteType.Onsite;
+                        }
+                        else
+                        {
+                            context.Summary.RecordUnmappedValue("remote_type", remoteRaw);
+                            remoteType = RemoteType.Unknown;
+                        }
+                    }
 
                     // Resurface policy
                     var proposedResurface = row["proposed_resurface"]?.Trim();
@@ -357,6 +390,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                         row.LineNumber,
                         rowResult.Error?.Code.ToString() ?? ErrorCode.ValidationError.ToString(),
                         rowResult.Error?.Message ?? "Failed to save appendix row"));
+                    recon.RecordErrored();
                     continue;
                 }
 
@@ -373,6 +407,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = updatedPosting;
                     context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{updatedPosting.NormalizedTitle}"] = updatedPosting;
                     context.Summary.PostingsUnchanged++;
+                    recon.RecordUnchanged("merged");
                 }
                 else if (updatedPosting is not null)
                 {
@@ -380,6 +415,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = updatedPosting;
                     context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{updatedPosting.NormalizedTitle}"] = updatedPosting;
                     context.Summary.PostingsUpdated++;
+                    recon.RecordUpdated();
                 }
                 else if (createdPosting is not null)
                 {
@@ -387,6 +423,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = createdPosting;
                     context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{createdPosting.NormalizedTitle}"] = createdPosting;
                     context.Summary.PostingsCreated++;
+                    recon.RecordCreated();
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -396,6 +433,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     row.LineNumber,
                     ErrorCode.ValidationError.ToString(),
                     ex.Message));
+                recon.RecordErrored();
             }
         }
 

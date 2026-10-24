@@ -285,6 +285,11 @@ public sealed class TrackerImportReportingTests : IClassFixture<IsolatedContaine
             Assert.Contains("Contacts Detected for Manual Entry", reportContent);
             Assert.Contains("roleradar contact add", reportContent);
 
+            // File-Level Reconciliation Summary Section
+            Assert.Contains("File-Level Reconciliation Summary", reportContent);
+            Assert.Contains("postings.json", reportContent);
+            Assert.Contains("applications.csv", reportContent);
+
             var client = new MongoClient(_fixture.HostMongoUri);
             await client.DropDatabaseAsync(dbName);
         }

@@ -6,6 +6,43 @@ public sealed record TrackerImportRowError(
     string ErrorCode,
     string Message);
 
+public sealed class FileReconciliationSummary
+{
+    public required string FileName { get; init; }
+    public int Read { get; set; }
+    public int Created { get; set; }
+    public int Updated { get; set; }
+    public int Unchanged { get; set; }
+    public int Errored { get; set; }
+    public Dictionary<string, int> SkippedByReason { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, int> UnchangedByReason { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public int TotalSkipped => SkippedByReason.Values.Sum();
+    public int TotalAccountedFor => Created + Updated + Unchanged + TotalSkipped + Errored;
+
+    public void RecordRead() => Read++;
+    public void RecordCreated() => Created++;
+    public void RecordUpdated() => Updated++;
+    public void RecordErrored() => Errored++;
+
+    public void RecordUnchanged(string? reason = null)
+    {
+        Unchanged++;
+        if (!string.IsNullOrWhiteSpace(reason))
+        {
+            UnchangedByReason.TryGetValue(reason, out var count);
+            UnchangedByReason[reason] = count + 1;
+        }
+    }
+
+    public void RecordSkipped(string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        SkippedByReason.TryGetValue(reason, out var count);
+        SkippedByReason[reason] = count + 1;
+    }
+}
+
 public sealed class TrackerImportSummary
 {
     public bool IsDryRun { get; set; }
@@ -25,6 +62,48 @@ public sealed class TrackerImportSummary
     public int CultureTruncations { get; set; }
     public int CultureUnmapped { get; set; }
     public int UnclaimedAppliedPostings { get; set; }
+
+    public Dictionary<string, FileReconciliationSummary> FileReconciliations { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public FileReconciliationSummary GetOrCreateFileReconciliation(string fileName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        if (!FileReconciliations.TryGetValue(fileName, out var recon))
+        {
+            recon = new FileReconciliationSummary { FileName = fileName };
+            FileReconciliations[fileName] = recon;
+        }
+        return recon;
+    }
+
+    public Dictionary<string, int> UnmappedValues { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, List<string>> UnmappedValueSamples { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public void RecordUnmappedValue(string fieldName, string? rawValue)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+        UnmappedValues.TryGetValue(fieldName, out var count);
+        UnmappedValues[fieldName] = count + 1;
+
+        if (string.Equals(fieldName, "culture_level", StringComparison.OrdinalIgnoreCase))
+        {
+            CultureUnmapped++;
+        }
+
+        if (!string.IsNullOrWhiteSpace(rawValue))
+        {
+            if (!UnmappedValueSamples.TryGetValue(fieldName, out var list))
+            {
+                list = new List<string>();
+                UnmappedValueSamples[fieldName] = list;
+            }
+
+            if (!list.Contains(rawValue) && list.Count < 50)
+            {
+                list.Add(rawValue);
+            }
+        }
+    }
 
     public Dictionary<string, int> FieldTruncations { get; } = new(StringComparer.OrdinalIgnoreCase);
 

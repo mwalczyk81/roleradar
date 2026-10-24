@@ -143,6 +143,58 @@ public sealed class PostingImportStepTests
         }
     }
 
+    [Fact]
+    public async Task AppendixRowsStep_FileReconciliation_SatisfiesReadEqualsCreatedPlusUpdatedPlusUnchangedPlusSkippedPlusErrored()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            // Row 1: Created
+            // Row 2: Skip decision -> Skipped (decision_skip)
+            // Row 3: Missing required title -> Errored
+            // Row 4: Empty line -> Skipped (empty_row)
+            // Row 5: Duplicate company+title with same disposition -> Unchanged (merged)
+            var csv = """
+                req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes
+                REQ-1,Acme Corp,Software Engineer,true,Details,2026-05-01,no-remote,no-remote,never,false,https://example.com/job/1,,
+                REQ-2,Acme Corp,Skipped Engineer,true,Details,2026-05-01,no-remote,no-remote,never,false,https://example.com/job/2,skip,
+                ,Acme Corp,,true,Details,2026-05-01,no-remote,no-remote,never,false,,,
+                ,,,,,,,,,,,,
+                REQ-5,Acme Corp,Software Engineer,true,Details,2026-05-01,no-remote,no-remote,never,false,https://example.com/job/5,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), csv);
+
+            var inMemoryCtx = new InMemoryPostingContext();
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var parser = new Rfc4180CsvParser();
+            var step = new AppendixRowsStep(parser, inMemoryCtx, criteriaStep);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result = await step.ExecuteAsync(context);
+            Assert.True(result.IsSuccess);
+
+            var recon = context.Summary.FileReconciliations["appendix-rows.csv"];
+            Assert.Equal(5, recon.Read);
+            Assert.Equal(1, recon.Created); // REQ-1
+            Assert.Equal(1, recon.Unchanged); // REQ-5 merged with REQ-1
+            Assert.Equal(2, recon.TotalSkipped); // REQ-2 (decision_skip) and empty row
+            Assert.Equal(1, recon.Errored); // missing title
+
+            // Reconciliation mathematical invariant holds!
+            Assert.Equal(recon.Read, recon.Created + recon.Updated + recon.Unchanged + recon.TotalSkipped + recon.Errored);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
     private static string CreateTempDir()
     {
         var path = Path.Combine(Path.GetTempPath(), $"rr_post_test_{Guid.NewGuid():N}");

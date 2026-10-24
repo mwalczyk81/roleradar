@@ -34,19 +34,30 @@ public sealed class ApplicationsStep : ITrackerImportStep
             return Result<bool>.Success(true);
         }
 
+        var recon = context.Summary.GetOrCreateFileReconciliation("applications.csv");
+        _standaloneNoteOrdinal = 0;
+
         using var reader = new StreamReader(filePath);
         var defaultDate = context.DefaultDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
 
         foreach (var row in _csvParser.Read(reader, hasHeader: true))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            recon.RecordRead();
 
             try
             {
+                if (!row.Fields.Any(f => !string.IsNullOrWhiteSpace(f)))
+                {
+                    recon.RecordSkipped("empty_row");
+                    continue;
+                }
+
                 var decision = row["decision"]?.Trim();
                 if (string.Equals(decision, "skip", StringComparison.OrdinalIgnoreCase))
                 {
                     context.Summary.ApplicationsUnchanged++;
+                    recon.RecordSkipped("decision_skip");
                     continue;
                 }
 
@@ -57,6 +68,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
                         row.LineNumber,
                         ErrorCode.ValidationError.ToString(),
                         $"Invalid decision value '{decision}'. Expected blank or 'skip'."));
+                    recon.RecordErrored();
                     continue;
                 }
 
@@ -81,9 +93,10 @@ public sealed class ApplicationsStep : ITrackerImportStep
                 // 1. Standalone Note branch
                 if (string.Equals(kind, "standalone_note", StringComparison.OrdinalIgnoreCase))
                 {
+                    var noteCreated = false;
                     var noteResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
                     {
-                        await ProcessStandaloneNoteAsync(context, row, defaultDate, ct);
+                        noteCreated = await ProcessStandaloneNoteAsync(context, row, defaultDate, ct);
                         return Result<bool>.Success(true);
                     }, cancellationToken);
 
@@ -94,6 +107,15 @@ public sealed class ApplicationsStep : ITrackerImportStep
                             row.LineNumber,
                             noteResult.Error?.Code.ToString() ?? ErrorCode.ValidationError.ToString(),
                             noteResult.Error?.Message ?? "Failed to save note"));
+                        recon.RecordErrored();
+                    }
+                    else if (noteCreated)
+                    {
+                        recon.RecordCreated();
+                    }
+                    else
+                    {
+                        recon.RecordUnchanged();
                     }
                     continue;
                 }
@@ -103,20 +125,19 @@ public sealed class ApplicationsStep : ITrackerImportStep
                 var rawTitle = (row["title"] ?? row["role"])?.Trim();
                 if (string.IsNullOrWhiteSpace(rawCompany) || string.IsNullOrWhiteSpace(rawTitle))
                 {
-                    if (row.Fields.Any(f => !string.IsNullOrWhiteSpace(f)))
-                    {
-                        context.Summary.Errors.Add(new TrackerImportRowError(
-                            "applications.csv",
-                            row.LineNumber,
-                            ErrorCode.ValidationError.ToString(),
-                            "Missing required company or title."));
-                    }
+                    context.Summary.Errors.Add(new TrackerImportRowError(
+                        "applications.csv",
+                        row.LineNumber,
+                        ErrorCode.ValidationError.ToString(),
+                        "Missing required company or title."));
+                    recon.RecordErrored();
                     continue;
                 }
 
+                var appCreated = false;
                 var appResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
                 {
-                    await ProcessApplicationAsync(context, row, defaultDate, reviewFlags, ct);
+                    appCreated = await ProcessApplicationAsync(context, row, defaultDate, reviewFlags, ct);
                     return Result<bool>.Success(true);
                 }, cancellationToken);
 
@@ -127,6 +148,15 @@ public sealed class ApplicationsStep : ITrackerImportStep
                         row.LineNumber,
                         appResult.Error?.Code.ToString() ?? ErrorCode.ValidationError.ToString(),
                         appResult.Error?.Message ?? "Failed to save application"));
+                    recon.RecordErrored();
+                }
+                else if (appCreated)
+                {
+                    recon.RecordCreated();
+                }
+                else
+                {
+                    recon.RecordUnchanged();
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -136,18 +166,22 @@ public sealed class ApplicationsStep : ITrackerImportStep
                     row.LineNumber,
                     ErrorCode.ValidationError.ToString(),
                     ex.Message));
+                recon.RecordErrored();
             }
         }
 
         return Result<bool>.Success(true);
     }
 
-    private async Task ProcessStandaloneNoteAsync(
+    private int _standaloneNoteOrdinal;
+
+    private async Task<bool> ProcessStandaloneNoteAsync(
         TrackerImportContext context,
         ICsvRecord row,
         DateOnly defaultDate,
         CancellationToken cancellationToken)
     {
+        _standaloneNoteOrdinal++;
         var company = row["company"]?.Trim();
         var title = (row["title"] ?? row["role"])?.Trim();
         var appliedOn = (row["applied_on"] ?? row["applied_date_md"])?.Trim();
@@ -163,16 +197,34 @@ public sealed class ApplicationsStep : ITrackerImportStep
         var dateOutcome = DateInferenceRule.Resolve(appliedOn, defaultDate);
         TrackDateInference(context, dateOutcome);
 
-        var fullTitle = !string.IsNullOrWhiteSpace(company)
-            ? $"{company} - {(string.IsNullOrWhiteSpace(title) ? "Note" : title)}"
-            : (string.IsNullOrWhiteSpace(title) ? "Note" : title);
+        string fullTitle;
+        if (!string.IsNullOrWhiteSpace(company) && !string.IsNullOrWhiteSpace(title))
+        {
+            fullTitle = $"{company} - {title}";
+        }
+        else if (!string.IsNullOrWhiteSpace(company))
+        {
+            var rawSnippet = !string.IsNullOrWhiteSpace(raw) ? raw : (!string.IsNullOrWhiteSpace(notes) ? notes : "Note");
+            var snippet = rawSnippet.Length > 40 ? rawSnippet[..40].Trim() : rawSnippet.Trim();
+            fullTitle = $"{company} - Imported note {_standaloneNoteOrdinal}: {snippet}";
+        }
+        else if (!string.IsNullOrWhiteSpace(title))
+        {
+            fullTitle = title;
+        }
+        else
+        {
+            var rawSnippet = !string.IsNullOrWhiteSpace(raw) ? raw : (!string.IsNullOrWhiteSpace(notes) ? notes : (!string.IsNullOrWhiteSpace(correctedNotes) ? correctedNotes : "General"));
+            var snippet = rawSnippet.Length > 40 ? rawSnippet[..40].Trim() : rawSnippet.Trim();
+            fullTitle = $"Imported note {_standaloneNoteOrdinal}: {snippet}";
+        }
 
-        fullTitle = TrackerImportFieldLimiter.LimitNoteTitle(fullTitle, context.Summary) ?? "Note";
+        fullTitle = TrackerImportFieldLimiter.LimitNoteTitle(fullTitle, context.Summary) ?? $"Imported note {_standaloneNoteOrdinal}";
 
         var existingNoteRes = await _context.NoteExistsAsync(context.OwnerId, fullTitle, "job-search", cancellationToken);
         if (existingNoteRes.IsSuccess && existingNoteRes.Value)
         {
-            return;
+            return false;
         }
 
         var noteDateStr = dateOutcome.ResolvedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -198,9 +250,10 @@ public sealed class ApplicationsStep : ITrackerImportStep
 
         await _context.AppendAuditEntryAsync(audit, cancellationToken);
         context.Summary.StandaloneNotesCreated++;
+        return true;
     }
 
-    private async Task ProcessApplicationAsync(
+    private async Task<bool> ProcessApplicationAsync(
         TrackerImportContext context,
         ICsvRecord row,
         DateOnly defaultDate,
@@ -212,7 +265,23 @@ public sealed class ApplicationsStep : ITrackerImportStep
         var rawReq = (row["req"] ?? row["req_id"])?.Trim();
         var appliedOn = (row["applied_on"] ?? row["applied_date_md"])?.Trim();
         var rejectedStr = row["rejected"]?.Trim();
-        var isRejected = bool.TryParse(rejectedStr, out var rej) && rej;
+        var isRejected = false;
+        if (!string.IsNullOrWhiteSpace(rejectedStr))
+        {
+            var s = rejectedStr.Trim().ToLowerInvariant();
+            if (s is "true" or "yes" or "1" or "t" or "y")
+            {
+                isRejected = true;
+            }
+            else if (s is "false" or "no" or "0" or "f" or "n")
+            {
+                isRejected = false;
+            }
+            else
+            {
+                context.Summary.RecordUnmappedValue("rejected", rejectedStr);
+            }
+        }
         var rejectedDateMd = row["rejected_date_md"]?.Trim();
 
         var companyName = TrackerImportFieldLimiter.LimitCompanyName(rawCompanyName, context.Summary);
@@ -220,8 +289,34 @@ public sealed class ApplicationsStep : ITrackerImportStep
         var req = TrackerImportFieldLimiter.LimitRequisitionId(rawReq, context.Summary);
 
         // Also limit optional free-text inputs for referral, fit, resume_variant
-        TrackerImportFieldLimiter.LimitReferral(row["referral"]?.Trim(), context.Summary);
-        TrackerImportFieldLimiter.LimitFit(row["fit"]?.Trim(), context.Summary);
+        var referralRaw = row["referral"]?.Trim();
+        TrackerImportFieldLimiter.LimitReferral(referralRaw, context.Summary);
+        if (!string.IsNullOrWhiteSpace(referralRaw))
+        {
+            var s = referralRaw.Trim().ToLowerInvariant();
+            if (s is not ("true" or "yes" or "1" or "false" or "no" or "0"))
+            {
+                context.Summary.RecordUnmappedValue("referral", referralRaw);
+            }
+        }
+
+        var fitRaw = row["fit"]?.Trim();
+        TrackerImportFieldLimiter.LimitFit(fitRaw, context.Summary);
+        decimal? fitScore = null;
+        if (!string.IsNullOrWhiteSpace(fitRaw))
+        {
+            var cleanFit = fitRaw.TrimEnd('.');
+            if (decimal.TryParse(cleanFit, NumberStyles.Any, CultureInfo.InvariantCulture, out var parsedScore) &&
+                parsedScore is >= 0.0m and <= 10.0m)
+            {
+                fitScore = parsedScore;
+            }
+            else
+            {
+                context.Summary.RecordUnmappedValue("fit", fitRaw);
+            }
+        }
+
         TrackerImportFieldLimiter.LimitResumeVariant(row["resume_variant"]?.Trim(), context.Summary);
 
         var dateOutcome = DateInferenceRule.Resolve(appliedOn, defaultDate);
@@ -239,8 +334,9 @@ public sealed class ApplicationsStep : ITrackerImportStep
                                reviewFlags.Contains("date_is_stated_not_submitted", StringComparison.OrdinalIgnoreCase);
 
         var statedFlagText = isDateStatedFlag ? "date_is_stated_not_submitted" : null;
+        var fitNoteText = !string.IsNullOrWhiteSpace(fitRaw) ? $"fit: {fitRaw.TrimEnd('.')}" : null;
         var rawNotes = !string.IsNullOrWhiteSpace(row["corrected_notes"]) ? row["corrected_notes"]?.Trim() : row["raw"]?.Trim();
-        var combinedNotes = string.Join("; ", new[] { statedFlagText, rawNotes }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        var combinedNotes = string.Join("; ", new[] { statedFlagText, fitNoteText, rawNotes }.Where(s => !string.IsNullOrWhiteSpace(s)));
 
         var canonicalCompany = !string.IsNullOrWhiteSpace(companyName) && context.CompanyAliases.TryGetValue(companyName, out var alias)
             ? alias
@@ -357,6 +453,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
                 originalUrl: null,
                 requisitionId: req,
                 remoteType: RemoteType.Unknown,
+                score: fitScore,
                 disposition: isRejected ? PostingDisposition.Rejected : PostingDisposition.Applied,
                 dispositionReason: isRejected ? "Rejected" : null,
                 now: appliedDateTime);
@@ -389,11 +486,15 @@ public sealed class ApplicationsStep : ITrackerImportStep
         var resumeVariant = ResumeVariant.Tailored;
         if (!string.IsNullOrWhiteSpace(rvRaw))
         {
-            if (!TrackingEnumExtensions.TryParseResumeVariant(rvRaw, out var parsedRv))
+            if (TrackingEnumExtensions.TryParseResumeVariant(rvRaw, out var parsedRv))
             {
-                throw new ArgumentException($"Invalid resume variant '{rvRaw}'. Expected tailored, as_is, or ic_framed.");
+                resumeVariant = parsedRv;
             }
-            resumeVariant = parsedRv;
+            else
+            {
+                context.Summary.RecordUnmappedValue("resume_variant", rvRaw);
+                resumeVariant = ResumeVariant.Tailored;
+            }
         }
 
         DesiredSalary? desiredSalary = null;
@@ -410,7 +511,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
         if (existingAppRes.IsSuccess && existingAppRes.Value is not null)
         {
             context.Summary.ApplicationsUnchanged++;
-            return;
+            return false;
         }
 
         var submittedDateStr = dateOutcome.ResolvedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
@@ -527,6 +628,8 @@ public sealed class ApplicationsStep : ITrackerImportStep
 
             await _context.AppendAuditEntryAsync(auditEvt2, cancellationToken);
         }
+
+        return true;
     }
 
     private static void TrackDateInference(TrackerImportContext context, ResolvedDateOutcome outcome)

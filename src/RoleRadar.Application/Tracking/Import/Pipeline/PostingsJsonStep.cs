@@ -40,6 +40,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
             return Result<bool>.Success(true);
         }
 
+        var recon = context.Summary.GetOrCreateFileReconciliation("postings.json");
         var defaultDate = context.DefaultDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
         var entryOrdinal = 0;
 
@@ -47,6 +48,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
         {
             cancellationToken.ThrowIfCancellationRequested();
             entryOrdinal++;
+            recon.RecordRead();
 
             try
             {
@@ -60,6 +62,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                         entryOrdinal,
                         ErrorCode.ValidationError.ToString(),
                         "Missing required title or company"));
+                    recon.RecordErrored();
                     continue;
                 }
 
@@ -77,13 +80,28 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                 var cultureLevel = CultureLevel.Unknown;
                 if (element.TryGetProperty("cultureLevel", out var cultLvlProp) && cultLvlProp.GetString() is { } cultLvlStr)
                 {
-                    cultureLevel = cultLvlStr.Trim().ToLowerInvariant() switch
+                    var s = cultLvlStr.Trim().ToLowerInvariant();
+                    cultureLevel = s switch
                     {
                         "stable" => CultureLevel.Stable,
                         "moderate" => CultureLevel.Moderate,
-                        "high_risk" => CultureLevel.HighRisk,
+                        "high_risk" or "highrisk" => CultureLevel.HighRisk,
                         "unknown" => CultureLevel.Unknown,
-                        _ => FallbackCultureLevel(context)
+                        _ => FallbackCultureLevel(context, cultLvlStr)
+                    };
+                }
+
+                var remoteType = RemoteType.Unknown;
+                if (element.TryGetProperty("remoteType", out var remProp) && remProp.GetString() is { } remStr)
+                {
+                    var s = remStr.Trim().ToLowerInvariant();
+                    remoteType = s switch
+                    {
+                        "remote" => RemoteType.Remote,
+                        "hybrid" => RemoteType.Hybrid,
+                        "onsite" => RemoteType.Onsite,
+                        "unknown" => RemoteType.Unknown,
+                        _ => FallbackRemoteType(context, remStr)
                     };
                 }
 
@@ -231,7 +249,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                         sourceKind: SourceKind.Aggregator,
                         originalUrl: url,
                         requisitionId: reqId,
-                        remoteType: RemoteType.Unknown,
+                        remoteType: remoteType,
                         compensation: compText != null ? new Compensation(Text: compText) : null,
                         score: (decimal?)score,
                         cultureLevel: cultureLevel,
@@ -275,6 +293,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                         entryOrdinal,
                         rowResult.Error?.Code.ToString() ?? ErrorCode.ValidationError.ToString(),
                         rowResult.Error?.Message ?? "Failed to save posting"));
+                    recon.RecordErrored();
                     continue;
                 }
 
@@ -294,6 +313,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                     if (isNewlyCreated)
                     {
                         context.Summary.PostingsCreated++;
+                        recon.RecordCreated();
 
                         if (originalWasApplied)
                         {
@@ -304,6 +324,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                     else
                     {
                         context.Summary.PostingsUnchanged++;
+                        recon.RecordUnchanged();
                     }
                 }
             }
@@ -314,15 +335,22 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                     entryOrdinal,
                     ErrorCode.ValidationError.ToString(),
                     ex.Message));
+                recon.RecordErrored();
             }
         }
 
         return Result<bool>.Success(true);
     }
 
-    private static CultureLevel FallbackCultureLevel(TrackerImportContext context)
+    private static CultureLevel FallbackCultureLevel(TrackerImportContext context, string rawValue)
     {
-        context.Summary.CultureUnmapped++;
+        context.Summary.RecordUnmappedValue("culture_level", rawValue);
         return CultureLevel.Unknown;
+    }
+
+    private static RemoteType FallbackRemoteType(TrackerImportContext context, string rawValue)
+    {
+        context.Summary.RecordUnmappedValue("remote_type", rawValue);
+        return RemoteType.Unknown;
     }
 }

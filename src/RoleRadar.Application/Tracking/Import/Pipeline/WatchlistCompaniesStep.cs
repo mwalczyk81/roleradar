@@ -27,25 +27,32 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
             return Result<bool>.Success(true);
         }
 
+        var recon = context.Summary.GetOrCreateFileReconciliation("watchlist-companies.csv");
+
         using var reader = new StreamReader(filePath);
         foreach (var row in _csvParser.Read(reader, hasHeader: true))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            recon.RecordRead();
 
             try
             {
+                if (!row.Fields.Any(f => !string.IsNullOrWhiteSpace(f)))
+                {
+                    recon.RecordSkipped("empty_row");
+                    continue;
+                }
+
                 var companyName = row["company"]?.Trim();
                 if (string.IsNullOrWhiteSpace(companyName))
                 {
                     // If row has any non-blank field, missing company is a validation error
-                    if (row.Fields.Any(f => !string.IsNullOrWhiteSpace(f)))
-                    {
-                        context.Summary.Errors.Add(new TrackerImportRowError(
-                            "watchlist-companies.csv",
-                            row.LineNumber,
-                            ErrorCode.ValidationError.ToString(),
-                            "Missing required 'company' column value."));
-                    }
+                    context.Summary.Errors.Add(new TrackerImportRowError(
+                        "watchlist-companies.csv",
+                        row.LineNumber,
+                        ErrorCode.ValidationError.ToString(),
+                        "Missing required 'company' column value."));
+                    recon.RecordErrored();
                     continue;
                 }
 
@@ -53,6 +60,7 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                 if (string.Equals(decision, "skip", StringComparison.OrdinalIgnoreCase))
                 {
                     context.Summary.CompaniesUnchanged++;
+                    recon.RecordSkipped("decision_skip");
                     continue;
                 }
 
@@ -63,11 +71,12 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                         row.LineNumber,
                         ErrorCode.ValidationError.ToString(),
                         $"Invalid decision value '{decision}'. Expected blank or 'skip'."));
+                    recon.RecordErrored();
                     continue;
                 }
 
                 var tier = row["tier"]?.Trim();
-                var status = MapStatus(tier);
+                var status = MapStatus(tier, context);
 
                 var rawNotes = !string.IsNullOrWhiteSpace(row["corrected_notes"])
                     ? row["corrected_notes"]!.Trim()
@@ -87,6 +96,7 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                     var existingCompany = existing.Value;
                     context.CanonicalCompanies[canonicalName] = existingCompany;
                     context.Summary.CompaniesUnchanged++;
+                    recon.RecordUnchanged();
                     continue;
                 }
 
@@ -133,6 +143,7 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                         row.LineNumber,
                         rowResult.Error?.Code.ToString() ?? ErrorCode.ValidationError.ToString(),
                         rowResult.Error?.Message ?? "Failed to save company"));
+                    recon.RecordErrored();
                     continue;
                 }
 
@@ -140,6 +151,7 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                 {
                     context.CanonicalCompanies[canonicalName] = createdCompany;
                     context.Summary.CompaniesCreated++;
+                    recon.RecordCreated();
                 }
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -149,13 +161,14 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                     row.LineNumber,
                     ErrorCode.ValidationError.ToString(),
                     ex.Message));
+                recon.RecordErrored();
             }
         }
 
         return Result<bool>.Success(true);
     }
 
-    private static CompanyStatus MapStatus(string? tier)
+    private static CompanyStatus MapStatus(string? tier, TrackerImportContext context)
     {
         if (string.IsNullOrWhiteSpace(tier))
         {
@@ -168,7 +181,13 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
             "watch" => CompanyStatus.Watch,
             "avoid" => CompanyStatus.Avoid,
             "neutral" => CompanyStatus.Neutral,
-            _ => throw new ArgumentException($"Invalid company status tier '{tier}'. Expected 'target', 'watch', 'avoid', or 'neutral'.", nameof(tier))
+            _ => FallbackTier(context, tier)
         };
+    }
+
+    private static CompanyStatus FallbackTier(TrackerImportContext context, string rawTier)
+    {
+        context.Summary.RecordUnmappedValue("tier", rawTier);
+        return CompanyStatus.Neutral;
     }
 }

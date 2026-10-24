@@ -85,6 +85,56 @@ public static class TrackerImportReportGenerator
         }
         sb.AppendLine();
 
+        // 2b. File Reconciliation Summary
+        sb.AppendLine("--------------------------------------------------------------------------------");
+        sb.AppendLine("                     File-Level Reconciliation Summary                          ");
+        sb.AppendLine("--------------------------------------------------------------------------------");
+        if (summary.FileReconciliations.Count == 0)
+        {
+            sb.AppendLine("No files processed.");
+        }
+        else
+        {
+            sb.AppendLine(string.Format(inv, "{0,-25} {1,8} {2,8} {3,8} {4,10} {5,8} {6,8}", "File", "Read", "Created", "Updated", "Unchanged", "Skipped", "Errored"));
+            sb.AppendLine(new string('-', 81));
+            foreach (var f in summary.FileReconciliations.Values.OrderBy(x => x.FileName, StringComparer.OrdinalIgnoreCase))
+            {
+                sb.AppendLine(string.Format(inv, "{0,-25} {1,8} {2,8} {3,8} {4,10} {5,8} {6,8}", f.FileName, f.Read, f.Created, f.Updated, f.Unchanged, f.TotalSkipped, f.Errored));
+                if (f.SkippedByReason.Count > 0)
+                {
+                    sb.AppendLine("    Skipped Breakdown:");
+                    foreach (var (reason, count) in f.SkippedByReason.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        sb.AppendLine(inv, $"      - {reason}: {count}");
+                    }
+                }
+                if (f.UnchangedByReason.Count > 0)
+                {
+                    sb.AppendLine("    Unchanged Breakdown:");
+                    foreach (var (reason, count) in f.UnchangedByReason.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        sb.AppendLine(inv, $"      - {reason}: {count}");
+                    }
+                }
+            }
+        }
+        sb.AppendLine();
+
+        if (summary.UnmappedValues.Count > 0)
+        {
+            sb.AppendLine("--------------------------------------------------------------------------------");
+            sb.AppendLine("                              Unmapped Values                                   ");
+            sb.AppendLine("--------------------------------------------------------------------------------");
+            foreach (var (field, count) in summary.UnmappedValues.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                var samples = summary.UnmappedValueSamples.TryGetValue(field, out var list) && list.Count > 0
+                    ? $" (samples: {string.Join(", ", list.Take(5))})"
+                    : string.Empty;
+                sb.AppendLine(inv, $"  - {field}: {count}{samples}");
+            }
+            sb.AppendLine();
+        }
+
         // 3. Companies Requiring Alias Review
         sb.AppendLine("--------------------------------------------------------------------------------");
         sb.AppendLine("                     Companies Requiring Alias Review                           ");
