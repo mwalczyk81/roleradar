@@ -1,9 +1,18 @@
+using System.Reflection;
 using Xunit;
 
 namespace RoleRadar.Tests.Integration.Hosting;
 
 public sealed class ContainerColdStartBenchmarkTests
 {
+    [Fact]
+    public void ColdStartBenchmark_IsConfiguredWith_BenchmarkCollection()
+    {
+        var attr = typeof(ContainerColdStartBenchmarkTests).GetCustomAttribute<CollectionAttribute>();
+        Assert.NotNull(attr);
+        Assert.Equal("BenchmarkCollection", attr.Name);
+    }
+
     [Fact]
     public async Task McpColdStart_UnderContainerHarness_RespondsUnder3Seconds()
     {
