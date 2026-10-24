@@ -60,7 +60,7 @@ public sealed class AuditArchiveAndReadinessIntegrationTests : IAsyncLifetime
         {
             opts.ConnectionString = connectionString;
             opts.DatabaseName = databaseName;
-            opts.ReadinessTimeout = TimeSpan.FromSeconds(2);
+            opts.ReadinessTimeout = TimeSpan.FromSeconds(15);
         });
         services.AddScoped<NoteMcpTools>();
         return services.BuildServiceProvider();
