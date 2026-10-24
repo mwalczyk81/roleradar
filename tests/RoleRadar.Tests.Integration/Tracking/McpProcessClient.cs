@@ -38,8 +38,14 @@ internal sealed class McpProcessClient : IAsyncDisposable
         }
     }
 
-    public static async Task<McpProcessClient> StartAsync(string mcpDllPath, IReadOnlyDictionary<string, string> env)
+    public static async Task<McpProcessClient> StartAsync(string mcpDllPath, IReadOnlyDictionary<string, string> env, bool? forceContainer = null)
     {
+        var runInContainer = forceContainer ?? (Environment.GetEnvironmentVariable("ROLERADAR_TEST_IMAGE") == "1");
+        if (runInContainer)
+        {
+            throw new NotImplementedException("Container mode execution in McpProcessClient is not yet implemented (T027).");
+        }
+
         var psi = new ProcessStartInfo
         {
             FileName = "dotnet",
