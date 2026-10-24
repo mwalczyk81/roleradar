@@ -225,4 +225,5 @@ Resets and drops all notes, revisions, and audit collections in the database.
 ## Development & Security Guidelines
 
 - Real names, personal addresses, and sensitive personal data must **never** be committed to this repository. See [docs/denylist.example.txt](docs/denylist.example.txt) for configuration of the pre-commit and pre-push sanitization hooks.
+- Container images run as unprivileged `USER 1654:1654`. On Linux and macOS hosts, `scripts/roleradar-docker.ps1` and test runners dynamically map `--user "$(id -u):$(id -g)"` for writable volume mounts so files written to host directories match host runner ownership.
 - Contribution guidelines and pull request conventions are detailed in [CONTRIBUTING.md](CONTRIBUTING.md).

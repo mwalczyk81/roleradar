@@ -121,7 +121,8 @@ public sealed class ContactNoLeakScannerIntegrationTests : IAsyncLifetime
         }
 
         // 5. Backup round-trip: .rrbak must NOT leak plaintext of the name or notes
-        var backupFile = Path.Combine(Path.GetTempPath(), $"contact_leak_test_{Guid.NewGuid():N}.rrbak");
+        var tempDir = RoleRadar.Tests.Integration.Hosting.ContainerTestHarness.CreateSharedTempDirectory("contact_leak_test");
+        var backupFile = Path.Combine(tempDir, $"contact_leak_test_{Guid.NewGuid():N}.rrbak");
         try
         {
             const string passphrase = "CorrectHorseBatteryStaple123!";
@@ -143,10 +144,14 @@ public sealed class ContactNoLeakScannerIntegrationTests : IAsyncLifetime
         }
         finally
         {
-            if (File.Exists(backupFile))
+            try
             {
-                File.Delete(backupFile);
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, recursive: true);
+                }
             }
+            catch { }
         }
     }
 

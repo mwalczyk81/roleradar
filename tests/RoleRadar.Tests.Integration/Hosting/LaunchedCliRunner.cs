@@ -49,8 +49,12 @@ internal static class LaunchedCliRunner
                 var containerDir = "/data/backup";
                 var containerPath = $"{containerDir}/{fileName}";
 
-                Directory.CreateDirectory(hostDir);
+                ContainerTestHarness.EnsureWritableDirectory(hostDir);
                 runArgs.Append(System.Globalization.CultureInfo.InvariantCulture, $"-v \"{hostDir}:{containerDir}:rw\" ");
+                if (!string.IsNullOrEmpty(ContainerTestHarness.HostUserAndGroup))
+                {
+                    runArgs.Append(System.Globalization.CultureInfo.InvariantCulture, $"--user \"{ContainerTestHarness.HostUserAndGroup}\" ");
+                }
 
                 translatedArgs = arguments.Replace($"\"{hostPath}\"", $"\"{containerPath}\"");
             }

@@ -29,8 +29,7 @@ public sealed class ContainerLegacyBackupCompatibilityTests : IClassFixture<Isol
         var uniqueDb = $"rrtest_legacy001_{Guid.NewGuid():N}";
         var db = client.GetDatabase(uniqueDb);
 
-        var tempBackupDir = Path.Combine(Path.GetTempPath(), $"rr_leg001_bak_{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempBackupDir);
+        var tempBackupDir = ContainerTestHarness.CreateSharedTempDirectory("rr_leg001_bak");
         var hostBackupFile = Path.Combine(tempBackupDir, "legacy001.rrbak");
         var containerBackupFile = "/data/backup/legacy001.rrbak";
 

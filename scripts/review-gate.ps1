@@ -85,13 +85,13 @@ try {
     }
 
     foreach ($line in $testOutput) {
-        if ($line -match 'Passed!\s+-\s+Failed:\s+0,\s+Passed:\s+(\d+).*RoleRadar\.Tests\.Unit\.dll') {
+        if ($line -match 'Passed!\s+-\s+Failed:\s+0,\s+Passed:\s+(\d+).*RoleRadar[.]Tests[.]Unit[.]dll') {
             $testCounts.Unit = [int]$Matches[1]
-        } elseif ($line -match 'Passed!\s+-\s+Failed:\s+0,\s+Passed:\s+(\d+).*RoleRadar\.Tests\.Architecture\.dll') {
+        } elseif ($line -match 'Passed!\s+-\s+Failed:\s+0,\s+Passed:\s+(\d+).*RoleRadar[.]Tests[.]Architecture[.]dll') {
             $testCounts.Arch = [int]$Matches[1]
-        } elseif ($line -match 'Passed!\s+-\s+Failed:\s+0,\s+Passed:\s+(\d+).*RoleRadar\.Tests\.Contract\.dll') {
+        } elseif ($line -match 'Passed!\s+-\s+Failed:\s+0,\s+Passed:\s+(\d+).*RoleRadar[.]Tests[.]Contract[.]dll') {
             $testCounts.Contract = [int]$Matches[1]
-        } elseif ($line -match 'Passed!\s+-\s+Failed:\s+0,\s+Passed:\s+(\d+).*RoleRadar\.Tests\.Integration\.dll') {
+        } elseif ($line -match 'Passed!\s+-\s+Failed:\s+0,\s+Passed:\s+(\d+).*RoleRadar[.]Tests[.]Integration[.]dll') {
             $testCounts.Integration = [int]$Matches[1]
         }
     }

@@ -85,6 +85,12 @@ if ($isCli -and $forwardArgs.Count -gt 0) {
         $absDest = (Resolve-Path $destPath).Path
         $dockerArgs.Add('-v')
         $dockerArgs.Add("${absDest}:/data/backup:rw")
+        if (-not [System.OperatingSystem]::IsWindows()) {
+            $uid = (id -u).Trim()
+            $gid = (id -g).Trim()
+            $dockerArgs.Add('--user')
+            $dockerArgs.Add("${uid}:${gid}")
+        }
         $forwardArgs[1] = '/data/backup'
     }
     elseif ($subCmd -eq 'restore' -and $forwardArgs.Count -gt 1) {

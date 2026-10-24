@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace RoleRadar.Tests.Integration.Hosting;
 
@@ -66,6 +68,82 @@ public static class ContainerTestHarness
         {
             throw new InvalidOperationException("Refusing to drop protected default database 'roleradar' in test cleanup.");
         }
+    }
+
+    public static string? HostUserAndGroup { get; } = ResolveHostUserAndGroup();
+
+    private static string? ResolveHostUserAndGroup()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            return null;
+        }
+
+        try
+        {
+            var psi = new ProcessStartInfo
+            {
+                FileName = "id",
+                Arguments = "-u",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+            using var uProc = Process.Start(psi);
+            var uid = uProc?.StandardOutput.ReadToEnd().Trim();
+            uProc?.WaitForExit();
+
+            psi.Arguments = "-g";
+            using var gProc = Process.Start(psi);
+            var gid = gProc?.StandardOutput.ReadToEnd().Trim();
+            gProc?.WaitForExit();
+
+            if (!string.IsNullOrEmpty(uid) && !string.IsNullOrEmpty(gid))
+            {
+                return $"{uid}:{gid}";
+            }
+        }
+        catch
+        {
+            // Ignore error resolving id on non-POSIX or minimal containers
+        }
+
+        return null;
+    }
+
+    public static void EnsureWritableDirectory(string directoryPath)
+    {
+        if (string.IsNullOrWhiteSpace(directoryPath))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(directoryPath);
+        if (!OperatingSystem.IsWindows())
+        {
+            try
+            {
+                File.SetUnixFileMode(directoryPath,
+                    UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
+                    UnixFileMode.GroupRead | UnixFileMode.GroupWrite | UnixFileMode.GroupExecute |
+                    UnixFileMode.OtherRead | UnixFileMode.OtherWrite | UnixFileMode.OtherExecute);
+            }
+            catch
+            {
+                try
+                {
+                    Process.Start("chmod", $"777 \"{directoryPath}\"")?.WaitForExit();
+                }
+                catch { }
+            }
+        }
+    }
+
+    public static string CreateSharedTempDirectory(string prefix)
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"{prefix}_{Guid.NewGuid():N}");
+        EnsureWritableDirectory(path);
+        return path;
     }
 
     public static async Task EnsureImagesBuiltAsync()
@@ -173,12 +251,32 @@ public static class ContainerTestHarness
             runArgs.Append(System.Globalization.CultureInfo.InvariantCulture, $"--entrypoint {entrypoint} ");
         }
 
+        var hasWritableMount = false;
         if (volumes is not null)
         {
             foreach (var vol in volumes)
             {
+                var match = Regex.Match(vol, @"^(.+?):(/[^:]+)(?::([a-z,]+))?$");
+                if (match.Success)
+                {
+                    var mode = match.Groups[3].Value;
+                    if (string.IsNullOrEmpty(mode) || mode.Contains("rw", StringComparison.OrdinalIgnoreCase))
+                    {
+                        hasWritableMount = true;
+                    }
+                    EnsureWritableDirectory(match.Groups[1].Value);
+                }
+                else
+                {
+                    hasWritableMount = true;
+                }
                 runArgs.Append(System.Globalization.CultureInfo.InvariantCulture, $"-v \"{vol}\" ");
             }
+        }
+
+        if (hasWritableMount && !string.IsNullOrEmpty(HostUserAndGroup))
+        {
+            runArgs.Append(System.Globalization.CultureInfo.InvariantCulture, $"--user \"{HostUserAndGroup}\" ");
         }
 
         if (environment is not null)

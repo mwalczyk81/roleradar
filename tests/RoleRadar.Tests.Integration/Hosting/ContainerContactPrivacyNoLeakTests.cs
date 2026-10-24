@@ -114,7 +114,8 @@ public sealed class ContainerContactPrivacyNoLeakTests : IAsyncLifetime
         }
 
         // 5. Backup round-trip via CLI container: .rrbak must NOT leak plaintext of the name or notes
-        var backupFile = Path.Combine(Path.GetTempPath(), $"container_contact_leak_{Guid.NewGuid():N}.rrbak");
+        var tempDir = ContainerTestHarness.CreateSharedTempDirectory("container_contact_leak");
+        var backupFile = Path.Combine(tempDir, $"container_contact_leak_{Guid.NewGuid():N}.rrbak");
         try
         {
             const string passphrase = "CorrectHorseBatteryStaple123!";
@@ -136,10 +137,14 @@ public sealed class ContainerContactPrivacyNoLeakTests : IAsyncLifetime
         }
         finally
         {
-            if (File.Exists(backupFile))
+            try
             {
-                File.Delete(backupFile);
+                if (Directory.Exists(tempDir))
+                {
+                    Directory.Delete(tempDir, recursive: true);
+                }
             }
+            catch { }
         }
     }
 

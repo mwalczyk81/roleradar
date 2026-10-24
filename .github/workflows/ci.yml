@@ -60,6 +60,17 @@ jobs:
           dotnet test tests/RoleRadar.Tests.Unit/RoleRadar.Tests.Unit.csproj -c Release --no-build
           dotnet test tests/RoleRadar.Tests.Architecture/RoleRadar.Tests.Architecture.csproj -c Release --no-build
 
+      - name: Run Pester script portability tests
+        shell: pwsh
+        run: |
+          Set-StrictMode -Version Latest
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version -like '5.*' })) {
+              Install-Module -Name Pester -RequiredVersion 5.9.1 -Scope CurrentUser -Force -SkipPublisherCheck
+          }
+          Import-Module Pester -RequiredVersion 5.9.1
+          Invoke-Pester -Path tests/RoleRadar.Tests.Unit/Scripts/ScriptPortability.Tests.ps1 -CI
+
   macos-verify:
     name: macOS (Unit, Architecture & Script Portability)
     runs-on: macos-latest
@@ -93,14 +104,16 @@ jobs:
         run: |
           Set-StrictMode -Version Latest
           $ErrorActionPreference = 'Stop'
-          if (-not (Get-Module -ListAvailable -Name Pester)) {
-              Install-Module -Name Pester -Scope CurrentUser -Force -SkipPublisherCheck
+          if (-not (Get-Module -ListAvailable -Name Pester | Where-Object { $_.Version -like '5.*' })) {
+              Install-Module -Name Pester -RequiredVersion 5.9.1 -Scope CurrentUser -Force -SkipPublisherCheck
           }
-          Invoke-Pester -Script tests/RoleRadar.Tests.Unit/Scripts/ScriptPortability.Tests.ps1 -EnableExit
+          Import-Module Pester -RequiredVersion 5.9.1
+          Invoke-Pester -Path tests/RoleRadar.Tests.Unit/Scripts/ScriptPortability.Tests.ps1 -CI
 
   ubuntu-build-and-test:
-    name: Ubuntu (Build, Testcontainers, Coverage & Container Suite)
-    runs-on: ubuntu-latest
+    name: Ubuntu (Build, Testcontainers, >=85% Coverage & Pre-Commit)
+    # ubuntu-latest recently moved to 26.04 where Testcontainers MongoDB fails ("mongosh or mongo binary could not be found"); pinned to 24.04
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -258,3 +271,48 @@ jobs:
 
       - name: Verify container cold-start timing (<3.0s)
         run: dotnet test tests/RoleRadar.Tests.Integration/RoleRadar.Tests.Integration.csproj -c Release --no-build --filter "FullyQualifiedName~ContainerColdStartBenchmarkTests"
+
+  ubuntu-2604-diag:
+    name: Ubuntu 26.04 Diagnostic (Contract & Mongo Investigation)
+    runs-on: ubuntu-26.04
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore with locked dependencies
+        run: dotnet restore tests/RoleRadar.Tests.Contract/RoleRadar.Tests.Contract.csproj --locked-mode
+
+      - name: Build Contract project
+        run: dotnet build tests/RoleRadar.Tests.Contract/RoleRadar.Tests.Contract.csproj -c Release --no-restore -warnaserror
+
+      - name: Run Contract tests (diagnostic)
+        id: contract_run
+        continue-on-error: true
+        run: dotnet test tests/RoleRadar.Tests.Contract/RoleRadar.Tests.Contract.csproj -c Release --no-build --logger "console;verbosity=detailed"
+
+      - name: Diagnostic Docker and Mongo logs on failure
+        if: steps.contract_run.outcome != 'success'
+        run: |
+          echo "=== Docker Version ==="
+          docker version || true
+          echo "=== Docker Info ==="
+          docker info || true
+          echo "=== Docker Containers ==="
+          docker ps -a || true
+          echo "=== Mongo Container Logs ==="
+          for c in $(docker ps -a --filter "ancestor=mongo" --format "{{.ID}}"); do
+            echo "--- Container $c ---"
+            docker logs "$c" || true
+          done
+          for c in $(docker ps -a --filter "name=mongo" --format "{{.ID}}"); do
+            echo "--- Container $c ---"
+            docker logs "$c" || true
+          done

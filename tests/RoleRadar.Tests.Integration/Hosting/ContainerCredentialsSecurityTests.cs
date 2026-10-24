@@ -238,9 +238,10 @@ public sealed class ContainerCredentialsSecurityTests : IClassFixture<IsolatedCo
                 HostMongoUri = mongo.HostMongoUri
             };
 
-            Directory.CreateDirectory(s.SecretsDir);
-            Directory.CreateDirectory(s.BackupDir);
-            Directory.CreateDirectory(s.ProbeDir);
+            ContainerTestHarness.EnsureWritableDirectory(s.Root);
+            ContainerTestHarness.EnsureWritableDirectory(s.SecretsDir);
+            ContainerTestHarness.EnsureWritableDirectory(s.BackupDir);
+            ContainerTestHarness.EnsureWritableDirectory(s.ProbeDir);
 
             // Per-test credential on the isolated server (removed in DisposeAsync).
             var admin = new MongoClient(s.HostMongoUri).GetDatabase("admin");
@@ -263,6 +264,10 @@ public sealed class ContainerCredentialsSecurityTests : IClassFixture<IsolatedCo
             // Holder: PID 1 is a CLI backup that blocks on the blackholed address, keeping /tmp alive.
             var args = new List<string> { "run", "--rm", "-i", "--name", s.Name };
             args.AddRange(HardeningFlags);
+            if (!string.IsNullOrEmpty(ContainerTestHarness.HostUserAndGroup))
+            {
+                args.AddRange(["--user", ContainerTestHarness.HostUserAndGroup]);
+            }
             args.AddRange([
                 "--network", mongo.NetworkName,
                 "-v", $"{s.SecretsDir}:/run/secrets:ro",
