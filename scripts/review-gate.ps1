@@ -134,7 +134,7 @@ finally {
     }
 }
 
-$allPassed = ($gateResults.Values | Where-Object { $_ -ne "PASS" }).Count -eq 0
+$allPassed = @($gateResults.Values | Where-Object { $_ -ne "PASS" }).Count -eq 0
 $totalTests = $testCounts.Unit + $testCounts.Arch + $testCounts.Contract + $testCounts.Integration
 
 # Exactly concise summary (<= 15 lines)
