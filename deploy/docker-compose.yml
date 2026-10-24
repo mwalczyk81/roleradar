@@ -1,3 +1,5 @@
+name: roleradar
+
 services:
   mongo:
     image: mongo:8.0.34

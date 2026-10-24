@@ -242,8 +242,8 @@
 
 **Purpose**: Verify end-to-end requirement traceability mapping every FR and SC to a task and test, and validate clean-machine quickstart workflow.
 
-- [ ] T039 Execute requirements traceability verification script `scripts/verify-traceability-003.ps1` asserting that all 30 requirements (FR-001 through FR-030, including ADR records FR-027 and FR-028) and 8 success criteria (SC-001 through SC-008) are cited in tasks.md, each maps to a test or CI job, and all referenced test files exist on disk [FR-001, FR-027, FR-028, SC-008]
-- [ ] T040 Execute clean-machine validation per `specs/003-linux-container-readiness/quickstart.md` using only Docker (build CLI and MCP images, start compose MongoDB, execute status, create encrypted backup via `--passphrase-stdin`, test MCP stdio initialize handshake, and run `test-images.ps1`) [FR-001, FR-003, FR-007, SC-003, SC-007]
+- [x] T039 Execute requirements traceability verification script `scripts/verify-traceability-003.ps1` asserting that all 30 requirements (FR-001 through FR-030, including ADR records FR-027 and FR-028) and 8 success criteria (SC-001 through SC-008) are cited in tasks.md, each maps to a test or CI job, and all referenced test files exist on disk [FR-001, FR-027, FR-028, SC-008]
+- [x] T040 Execute clean-machine validation per `specs/003-linux-container-readiness/quickstart.md` using only Docker (build CLI and MCP images, start compose MongoDB, execute status, create encrypted backup via `--passphrase-stdin`, test MCP stdio initialize handshake, and run `test-images.ps1`) [FR-001, FR-003, FR-007, SC-003, SC-007]
 
 ---
 

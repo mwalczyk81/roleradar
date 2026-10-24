@@ -55,3 +55,22 @@ Continuous Integration (CI) always runs the complete test suite across all proje
 ```powershell
 dotnet test RoleRadar.sln -c Release
 ```
+
+### Review Gate Script
+
+Before submitting a pull request, run the cross-platform review gate script to execute all verification gates against a clean clone:
+
+```powershell
+pwsh ./scripts/review-gate.ps1 [-Branch <branch-name>]
+```
+
+`review-gate.ps1` performs the following automated checks without printing noisy build logs:
+
+1. Clones the repository to an isolated temporary directory.
+2. Restores dependencies with `--locked-mode`.
+3. Verifies code formatting with `dotnet format --verify-no-changes`.
+4. Compiles the solution with warnings as errors (`-warnaserror`).
+5. Executes all tests (`Unit`, `Architecture`, `Contract`, `Integration`) via `scripts/test-all.ps1`.
+6. Computes CI-equivalent merged `RoleRadar.Domain` + `RoleRadar.Application` coverage (enforcing `>= 85%`).
+7. Builds both Linux container images (`roleradar-cli` and `roleradar-mcp`) and measures image sizes.
+8. Prints a concise summary table (max 15 lines) and cleans up the temporary clone.

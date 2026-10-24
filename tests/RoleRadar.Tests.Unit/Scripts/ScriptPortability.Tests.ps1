@@ -18,7 +18,8 @@ Describe "Script Portability and Cross-Platform Compatibility" {
             "test-images.ps1",
             "verify-action-pins.ps1",
             "verify-traceability-003.ps1",
-            "check-tools-release.ps1"
+            "check-tools-release.ps1",
+            "review-gate.ps1"
         )
 
         foreach ($script in $requiredScripts) {
