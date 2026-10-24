@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Stage 1: Build .NET applications
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:747cbade5bfd918a175ac32f8f1d931edec2c7d0d5397a3de72eaef1ac1f66d2 AS build
 WORKDIR /src
 
 # Copy project files and restore with locked dependencies
@@ -60,7 +60,7 @@ RUN set -eux; \
     dpkg-query -s libgssapi-krb5-2 libkrb5-3 libk5crypto3 libkrb5support0 libkeyutils1 libcom-err2 > /out/var/lib/dpkg/status
 
 # Stage 3: MCP Runtime (roleradar-mcp)
-FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled@sha256:75e4232c875a07e46e447ca0a56a61f7cd72d9fb361639018a19e9fc605c6827 AS mcp
+FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled@sha256:7ac579eeb88591c261c85576d7094e8f65949ff9e9502cdaab1de2457e506505 AS mcp
 WORKDIR /app
 COPY --from=build --chown=1654:1654 /app/mcp /app
 USER 1654:1654
@@ -70,7 +70,7 @@ ENV DOTNET_EnableDiagnostics=0 \
 ENTRYPOINT ["/app/RoleRadar.Mcp.Stdio"]
 
 # Stage 4: CLI Runtime (roleradar-cli)
-FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled@sha256:75e4232c875a07e46e447ca0a56a61f7cd72d9fb361639018a19e9fc605c6827 AS cli
+FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled@sha256:7ac579eeb88591c261c85576d7094e8f65949ff9e9502cdaab1de2457e506505 AS cli
 COPY --from=tools-downloader /out/usr/ /usr/
 COPY --from=tools-downloader /out/var/ /var/
 WORKDIR /app
