@@ -53,6 +53,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
                 context.Summary.Errors.Add(new TrackerImportRowError(
                     "applications.csv",
                     row.LineNumber,
+                    ErrorCode.ValidationError.ToString(),
                     $"Invalid decision value '{decision}'. Expected blank or 'skip'."));
                 continue;
             }
@@ -60,8 +61,12 @@ public sealed class ApplicationsStep : ITrackerImportStep
             // Flag detection for people
             var peopleDetected = row["people_detected"]?.Trim();
             var reviewFlags = row["review_flags"]?.Trim();
-            var containsPeople = !string.IsNullOrWhiteSpace(reviewFlags) &&
-                                 reviewFlags.Contains("contains_people", StringComparison.OrdinalIgnoreCase);
+            var containsPeopleCol = row["contains_people"]?.Trim();
+            var containsPeople = (!string.IsNullOrWhiteSpace(reviewFlags) &&
+                                  reviewFlags.Contains("contains_people", StringComparison.OrdinalIgnoreCase)) ||
+                                 (!string.IsNullOrWhiteSpace(containsPeopleCol) &&
+                                  (containsPeopleCol.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                                   containsPeopleCol.Contains("contains_people", StringComparison.OrdinalIgnoreCase)));
 
             if (!string.IsNullOrWhiteSpace(peopleDetected) || containsPeople)
             {
@@ -85,6 +90,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
                     context.Summary.Errors.Add(new TrackerImportRowError(
                         "applications.csv",
                         row.LineNumber,
+                        noteResult.Error?.Code.ToString() ?? ErrorCode.ValidationError.ToString(),
                         noteResult.Error?.Message ?? "Failed to save note"));
                 }
                 continue;
@@ -102,6 +108,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
                 context.Summary.Errors.Add(new TrackerImportRowError(
                     "applications.csv",
                     row.LineNumber,
+                    appResult.Error?.Code.ToString() ?? ErrorCode.ValidationError.ToString(),
                     appResult.Error?.Message ?? "Failed to save application"));
             }
         }
@@ -116,11 +123,14 @@ public sealed class ApplicationsStep : ITrackerImportStep
         CancellationToken cancellationToken)
     {
         var company = row["company"]?.Trim();
-        var title = row["title"]?.Trim();
-        var appliedOn = row["applied_on"]?.Trim();
+        var title = (row["title"] ?? row["role"])?.Trim();
+        var appliedOn = (row["applied_on"] ?? row["applied_date_md"])?.Trim();
         var raw = row["raw"]?.Trim();
         var correctedNotes = row["corrected_notes"]?.Trim();
-        var body = !string.IsNullOrWhiteSpace(correctedNotes) ? correctedNotes : (raw ?? string.Empty);
+        var notes = row["notes"]?.Trim();
+        var body = !string.IsNullOrWhiteSpace(correctedNotes)
+            ? correctedNotes
+            : (!string.IsNullOrWhiteSpace(notes) ? notes : (!string.IsNullOrWhiteSpace(raw) ? raw : "Standalone note"));
 
         var dateOutcome = DateInferenceRule.Resolve(appliedOn, defaultDate);
         TrackDateInference(context, dateOutcome);
@@ -168,9 +178,9 @@ public sealed class ApplicationsStep : ITrackerImportStep
         CancellationToken cancellationToken)
     {
         var companyName = row["company"]?.Trim();
-        var title = row["title"]?.Trim();
-        var req = row["req"]?.Trim();
-        var appliedOn = row["applied_on"]?.Trim();
+        var title = (row["title"] ?? row["role"])?.Trim();
+        var req = (row["req"] ?? row["req_id"])?.Trim();
+        var appliedOn = (row["applied_on"] ?? row["applied_date_md"])?.Trim();
         var rejectedStr = row["rejected"]?.Trim();
         var isRejected = bool.TryParse(rejectedStr, out var rej) && rej;
         var rejectedDateMd = row["rejected_date_md"]?.Trim();

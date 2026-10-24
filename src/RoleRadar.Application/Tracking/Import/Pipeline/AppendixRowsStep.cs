@@ -83,6 +83,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                 context.Summary.Errors.Add(new TrackerImportRowError(
                     "appendix-rows.csv",
                     row.LineNumber,
+                    ErrorCode.ValidationError.ToString(),
                     $"Invalid decision value '{decision}'. Expected blank or 'skip'."));
                 continue;
             }
@@ -336,6 +337,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                 context.Summary.Errors.Add(new TrackerImportRowError(
                     "appendix-rows.csv",
                     row.LineNumber,
+                    rowResult.Error?.Code.ToString() ?? ErrorCode.ValidationError.ToString(),
                     rowResult.Error?.Message ?? "Failed to save appendix row"));
                 continue;
             }

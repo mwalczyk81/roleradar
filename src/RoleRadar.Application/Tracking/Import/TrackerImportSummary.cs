@@ -1,6 +1,10 @@
 namespace RoleRadar.Application.Tracking.Import;
 
-public sealed record TrackerImportRowError(string SourceFile, int LineNumber, string Message);
+public sealed record TrackerImportRowError(
+    string SourceFile,
+    int LineNumber,
+    string ErrorCode,
+    string Message);
 
 public sealed class TrackerImportSummary
 {

@@ -50,6 +50,7 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                 context.Summary.Errors.Add(new TrackerImportRowError(
                     "watchlist-companies.csv",
                     row.LineNumber,
+                    ErrorCode.ValidationError.ToString(),
                     $"Invalid decision value '{decision}'. Expected blank or 'skip'."));
                 continue;
             }
@@ -112,6 +113,7 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                 context.Summary.Errors.Add(new TrackerImportRowError(
                     "watchlist-companies.csv",
                     row.LineNumber,
+                    rowResult.Error?.Code.ToString() ?? ErrorCode.ValidationError.ToString(),
                     rowResult.Error?.Message ?? "Failed to save company"));
                 continue;
             }

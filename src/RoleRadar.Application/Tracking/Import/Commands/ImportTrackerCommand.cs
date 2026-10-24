@@ -1,5 +1,6 @@
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Tracking.Import.Pipeline;
+using RoleRadar.Application.Tracking.Import.Report;
 using RoleRadar.Domain.Common;
 
 namespace RoleRadar.Application.Tracking.Import.Commands;
@@ -51,7 +52,7 @@ public sealed class TrackerImportCoordinator : ITrackerImportCoordinator
         // Validate --report path does not reside in a git work tree
         if (!string.IsNullOrWhiteSpace(command.ReportPath))
         {
-            if (IsInsideGitWorkTree(command.ReportPath))
+            if (TrackerImportReportGenerator.IsInsideGitWorkTree(command.ReportPath))
             {
                 return Result<TrackerImportSummary>.Failure(
                     ErrorCode.ValidationError,
@@ -75,19 +76,27 @@ public sealed class TrackerImportCoordinator : ITrackerImportCoordinator
 
         var targetDbName = _contextFactory.TargetDatabaseName;
 
+        Result<TrackerImportSummary> runResult;
         if (!command.Apply)
         {
             // Dry-run mode: ephemerally isolated inside scratch database
             await _scratchManager.CleanupOrphanedScratchDatabasesAsync(targetDbName, cancellationToken: cancellationToken);
 
             await using var scratchScope = await _scratchManager.CreateScopeAsync(targetDbName, cancellationToken);
-            return await RunPipelineAsync(scratchScope.ScratchDatabaseName, ownerId, command, isDryRun: true, cancellationToken);
+            runResult = await RunPipelineAsync(scratchScope.ScratchDatabaseName, ownerId, command, isDryRun: true, cancellationToken);
         }
         else
         {
             // Apply mode: commits persistent writes to target database
-            return await RunPipelineAsync(targetDbName, ownerId, command, isDryRun: false, cancellationToken);
+            runResult = await RunPipelineAsync(targetDbName, ownerId, command, isDryRun: false, cancellationToken);
         }
+
+        if (runResult.IsSuccess && !string.IsNullOrWhiteSpace(command.ReportPath))
+        {
+            await TrackerImportReportGenerator.GenerateReportAsync(command.ReportPath, command, runResult.Value!, cancellationToken);
+        }
+
+        return runResult;
     }
 
     private async Task<Result<TrackerImportSummary>> RunPipelineAsync(
@@ -112,24 +121,7 @@ public sealed class TrackerImportCoordinator : ITrackerImportCoordinator
         return await pipeline.ExecuteAsync(context, cancellationToken);
     }
 
-    private static bool IsInsideGitWorkTree(string path)
-    {
-        var fullPath = Path.GetFullPath(path);
-        var dir = new DirectoryInfo(Path.GetDirectoryName(fullPath) ?? fullPath);
 
-        while (dir is not null)
-        {
-            if (Directory.Exists(Path.Combine(dir.FullName, ".git")) ||
-                File.Exists(Path.Combine(dir.FullName, ".git")))
-            {
-                return true;
-            }
-
-            dir = dir.Parent;
-        }
-
-        return false;
-    }
 
     private ResultError? CheckForMissingOrPartialDates(string bundleDirectory)
     {

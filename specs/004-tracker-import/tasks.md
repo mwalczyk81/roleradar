@@ -119,14 +119,14 @@
 
 ### Tests for User Story 5 (MANDATORY - Test-First per Principle II) ⚠️
 
-- [ ] T027 [P] [US5] Integration tests in `tests/RoleRadar.Tests.Integration/Import/TrackerImportReportingTests.cs` using `IsolatedContainerMongoFixture` asserting console stdout contains 0 company names, job titles, or salary figures across all runs; asserting `--report <path>` fails with exit code 1 if `<path>` is inside git work tree; and asserting external report contains auto-created company alias review list and unclaimed `applied` postings list (expected to fail before implementation)
-- [ ] T028 [P] [US5] CLI help snapshot test in `tests/RoleRadar.Tests.Unit/Cli/CliHelpSnapshotTests.cs` verifying `tracker-import` is recorded in root CLI help with dry-run default documented (expected to fail before implementation)
-- [ ] T029 [P] [US5] Container integration test in `tests/RoleRadar.Tests.Integration/Hosting/TrackerImportContainerTests.cs` asserting `tracker-import` runs successfully from the `roleradar-cli` container image against a read-only mounted fictional bundle (`:ro`) writing `--report` to a separate writable mount (`:rw`) (expected to fail before implementation)
+- [X] T027 [P] [US5] Integration tests in `tests/RoleRadar.Tests.Integration/Import/TrackerImportReportingTests.cs` using `IsolatedContainerMongoFixture` asserting console stdout contains 0 company names, job titles, or salary figures across all runs; asserting `--report <path>` fails with exit code 1 if `<path>` is inside git work tree; and asserting external report contains auto-created company alias review list and unclaimed `applied` postings list (expected to fail before implementation)
+- [X] T028 [P] [US5] CLI help snapshot test in `tests/RoleRadar.Tests.Unit/Cli/CliHelpSnapshotTests.cs` verifying `tracker-import` is recorded in root CLI help with dry-run default documented (expected to fail before implementation)
+- [X] T029 [P] [US5] Container integration test in `tests/RoleRadar.Tests.Integration/Hosting/TrackerImportContainerTests.cs` asserting `tracker-import` runs successfully from the `roleradar-cli` container image against a read-only mounted fictional bundle (`:ro`) writing `--report` to a separate writable mount (`:rw`) (expected to fail before implementation)
 
 ### Implementation for User Story 5
 
-- [ ] T030 [P] [US5] Implement report generator and git work-tree detector in `src/RoleRadar.Application/Tracking/Import/Report/TrackerImportReportGenerator.cs` verifying destination path is outside git working tree and writing detailed row outcomes, auto-created companies, unclaimed applied postings, and manual contact instructions
-- [ ] T031 [US5] Implement console formatter in `src/RoleRadar.Cli/Commands/TrackerImportCommand.cs` printing strictly aggregate counts and row numbers to stdout and diagnostic logs to stderr
+- [X] T030 [P] [US5] Implement report generator and git work-tree detector in `src/RoleRadar.Application/Tracking/Import/Report/TrackerImportReportGenerator.cs` verifying destination path is outside git working tree and writing detailed row outcomes, auto-created companies, unclaimed applied postings, and manual contact instructions
+- [X] T031 [US5] Implement console formatter in `src/RoleRadar.Cli/Commands/TrackerImportCommand.cs` printing strictly aggregate counts and row numbers to stdout and diagnostic logs to stderr
 
 ---
 
@@ -134,7 +134,7 @@
 
 **Purpose**: End-to-end durability verification, coverage gate enforcement, and pre-commit review gates.
 
-- [ ] T032 [P] Integration test in `tests/RoleRadar.Tests.Integration/Backup/TrackerImportBackupRestoreTests.cs` using `IsolatedContainerMongoFixture` verifying database backup followed by restore round-trips 100% of imported tracker data, and `roleradar verify` clean check in `tests/RoleRadar.Tests.Integration/Smoke/TrackerImportVerifyTests.cs`
+- [X] T032 [P] Integration test in `tests/RoleRadar.Tests.Integration/Backup/TrackerImportBackupRestoreTests.cs` using `IsolatedContainerMongoFixture` verifying database backup followed by restore round-trips 100% of imported tracker data, and `roleradar verify` clean check in `tests/RoleRadar.Tests.Integration/Smoke/TrackerImportVerifyTests.cs`
 - [ ] T033 Execute `scripts/review-gate.ps1` and verify the dev-stack canary passes, Domain+Application test coverage remains >= 85%, and the pre-commit denylist hook passes with zero detections
 
 ---

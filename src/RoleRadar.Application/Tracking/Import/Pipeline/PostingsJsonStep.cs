@@ -41,16 +41,23 @@ public sealed class PostingsJsonStep : ITrackerImportStep
         }
 
         var defaultDate = context.DefaultDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var entryOrdinal = 0;
 
         foreach (var element in doc.RootElement.EnumerateArray())
         {
             cancellationToken.ThrowIfCancellationRequested();
+            entryOrdinal++;
 
             var title = element.TryGetProperty("title", out var titleProp) ? titleProp.GetString()?.Trim() : null;
             var companyName = element.TryGetProperty("company", out var compProp) ? compProp.GetString()?.Trim() : null;
 
             if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(companyName))
             {
+                context.Summary.Errors.Add(new TrackerImportRowError(
+                    "postings.json",
+                    entryOrdinal,
+                    ErrorCode.ValidationError.ToString(),
+                    "Missing required title or company"));
                 continue;
             }
 
@@ -120,6 +127,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
 
             // 1. Resolve or auto-create company, and 2. Save posting atomically inside one transaction per row
             var autoCreatedCompany = false;
+            var isNewlyCreated = false;
             Company? newCompany = null;
             Posting? newPosting = null;
 
@@ -212,6 +220,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                 if (existingPosting is not null)
                 {
                     newPosting = existingPosting;
+                    isNewlyCreated = false;
                     return Result<bool>.Success(true);
                 }
 
@@ -255,12 +264,17 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                 await txCtx.AppendAuditEntryAsync(auditP, ct);
 
                 newPosting = posting;
+                isNewlyCreated = true;
                 return Result<bool>.Success(true);
             }, cancellationToken);
 
             if (!rowResult.IsSuccess)
             {
-                context.Summary.Errors.Add(new TrackerImportRowError("postings.json", 0, rowResult.Error?.Message ?? "Failed to save posting"));
+                context.Summary.Errors.Add(new TrackerImportRowError(
+                    "postings.json",
+                    entryOrdinal,
+                    rowResult.Error?.Code.ToString() ?? ErrorCode.ValidationError.ToString(),
+                    rowResult.Error?.Message ?? "Failed to save posting"));
                 continue;
             }
 
@@ -273,11 +287,12 @@ public sealed class PostingsJsonStep : ITrackerImportStep
 
             if (newPosting is not null)
             {
-                if (newPosting.VersionToken != Guid.Empty && !context.PostingsByCompanyAndTitle.ContainsKey($"{canonicalName}|{newPosting.NormalizedTitle}"))
+                if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = newPosting;
+                if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = newPosting;
+                context.PostingsByCompanyAndTitle[$"{canonicalName}|{newPosting.NormalizedTitle}"] = newPosting;
+
+                if (isNewlyCreated)
                 {
-                    if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = newPosting;
-                    if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = newPosting;
-                    context.PostingsByCompanyAndTitle[$"{canonicalName}|{newPosting.NormalizedTitle}"] = newPosting;
                     context.Summary.PostingsCreated++;
 
                     if (originalWasApplied)
@@ -288,9 +303,6 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                 }
                 else
                 {
-                    if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = newPosting;
-                    if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = newPosting;
-                    context.PostingsByCompanyAndTitle[$"{canonicalName}|{newPosting.NormalizedTitle}"] = newPosting;
                     context.Summary.PostingsUnchanged++;
                 }
             }

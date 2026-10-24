@@ -73,7 +73,7 @@ public static class TrackerImportCommand
             if (!result.IsSuccess)
             {
                 var error = result.Error!.Value;
-                await Console.Error.WriteLineAsync($"Tracker import failed ({error.Code}): {error.Message}");
+                await Console.Error.WriteLineAsync($"Tracker import failed: {error.Code}");
                 return 1;
             }
 
@@ -103,7 +103,7 @@ public static class TrackerImportCommand
                 Console.WriteLine("Encountered Row Errors:");
                 foreach (var err in summary.Errors)
                 {
-                    Console.WriteLine($"  [{err.SourceFile}:{err.LineNumber}] {err.Message}");
+                    Console.WriteLine($"  [{err.SourceFile}:{err.LineNumber}] {err.ErrorCode}");
                 }
             }
 
