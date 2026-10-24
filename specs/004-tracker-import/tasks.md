@@ -135,7 +135,7 @@
 **Purpose**: End-to-end durability verification, coverage gate enforcement, and pre-commit review gates.
 
 - [X] T032 [P] Integration test in `tests/RoleRadar.Tests.Integration/Backup/TrackerImportBackupRestoreTests.cs` using `IsolatedContainerMongoFixture` verifying database backup followed by restore round-trips 100% of imported tracker data, and `roleradar verify` clean check in `tests/RoleRadar.Tests.Integration/Smoke/TrackerImportVerifyTests.cs`
-- [ ] T033 Execute `scripts/review-gate.ps1` and verify the dev-stack canary passes, Domain+Application test coverage remains >= 85%, and the pre-commit denylist hook passes with zero detections
+- [X] T033 Execute `scripts/review-gate.ps1` and verify the dev-stack canary passes, Domain+Application test coverage remains >= 85%, and the pre-commit denylist hook passes with zero detections
 
 ---
 
