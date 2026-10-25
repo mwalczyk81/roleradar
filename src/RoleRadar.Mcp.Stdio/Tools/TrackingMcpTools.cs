@@ -95,7 +95,7 @@ public sealed class TrackingMcpTools
         [Description("Linked narrative screening note identifier.")] Guid? screeningNoteId = null,
         [Description("Pointer to canonical posting if this is a duplicate.")] Guid? duplicateOfId = null,
         [Description("Optional flag indicating whether compensation is high priority (null = not judged).")] bool? compHighPriority = null,
-        [Description("Observed signals (e.g. repost, no_salary, parallel_posting, gone, phantom, deadline).")] SignalInputDto[]? signals = null,
+        [Description("Observed signals. Accepts string shorthand (e.g. 'no_salary', 'repost', 'parallel_posting', 'gone', 'phantom', 'deadline:YYYY-MM-DD') or object form with properties 'signalType' ('no_salary', 'repost', 'parallel_posting', 'gone', 'phantom', 'deadline'), optional 'evidence' (defaults to 'reported by agent'), and optional 'deadlineDate' (YYYY-MM-DD).")] SignalInputDto[]? signals = null,
         CancellationToken cancellationToken = default)
     {
         var command = new RecordPostingCommand(
