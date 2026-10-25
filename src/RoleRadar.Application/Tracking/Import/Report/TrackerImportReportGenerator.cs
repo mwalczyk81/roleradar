@@ -68,6 +68,8 @@ public static class TrackerImportReportGenerator
         sb.AppendLine(inv, $"Standalone Notes Created:              {summary.StandaloneNotesCreated}");
         sb.AppendLine(inv, $"Criteria Registered:                   {summary.CriteriaCreated}");
         sb.AppendLine(inv, $"Signals Created:                       {summary.SignalsCreated}");
+        sb.AppendLine(inv, $"Mapped to Event Notes:                 {summary.MappedToEventNotes}");
+        sb.AppendLine(inv, $"Resume Variants Defaulted:             {summary.ResumeVariantsDefaulted}");
         sb.AppendLine(inv, $"Dates Defaulted:                       {summary.DatesDefaulted}");
         sb.AppendLine(inv, $"Dates Inferred (Rollback/SameYear):    {summary.DatesInferred}");
         sb.AppendLine(inv, $"Dates Flagged (or Scores Flagged):     {summary.DatesFlagged}");
@@ -139,6 +141,17 @@ public static class TrackerImportReportGenerator
             }
             sb.AppendLine();
         }
+
+        sb.AppendLine("--------------------------------------------------------------------------------");
+        sb.AppendLine("                              Mapping Decisions                                 ");
+        sb.AppendLine("--------------------------------------------------------------------------------");
+        sb.AppendLine("  - Remote Type: 'remote_mentioned' is preserved as RemoteType.Unknown with 'remote mentioned'");
+        sb.AppendLine("    recorded in the posting summary/notes, avoiding premature classification as full remote.");
+        sb.AppendLine("  - Resume Variant: Domain entity requires non-nullable ResumeVariant; blank values default");
+        sb.AppendLine("    to ResumeVariant.Tailored (counted under Resume Variants Defaulted).");
+        sb.AppendLine("  - Fit & Referral: Fit values and referral=true are mapped to applied event notes");
+        sb.AppendLine("    (counted under Mapped to Event Notes).");
+        sb.AppendLine();
 
         if (summary.UnmappedValues.Count > 0)
         {

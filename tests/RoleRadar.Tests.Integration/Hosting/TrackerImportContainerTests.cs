@@ -30,7 +30,7 @@ public sealed class TrackerImportContainerTests : IClassFixture<IsolatedContaine
         {
             // Create minimal valid bundle files
             File.WriteAllText(Path.Combine(tempBundleDir, "watchlist-companies.csv"),
-                "company,tier,source,notes,decision,corrected_notes\r\nAcme Corp,watch,recruiter,Note,,\r\n");
+                "company,proposed_status,text,decision,corrected_notes\r\nAcme Corp,watch,Note,,\r\n");
 
             File.WriteAllText(Path.Combine(tempBundleDir, "company-aliases.csv"),
                 "alias,canonical\r\nAcme,Acme Corp\r\n");
@@ -48,10 +48,10 @@ public sealed class TrackerImportContainerTests : IClassFixture<IsolatedContaine
                 """);
 
             File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"),
-                "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");
+                "source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes\r\n");
 
             File.WriteAllText(Path.Combine(tempBundleDir, "applications.csv"),
-                "req_id,company,role,applied_date_md,fit,interview_lead,notes,raw,outcome,status,rejected_date_md,reason_rejected,rejected_stage,contains_people,decision,corrected_notes\r\n");
+                "kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes\r\n");
 
             // Snapshot bundle file hashes/times
             var initialPostingsJson = await File.ReadAllTextAsync(Path.Combine(tempBundleDir, "postings.json"));

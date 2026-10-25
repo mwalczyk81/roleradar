@@ -40,6 +40,20 @@ public sealed class CompanyAliasesStep : ITrackerImportStep
             return Task.FromResult(Result<bool>.Failure(ErrorCode.ValidationError, "company-aliases.csv is present but empty."));
         }
 
+        using var headerReader = new StringReader(content);
+        var headers = _csvParser.ReadHeader(headerReader);
+        var headerValidation = CsvHeaderValidator.Validate("company-aliases.csv", headers, CsvHeaderValidator.CompanyAliasesHeaders);
+        if (!headerValidation.IsSuccess)
+        {
+            recon.RecordErrored();
+            context.Summary.Errors.Add(new TrackerImportRowError(
+                "company-aliases.csv",
+                1,
+                ErrorCode.ValidationError.ToString(),
+                headerValidation.Error!.Value.Message));
+            return Task.FromResult(Result<bool>.Failure(headerValidation.Error!.Value));
+        }
+
         using var reader = new StringReader(content);
         foreach (var row in _csvParser.Read(reader, hasHeader: true))
         {

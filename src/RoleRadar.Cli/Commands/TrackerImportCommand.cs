@@ -94,6 +94,8 @@ public static class TrackerImportCommand
                 Console.WriteLine($"Standalone Notes:        {summary.StandaloneNotesCreated}");
                 Console.WriteLine($"Criteria Created:        {summary.CriteriaCreated}");
                 Console.WriteLine($"Signals Created:         {summary.SignalsCreated}");
+                Console.WriteLine($"Mapped to Event Notes:   {summary.MappedToEventNotes}");
+                Console.WriteLine($"Resume Variants Defaulted: {summary.ResumeVariantsDefaulted}");
                 Console.WriteLine($"Dates Inferred:          {summary.DatesInferred}");
                 Console.WriteLine($"Dates Defaulted:         {summary.DatesDefaulted}");
                 Console.WriteLine($"Dates Flagged:           {summary.DatesFlagged}");

@@ -49,11 +49,11 @@ public sealed class CompanyImportStepTests
         try
         {
             var csv = """
-                company,tier,source,notes,decision,corrected_notes
-                Acme Corp,target,recruiter,Note for Acme,,
-                Cyberdyne,avoid,news,Note for Cyberdyne,,
-                Soylent,watch,direct,Note for Soylent,,
-                Initech,watch,referral,Skip Initech,skip,
+                company,proposed_status,text,decision,corrected_notes
+                Acme Corp,target,Note for Acme,,
+                Cyberdyne,avoid,Note for Cyberdyne,,
+                Soylent,watch,Note for Soylent,,
+                Initech,watch,Skip Initech,skip,
                 """;
             File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), csv);
 
@@ -110,8 +110,8 @@ public sealed class CompanyImportStepTests
         try
         {
             var csv = """
-                company,tier,source,notes,decision,corrected_notes
-                Wayne Enterprises,target,referral,Original text,,Corrected text
+                company,proposed_status,text,decision,corrected_notes
+                Wayne Enterprises,target,Original text,,Corrected text
                 """;
             File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), csv);
 

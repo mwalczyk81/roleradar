@@ -45,6 +45,20 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
             return Result<bool>.Failure(ErrorCode.ValidationError, "watchlist-companies.csv is present but empty.");
         }
 
+        using var headerReader = new StringReader(content);
+        var headers = _csvParser.ReadHeader(headerReader);
+        var headerValidation = CsvHeaderValidator.Validate("watchlist-companies.csv", headers, CsvHeaderValidator.WatchlistHeaders);
+        if (!headerValidation.IsSuccess)
+        {
+            recon.RecordErrored();
+            context.Summary.Errors.Add(new TrackerImportRowError(
+                "watchlist-companies.csv",
+                1,
+                ErrorCode.ValidationError.ToString(),
+                headerValidation.Error!.Value.Message));
+            return Result<bool>.Failure(headerValidation.Error!.Value);
+        }
+
         using var reader = new StringReader(content);
         foreach (var row in _csvParser.Read(reader, hasHeader: true))
         {
@@ -91,8 +105,8 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                     continue;
                 }
 
-                var tier = Decode(row["tier"])?.Trim();
-                var status = MapStatus(tier, context);
+                var proposedStatus = (Decode(row["proposed_status"]) ?? Decode(row["tier"]))?.Trim();
+                var status = MapStatus(proposedStatus, context);
 
                 var rawNotes = Decode(!string.IsNullOrWhiteSpace(row["corrected_notes"])
                     ? row["corrected_notes"]!.Trim()
