@@ -81,7 +81,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             return await work(existingScope.Context, cancellationToken);
         }
 
-        const int maxAttempts = 5;
+        const int maxAttempts = 15;
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
             using var session = await _client.StartSessionAsync(cancellationToken: cancellationToken);
@@ -127,7 +127,8 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             }
             catch (Exception ex) when (attempt < maxAttempts && IsDuplicateKeyOrWriteConflict(ex))
             {
-                await Task.Delay(Random.Shared.Next(50, 250), cancellationToken);
+                var jitter = Random.Shared.Next(40, 160) * Math.Min(attempt, 5);
+                await Task.Delay(jitter, cancellationToken);
             }
             catch (Domain.Tracking.TrackingIndexValidationException ex)
             {

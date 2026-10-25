@@ -158,7 +158,8 @@ public sealed class ShippedHostRaceIntegrationTests
                     r.GetProperty("data").TryGetProperty("status", out var st) && st.GetString() == "already_tracked").ToList();
 
                 Assert.Single(createdA);
-                Assert.Equal(processCount - 1, alreadyTrackedA.Count);
+                var statusesA = resultsA.Select(r => r.TryGetProperty("data", out var d) && d.TryGetProperty("status", out var s) ? s.GetString() : r.ToString()).ToArray();
+                Assert.True(alreadyTrackedA.Count == processCount - 1, $"Statuses: {string.Join(", ", statusesA)}");
 
                 var auditsA = await auditCol.Find(Builders<BsonDocument>.Filter.And(
                     Builders<BsonDocument>.Filter.Eq("operation", "posting_create"),
@@ -195,7 +196,8 @@ public sealed class ShippedHostRaceIntegrationTests
                     r.GetProperty("data").TryGetProperty("status", out var st) && st.GetString() == "already_tracked").ToList();
 
                 Assert.Single(createdB);
-                Assert.Equal(processCount - 1, alreadyTrackedB.Count);
+                var statusesB = resultsB.Select(r => r.TryGetProperty("data", out var d) && d.TryGetProperty("status", out var s) ? s.GetString() : r.ToString()).ToArray();
+                Assert.True(alreadyTrackedB.Count == processCount - 1, $"Statuses: {string.Join(", ", statusesB)}");
 
                 var auditsB = await auditCol.Find(Builders<BsonDocument>.Filter.And(
                     Builders<BsonDocument>.Filter.Eq("operation", "posting_create"),
