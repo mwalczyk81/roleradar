@@ -109,6 +109,13 @@ public sealed class SourceFieldCatalogTests
     }
 
     [Fact]
+    public void PostingsJson_ParentField_IsStoredInCompanyDescription()
+    {
+        var handling = SourceFieldCatalog.GetHandling("postings.json", "parent");
+        Assert.Equal("stored in Company.Description", handling);
+    }
+
+    [Fact]
     public void UnmappedField_ThrowsKeyNotFoundException()
     {
         Assert.Throws<KeyNotFoundException>(() => SourceFieldCatalog.GetHandling("unknown.csv", "nonexistent"));

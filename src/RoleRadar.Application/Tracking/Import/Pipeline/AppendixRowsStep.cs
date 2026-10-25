@@ -75,7 +75,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
 
         foreach (var row in records)
         {
-            var rawProposedDisp = (Decode(row["proposed_disposition"]) ?? Decode(row["disposition"]))?.Trim();
+            var rawProposedDisp = (TrackerImportTextSanitizer.SanitizePlainText(row["proposed_disposition"]) ?? TrackerImportTextSanitizer.SanitizePlainText(row["disposition"]))?.Trim();
             var isDuplicate = string.Equals(rawProposedDisp, "duplicate", StringComparison.OrdinalIgnoreCase);
 
             if (isDuplicate)
@@ -98,7 +98,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
 
             foreach (var def in SourceFieldCatalog.ByFile["appendix-rows.csv"])
             {
-                var val = Decode(row[def.Field])?.Trim();
+                var val = TrackerImportTextSanitizer.SanitizePlainText(row[def.Field])?.Trim();
                 context.Summary.RecordFieldRead("appendix-rows.csv", def.Field, !string.IsNullOrWhiteSpace(val));
             }
 
@@ -110,8 +110,8 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     continue;
                 }
 
-                var companyName = Decode(row["company"])?.Trim();
-                var title = Decode(row["title"])?.Trim();
+                var companyName = TrackerImportTextSanitizer.SanitizePlainText(row["company"])?.Trim();
+                var title = TrackerImportTextSanitizer.SanitizePlainText(row["title"])?.Trim();
 
                 if (string.IsNullOrWhiteSpace(companyName) || string.IsNullOrWhiteSpace(title))
                 {
@@ -124,7 +124,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     continue;
                 }
 
-                var decision = Decode(row["decision"])?.Trim();
+                var decision = TrackerImportTextSanitizer.SanitizePlainText(row["decision"])?.Trim();
                 if (string.Equals(decision, "skip", StringComparison.OrdinalIgnoreCase))
                 {
                     context.Summary.PostingsUnchanged++;
@@ -150,7 +150,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                 title = TrackerImportFieldLimiter.LimitTitle(title, context.Summary)!;
 
                 // 2. Parse date
-                var addedRaw = Decode(row["added_md"])?.Trim();
+                var addedRaw = TrackerImportTextSanitizer.SanitizePlainText(row["added_md"])?.Trim();
                 var dateOutcome = DateInferenceRule.Resolve(addedRaw, defaultDate);
                 if (dateOutcome.Kind == DateResolutionKind.DefaultedBlank) context.Summary.DatesDefaulted++;
                 if (dateOutcome.Kind is DateResolutionKind.InferredRollback or DateResolutionKind.InferredSameYear) context.Summary.DatesInferred++;
@@ -164,15 +164,15 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                 Posting? createdPosting = null;
                 var isUnchanged = false;
 
-                var rawReqId = (Decode(row["req"]) ?? Decode(row["req_id"]))?.Trim();
+                var rawReqId = (TrackerImportTextSanitizer.SanitizePlainText(row["req"]) ?? TrackerImportTextSanitizer.SanitizePlainText(row["req_id"]))?.Trim();
                 var reqId = TrackerImportFieldLimiter.LimitRequisitionId(rawReqId, context.Summary);
-                var rawReasonPrimary = Decode(row["reason_primary"])?.Trim();
+                var rawReasonPrimary = TrackerImportTextSanitizer.SanitizeFreeText(row["reason_primary"])?.Trim();
                 var reasonPrimary = TrackerImportFieldLimiter.LimitDispositionReason(rawReasonPrimary, context.Summary);
-                var reasonAll = Decode(row["reason_all"])?.Trim();
-                var rawProposedDisp = (Decode(row["proposed_disposition"]) ?? Decode(row["disposition"]))?.Trim();
+                var reasonAll = TrackerImportTextSanitizer.SanitizeFreeText(row["reason_all"])?.Trim();
+                var rawProposedDisp = (TrackerImportTextSanitizer.SanitizePlainText(row["proposed_disposition"]) ?? TrackerImportTextSanitizer.SanitizePlainText(row["disposition"]))?.Trim();
 
-                var rawComp = Decode(row["comp_detected"])?.Trim();
-                var rawCompEstimate = Decode(row["comp_is_estimate"])?.Trim();
+                var rawComp = TrackerImportTextSanitizer.SanitizePlainText(row["comp_detected"])?.Trim();
+                var rawCompEstimate = TrackerImportTextSanitizer.SanitizePlainText(row["comp_is_estimate"])?.Trim();
                 Compensation? compensation = null;
                 if (!string.IsNullOrWhiteSpace(rawComp))
                 {
@@ -188,7 +188,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     compensation = compText != null ? new Compensation(compMin, compMax, "USD", compText) : null;
                 }
 
-                var remoteMentioned = Decode(row["remote_mentioned"])?.Trim();
+                var remoteMentioned = TrackerImportTextSanitizer.SanitizePlainText(row["remote_mentioned"])?.Trim();
                 var isRemoteMentioned = string.Equals(remoteMentioned, "yes", StringComparison.OrdinalIgnoreCase) || string.Equals(remoteMentioned, "true", StringComparison.OrdinalIgnoreCase);
                 if (isRemoteMentioned || (!string.IsNullOrWhiteSpace(remoteMentioned) && !string.Equals(remoteMentioned, "no", StringComparison.OrdinalIgnoreCase) && !string.Equals(remoteMentioned, "false", StringComparison.OrdinalIgnoreCase)))
                 {
@@ -237,8 +237,8 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     continue;
                 }
 
-                var rawReasonText = Decode(row["reason_text"])?.Trim();
-                var rawDetails = Decode(row["details_raw"])?.Trim();
+                var rawReasonText = TrackerImportTextSanitizer.SanitizeFreeText(row["reason_text"])?.Trim();
+                var rawDetails = TrackerImportTextSanitizer.SanitizeFreeText(row["details_raw"])?.Trim();
 
                 var baseReason = !string.IsNullOrWhiteSpace(rawReasonText)
                     ? rawReasonText
@@ -271,7 +271,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     ? dateOutcome.ResolvedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                     : null;
 
-                var rawSource = Decode(row["source"])?.Trim();
+                var rawSource = TrackerImportTextSanitizer.SanitizePlainText(row["source"])?.Trim();
                 var sourceKind = TrackingEnumExtensions.TryParseSourceKind(rawSource, out var parsedSrc) ? parsedSrc : SourceKind.Aggregator;
 
                 var rowResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
@@ -406,7 +406,7 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     }
 
                     // Resurface policy
-                    var proposedResurface = Decode(row["proposed_resurface"])?.Trim();
+                    var proposedResurface = TrackerImportTextSanitizer.SanitizePlainText(row["proposed_resurface"])?.Trim();
                     ResurfacePolicy resurfacePolicy;
                     if (string.IsNullOrWhiteSpace(proposedResurface))
                     {
@@ -544,7 +544,4 @@ public sealed class AppendixRowsStep : ITrackerImportStep
 
         return Result<bool>.Success(true);
     }
-
-    private static string? Decode(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? value : WebUtility.HtmlDecode(value);
 }

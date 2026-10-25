@@ -69,7 +69,7 @@ public static class SourceFieldCatalog
         new("postings.json", "loc", "stored in Posting.Location"),
         new("postings.json", "note", "stored in Note.Body / Posting.ScreeningNoteId"),
         new("postings.json", "order", "dropped by design"),
-        new("postings.json", "parent", "stored in Posting.AtsTenant / audit"),
+        new("postings.json", "parent", "stored in Company.Description"),
         new("postings.json", "posted", "stored in Posting.PostedAt"),
         new("postings.json", "score", "stored in Posting.Score"),
         new("postings.json", "status", "stored in Posting.Disposition"),

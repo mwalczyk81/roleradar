@@ -79,7 +79,7 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                 context.Summary.RecordFieldRead("watchlist-companies.csv", "decision", !string.IsNullOrWhiteSpace(row["decision"]));
                 context.Summary.RecordFieldRead("watchlist-companies.csv", "corrected_notes", !string.IsNullOrWhiteSpace(row["corrected_notes"]));
 
-                var companyName = Decode(row["company"])?.Trim();
+                var companyName = TrackerImportTextSanitizer.SanitizePlainText(row["company"])?.Trim();
                 if (string.IsNullOrWhiteSpace(companyName))
                 {
                     // If row has any non-blank field, missing company is a validation error
@@ -92,7 +92,7 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                     continue;
                 }
 
-                var decision = Decode(row["decision"])?.Trim();
+                var decision = TrackerImportTextSanitizer.SanitizePlainText(row["decision"])?.Trim();
                 if (string.Equals(decision, "skip", StringComparison.OrdinalIgnoreCase))
                 {
                     context.Summary.CompaniesUnchanged++;
@@ -111,10 +111,10 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                     continue;
                 }
 
-                var proposedStatus = (Decode(row["proposed_status"]) ?? Decode(row["tier"]))?.Trim();
+                var proposedStatus = (TrackerImportTextSanitizer.SanitizePlainText(row["proposed_status"]) ?? TrackerImportTextSanitizer.SanitizePlainText(row["tier"]))?.Trim();
                 var status = MapStatus(proposedStatus, context);
 
-                var rawNotes = Decode(!string.IsNullOrWhiteSpace(row["corrected_notes"])
+                var rawNotes = TrackerImportTextSanitizer.SanitizeFreeText(!string.IsNullOrWhiteSpace(row["corrected_notes"])
                     ? row["corrected_notes"]!.Trim()
                     : (!string.IsNullOrWhiteSpace(row["text"])
                         ? row["text"]!.Trim()
@@ -226,7 +226,4 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
         context.Summary.RecordUnmappedValue("tier", rawTier);
         return CompanyStatus.Neutral;
     }
-
-    private static string? Decode(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? value : WebUtility.HtmlDecode(value);
 }

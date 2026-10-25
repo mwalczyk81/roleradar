@@ -1,8 +1,9 @@
 # Default to LF line endings for cross-platform consistency
 * text=auto eol=lf
 
-# Windows PowerShell scripts use CRLF
-*.ps1 text eol=crlf
+# Shell and PowerShell scripts use LF
+*.ps1 text eol=lf
+*.sh text eol=lf
 *.cmd text eol=crlf
 *.bat text eol=crlf
 

@@ -81,13 +81,13 @@ public sealed class PostingsJsonStep : ITrackerImportStep
             IEnumerable<(string? Slug, JsonElement Element)> entries;
             if (doc.RootElement.ValueKind == JsonValueKind.Object)
             {
-                entries = doc.RootElement.EnumerateObject().Select(p => ((string?)Decode(p.Name), p.Value));
+                entries = doc.RootElement.EnumerateObject().Select(p => ((string?)TrackerImportTextSanitizer.SanitizePlainText(p.Name), p.Value));
             }
             else
             {
                 entries = doc.RootElement.EnumerateArray().Select(e =>
                 {
-                    string? slug = e.TryGetProperty("slug", out var sProp) && sProp.GetString() is { } ss ? Decode(ss) : null;
+                    string? slug = e.TryGetProperty("slug", out var sProp) && sProp.GetString() is { } ss ? TrackerImportTextSanitizer.SanitizePlainText(ss) : null;
                     return (slug, e);
                 });
             }
@@ -132,10 +132,10 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                 try
                 {
                     var rawTitle = element.TryGetProperty("title", out var titleProp) && titleProp.GetString() is { } ts
-                        ? Decode(ts)?.Trim()
+                        ? TrackerImportTextSanitizer.SanitizePlainText(ts)?.Trim()
                         : null;
                     var rawCompanyName = element.TryGetProperty("company", out var compProp) && compProp.GetString() is { } cs
-                        ? Decode(cs)?.Trim()
+                        ? TrackerImportTextSanitizer.SanitizePlainText(cs)?.Trim()
                         : null;
 
                     if (string.IsNullOrWhiteSpace(rawTitle) || string.IsNullOrWhiteSpace(rawCompanyName))
@@ -157,14 +157,14 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                     string? cultureSummary = null;
                     if (element.TryGetProperty("culture", out var cultProp) && cultProp.GetString() is { } cultStr)
                     {
-                        var decodedCult = Decode(cultStr);
+                        var decodedCult = TrackerImportTextSanitizer.SanitizeFreeText(cultStr);
                         cultureSummary = TrackerImportFieldLimiter.LimitCultureSummary(decodedCult, context.Summary);
                     }
 
                     var cultureLevel = CultureLevel.Unknown;
                     if (element.TryGetProperty("cultureLevel", out var cultLvlProp) && cultLvlProp.GetString() is { } cultLvlStr)
                     {
-                        var decodedCultLvl = Decode(cultLvlStr);
+                        var decodedCultLvl = TrackerImportTextSanitizer.SanitizePlainText(cultLvlStr);
                         if (!string.IsNullOrWhiteSpace(decodedCultLvl))
                         {
                             var s = decodedCultLvl.Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
@@ -182,7 +182,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                     var remoteType = RemoteType.Unknown;
                     if (element.TryGetProperty("remoteType", out var remProp) && remProp.GetString() is { } remStr)
                     {
-                        var decodedRem = Decode(remStr);
+                        var decodedRem = TrackerImportTextSanitizer.SanitizePlainText(remStr);
                         if (!string.IsNullOrWhiteSpace(decodedRem))
                         {
                             var s = decodedRem.Trim().ToLowerInvariant().Replace('-', '_').Replace(' ', '_');
@@ -214,8 +214,8 @@ public sealed class PostingsJsonStep : ITrackerImportStep
 
                     // 4. Parse Dates
                     var addedRaw = element.TryGetProperty("added", out var addedProp) && addedProp.GetString() is { } as1
-                        ? Decode(as1)?.Trim()
-                        : (element.TryGetProperty("first", out var firstProp) && firstProp.GetString() is { } as2 ? Decode(as2)?.Trim() : null);
+                        ? TrackerImportTextSanitizer.SanitizePlainText(as1)?.Trim()
+                        : (element.TryGetProperty("first", out var firstProp) && firstProp.GetString() is { } as2 ? TrackerImportTextSanitizer.SanitizePlainText(as2)?.Trim() : null);
 
                     var dateOutcome = DateInferenceRule.Resolve(addedRaw, defaultDate);
                     if (dateOutcome.Kind == DateResolutionKind.DefaultedBlank) context.Summary.DatesDefaulted++;
@@ -223,7 +223,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                     if (dateOutcome.IsFlagged) context.Summary.DatesFlagged++;
 
                     var rawCompText = element.TryGetProperty("comp", out var cProp) && cProp.GetString() is { } cp
-                        ? Decode(cp)?.Trim()
+                        ? TrackerImportTextSanitizer.SanitizePlainText(cp)?.Trim()
                         : null;
                     var compText = TrackerImportFieldLimiter.LimitCompensationText(rawCompText, context.Summary);
                     var (compMin, compMax) = TryParseCompensationRange(compText);
@@ -236,40 +236,40 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                     }
 
                     var rawReqId = element.TryGetProperty("req_id", out var reqProp) && reqProp.GetString() is { } rs1
-                        ? Decode(rs1)?.Trim()
-                        : (element.TryGetProperty("requisitionId", out var reqProp2) && reqProp2.GetString() is { } rs2 ? Decode(rs2)?.Trim() : null);
+                        ? TrackerImportTextSanitizer.SanitizePlainText(rs1)?.Trim()
+                        : (element.TryGetProperty("requisitionId", out var reqProp2) && reqProp2.GetString() is { } rs2 ? TrackerImportTextSanitizer.SanitizePlainText(rs2)?.Trim() : null);
                     var reqId = TrackerImportFieldLimiter.LimitRequisitionId(rawReqId, context.Summary);
 
                     var rawUrl = element.TryGetProperty("href", out var hrefProp) && hrefProp.GetString() is { } us1
-                        ? Decode(us1)?.Trim()
-                        : (element.TryGetProperty("url", out var urlProp) && urlProp.GetString() is { } us2 ? Decode(us2)?.Trim() : null);
+                        ? TrackerImportTextSanitizer.SanitizePlainText(us1)?.Trim()
+                        : (element.TryGetProperty("url", out var urlProp) && urlProp.GetString() is { } us2 ? TrackerImportTextSanitizer.SanitizePlainText(us2)?.Trim() : null);
                     var url = TrackerImportFieldLimiter.LimitUrl(rawUrl, context.Summary);
 
                     var rawLoc = element.TryGetProperty("loc", out var locProp) && locProp.GetString() is { } ls1
-                        ? Decode(ls1)?.Trim()
-                        : (element.TryGetProperty("location", out var locProp2) && locProp2.GetString() is { } ls2 ? Decode(ls2)?.Trim() : null);
+                        ? TrackerImportTextSanitizer.SanitizePlainText(ls1)?.Trim()
+                        : (element.TryGetProperty("location", out var locProp2) && locProp2.GetString() is { } ls2 ? TrackerImportTextSanitizer.SanitizePlainText(ls2)?.Trim() : null);
                     var location = TrackerImportFieldLimiter.LimitLocation(rawLoc, context.Summary);
 
                     var sourceKind = SourceKind.Aggregator;
                     if (element.TryGetProperty("source", out var srcProp) && srcProp.GetString() is { } srcStr &&
-                        TrackingEnumExtensions.TryParseSourceKind(Decode(srcStr)?.Trim(), out var parsedSrc))
+                        TrackingEnumExtensions.TryParseSourceKind(TrackerImportTextSanitizer.SanitizePlainText(srcStr)?.Trim(), out var parsedSrc))
                     {
                         sourceKind = parsedSrc;
                     }
 
                     var rawPosted = element.TryGetProperty("posted", out var pProp) && pProp.GetString() is { } ps
-                        ? Decode(ps)?.Trim()
+                        ? TrackerImportTextSanitizer.SanitizePlainText(ps)?.Trim()
                         : null;
 
                     var rawNote = element.TryGetProperty("note", out var noteProp) && noteProp.GetString() is { } ns
-                        ? Decode(ns)?.Trim()
+                        ? TrackerImportTextSanitizer.SanitizeFreeText(ns)?.Trim()
                         : null;
 
                     var candidateSignals = ParseGhostSignals(element, context);
 
                     // Postings with status "applied" are imported with disposition "scored"
                     var rawStatus = element.TryGetProperty("status", out var stProp) && stProp.GetString() is { } stStr
-                        ? Decode(stStr)?.Trim()
+                        ? TrackerImportTextSanitizer.SanitizePlainText(stStr)?.Trim()
                         : null;
                     var originalWasApplied = string.Equals(rawStatus, "applied", StringComparison.OrdinalIgnoreCase);
 
@@ -279,7 +279,12 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                     var signalsCreatedInRow = 0;
                     var notesCreatedInRow = 0;
                     Company? newCompany = null;
+                    Company? updatedCompany = null;
                     Posting? newPosting = null;
+
+                    var parentText = element.TryGetProperty("parent", out var parentProp) && parentProp.GetString() is { } parStr
+                        ? TrackerImportTextSanitizer.SanitizeFreeText(parStr)?.Trim()
+                        : null;
 
                     var rowResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
                     {
@@ -295,11 +300,18 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                             }
                             else
                             {
-                                var parentText = element.TryGetProperty("parent", out var parentProp) && parentProp.GetString() is { } parStr
-                                    ? Decode(parStr)?.Trim()
-                                    : null;
-                                var rawDescription = parentText ?? string.Empty;
-                                var description = TrackerImportFieldLimiter.LimitCompanyDescription(rawDescription, context.Summary) ?? string.Empty;
+                                string description = string.Empty;
+                                if (!string.IsNullOrWhiteSpace(parentText))
+                                {
+                                    if (parentText.Length <= Company.MaxDescriptionLength)
+                                    {
+                                        description = parentText;
+                                    }
+                                    else
+                                    {
+                                        context.Summary.RecordFieldTruncation("company_description");
+                                    }
+                                }
 
                                 resolvedCompany = Company.Create(
                                     ownerId: context.OwnerId,
@@ -326,11 +338,90 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                                         After: new Dictionary<string, object?>
                                         {
                                             ["name"] = resolvedCompany.Name,
-                                            ["status"] = resolvedCompany.Status.ToString()
+                                            ["status"] = resolvedCompany.Status.ToString(),
+                                            ["description"] = resolvedCompany.Description
                                         }));
                                 await txCtx.AppendAuditEntryAsync(audit, ct);
                                 autoCreatedCompany = true;
                                 newCompany = resolvedCompany;
+                            }
+                        }
+
+                        if (!autoCreatedCompany && resolvedCompany is not null)
+                        {
+                            updatedCompany = resolvedCompany;
+                            if (!string.IsNullOrWhiteSpace(parentText))
+                            {
+                                var currentDesc = resolvedCompany.Description;
+                                if (string.IsNullOrWhiteSpace(currentDesc))
+                                {
+                                    if (parentText.Length <= Company.MaxDescriptionLength)
+                                    {
+                                        resolvedCompany.Update(description: parentText);
+                                        var updateRes = await txCtx.Companies.UpsertCompanyAsync(resolvedCompany, ct);
+                                        if (!updateRes.IsSuccess)
+                                        {
+                                            return Result<bool>.Failure(updateRes.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to update company description"));
+                                        }
+
+                                        var audit = AuditLogEntry.CreateForTracking(
+                                            ownerId: context.OwnerId,
+                                            actor: ImportActor,
+                                            operation: AuditOperation.ImportCompanyUpdate,
+                                            entityType: "company",
+                                            entityId: resolvedCompany.Id,
+                                            resultingVersionToken: resolvedCompany.VersionToken,
+                                            occurredAtUtc: DateTime.UtcNow,
+                                            details: new AuditDetails(
+                                                ChangedFields: ["description"],
+                                                After: new Dictionary<string, object?>
+                                                {
+                                                    ["description"] = resolvedCompany.Description
+                                                }));
+                                        await txCtx.AppendAuditEntryAsync(audit, ct);
+                                    }
+                                    else
+                                    {
+                                        context.Summary.RecordFieldTruncation("company_description");
+                                    }
+                                }
+                                else if (!currentDesc.Contains(parentText, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    var trimmed = currentDesc.TrimEnd();
+                                    var candidate = trimmed.EndsWith(';') || trimmed.EndsWith('.')
+                                        ? $"{trimmed} {parentText}"
+                                        : $"{trimmed}; {parentText}";
+
+                                    if (candidate.Length <= Company.MaxDescriptionLength)
+                                    {
+                                        resolvedCompany.Update(description: candidate);
+                                        var updateRes = await txCtx.Companies.UpsertCompanyAsync(resolvedCompany, ct);
+                                        if (!updateRes.IsSuccess)
+                                        {
+                                            return Result<bool>.Failure(updateRes.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to update company description"));
+                                        }
+
+                                        var audit = AuditLogEntry.CreateForTracking(
+                                            ownerId: context.OwnerId,
+                                            actor: ImportActor,
+                                            operation: AuditOperation.ImportCompanyUpdate,
+                                            entityType: "company",
+                                            entityId: resolvedCompany.Id,
+                                            resultingVersionToken: resolvedCompany.VersionToken,
+                                            occurredAtUtc: DateTime.UtcNow,
+                                            details: new AuditDetails(
+                                                ChangedFields: ["description"],
+                                                After: new Dictionary<string, object?>
+                                                {
+                                                    ["description"] = resolvedCompany.Description
+                                                }));
+                                        await txCtx.AppendAuditEntryAsync(audit, ct);
+                                    }
+                                    else
+                                    {
+                                        context.Summary.RecordFieldTruncation("company_description");
+                                    }
+                                }
                             }
                         }
 
@@ -584,6 +675,10 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                         context.Summary.CompaniesCreated++;
                         context.Summary.AutoCreatedCompanies.Add(canonicalName);
                     }
+                    else if (updatedCompany is not null)
+                    {
+                        context.CanonicalCompanies[canonicalName] = updatedCompany;
+                    }
 
                     if (newPosting is not null)
                     {
@@ -621,9 +716,6 @@ public sealed class PostingsJsonStep : ITrackerImportStep
 
         return Result<bool>.Success(true);
     }
-
-    private static string? Decode(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? value : WebUtility.HtmlDecode(value);
 
     public static (decimal? Min, decimal? Max) TryParseCompensationRange(string? text)
     {
@@ -691,7 +783,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
 
         if (ghostProp.ValueKind == JsonValueKind.String)
         {
-            var raw = Decode(ghostProp.GetString());
+            var raw = TrackerImportTextSanitizer.SanitizePlainText(ghostProp.GetString());
             if (string.IsNullOrWhiteSpace(raw))
             {
                 return list;

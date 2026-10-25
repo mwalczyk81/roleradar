@@ -295,7 +295,18 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
                 if (isFirstChunk)
                 {
-                    TryExtractSourceDatabaseName(scratchPlaintext.AsSpan(0, plainLen), _mongoOptions.DatabaseName, out extractedSourceDb);
+                    var extractSuccess = TryExtractSourceDatabaseName(
+                        scratchPlaintext.AsSpan(0, plainLen),
+                        _mongoOptions.DatabaseName,
+                        out extractedSourceDb,
+                        out var validationError);
+
+                    if (!extractSuccess && validationError is not null)
+                    {
+                        return Result<(byte[], string?)>.Failure(
+                            ErrorCode.ValidationError,
+                            validationError);
+                    }
                 }
 
                 isFirstChunk = false;
@@ -1007,11 +1018,19 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
     }
 
     internal static bool TryExtractSourceDatabaseName(ReadOnlySpan<byte> chunk, out string? sourceDb)
-        => TryExtractSourceDatabaseName(chunk, targetDatabaseName: null, out sourceDb);
+        => TryExtractSourceDatabaseName(chunk, targetDatabaseName: null, out sourceDb, out _);
 
     internal static bool TryExtractSourceDatabaseName(ReadOnlySpan<byte> chunk, string? targetDatabaseName, out string? sourceDb)
+        => TryExtractSourceDatabaseName(chunk, targetDatabaseName, out sourceDb, out _);
+
+    internal static bool TryExtractSourceDatabaseName(
+        ReadOnlySpan<byte> chunk,
+        string? targetDatabaseName,
+        out string? sourceDb,
+        out string? validationError)
     {
         sourceDb = null;
+        validationError = null;
         if (chunk.Length < 4)
         {
             return false;
@@ -1033,7 +1052,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                     totalRead += read;
                 }
 
-                return TryScanDatabaseNameFromBson(decompBuffer.AsSpan(0, totalRead), targetDatabaseName, out sourceDb);
+                return TryScanDatabaseNameFromBson(decompBuffer.AsSpan(0, totalRead), targetDatabaseName, out sourceDb, out validationError);
             }
             catch
             {
@@ -1042,12 +1061,17 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         }
 
         // 2. Uncompressed stream
-        return TryScanDatabaseNameFromBson(chunk, targetDatabaseName, out sourceDb);
+        return TryScanDatabaseNameFromBson(chunk, targetDatabaseName, out sourceDb, out validationError);
     }
 
-    private static bool TryScanDatabaseNameFromBson(ReadOnlySpan<byte> span, string? targetDatabaseName, out string? sourceDb)
+    private static bool TryScanDatabaseNameFromBson(
+        ReadOnlySpan<byte> span,
+        string? targetDatabaseName,
+        out string? sourceDb,
+        out string? validationError)
     {
         sourceDb = null;
+        validationError = null;
         if (span.Length < 8)
         {
             return false;
@@ -1103,8 +1127,8 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             return true;
         }
 
-        sourceDb = foundDatabases.First();
-        return true;
+        validationError = $"archive contains {foundDatabases.Count} databases, none named {targetDatabaseName ?? "<target>"}; cannot choose a source";
+        return false;
     }
 
     private static bool IsValidMongodumpArchive(byte[] chunk, int count)

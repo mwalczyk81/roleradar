@@ -834,4 +834,104 @@ public sealed class SecretStreamBackupCryptoTests
         Assert.False(success);
         Assert.Null(extractedDb);
     }
+
+    [Fact]
+    public void TryExtractSourceDatabaseName_0Databases_WithAndWithoutTarget_ReturnsFalse()
+    {
+        var dummyBytes = new byte[] { 0x6d, 0xe2, 0x99, 0x81, 0x10, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03 };
+
+        // Without target
+        var successNoTarget = SecretStreamBackupArchiveService.TryExtractSourceDatabaseName(
+            dummyBytes, targetDatabaseName: null, out var dbNoTarget, out var errNoTarget);
+        Assert.False(successNoTarget);
+        Assert.Null(dbNoTarget);
+        Assert.Null(errNoTarget);
+
+        // With target
+        var successWithTarget = SecretStreamBackupArchiveService.TryExtractSourceDatabaseName(
+            dummyBytes, targetDatabaseName: "target_db", out var dbWithTarget, out var errWithTarget);
+        Assert.False(successWithTarget);
+        Assert.Null(dbWithTarget);
+        Assert.Null(errWithTarget);
+    }
+
+    [Fact]
+    public void TryExtractSourceDatabaseName_1Database_WithAndWithoutTarget_ReturnsTrue()
+    {
+        var chunk = CreateSyntheticDumpChunk("single_db");
+
+        // Target matches
+        var okMatch = SecretStreamBackupArchiveService.TryExtractSourceDatabaseName(
+            chunk, targetDatabaseName: "single_db", out var dbMatch, out var errMatch);
+        Assert.True(okMatch);
+        Assert.Equal("single_db", dbMatch);
+        Assert.Null(errMatch);
+
+        // Target differs (remapping allowed for single database)
+        var okDiff = SecretStreamBackupArchiveService.TryExtractSourceDatabaseName(
+            chunk, targetDatabaseName: "other_target", out var dbDiff, out var errDiff);
+        Assert.True(okDiff);
+        Assert.Equal("single_db", dbDiff);
+        Assert.Null(errDiff);
+
+        // Target null
+        var okNull = SecretStreamBackupArchiveService.TryExtractSourceDatabaseName(
+            chunk, targetDatabaseName: null, out var dbNull, out var errNull);
+        Assert.True(okNull);
+        Assert.Equal("single_db", dbNull);
+        Assert.Null(errNull);
+    }
+
+    [Fact]
+    public void TryExtractSourceDatabaseName_2Databases_WithTargetPresent_SelectsTarget()
+    {
+        var chunk = CreateSyntheticDumpChunk("db_alpha", "db_beta");
+
+        var ok = SecretStreamBackupArchiveService.TryExtractSourceDatabaseName(
+            chunk, targetDatabaseName: "db_beta", out var db, out var err);
+        Assert.True(ok);
+        Assert.Equal("db_beta", db);
+        Assert.Null(err);
+    }
+
+    [Fact]
+    public void TryExtractSourceDatabaseName_2Databases_WithoutTargetPresent_FailsWithValidationError()
+    {
+        var chunk = CreateSyntheticDumpChunk("db_alpha", "db_beta");
+
+        var ok = SecretStreamBackupArchiveService.TryExtractSourceDatabaseName(
+            chunk, targetDatabaseName: "db_gamma", out var db, out var err);
+        Assert.False(ok);
+        Assert.Null(db);
+        Assert.Equal("archive contains 2 databases, none named db_gamma; cannot choose a source", err);
+    }
+
+    [Fact]
+    public void TryExtractSourceDatabaseName_3Databases_WithoutTargetPresent_FailsWithValidationError()
+    {
+        var chunk = CreateSyntheticDumpChunk("db1", "db2", "db3");
+
+        var ok = SecretStreamBackupArchiveService.TryExtractSourceDatabaseName(
+            chunk, targetDatabaseName: "unmatched_target", out var db, out var err);
+        Assert.False(ok);
+        Assert.Null(db);
+        Assert.Equal("archive contains 3 databases, none named unmatched_target; cannot choose a source", err);
+    }
+
+    private static byte[] CreateSyntheticDumpChunk(params string[] databases)
+    {
+        using var ms = new MemoryStream();
+        ms.Write([0x6d, 0xe2, 0x99, 0x81]); // 4-byte archive magic
+        ms.Write(BitConverter.GetBytes(50)); // header len
+        ms.Write(new byte[50]); // dummy header
+        foreach (var db in databases)
+        {
+            ms.Write([0x02, (byte)'d', (byte)'b', 0x00]);
+            var dbBytes = Encoding.UTF8.GetBytes(db);
+            ms.Write(BitConverter.GetBytes(dbBytes.Length + 1));
+            ms.Write(dbBytes);
+            ms.WriteByte(0x00);
+        }
+        return ms.ToArray();
+    }
 }

@@ -68,8 +68,8 @@ public sealed class CompanyAliasesStep : ITrackerImportStep
             context.Summary.RecordFieldRead("company-aliases.csv", "alias", !string.IsNullOrWhiteSpace(row["alias"]));
             context.Summary.RecordFieldRead("company-aliases.csv", "canonical", !string.IsNullOrWhiteSpace(row["canonical"]));
 
-            var alias = Decode(row["alias"])?.Trim();
-            var canonical = Decode(row["canonical"])?.Trim();
+            var alias = TrackerImportTextSanitizer.SanitizePlainText(row["alias"])?.Trim();
+            var canonical = TrackerImportTextSanitizer.SanitizePlainText(row["canonical"])?.Trim();
 
             if (!string.IsNullOrWhiteSpace(alias) && !string.IsNullOrWhiteSpace(canonical))
             {
@@ -84,7 +84,4 @@ public sealed class CompanyAliasesStep : ITrackerImportStep
 
         return Task.FromResult(Result<bool>.Success(true));
     }
-
-    private static string? Decode(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? value : WebUtility.HtmlDecode(value);
 }
