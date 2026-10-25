@@ -79,8 +79,8 @@ public sealed class TrackingMcpTools
         [Description("Job posting title (1..200 characters).")] string? title = null,
         [Description("Original job posting URL (max 1000 characters).")] string? url = null,
         [Description("Source kind ('ats' or 'aggregator').")] string? sourceKind = null,
-        [Description("ATS tenant identifier (e.g. 'acmesoftware').")] string? atsTenant = null,
-        [Description("Requisition or job ID within the ATS.")] string? requisitionId = null,
+        [Description("String ATS tenant identifier (e.g. 'acmesoftware').")] string? atsTenant = null,
+        [Description("String requisition or job ID within the ATS (e.g. '19505', 'REQ-01').")] string? requisitionId = null,
         [Description("Geographic location or office specification.")] string? location = null,
         [Description("Remote work type ('remote', 'hybrid', 'onsite', 'unknown').")] string? remoteType = null,
         [Description("Minimum base compensation.")] decimal? compensationMin = null,
@@ -95,7 +95,7 @@ public sealed class TrackingMcpTools
         [Description("Linked narrative screening note identifier.")] Guid? screeningNoteId = null,
         [Description("Pointer to canonical posting if this is a duplicate.")] Guid? duplicateOfId = null,
         [Description("Optional flag indicating whether compensation is high priority (null = not judged).")] bool? compHighPriority = null,
-        [Description("Observed signals. Accepts string shorthand (e.g. 'no_salary', 'repost', 'parallel_posting', 'gone', 'phantom', 'deadline:YYYY-MM-DD') or object form with properties 'signalType' ('no_salary', 'repost', 'parallel_posting', 'gone', 'phantom', 'deadline'), optional 'evidence' (defaults to 'reported by agent'), and optional 'deadlineDate' (YYYY-MM-DD).")] SignalInputDto[]? signals = null,
+        [Description("Array of observed signals. Accepts string shorthand (e.g. 'no_salary', 'repost', 'parallel_posting', 'gone', 'phantom', 'deadline:YYYY-MM-DD') or object form with properties 'signalType' (string, e.g. 'no_salary', 'repost', 'parallel_posting', 'gone', 'phantom', 'deadline'), optional 'evidence' (string, defaults to 'reported by agent'), and optional 'deadlineDate' (string YYYY-MM-DD).")] SignalInputDto[]? signals = null,
         CancellationToken cancellationToken = default)
     {
         var command = new RecordPostingCommand(
@@ -164,7 +164,7 @@ public sealed class TrackingMcpTools
         [Description("Include stale companies overdue for check.")] bool includeStale = false,
         [Description("Stale threshold days.")] int staleAfterDays = 7,
         [Description("Point-in-time effective date for criteria (YYYY-MM-DD).")] string? effectiveDate = null,
-        [Description("Deduplication key lookup value for entity 'posting_dedup_lookup'.")] string? dedupKey = null,
+        [Description("String deduplication key lookup value for entity 'posting_dedup_lookup' (e.g. '<companyId>|<req>' or URL).")] string? dedupKey = null,
         [Description("1-based page index (default: 1).")] int page = 1,
         [Description("Bounded page size (default: 50, max: 200).")] int pageSize = 50,
         CancellationToken cancellationToken = default)
@@ -193,7 +193,7 @@ public sealed class TrackingMcpTools
     public async Task<string> TrackerLogAsync(
         [Description("Action discriminator ('criterion_revision', 'criterion_deactivate', 'search_run').")] string action,
         [Description("Screening criterion key (max 100 characters).")] string? key = null,
-        [Description("Screening criterion category ('hard_skip', 'weight', 'preference').")] string? category = null,
+        [Description("String screening criterion category (e.g. 'hard_skip', 'weight', 'preference').")] string? category = null,
         [Description("Screening criterion rule specification or threshold (max 500 characters).")] string? value = null,
         [Description("Criterion provenance ('stated', 'inferred').")] string? provenance = null,
         [Description("UTC timestamp when rule becomes effective (ISO 8601).")] string? effectiveFrom = null,

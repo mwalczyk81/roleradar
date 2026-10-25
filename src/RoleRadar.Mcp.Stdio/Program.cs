@@ -51,6 +51,7 @@ public static class Program
             builder.Services.Configure<McpServerOptions>(options =>
             {
                 options.Filters.Request.CallToolFilters.Add(UnknownArgumentValidationFilter.Create());
+                options.Filters.Request.ListToolsFilters.Add(ToolSchemaNormalizationFilter.Create());
             });
 
             var app = builder.Build();

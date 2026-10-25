@@ -456,6 +456,43 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
                 Assert.Equal("already_decided", doc.RootElement.GetProperty("data").GetProperty("status").GetString());
             }
 
+            // 3b. Regression test: call posting_record through MCP layer with requisitionId as JSON number (19505)
+            var numericReqArgsJson = $$"""
+                {
+                    "companyId": "{{companyId}}",
+                    "title": "Director, Software Engineering",
+                    "requisitionId": 19505
+                }
+                """;
+            using (var numericArgsDoc = JsonDocument.Parse(numericReqArgsJson))
+            {
+                var numericArgs = numericArgsDoc.RootElement.EnumerateObject().ToDictionary(p => p.Name, p => p.Value.Clone());
+                var mcpFilterRes = await RoleRadar.Mcp.Stdio.Filters.UnknownArgumentValidationFilter.ExecuteAsync(
+                    new ModelContextProtocol.Protocol.CallToolRequestParams
+                    {
+                        Name = "posting_record",
+                        Arguments = numericArgs
+                    },
+                    async p =>
+                    {
+                        var reqId = p.Arguments!["requisitionId"].GetString();
+                        var rJson = await tools.PostingRecordAsync(
+                            companyId: companyId,
+                            title: "Director, Software Engineering",
+                            requisitionId: reqId);
+                        return new ModelContextProtocol.Protocol.CallToolResult
+                        {
+                            Content = [new ModelContextProtocol.Protocol.TextContentBlock { Text = rJson }]
+                        };
+                    });
+                Assert.False(mcpFilterRes.IsError == true);
+                var mcpFilterText = Assert.IsType<ModelContextProtocol.Protocol.TextContentBlock>(Assert.Single(mcpFilterRes.Content!)).Text;
+                using var filterDoc = JsonDocument.Parse(mcpFilterText!);
+                Assert.True(filterDoc.RootElement.GetProperty("ok").GetBoolean());
+                Assert.Equal("already_decided", filterDoc.RootElement.GetProperty("data").GetProperty("status").GetString());
+                Assert.Equal("screened_out", filterDoc.RootElement.GetProperty("data").GetProperty("posting").GetProperty("disposition").GetString());
+            }
+
             // 4. Call posting_record handler and MCP tool with same company + title (Tier D, screened_out -> already_decided)
             var resTitleDecidedHandler = await recordPostingHandler.HandleAsync(new RecordPostingCommand(
                 CompanyId: companyId,

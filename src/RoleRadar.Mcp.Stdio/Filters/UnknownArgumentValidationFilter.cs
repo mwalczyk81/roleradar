@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
 using ModelContextProtocol.Protocol;
@@ -58,12 +59,114 @@ public static class UnknownArgumentValidationFilter
             }
         }
 
-        // 3. Pre-validate parameter shapes & coerce signals shorthand
+        // 3. Pre-validate parameter shapes, apply server-side tolerance conversions, & coerce signals shorthand
         if (args != null && args.Count > 0)
         {
+            IDictionary<string, JsonElement> mutableArgs = args.IsReadOnly
+                ? new Dictionary<string, JsonElement>(args, StringComparer.Ordinal)
+                : args;
+
+            if (args.IsReadOnly)
+            {
+                requestParams.Arguments = mutableArgs;
+                args = mutableArgs;
+            }
+
+            // A. Coerce values tolerantly:
+            // - accept JSON numbers (integer or decimal) wherever a string is expected and convert it with invariant culture
+            //   to its exact original text via GetRawText() (19505 stays "19505", no scientific notation, leading zeros preserved if string)
+            // - accept "true"/"false" strings for booleans
+            // - accept numeric strings for numbers (int, decimal, double)
+            // - accept numbers inside string arrays
             foreach (var (paramName, paramInfo) in validParams)
             {
-                if (args.TryGetValue(paramName, out var element))
+                if (mutableArgs.TryGetValue(paramName, out var element))
+                {
+                    var nonNullType = Nullable.GetUnderlyingType(paramInfo.ParameterType) ?? paramInfo.ParameterType;
+
+                    if (nonNullType == typeof(string))
+                    {
+                        if (element.ValueKind == JsonValueKind.Number)
+                        {
+                            var raw = element.GetRawText();
+                            mutableArgs[paramName] = JsonSerializer.SerializeToElement(raw);
+                        }
+                    }
+                    else if (nonNullType == typeof(bool))
+                    {
+                        if (element.ValueKind == JsonValueKind.String)
+                        {
+                            var str = element.GetString()?.Trim().ToLowerInvariant();
+                            if (str == "true")
+                            {
+                                mutableArgs[paramName] = JsonSerializer.SerializeToElement(true);
+                            }
+                            else if (str == "false")
+                            {
+                                mutableArgs[paramName] = JsonSerializer.SerializeToElement(false);
+                            }
+                        }
+                    }
+                    else if (nonNullType == typeof(int) || nonNullType == typeof(long))
+                    {
+                        if (element.ValueKind == JsonValueKind.String)
+                        {
+                            var str = element.GetString()?.Trim();
+                            if (int.TryParse(str, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intVal))
+                            {
+                                mutableArgs[paramName] = JsonSerializer.SerializeToElement(intVal);
+                            }
+                        }
+                    }
+                    else if (nonNullType == typeof(decimal))
+                    {
+                        if (element.ValueKind == JsonValueKind.String)
+                        {
+                            var str = element.GetString()?.Trim();
+                            if (decimal.TryParse(str, NumberStyles.Number, CultureInfo.InvariantCulture, out var decVal))
+                            {
+                                mutableArgs[paramName] = JsonSerializer.SerializeToElement(decVal);
+                            }
+                        }
+                    }
+                    else if (nonNullType == typeof(double))
+                    {
+                        if (element.ValueKind == JsonValueKind.String)
+                        {
+                            var str = element.GetString()?.Trim();
+                            if (double.TryParse(str, NumberStyles.Float, CultureInfo.InvariantCulture, out var dblVal))
+                            {
+                                mutableArgs[paramName] = JsonSerializer.SerializeToElement(dblVal);
+                            }
+                        }
+                    }
+                    else if ((nonNullType == typeof(string[]) || nonNullType == typeof(IReadOnlyList<string>)) && element.ValueKind == JsonValueKind.Array)
+                    {
+                        var hasNumbers = false;
+                        foreach (var item in element.EnumerateArray())
+                        {
+                            if (item.ValueKind == JsonValueKind.Number)
+                            {
+                                hasNumbers = true;
+                                break;
+                            }
+                        }
+
+                        if (hasNumbers)
+                        {
+                            var coerced = element.EnumerateArray()
+                                .Select(item => item.ValueKind == JsonValueKind.Number ? item.GetRawText() : item.GetString()!)
+                                .ToArray();
+                            mutableArgs[paramName] = JsonSerializer.SerializeToElement(coerced);
+                        }
+                    }
+                }
+            }
+
+            // B. Validate parameter shapes
+            foreach (var (paramName, paramInfo) in validParams)
+            {
+                if (mutableArgs.TryGetValue(paramName, out var element))
                 {
                     var shapeError = ValidateArgumentShape(paramName, paramInfo, element);
                     if (shapeError != null)
@@ -73,13 +176,12 @@ public static class UnknownArgumentValidationFilter
                 }
             }
 
-            // If tool is posting_record and has signals, coerce string shorthand to object form in-place
+            // C. If tool is posting_record and has signals, coerce string shorthand to object form in-place
             if (string.Equals(toolName, "posting_record", StringComparison.OrdinalIgnoreCase)
-                && args.TryGetValue("signals", out var signalsElement)
-                && signalsElement.ValueKind == JsonValueKind.Array
-                && !args.IsReadOnly)
+                && mutableArgs.TryGetValue("signals", out var signalsElement)
+                && signalsElement.ValueKind == JsonValueKind.Array)
             {
-                CoerceSignalsArgument(args, signalsElement);
+                CoerceSignalsArgument(mutableArgs, signalsElement);
             }
         }
 
