@@ -93,6 +93,7 @@ public static class TrackerImportCommand
                 Console.WriteLine($"Applications Created:    {summary.ApplicationsCreated}");
                 Console.WriteLine($"Standalone Notes:        {summary.StandaloneNotesCreated}");
                 Console.WriteLine($"Criteria Created:        {summary.CriteriaCreated}");
+                Console.WriteLine($"Signals Created:         {summary.SignalsCreated}");
                 Console.WriteLine($"Dates Inferred:          {summary.DatesInferred}");
                 Console.WriteLine($"Dates Defaulted:         {summary.DatesDefaulted}");
                 Console.WriteLine($"Dates Flagged:           {summary.DatesFlagged}");
@@ -135,6 +136,16 @@ public static class TrackerImportCommand
                     foreach (var (field, count) in summary.FieldTruncations.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
                     {
                         Console.WriteLine($"  {field}: {count}");
+                    }
+                }
+
+                if (summary.DispositionHistogram.Count > 0)
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("Post-Run Disposition Histogram:");
+                    foreach (var (disposition, count) in summary.DispositionHistogram.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        Console.WriteLine($"  {disposition}: {count}");
                     }
                 }
 

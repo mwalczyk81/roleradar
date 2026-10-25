@@ -57,6 +57,7 @@ public sealed class TrackerImportSummary
     public int ApplicationsUnchanged { get; set; }
     public int StandaloneNotesCreated { get; set; }
     public int CriteriaCreated { get; set; }
+    public int SignalsCreated { get; set; }
     public int DatesDefaulted { get; set; }
     public int DatesInferred { get; set; }
     public int DatesFlagged { get; set; }
@@ -124,11 +125,14 @@ public sealed class TrackerImportSummary
     public List<string> PeopleDetected { get; } = new();
     public List<TrackerImportRowError> Errors { get; } = new();
 
+    public Dictionary<string, int> DispositionHistogram { get; } = new(StringComparer.OrdinalIgnoreCase);
+
     public bool IsIdempotentNoOp =>
         CompaniesCreated == 0 &&
         PostingsCreated == 0 &&
         ApplicationsCreated == 0 &&
         StandaloneNotesCreated == 0 &&
         CriteriaCreated == 0 &&
+        SignalsCreated == 0 &&
         Errors.Count == 0;
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Domain.Audit;
@@ -59,9 +60,11 @@ public sealed class AppendixRowsStep : ITrackerImportStep
 
         foreach (var row in records)
         {
+            var rawProposedDisp = (Decode(row["proposed_disposition"]) ?? Decode(row["disposition"]))?.Trim();
             var reasonPrimary = Decode(row["reason_primary"])?.Trim();
             var reasonAll = Decode(row["reason_all"])?.Trim();
-            var isDuplicate = string.Equals(reasonPrimary, "duplicate", StringComparison.OrdinalIgnoreCase) ||
+            var isDuplicate = string.Equals(rawProposedDisp, "duplicate", StringComparison.OrdinalIgnoreCase) ||
+                              string.Equals(reasonPrimary, "duplicate", StringComparison.OrdinalIgnoreCase) ||
                               (reasonAll is not null && reasonAll.Contains("duplicate", StringComparison.OrdinalIgnoreCase));
 
             if (isDuplicate)
@@ -150,6 +153,61 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                 var url = TrackerImportFieldLimiter.LimitUrl(rawUrl, context.Summary);
                 var rawReasonPrimary = Decode(row["reason_primary"])?.Trim();
                 var reasonPrimary = TrackerImportFieldLimiter.LimitDispositionReason(rawReasonPrimary, context.Summary);
+                var reasonAll = Decode(row["reason_all"])?.Trim();
+                var rawProposedDisp = (Decode(row["proposed_disposition"]) ?? Decode(row["disposition"]))?.Trim();
+
+                var isDuplicateRow = string.Equals(rawProposedDisp, "duplicate", StringComparison.OrdinalIgnoreCase) ||
+                                     string.Equals(reasonPrimary, "duplicate", StringComparison.OrdinalIgnoreCase) ||
+                                     (reasonAll is not null && reasonAll.Contains("duplicate", StringComparison.OrdinalIgnoreCase));
+
+                PostingDisposition targetDisposition;
+                string? finalReason;
+                var normalizedDisp = rawProposedDisp?.ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
+
+                if (isDuplicateRow)
+                {
+                    targetDisposition = PostingDisposition.ScreenedOut;
+                    finalReason = reasonPrimary ?? "duplicate";
+                }
+                else if (normalizedDisp is "screened_out" or "screenedout")
+                {
+                    targetDisposition = PostingDisposition.ScreenedOut;
+                    finalReason = reasonPrimary ?? "screened_out";
+                }
+                else if (normalizedDisp is "closed")
+                {
+                    targetDisposition = PostingDisposition.Closed;
+                    finalReason = reasonPrimary ?? "closed";
+                }
+                else if (normalizedDisp is "unscored")
+                {
+                    targetDisposition = PostingDisposition.Unscored;
+                    finalReason = reasonPrimary;
+                }
+                else if (normalizedDisp is "dismissed")
+                {
+                    targetDisposition = PostingDisposition.ScreenedOut;
+                    finalReason = "dismissed";
+                }
+                else if (string.IsNullOrWhiteSpace(normalizedDisp))
+                {
+                    targetDisposition = PostingDisposition.ScreenedOut;
+                    finalReason = reasonPrimary ?? "screened_out";
+                }
+                else
+                {
+                    context.Summary.Errors.Add(new TrackerImportRowError(
+                        "appendix-rows.csv",
+                        row.LineNumber,
+                        ErrorCode.ValidationError.ToString(),
+                        $"Invalid proposed_disposition '{rawProposedDisp}'."));
+                    recon.RecordErrored();
+                    continue;
+                }
+
+                var closedDate = targetDisposition == PostingDisposition.Closed
+                    ? dateOutcome.ResolvedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+                    : null;
 
                 var rawSource = Decode(row["source"])?.Trim();
                 var sourceKind = TrackingEnumExtensions.TryParseSourceKind(rawSource, out var parsedSrc) ? parsedSrc : SourceKind.Aggregator;
@@ -199,11 +257,12 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                         }
                     }
 
-                    // 3. Resolve or create criterion from reason_primary
+                    // 3. Resolve or create criterion from finalReason
                     Guid? criterionId = null;
-                    if (!string.IsNullOrWhiteSpace(reasonPrimary))
+                    if (!string.IsNullOrWhiteSpace(finalReason))
                     {
-                        var critResult = await _criteriaStep.GetOrCreateReasonCriterionAsync(context.OwnerId, reasonPrimary, effectiveDate, ct);
+                        var critResult = await _criteriaStep.GetOrCreateReasonCriterionAsync(
+                            context.OwnerId, finalReason, effectiveDate, context.Summary, ct);
                         if (critResult.IsSuccess && critResult.Value is not null)
                         {
                             criterionId = critResult.Value.Id;
@@ -238,15 +297,8 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                         }
                     }
 
-                    // Resurface policy
-                    var proposedResurface = Decode(row["proposed_resurface"])?.Trim();
-                    var resurfacePolicy = string.Equals(proposedResurface, "if_reopened", StringComparison.OrdinalIgnoreCase)
-                        ? ResurfacePolicy.IfReopened
-                        : ResurfacePolicy.Never;
-
                     // Duplicate link resolution
                     Guid? duplicateOfId = null;
-                    var isDuplicateRow = string.Equals(reasonPrimary, "duplicate", StringComparison.OrdinalIgnoreCase);
                     if (isDuplicateRow)
                     {
                         var lookupKey = $"{canonicalCompany}|{TitleNormalizer.Normalize(title)}";
@@ -316,28 +368,79 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                         }
                     }
 
+                    // Resurface policy
+                    var proposedResurface = Decode(row["proposed_resurface"])?.Trim();
+                    ResurfacePolicy resurfacePolicy;
+                    if (string.IsNullOrWhiteSpace(proposedResurface))
+                    {
+                        resurfacePolicy = existingPosting?.ResurfacePolicy ?? ResurfacePolicy.Never;
+                    }
+                    else
+                    {
+                        var s = proposedResurface.Trim().ToLowerInvariant().Replace("-", "_").Replace(" ", "_");
+                        if (s is "if_reopened" or "ifreopened")
+                        {
+                            resurfacePolicy = ResurfacePolicy.IfReopened;
+                        }
+                        else if (s is "never")
+                        {
+                            resurfacePolicy = ResurfacePolicy.Never;
+                        }
+                        else
+                        {
+                            context.Summary.RecordUnmappedValue("proposed_resurface", proposedResurface);
+                            resurfacePolicy = existingPosting?.ResurfacePolicy ?? ResurfacePolicy.Never;
+                        }
+                    }
+
                     if (existingPosting is not null)
                     {
-                        if (existingPosting.Disposition == PostingDisposition.ScreenedOut &&
-                            string.Equals(existingPosting.DispositionReason, reasonPrimary ?? "screened_out", StringComparison.OrdinalIgnoreCase))
+                        if (existingPosting.Disposition == targetDisposition &&
+                            string.Equals(existingPosting.DispositionReason, finalReason, StringComparison.OrdinalIgnoreCase) &&
+                            existingPosting.ResurfacePolicy == resurfacePolicy &&
+                            string.Equals(existingPosting.ClosedDate, closedDate, StringComparison.OrdinalIgnoreCase))
                         {
                             isUnchanged = true;
                             updatedPosting = existingPosting;
                             return Result<bool>.Success(true);
                         }
 
-                        // Transition existing posting to ScreenedOut
+                        if (!DispositionMatrix.CanTransition(existingPosting.Disposition, targetDisposition, existingPosting.ResurfacePolicy))
+                        {
+                            return Result<bool>.Failure(
+                                ErrorCode.ValidationError,
+                                $"Cannot transition posting from {existingPosting.Disposition.ToSnakeCase()} to {targetDisposition.ToSnakeCase()} with policy {existingPosting.ResurfacePolicy.ToSnakeCase()}.");
+                        }
+
                         existingPosting.Transition(
-                            PostingDisposition.ScreenedOut,
-                            reason: reasonPrimary ?? "screened_out",
+                            targetDisposition,
+                            reason: finalReason,
                             criterionId: criterionId,
                             resurfacePolicy: resurfacePolicy,
-                            timestamp: effectiveDate);
+                            timestamp: effectiveDate,
+                            closedDate: closedDate);
 
                         var saveExisting = await txCtx.Postings.UpsertPostingAsync(existingPosting, ct);
                         if (!saveExisting.IsSuccess)
                         {
                             return Result<bool>.Failure(saveExisting.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to transition posting"));
+                        }
+
+                        var changedFields = new List<string> { "disposition", "disposition_reason" };
+                        var afterDetails = new Dictionary<string, object?>
+                        {
+                            ["disposition"] = existingPosting.Disposition.ToString(),
+                            ["reason"] = existingPosting.DispositionReason
+                        };
+                        if (criterionId.HasValue)
+                        {
+                            changedFields.Add("disposition_criterion_id");
+                            afterDetails["disposition_criterion_id"] = criterionId.Value;
+                        }
+                        if (closedDate is not null)
+                        {
+                            changedFields.Add("closed_date");
+                            afterDetails["closed_date"] = closedDate;
                         }
 
                         var audit = AuditLogEntry.CreateForTracking(
@@ -349,18 +452,14 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                             resultingVersionToken: existingPosting.VersionToken,
                             occurredAtUtc: DateTime.UtcNow,
                             details: new AuditDetails(
-                                ChangedFields: ["disposition", "disposition_reason", "disposition_criterion_id"],
-                                After: new Dictionary<string, object?>
-                                {
-                                    ["disposition"] = existingPosting.Disposition.ToString(),
-                                    ["reason"] = existingPosting.DispositionReason
-                                }));
+                                ChangedFields: changedFields,
+                                After: afterDetails));
                         await txCtx.AppendAuditEntryAsync(audit, ct);
                         updatedPosting = existingPosting;
                         return Result<bool>.Success(true);
                     }
 
-                    // Create new posting directly with ScreenedOut disposition
+                    // Create new posting directly with target disposition
                     var newPosting = Posting.Create(
                         ownerId: context.OwnerId,
                         companyId: company?.Id ?? Guid.NewGuid(),
@@ -369,18 +468,31 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                         originalUrl: url,
                         requisitionId: reqId,
                         remoteType: remoteType,
-                        disposition: PostingDisposition.ScreenedOut,
-                        dispositionReason: reasonPrimary ?? "screened_out",
+                        disposition: targetDisposition,
+                        dispositionReason: finalReason,
                         dispositionCriterionId: criterionId,
                         resurfacePolicy: resurfacePolicy,
-                        decidedAt: effectiveDate,
+                        decidedAt: targetDisposition is PostingDisposition.ScreenedOut or PostingDisposition.Closed ? effectiveDate : null,
                         duplicateOfId: duplicateOfId,
-                        now: effectiveDate);
+                        now: effectiveDate,
+                        closedDate: closedDate);
 
                     var saveNew = await txCtx.Postings.UpsertPostingAsync(newPosting, ct);
                     if (!saveNew.IsSuccess)
                     {
                         return Result<bool>.Failure(saveNew.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to create posting"));
+                    }
+
+                    var newChangedFields = new List<string> { "title", "company_id", "disposition" };
+                    var newAfterDetails = new Dictionary<string, object?>
+                    {
+                        ["title"] = newPosting.Title,
+                        ["disposition"] = newPosting.Disposition.ToString()
+                    };
+                    if (closedDate is not null)
+                    {
+                        newChangedFields.Add("closed_date");
+                        newAfterDetails["closed_date"] = closedDate;
                     }
 
                     var auditNew = AuditLogEntry.CreateForTracking(
@@ -392,12 +504,8 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                         resultingVersionToken: newPosting.VersionToken,
                         occurredAtUtc: DateTime.UtcNow,
                         details: new AuditDetails(
-                            ChangedFields: ["title", "company_id", "disposition"],
-                            After: new Dictionary<string, object?>
-                            {
-                                ["title"] = newPosting.Title,
-                                ["disposition"] = newPosting.Disposition.ToString()
-                            }));
+                            ChangedFields: newChangedFields,
+                            After: newAfterDetails));
                     await txCtx.AppendAuditEntryAsync(auditNew, ct);
                     createdPosting = newPosting;
                     return Result<bool>.Success(true);

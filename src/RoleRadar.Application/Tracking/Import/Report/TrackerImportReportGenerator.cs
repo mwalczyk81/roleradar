@@ -67,6 +67,7 @@ public static class TrackerImportReportGenerator
         sb.AppendLine(inv, $"Applications Unchanged/Skipped:        {summary.ApplicationsUnchanged}");
         sb.AppendLine(inv, $"Standalone Notes Created:              {summary.StandaloneNotesCreated}");
         sb.AppendLine(inv, $"Criteria Registered:                   {summary.CriteriaCreated}");
+        sb.AppendLine(inv, $"Signals Created:                       {summary.SignalsCreated}");
         sb.AppendLine(inv, $"Dates Defaulted:                       {summary.DatesDefaulted}");
         sb.AppendLine(inv, $"Dates Inferred (Rollback/SameYear):    {summary.DatesInferred}");
         sb.AppendLine(inv, $"Dates Flagged (or Scores Flagged):     {summary.DatesFlagged}");
@@ -126,6 +127,18 @@ public static class TrackerImportReportGenerator
             }
         }
         sb.AppendLine();
+
+        if (summary.DispositionHistogram.Count > 0)
+        {
+            sb.AppendLine("--------------------------------------------------------------------------------");
+            sb.AppendLine("                       Post-Run Disposition Histogram                           ");
+            sb.AppendLine("--------------------------------------------------------------------------------");
+            foreach (var (disposition, count) in summary.DispositionHistogram.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                sb.AppendLine(inv, $"  - {disposition}: {count}");
+            }
+            sb.AppendLine();
+        }
 
         if (summary.UnmappedValues.Count > 0)
         {
