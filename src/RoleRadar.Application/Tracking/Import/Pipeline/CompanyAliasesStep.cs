@@ -65,6 +65,9 @@ public sealed class CompanyAliasesStep : ITrackerImportStep
                 continue;
             }
 
+            context.Summary.RecordFieldRead("company-aliases.csv", "alias", !string.IsNullOrWhiteSpace(row["alias"]));
+            context.Summary.RecordFieldRead("company-aliases.csv", "canonical", !string.IsNullOrWhiteSpace(row["canonical"]));
+
             var alias = Decode(row["alias"])?.Trim();
             var canonical = Decode(row["canonical"])?.Trim();
 

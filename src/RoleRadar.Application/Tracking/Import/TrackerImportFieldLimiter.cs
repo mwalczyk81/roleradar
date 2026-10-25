@@ -92,8 +92,22 @@ public static class TrackerImportFieldLimiter
     public static string? LimitUrl(string? value, TrackerImportSummary summary) =>
         Limit(value, UrlLimit, "url", summary);
 
-    public static string? LimitRequisitionId(string? value, TrackerImportSummary summary) =>
-        Limit(value, RequisitionIdLimit, "requisition_id", summary);
+    public static string? LimitRequisitionId(string? value, TrackerImportSummary summary)
+    {
+        var limited = Limit(value, RequisitionIdLimit, "requisition_id", summary);
+        if (string.IsNullOrWhiteSpace(limited))
+        {
+            return null;
+        }
+
+        if (!limited.Any(char.IsDigit))
+        {
+            summary.RecordUnmappedValue("req (no digit)", limited);
+            return null;
+        }
+
+        return limited;
+    }
 
     public static string? LimitNoteTitle(string? value, TrackerImportSummary summary) =>
         Limit(value, NoteTitleLimit, "note_title", summary);

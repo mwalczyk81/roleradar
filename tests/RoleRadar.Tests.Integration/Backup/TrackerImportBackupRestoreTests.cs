@@ -226,13 +226,38 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
             Assert.True(applySummary.DispositionHistogram.ContainsKey("closed"));
             Assert.True(applySummary.DispositionHistogram.ContainsKey("unscored"));
 
+            // Requirement E.11: Disposition histogram total equals stored postings
+            var histogramTotal = applySummary.DispositionHistogram.Values.Sum();
+            Assert.Equal(postings.Count, histogramTotal);
+
+            // Requirement E.11: Application row maps to 1 stored application with matching company & title
+            var appsCol = targetDb.GetCollection<BsonDocument>(TrackingMongoOptions.ApplicationsCollectionName);
+            var storedApps = await appsCol.Find(Builders<BsonDocument>.Filter.Empty).ToListAsync();
+            var appDoc = Assert.Single(storedApps);
+            var appPostingDoc = postings.First(p => p["_id"].AsGuid == appDoc["posting_id"].AsGuid);
+            var appCompanyDoc = await targetDb.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName)
+                .Find(Builders<BsonDocument>.Filter.Eq("_id", appPostingDoc["company_id"].AsGuid)).FirstOrDefaultAsync();
+            Assert.NotNull(appCompanyDoc);
+            Assert.Equal("Initech Corp", appCompanyDoc["name"].AsString);
+            Assert.Equal("Lead Systems Architect", appPostingDoc["title"].AsString);
+
+            // Requirement E.11: Unclaimed applied roles equals applied postings with no application row
+            // postings.json has 2 entries with status: "applied". 1 was claimed by applications.csv ("Lead Systems Architect").
+            // 1 remains unclaimed ("Autonomous Systems Engineer").
+            var expectedUnclaimedTitles = new[] { "Autonomous Systems Engineer" };
+            Assert.Equal(expectedUnclaimedTitles.Length, applySummary.UnclaimedAppliedPostings);
+            Assert.Equal(expectedUnclaimedTitles, applySummary.UnclaimedAppliedPostingTitles);
+
             Assert.True(applySummary.StandaloneNotesCreated > 0,
                 $"StandaloneNotesCreated is {applySummary.StandaloneNotesCreated}. Errors: {string.Join("; ", applySummary.Errors.Select(e => $"{e.SourceFile}:{e.LineNumber} {e.ErrorCode}: {e.Message}"))}");
 
-            // Verify standalone note stored in job-search area
+            // Verify standalone note and postings screening notes stored in job-search area
             var notesCol = targetDb.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NotesCollectionName);
             var notes = await notesCol.Find(Builders<BsonDocument>.Filter.Empty).ToListAsync();
-            Assert.Contains(notes, n => n["area"].AsString == "job-search");
+            Assert.Equal(4, notes.Count); // 3 screening notes + 1 standalone note
+            Assert.All(notes, n => Assert.Equal("job-search", n["area"].AsString));
+            Assert.Contains(notes, n => n["title"].AsString == "Initech Corp - General Strategy");
+            Assert.Contains(notes, n => n["title"].AsString == "Assessment: Initech Corp - Lead Systems Architect");
 
             // Step C: Second --apply execution reports zero created/updated (idempotent no-op)
             var secondApplyResult = await coordinator.ExecuteAsync(applyCmd);
@@ -243,6 +268,7 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
             Assert.Equal(0, secondSummary.PostingsCreated);
             Assert.Equal(0, secondSummary.ApplicationsCreated);
             Assert.Equal(0, secondSummary.StandaloneNotesCreated);
+            Assert.Equal(0, secondSummary.ScreeningNotesCreated);
             Assert.Equal(0, secondSummary.CriteriaCreated);
             Assert.Equal(0, secondSummary.SignalsCreated);
 

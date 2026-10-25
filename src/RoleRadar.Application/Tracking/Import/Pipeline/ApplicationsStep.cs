@@ -76,6 +76,12 @@ public sealed class ApplicationsStep : ITrackerImportStep
             cancellationToken.ThrowIfCancellationRequested();
             recon.RecordRead();
 
+            foreach (var def in SourceFieldCatalog.ByFile["applications.csv"])
+            {
+                var val = Decode(row[def.Field])?.Trim();
+                context.Summary.RecordFieldRead("applications.csv", def.Field, !string.IsNullOrWhiteSpace(val));
+            }
+
             try
             {
                 if (!row.Fields.Any(f => !string.IsNullOrWhiteSpace(f)))
@@ -168,7 +174,12 @@ public sealed class ApplicationsStep : ITrackerImportStep
                 var appCreated = false;
                 var appResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
                 {
-                    appCreated = await ProcessApplicationAsync(context, row, defaultDate, reviewFlags, ct);
+                    var res = await ProcessApplicationAsync(context, row, defaultDate, reviewFlags, ct);
+                    if (!res.IsSuccess)
+                    {
+                        return res;
+                    }
+                    appCreated = res.Value;
                     return Result<bool>.Success(true);
                 }, cancellationToken);
 
@@ -284,7 +295,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
         return true;
     }
 
-    private async Task<bool> ProcessApplicationAsync(
+    private async Task<Result<bool>> ProcessApplicationAsync(
         TrackerImportContext context,
         ICsvRecord row,
         DateOnly defaultDate,
@@ -388,6 +399,30 @@ public sealed class ApplicationsStep : ITrackerImportStep
             context.Summary.ResumeVariantsDefaulted++;
         }
 
+        var rawSalary = Decode(row["desired_salary"])?.Trim();
+        DesiredSalary? desiredSalary = null;
+        string? unparseableSalaryNote = null;
+        if (!string.IsNullOrWhiteSpace(rawSalary))
+        {
+            if (decimal.TryParse(rawSalary, NumberStyles.Any, CultureInfo.InvariantCulture, out var directDecimal) && directDecimal < 0)
+            {
+                desiredSalary = new DesiredSalary(directDecimal, directDecimal, "USD");
+            }
+            else
+            {
+                var (salMin, salMax) = PostingsJsonStep.TryParseCompensationRange(rawSalary);
+                if (salMin.HasValue)
+                {
+                    desiredSalary = new DesiredSalary(salMin.Value, salMax ?? salMin.Value, "USD");
+                }
+                else
+                {
+                    context.Summary.RecordUnmappedValue("desired_salary", rawSalary);
+                    unparseableSalaryNote = $"desired_salary: {rawSalary}";
+                }
+            }
+        }
+
         var dateOutcome = DateInferenceRule.Resolve(appliedOn, defaultDate);
         TrackDateInference(context, dateOutcome);
 
@@ -404,7 +439,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
 
         var statedFlagText = isDateStatedFlag ? "date_is_stated_not_submitted" : null;
         var rawNotes = Decode(!string.IsNullOrWhiteSpace(row["corrected_notes"]) ? row["corrected_notes"]?.Trim() : row["raw"]?.Trim());
-        var combinedNotes = string.Join("; ", new[] { statedFlagText, fitNoteText, referralNoteText, rawNotes, resumeVariantNoteText }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        var combinedNotes = string.Join("; ", new[] { statedFlagText, fitNoteText, referralNoteText, unparseableSalaryNote, rawNotes, resumeVariantNoteText }.Where(s => !string.IsNullOrWhiteSpace(s)));
 
         var canonicalCompany = !string.IsNullOrWhiteSpace(companyName) && context.CompanyAliases.TryGetValue(companyName, out var alias)
             ? alias
@@ -417,10 +452,6 @@ public sealed class ApplicationsStep : ITrackerImportStep
             if (!string.IsNullOrWhiteSpace(canonicalCompany) && context.PostingsByCompanyAndReq.TryGetValue($"{canonicalCompany}|{req}", out var byReq))
             {
                 foundPosting = byReq;
-            }
-            else if (context.PostingsByReqOrUrl.TryGetValue(req, out var byLegacyReq))
-            {
-                foundPosting = byLegacyReq;
             }
             else if (!string.IsNullOrWhiteSpace(canonicalCompany))
             {
@@ -538,16 +569,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
             }
 
             postingId = foundPosting.Id;
-            context.AllPostings[foundPosting.Id] = foundPosting;
-            if (!string.IsNullOrWhiteSpace(canonicalCompany))
-            {
-                context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{foundPosting.NormalizedTitle}"] = foundPosting;
-                if (!string.IsNullOrWhiteSpace(foundPosting.RequisitionId))
-                {
-                    context.PostingsByCompanyAndReq[$"{canonicalCompany}|{foundPosting.RequisitionId}"] = foundPosting;
-                    context.PostingsByReqOrUrl[foundPosting.RequisitionId] = foundPosting;
-                }
-            }
+            context.IndexPosting(foundPosting, canonicalCompany);
         }
         else
         {
@@ -633,39 +655,40 @@ public sealed class ApplicationsStep : ITrackerImportStep
             await _context.AppendAuditEntryAsync(auditP, cancellationToken);
             context.Summary.PostingsCreated++;
             postingId = newPosting.Id;
-            context.AllPostings[newPosting.Id] = newPosting;
-            if (!string.IsNullOrWhiteSpace(canonicalCompany))
-            {
-                context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{newPosting.NormalizedTitle}"] = newPosting;
-                if (!string.IsNullOrWhiteSpace(newPosting.RequisitionId))
-                {
-                    context.PostingsByCompanyAndReq[$"{canonicalCompany}|{newPosting.RequisitionId}"] = newPosting;
-                    context.PostingsByReqOrUrl[newPosting.RequisitionId] = newPosting;
-                }
-            }
+            context.IndexPosting(newPosting, canonicalCompany);
         }
 
-        DesiredSalary? desiredSalary = null;
-        if (decimal.TryParse(row["desired_salary"], NumberStyles.Any, CultureInfo.InvariantCulture, out var sal))
+        if (!context.ClaimedPostingIdsInRun.Add(postingId))
         {
-            if (sal < 0)
-            {
-                throw new ArgumentException($"Desired salary minimum must be >= 0: '{sal}'.");
-            }
-            desiredSalary = new DesiredSalary(Min: sal, Max: sal, Currency: "USD");
-        }
-
-        var existingAppRes = await _context.Applications.GetByPostingIdAsync(context.OwnerId, postingId, cancellationToken);
-        if (existingAppRes.IsSuccess && existingAppRes.Value is not null)
-        {
-            context.Summary.ApplicationsUnchanged++;
-            return false;
+            return Result<bool>.Failure(
+                ErrorCode.ValidationError,
+                "Conflicting application: multiple application rows resolve to the same posting.");
         }
 
         var submittedDateStr = dateOutcome.ResolvedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         var outcome = isRejected ? ApplicationOutcome.Rejected : ApplicationOutcome.Applied;
         var outcomeReasonRaw = isRejected ? (!string.IsNullOrWhiteSpace(combinedNotes) ? combinedNotes : "Rejected") : null;
         var outcomeReason = TrackerImportFieldLimiter.LimitOutcomeReason(outcomeReasonRaw, context.Summary);
+
+        var existingAppRes = await _context.Applications.GetByPostingIdAsync(context.OwnerId, postingId, cancellationToken);
+        if (existingAppRes.IsSuccess && existingAppRes.Value is not null)
+        {
+            var existingApp = existingAppRes.Value;
+            var isIdentical =
+                string.Equals(existingApp.SubmittedDate, submittedDateStr, StringComparison.Ordinal) &&
+                existingApp.ResumeVariant == resumeVariant &&
+                existingApp.Outcome == outcome;
+
+            if (isIdentical)
+            {
+                context.Summary.ApplicationsUnchanged++;
+                return Result<bool>.Success(false);
+            }
+
+            return Result<bool>.Failure(
+                ErrorCode.ValidationError,
+                "Conflicting application: existing application for posting has conflicting data.");
+        }
 
         var application = RoleRadar.Domain.Tracking.Application.Create(
             ownerId: context.OwnerId,
@@ -777,7 +800,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
             await _context.AppendAuditEntryAsync(auditEvt2, cancellationToken);
         }
 
-        return true;
+        return Result<bool>.Success(true);
     }
 
     private static string? Decode(string? value) =>
