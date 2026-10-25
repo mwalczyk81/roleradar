@@ -44,12 +44,12 @@ public sealed class TrackingMcpTools
     [McpServerTool(Name = "company_record"), Description("Creates or updates a tracked company profile with ownership type, category tags, description, and career sources (ATS endpoints) with upsert by id or natural key without accidental source deletion.")]
     public async Task<string> CompanyRecordAsync(
         [Description("Unique company identifier (generated if omitted).")] Guid? id = null,
-        [Description("Unique company name (1..150 characters).")] string name = "",
+        [Description("Unique company name (1..150 characters). Required for create.")] string? name = null,
         [Description("Summary of industry, ownership context, and headquarters (max 300 characters).")] string? description = null,
         [Description("Parent company name (max 150 characters).")] string? parentCompany = null,
-        [Description("Ownership type ('public', 'private', 'pe_backed', 'vc_backed', 'mutual', 'subsidiary', 'nonprofit', 'government', 'unknown').")] string ownershipType = "unknown",
+        [Description("Ownership type ('public', 'private', 'pe_backed', 'vc_backed', 'mutual', 'subsidiary', 'nonprofit', 'government', 'unknown').")] string? ownershipType = null,
         [Description("Primary headquarters location (max 150 characters).")] string? headquarters = null,
-        [Description("Tracking status ('target', 'watch', 'avoid', 'neutral').")] string status = "neutral",
+        [Description("Tracking status ('target', 'watch', 'avoid', 'neutral').")] string? status = null,
         [Description("Category or industry tags (max 20 tags, each max 50 characters).")] string[]? categoryTags = null,
         [Description("Career source ATS endpoints to upsert.")] CareerSourceInputDto[]? careerSources = null,
         [Description("Optimistic concurrency token required when updating an existing company.")] Guid? versionToken = null,

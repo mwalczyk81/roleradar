@@ -23,6 +23,10 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
     private MongoPostingRepository _postingRepo = null!;
     private TrackingTransactionContextReal _context = null!;
 
+    private static readonly string[] EnterpriseSecurityTags = ["enterprise", "security"];
+    private static readonly string[] SaasTags = ["saas"];
+    private static readonly string[] StdioTags = ["tagA", "tagB"];
+
     public CompanyRecordContractTests(SharedMongoFixture fixture)
     {
         _fixture = fixture;
@@ -457,6 +461,185 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
         var wrongTokenResult = await handler.HandleAsync(wrongTokenCommand);
         Assert.False(wrongTokenResult.IsSuccess);
         Assert.Equal(ErrorCode.StaleVersionToken, wrongTokenResult.Error!.Value.Code);
+    }
+
+    [Fact]
+    public async Task CompanyRecord_UpdateWithOnlyCareerSources_KeepsStatusOwnershipTypeDescriptionAndTags()
+    {
+        var clock = new FixedClock(new DateTime(2026, 10, 17, 12, 0, 0, DateTimeKind.Utc));
+        var handler = new RecordCompanyCommandHandler(_context, clock);
+
+        // 1. Create company with explicit status, ownership, description, and tags
+        var createCmd = new RecordCompanyCommand(
+            Name: "Preserved Profile Corp",
+            Description: "Original detailed description",
+            ParentCompany: "Preserved Parent LLC",
+            OwnershipType: "pe_backed",
+            Headquarters: "Boston, MA",
+            Status: "watch",
+            CategoryTags: ["enterprise", "security"],
+            OwnerId: "owner-1");
+
+        var createRes = await handler.HandleAsync(createCmd);
+        Assert.True(createRes.IsSuccess);
+        var companyId = createRes.Value!.Company.Id;
+        var versionToken = createRes.Value.Company.VersionToken;
+
+        // 2. Update with ONLY careerSources (all other fields omitted/null)
+        var updateCmd = new RecordCompanyCommand(
+            Id: companyId,
+            VersionToken: versionToken,
+            CareerSources:
+            [
+                new CareerSourceInputDto(
+                    AtsType: "Greenhouse",
+                    Tenant: "preserved_gh",
+                    Slug: "careers",
+                    FetchMethod: "api")
+            ],
+            OwnerId: "owner-1");
+
+        var updateRes = await handler.HandleAsync(updateCmd);
+        Assert.True(updateRes.IsSuccess, updateRes.Error?.Message);
+        Assert.NotNull(updateRes.Value);
+
+        // Result DTO assertions
+        Assert.Equal("Preserved Profile Corp", updateRes.Value.Company.Name);
+        Assert.Equal("pe_backed", updateRes.Value.Company.OwnershipType);
+        Assert.Equal("watch", updateRes.Value.Company.Status);
+        Assert.Equal("Original detailed description", updateRes.Value.Company.Description);
+        Assert.Equal(1, updateRes.Value.Company.CareerSourceCount);
+
+        // Datastore assertions
+        var stored = await _companyRepo.GetByIdAsync("owner-1", companyId);
+        Assert.True(stored.IsSuccess);
+        Assert.NotNull(stored.Value);
+        Assert.Equal("Preserved Profile Corp", stored.Value.Name);
+        Assert.Equal(OwnershipType.PeBacked, stored.Value.OwnershipType);
+        Assert.Equal(CompanyStatus.Watch, stored.Value.Status);
+        Assert.Equal("Original detailed description", stored.Value.Description);
+        Assert.Equal("Preserved Parent LLC", stored.Value.ParentCompany);
+        Assert.Equal("Boston, MA", stored.Value.Headquarters);
+        Assert.Equal(EnterpriseSecurityTags, stored.Value.CategoryTags);
+
+        var sources = await _companyRepo.GetCareerSourcesAsync("owner-1", companyId, includeInactive: true);
+        Assert.True(sources.IsSuccess);
+        Assert.Single(sources.Value!);
+        Assert.Equal("preserved_gh", sources.Value![0].Tenant);
+    }
+
+    [Fact]
+    public async Task CompanyRecord_ExplicitStatusChange_StillWorks()
+    {
+        var clock = new FixedClock(new DateTime(2026, 10, 17, 12, 0, 0, DateTimeKind.Utc));
+        var handler = new RecordCompanyCommandHandler(_context, clock);
+
+        // 1. Create company initially as "watch" and "pe_backed"
+        var createCmd = new RecordCompanyCommand(
+            Name: "Status Change Corp",
+            Description: "B2B SaaS platform",
+            OwnershipType: "pe_backed",
+            Status: "watch",
+            CategoryTags: ["saas"],
+            OwnerId: "owner-1");
+
+        var createRes = await handler.HandleAsync(createCmd);
+        Assert.True(createRes.IsSuccess);
+        var companyId = createRes.Value!.Company.Id;
+        var initialToken = createRes.Value.Company.VersionToken;
+
+        // 2. Explicitly change status to "target" while omitting ownershipType, description, etc.
+        var updateCmd = new RecordCompanyCommand(
+            Id: companyId,
+            Status: "target",
+            VersionToken: initialToken,
+            OwnerId: "owner-1");
+
+        var updateRes = await handler.HandleAsync(updateCmd);
+        Assert.True(updateRes.IsSuccess);
+        Assert.Equal("target", updateRes.Value!.Company.Status);
+        Assert.Equal("pe_backed", updateRes.Value.Company.OwnershipType);
+        Assert.NotEqual(initialToken, updateRes.Value.Company.VersionToken);
+
+        // Datastore assertions
+        var stored = await _companyRepo.GetByIdAsync("owner-1", companyId);
+        Assert.True(stored.IsSuccess);
+        Assert.Equal(CompanyStatus.Target, stored.Value!.Status);
+        Assert.Equal(OwnershipType.PeBacked, stored.Value.OwnershipType);
+        Assert.Equal("B2B SaaS platform", stored.Value.Description);
+        Assert.Equal(SaasTags, stored.Value.CategoryTags);
+    }
+
+    [Fact]
+    public async Task CompanyRecord_CreateWithoutStatus_YieldsNeutral()
+    {
+        var clock = new FixedClock(new DateTime(2026, 10, 17, 12, 0, 0, DateTimeKind.Utc));
+        var handler = new RecordCompanyCommandHandler(_context, clock);
+
+        // Create company without status or ownershipType
+        var createCmd = new RecordCompanyCommand(
+            Name: "Default Status Corp",
+            OwnerId: "owner-1");
+
+        var createRes = await handler.HandleAsync(createCmd);
+        Assert.True(createRes.IsSuccess);
+        Assert.NotNull(createRes.Value);
+
+        // In result DTO: status yields "neutral" and ownership yields "unknown"
+        Assert.Equal("neutral", createRes.Value.Company.Status);
+        Assert.Equal("unknown", createRes.Value.Company.OwnershipType);
+
+        // In datastore
+        var stored = await _companyRepo.GetByIdAsync("owner-1", createRes.Value.Company.Id);
+        Assert.True(stored.IsSuccess);
+        Assert.NotNull(stored.Value);
+        Assert.Equal(CompanyStatus.Neutral, stored.Value.Status);
+        Assert.Equal(OwnershipType.Unknown, stored.Value.OwnershipType);
+    }
+
+    [Fact]
+    public async Task CompanyRecord_OverStdio_UpdateWithOnlyCareerSources_PreservesAllOmittedFields()
+    {
+        var mcpDllPath = McpHostLocator.GetMcpDllPath();
+        var env = _fixture.CreateProcessEnvironment(_databaseName);
+
+        await using var client = await McpProcessClient.StartAsync(mcpDllPath, env);
+
+        // 1. Create company with watch status and vc_backed ownership
+        var createRes = await client.CallToolAsync("company_record", new
+        {
+            name = "Stdio Preserved Corp",
+            status = "watch",
+            ownershipType = "vc_backed",
+            description = "Stdio original description",
+            categoryTags = StdioTags
+        });
+        Assert.True(createRes.GetProperty("ok").GetBoolean());
+        var company = createRes.GetProperty("data").GetProperty("company");
+        var companyId = company.GetProperty("id").GetString()!;
+        var versionToken = company.GetProperty("versionToken").GetString()!;
+
+        // 2. Call company_record with only careerSources
+        var updateRes = await client.CallToolAsync("company_record", new
+        {
+            id = companyId,
+            versionToken = versionToken,
+            careerSources = new[]
+            {
+                new
+                {
+                    atsType = "Greenhouse",
+                    tenant = "stdio_pres"
+                }
+            }
+        });
+
+        Assert.True(updateRes.GetProperty("ok").GetBoolean(), $"Update failed: {updateRes.GetRawText()}");
+        var updatedCompany = updateRes.GetProperty("data").GetProperty("company");
+        Assert.Equal("watch", updatedCompany.GetProperty("status").GetString());
+        Assert.Equal("vc_backed", updatedCompany.GetProperty("ownershipType").GetString());
+        Assert.Equal("Stdio original description", updatedCompany.GetProperty("description").GetString());
+        Assert.Equal(1, updatedCompany.GetProperty("careerSourceCount").GetInt32());
     }
 
     private sealed class TrackingTransactionContextReal : ITrackingTransactionContext

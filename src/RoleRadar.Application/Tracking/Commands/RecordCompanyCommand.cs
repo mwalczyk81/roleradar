@@ -10,7 +10,7 @@ public sealed record CareerSourceInputDto(
     string AtsType = "",
     string? Tenant = null,
     string? Slug = null,
-    string FetchMethod = "api",
+    string? FetchMethod = null,
     string? Notes = null,
     bool? IsActive = null,
     Guid? VersionToken = null);
@@ -30,12 +30,12 @@ public sealed record CompanyRecordResultDto(
 
 public sealed record RecordCompanyCommand(
     Guid? Id = null,
-    string Name = "",
+    string? Name = null,
     string? Description = null,
     string? ParentCompany = null,
-    string OwnershipType = "unknown",
+    string? OwnershipType = null,
     string? Headquarters = null,
-    string Status = "neutral",
+    string? Status = null,
     IReadOnlyList<string>? CategoryTags = null,
     IReadOnlyList<CareerSourceInputDto>? CareerSources = null,
     Guid? VersionToken = null,
@@ -115,16 +115,48 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
         bool isCreate;
         List<string> changedFields = [];
 
-        var parsedOwnership = existing?.OwnershipType ?? OwnershipType.Unknown;
-        if (!string.IsNullOrWhiteSpace(command.OwnershipType) && TrackingEnumExtensions.TryParseOwnershipType(command.OwnershipType, out var po))
-        {
-            parsedOwnership = po;
-        }
+        OwnershipType parsedOwnership;
+        CompanyStatus parsedStatus;
 
-        var parsedStatus = existing?.Status ?? CompanyStatus.Target;
-        if (!string.IsNullOrWhiteSpace(command.Status) && TrackingEnumExtensions.TryParseCompanyStatus(command.Status, out var ps))
+        if (existing is null)
         {
-            parsedStatus = ps;
+            parsedOwnership = OwnershipType.Unknown;
+            if (!string.IsNullOrWhiteSpace(command.OwnershipType))
+            {
+                if (!TrackingEnumExtensions.TryParseOwnershipType(command.OwnershipType, out parsedOwnership))
+                {
+                    return Result<CompanyRecordResultDto>.Failure(ErrorCode.ValidationError, $"Invalid ownership type '{command.OwnershipType}'.");
+                }
+            }
+
+            parsedStatus = CompanyStatus.Neutral;
+            if (!string.IsNullOrWhiteSpace(command.Status))
+            {
+                if (!TrackingEnumExtensions.TryParseCompanyStatus(command.Status, out parsedStatus))
+                {
+                    return Result<CompanyRecordResultDto>.Failure(ErrorCode.ValidationError, $"Invalid company status '{command.Status}'.");
+                }
+            }
+        }
+        else
+        {
+            parsedOwnership = existing.OwnershipType;
+            if (!string.IsNullOrWhiteSpace(command.OwnershipType))
+            {
+                if (!TrackingEnumExtensions.TryParseOwnershipType(command.OwnershipType, out parsedOwnership))
+                {
+                    return Result<CompanyRecordResultDto>.Failure(ErrorCode.ValidationError, $"Invalid ownership type '{command.OwnershipType}'.");
+                }
+            }
+
+            parsedStatus = existing.Status;
+            if (!string.IsNullOrWhiteSpace(command.Status))
+            {
+                if (!TrackingEnumExtensions.TryParseCompanyStatus(command.Status, out parsedStatus))
+                {
+                    return Result<CompanyRecordResultDto>.Failure(ErrorCode.ValidationError, $"Invalid company status '{command.Status}'.");
+                }
+            }
         }
 
         var companyFieldNamesChanged = new List<string>();
@@ -164,7 +196,7 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
 
         if (existing is not null)
         {
-            if (!command.Id.HasValue && !command.VersionToken.HasValue)
+            if (!command.Id.HasValue && !command.VersionToken.HasValue && (command.CareerSources is null || command.CareerSources.Count == 0))
             {
                 var existingSources = await _context.Companies.GetCareerSourcesAsync(ownerId, existing.Id, includeInactive: true, cancellationToken);
                 var sourceCount = existingSources.IsSuccess && existingSources.Value is not null ? existingSources.Value.Count : 0;
@@ -198,13 +230,13 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
                 }
 
                 existing.Update(
-                    name: trimmedName,
-                    description: command.Description ?? existing.Description,
-                    parentCompany: command.ParentCompany ?? existing.ParentCompany,
-                    ownershipType: parsedOwnership,
-                    headquarters: command.Headquarters ?? existing.Headquarters,
-                    categoryTags: command.CategoryTags ?? existing.CategoryTags,
-                    status: parsedStatus,
+                    name: trimmedName != existing.Name ? trimmedName : null,
+                    description: command.Description is not null ? command.Description : null,
+                    parentCompany: command.ParentCompany is not null ? command.ParentCompany : null,
+                    ownershipType: !string.IsNullOrWhiteSpace(command.OwnershipType) ? parsedOwnership : null,
+                    headquarters: command.Headquarters is not null ? command.Headquarters : null,
+                    categoryTags: command.CategoryTags is not null ? command.CategoryTags : null,
+                    status: !string.IsNullOrWhiteSpace(command.Status) ? parsedStatus : null,
                     now: now);
 
                 await _context.Companies.UpsertCompanyAsync(existing, cancellationToken);
@@ -263,7 +295,18 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
                         string.Equals(s.Slug ?? string.Empty, csInput.Slug?.Trim() ?? string.Empty, StringComparison.OrdinalIgnoreCase));
                 }
 
-                _ = TrackingEnumExtensions.TryParseFetchMethod(csInput.FetchMethod, out var fetchMethod);
+                FetchMethod? fetchMethod = null;
+                if (!string.IsNullOrWhiteSpace(csInput.FetchMethod))
+                {
+                    if (TrackingEnumExtensions.TryParseFetchMethod(csInput.FetchMethod, out var parsedFm))
+                    {
+                        fetchMethod = parsedFm;
+                    }
+                    else
+                    {
+                        return Result<CompanyRecordResultDto>.Failure(ErrorCode.ValidationError, $"Invalid career source fetch method '{csInput.FetchMethod}'.");
+                    }
+                }
 
                 if (matchedSource is not null)
                 {
@@ -293,7 +336,7 @@ public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyC
                         atsType: csInput.AtsType,
                         tenant: csInput.Tenant,
                         slug: csInput.Slug,
-                        fetchMethod: fetchMethod,
+                        fetchMethod: fetchMethod ?? FetchMethod.Api,
                         notes: csInput.Notes,
                         isActive: csInput.IsActive ?? true,
                         id: csInput.Id,
@@ -428,12 +471,12 @@ public sealed class RecordCompanyCommandValidator : ICommandValidator<RecordComp
     {
         ArgumentNullException.ThrowIfNull(command);
 
-        if (string.IsNullOrWhiteSpace(command.Name))
+        if (string.IsNullOrWhiteSpace(command.Name) && !command.Id.HasValue)
         {
             return new ResultError(ErrorCode.ValidationError, "Company name is required.");
         }
 
-        if (command.Name.Trim().Length > 150)
+        if (!string.IsNullOrWhiteSpace(command.Name) && command.Name.Trim().Length > 150)
         {
             return new ResultError(ErrorCode.ValidationError, "Company name cannot exceed 150 characters.");
         }
@@ -451,6 +494,16 @@ public sealed class RecordCompanyCommandValidator : ICommandValidator<RecordComp
         if (command.Headquarters is not null && command.Headquarters.Length > 150)
         {
             return new ResultError(ErrorCode.ValidationError, "Headquarters cannot exceed 150 characters.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(command.OwnershipType) && !TrackingEnumExtensions.TryParseOwnershipType(command.OwnershipType, out _))
+        {
+            return new ResultError(ErrorCode.ValidationError, $"Invalid ownership type '{command.OwnershipType}'.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(command.Status) && !TrackingEnumExtensions.TryParseCompanyStatus(command.Status, out _))
+        {
+            return new ResultError(ErrorCode.ValidationError, $"Invalid company status '{command.Status}'.");
         }
 
         if (command.CategoryTags is not null)
