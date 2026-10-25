@@ -699,6 +699,169 @@ public sealed class PostingImportStepTests
         }
     }
 
+    [Fact]
+    public async Task PostingsJsonStep_GhostSignals_Parsing_And_Idempotency()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var json = """
+                {
+                    "slug-1": {
+                        "title": "Engineer Parallel",
+                        "company": "Acme Corp",
+                        "ghost": "parallel"
+                    },
+                    "slug-2": {
+                        "title": "Engineer Repost NoSalary",
+                        "company": "Acme Corp",
+                        "ghost": "repost nosalary"
+                    },
+                    "slug-3": {
+                        "title": "Engineer Phantom Deadline",
+                        "company": "Acme Corp",
+                        "ghost": "phantom deadline:2026-05-25"
+                    },
+                    "slug-4": {
+                        "title": "Engineer Gone Invalid And Unknown",
+                        "company": "Acme Corp",
+                        "ghost": "gone deadline:invalid_date unknown_xyz"
+                    },
+                    "slug-5": {
+                        "title": "Engineer Bool Ghost",
+                        "company": "Acme Corp",
+                        "ghost": true
+                    },
+                    "slug-6": {
+                        "title": "Engineer No Ghost",
+                        "company": "Acme Corp",
+                        "ghost": false
+                    }
+                }
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "postings.json"), json);
+
+            var inMemoryCtx = new InMemoryPostingContext();
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var step = new PostingsJsonStep(inMemoryCtx, criteriaStep);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result = await step.ExecuteAsync(context);
+            Assert.True(result.IsSuccess);
+
+            // Parallel (1) + Repost/NoSalary (2) + Phantom/Deadline (2) + Gone (1) + Bool Phantom (1) = 7 signals
+            Assert.Equal(7, context.Summary.SignalsCreated);
+            Assert.Equal(7, inMemoryCtx.SavedSignals.Count);
+
+            // Invalid date and unknown token recorded as unmapped
+            Assert.True(context.Summary.UnmappedValues.TryGetValue("ghost", out var unmappedCount));
+            Assert.Equal(2, unmappedCount);
+
+            // Verify specific signals
+            var p3 = inMemoryCtx.SavedPostings.First(p => p.Title == "Engineer Phantom Deadline");
+            var p3Signals = inMemoryCtx.SavedSignals.Where(s => s.PostingId == p3.Id).ToList();
+            Assert.Equal(2, p3Signals.Count);
+            Assert.Contains(p3Signals, s => s.SignalType == SignalType.Phantom);
+            Assert.Contains(p3Signals, s => s.SignalType == SignalType.Deadline && s.DeadlineDate == "2026-05-25");
+
+            // Re-run the step on the exact same bundle
+            var rerunContext = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var rerunResult = await step.ExecuteAsync(rerunContext);
+            Assert.True(rerunResult.IsSuccess);
+
+            // Zero signals created on re-run, no duplicates
+            Assert.Equal(0, rerunContext.Summary.SignalsCreated);
+            Assert.Equal(7, inMemoryCtx.SavedSignals.Count);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task AppendixRowsStep_ProposedDisposition_And_Resurface_Mapping()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var csv = """
+                req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_disposition,proposed_resurface,company_also_in_db,url,decision,corrected_notes
+                REQ-S,Acme Corp,Screened Role,true,Details,05/01,reason-screened,reason-screened,screened_out,never,false,https://example.com/job/s,,
+                REQ-C,Acme Corp,Closed Role,true,Details,05/02,reason-closed,reason-closed,closed,if_reopened,false,https://example.com/job/c,,
+                REQ-U,Acme Corp,Unscored Role,true,Details,05/03,reason-unscored,reason-unscored,unscored,,false,https://example.com/job/u,,
+                REQ-D,Acme Corp,Dismissed Role,true,Details,05/04,,dismissed,screened_out,never,false,https://example.com/job/d,,
+                REQ-DUP,Acme Corp,Screened Role,true,Details,05/05,duplicate,duplicate,duplicate,,false,https://example.com/job/dup,,
+                REQ-INV,Acme Corp,Invalid Role,true,Details,05/06,bad,bad,invalid_disposition,,false,https://example.com/job/inv,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), csv);
+
+            var inMemoryCtx = new InMemoryPostingContext();
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var parser = new Rfc4180CsvParser();
+            var step = new AppendixRowsStep(parser, inMemoryCtx, criteriaStep);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result = await step.ExecuteAsync(context);
+            Assert.True(result.IsSuccess);
+
+            // 5 created (screened_out, closed, unscored, dismissed, duplicate), 1 errored (invalid_disposition)
+            var recon = context.Summary.FileReconciliations["appendix-rows.csv"];
+            Assert.Equal(6, recon.Read);
+            Assert.Equal(5, recon.Created);
+            Assert.Equal(1, recon.Errored);
+
+            var pScreened = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-S");
+            Assert.Equal(PostingDisposition.ScreenedOut, pScreened.Disposition);
+            Assert.Equal(ResurfacePolicy.Never, pScreened.ResurfacePolicy);
+            Assert.Null(pScreened.ClosedDate);
+
+            var pClosed = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-C");
+            Assert.Equal(PostingDisposition.Closed, pClosed.Disposition);
+            Assert.Equal(ResurfacePolicy.IfReopened, pClosed.ResurfacePolicy);
+            Assert.NotNull(pClosed.ClosedDate);
+
+            var pUnscored = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-U");
+            Assert.Equal(PostingDisposition.Unscored, pUnscored.Disposition);
+            // Blank resurface policy leaves domain default (Never)
+            Assert.Equal(ResurfacePolicy.Never, pUnscored.ResurfacePolicy);
+            Assert.Null(pUnscored.ClosedDate);
+
+            var pDismissed = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-D");
+            Assert.Equal(PostingDisposition.ScreenedOut, pDismissed.Disposition);
+            Assert.Null(pDismissed.ClosedDate);
+
+            var pDup = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-DUP");
+            Assert.Equal(pScreened.Id, pDup.DuplicateOfId);
+            Assert.Equal(PostingDisposition.ScreenedOut, pDup.Disposition);
+
+            // CriteriaCreated was incremented dynamically when reason criteria were seeded
+            Assert.True(context.Summary.CriteriaCreated > 0);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
     private static string CreateTempDir()
     {
         var path = Path.Combine(Path.GetTempPath(), $"rr_post_test_{Guid.NewGuid():N}");

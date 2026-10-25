@@ -82,7 +82,8 @@ public sealed class Posting
         Guid? screeningNoteId = null,
         Guid? id = null,
         DateTimeOffset? now = null,
-        bool? compHighPriority = null)
+        bool? compHighPriority = null,
+        string? closedDate = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
@@ -186,6 +187,7 @@ public sealed class Posting
             Compensation = compensation ?? new(),
             CompHighPriority = compHighPriority,
             PostedDate = postedDate,
+            ClosedDate = closedDate,
             FirstSeenAt = timestamp,
             LastVerifiedAt = timestamp,
             Score = score,
@@ -314,12 +316,17 @@ public sealed class Posting
         string? reason,
         Guid? criterionId,
         ResurfacePolicy resurfacePolicy,
-        DateTimeOffset timestamp)
+        DateTimeOffset timestamp,
+        string? closedDate = null)
     {
         Disposition = targetDisposition;
         DispositionReason = reason?.Trim();
         DispositionCriterionId = criterionId;
         ResurfacePolicy = resurfacePolicy;
+        if (closedDate is not null)
+        {
+            ClosedDate = closedDate;
+        }
 
         if (targetDisposition == PostingDisposition.ScreenedOut ||
             targetDisposition == PostingDisposition.Closed ||

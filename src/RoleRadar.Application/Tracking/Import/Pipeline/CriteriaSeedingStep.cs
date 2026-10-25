@@ -103,13 +103,14 @@ public sealed class CriteriaSeedingStep
         string ownerId,
         string reasonPrimary,
         DateTimeOffset effectiveDate,
+        TrackerImportSummary? summary = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
         ArgumentException.ThrowIfNullOrWhiteSpace(reasonPrimary);
 
         var rawKey = reasonPrimary.Trim();
-        var key = TrackerImportFieldLimiter.Limit(rawKey, TrackerImportFieldLimiter.CriteriaKeyLimit, "criteria_key", new TrackerImportSummary())!;
+        var key = TrackerImportFieldLimiter.Limit(rawKey, TrackerImportFieldLimiter.CriteriaKeyLimit, "criteria_key", summary ?? new TrackerImportSummary())!;
         if (_cache.TryGetValue(key, out var cached))
         {
             return Result<Criterion>.Success(cached);
@@ -134,6 +135,11 @@ public sealed class CriteriaSeedingStep
         if (!upsertResult.IsSuccess)
         {
             return Result<Criterion>.Failure(upsertResult.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to upsert criterion."));
+        }
+
+        if (summary is not null)
+        {
+            summary.CriteriaCreated++;
         }
 
         var auditEntry = AuditLogEntry.CreateForTracking(

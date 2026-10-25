@@ -136,6 +136,18 @@ public sealed class TrackerImportPipeline
             }
         }
 
+        context.Summary.DispositionHistogram.Clear();
+        var distinctPostings = context.PostingsByCompanyAndTitle.Values
+            .Concat(context.PostingsByReqOrUrl.Values)
+            .DistinctBy(p => p.Id);
+
+        foreach (var p in distinctPostings)
+        {
+            var dispName = p.Disposition.ToSnakeCase();
+            context.Summary.DispositionHistogram.TryGetValue(dispName, out var count);
+            context.Summary.DispositionHistogram[dispName] = count + 1;
+        }
+
         return Result<TrackerImportSummary>.Success(context.Summary);
     }
 }

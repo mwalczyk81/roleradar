@@ -272,6 +272,8 @@ public sealed class TrackerImportReportingTests : IClassFixture<IsolatedContaine
             Assert.Contains("Aggregated Counts Summary", reportContent);
             Assert.Contains("Companies Created", reportContent);
             Assert.Contains("Postings Created", reportContent);
+            Assert.Contains("Signals Created", reportContent);
+            Assert.Contains("Post-Run Disposition Histogram", reportContent);
 
             // Section 3: Companies Requiring Alias Review
             Assert.Contains("Companies Requiring Alias Review", reportContent);

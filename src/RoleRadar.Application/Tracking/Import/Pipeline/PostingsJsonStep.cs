@@ -247,9 +247,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                         ? Decode(ns)?.Trim()
                         : null;
 
-                    var isGhost = element.TryGetProperty("ghost", out var ghostProp) &&
-                                  ghostProp.ValueKind == JsonValueKind.True &&
-                                  ghostProp.GetBoolean();
+                    var candidateSignals = ParseGhostSignals(element, context);
 
                     // Postings with status "applied" are imported with disposition "scored"
                     var rawStatus = element.TryGetProperty("status", out var stProp) && stProp.GetString() is { } stStr
@@ -260,11 +258,13 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                     // 1. Resolve or auto-create company, and 2. Save posting atomically inside one transaction per row
                     var autoCreatedCompany = false;
                     var isNewlyCreated = false;
+                    var signalsCreatedInRow = 0;
                     Company? newCompany = null;
                     Posting? newPosting = null;
 
                     var rowResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
                     {
+                        signalsCreatedInRow = 0;
                         Company? resolvedCompany = null;
                         if (!context.CanonicalCompanies.TryGetValue(canonicalName, out resolvedCompany))
                         {
@@ -364,94 +364,125 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                         {
                             newPosting = existingPosting;
                             isNewlyCreated = false;
-                            return Result<bool>.Success(true);
                         }
-
-                        var posting = Posting.Create(
-                            ownerId: context.OwnerId,
-                            companyId: resolvedCompany?.Id ?? Guid.NewGuid(),
-                            title: title,
-                            sourceKind: sourceKind,
-                            originalUrl: url,
-                            atsTenant: null,
-                            requisitionId: reqId,
-                            location: location,
-                            remoteType: remoteType,
-                            compensation: compText != null ? new Compensation(compMin, compMax, "USD", compText) : null,
-                            postedDate: rawPosted,
-                            score: (decimal?)score,
-                            cultureLevel: cultureLevel,
-                            cultureSummary: cultureSummary,
-                            disposition: PostingDisposition.Scored,
-                            now: dateOutcome.ResolvedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
-                            compHighPriority: compHigh);
-
-                        var savePosting = await txCtx.Postings.UpsertPostingAsync(posting, ct);
-                        if (!savePosting.IsSuccess)
+                        else
                         {
-                            return Result<bool>.Failure(savePosting.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to save posting"));
-                        }
-
-                        var changedFields = new List<string> { "title", "company_id", "disposition" };
-                        var afterDetails = new Dictionary<string, object?>
-                        {
-                            ["title"] = posting.Title,
-                            ["disposition"] = posting.Disposition.ToString()
-                        };
-                        if (!string.IsNullOrWhiteSpace(slug))
-                        {
-                            changedFields.Add("slug");
-                            afterDetails["slug"] = slug;
-                        }
-                        if (!string.IsNullOrWhiteSpace(rawNote))
-                        {
-                            changedFields.Add("note");
-                            afterDetails["note"] = rawNote;
-                        }
-
-                        var auditP = AuditLogEntry.CreateForTracking(
-                            ownerId: context.OwnerId,
-                            actor: ImportActor,
-                            operation: AuditOperation.ImportPostingCreate,
-                            entityType: "posting",
-                            entityId: posting.Id,
-                            resultingVersionToken: posting.VersionToken,
-                            occurredAtUtc: DateTime.UtcNow,
-                            details: new AuditDetails(
-                                ChangedFields: changedFields,
-                                After: afterDetails));
-                        await txCtx.AppendAuditEntryAsync(auditP, ct);
-
-                        if (isGhost)
-                        {
-                            var signalEntity = new PostingSignal(
-                                id: Guid.CreateVersion7(),
+                            var posting = Posting.Create(
                                 ownerId: context.OwnerId,
-                                postingId: posting.Id,
-                                signalType: SignalType.Phantom,
-                                evidence: "Imported ghost flag",
-                                observedAt: dateOutcome.ResolvedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
-                            await txCtx.Postings.AppendSignalAsync(signalEntity, ct);
+                                companyId: resolvedCompany?.Id ?? Guid.NewGuid(),
+                                title: title,
+                                sourceKind: sourceKind,
+                                originalUrl: url,
+                                atsTenant: null,
+                                requisitionId: reqId,
+                                location: location,
+                                remoteType: remoteType,
+                                compensation: compText != null ? new Compensation(compMin, compMax, "USD", compText) : null,
+                                postedDate: rawPosted,
+                                score: (decimal?)score,
+                                cultureLevel: cultureLevel,
+                                cultureSummary: cultureSummary,
+                                disposition: PostingDisposition.Scored,
+                                now: dateOutcome.ResolvedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+                                compHighPriority: compHigh);
 
-                            var signalAudit = AuditLogEntry.CreateForTracking(
+                            var savePosting = await txCtx.Postings.UpsertPostingAsync(posting, ct);
+                            if (!savePosting.IsSuccess)
+                            {
+                                return Result<bool>.Failure(savePosting.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to save posting"));
+                            }
+
+                            var changedFields = new List<string> { "title", "company_id", "disposition" };
+                            var afterDetails = new Dictionary<string, object?>
+                            {
+                                ["title"] = posting.Title,
+                                ["disposition"] = posting.Disposition.ToString()
+                            };
+                            if (!string.IsNullOrWhiteSpace(slug))
+                            {
+                                changedFields.Add("slug");
+                                afterDetails["slug"] = slug;
+                            }
+                            if (!string.IsNullOrWhiteSpace(rawNote))
+                            {
+                                changedFields.Add("note");
+                                afterDetails["note"] = rawNote;
+                            }
+
+                            var auditP = AuditLogEntry.CreateForTracking(
                                 ownerId: context.OwnerId,
                                 actor: ImportActor,
-                                operation: AuditOperation.ImportPostingSignalAppend,
+                                operation: AuditOperation.ImportPostingCreate,
                                 entityType: "posting",
                                 entityId: posting.Id,
                                 resultingVersionToken: posting.VersionToken,
                                 occurredAtUtc: DateTime.UtcNow,
                                 details: new AuditDetails(
-                                    ChangedFields: ["signals"],
-                                    After: new Dictionary<string, object?>
-                                    {
-                                        ["signal_type"] = SignalType.Phantom.ToString()
-                                    }));
-                            await txCtx.AppendAuditEntryAsync(signalAudit, ct);
+                                    ChangedFields: changedFields,
+                                    After: afterDetails));
+                            await txCtx.AppendAuditEntryAsync(auditP, ct);
+
+                            newPosting = posting;
+                            isNewlyCreated = true;
                         }
 
-                        newPosting = posting;
-                        isNewlyCreated = true;
+                        if (candidateSignals.Count > 0 && newPosting is not null)
+                        {
+                            var signalsRes = await txCtx.Postings.GetSignalsAsync(context.OwnerId, newPosting.Id, ct);
+                            var existingSignals = signalsRes.IsSuccess && signalsRes.Value is not null
+                                ? signalsRes.Value
+                                : Array.Empty<PostingSignal>();
+
+                            foreach (var sig in candidateSignals)
+                            {
+                                var alreadyPresent = existingSignals.Any(e =>
+                                    e.SignalType == sig.Type &&
+                                    string.Equals(e.DeadlineDate, sig.DeadlineDate, StringComparison.Ordinal));
+
+                                if (!alreadyPresent)
+                                {
+                                    var signalEntity = new PostingSignal(
+                                        id: Guid.CreateVersion7(),
+                                        ownerId: context.OwnerId,
+                                        postingId: newPosting.Id,
+                                        signalType: sig.Type,
+                                        evidence: sig.Evidence,
+                                        observedAt: dateOutcome.ResolvedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
+                                        deadlineDate: sig.DeadlineDate);
+                                    var appendRes = await txCtx.Postings.AppendSignalAsync(signalEntity, ct);
+                                    if (!appendRes.IsSuccess)
+                                    {
+                                        return Result<bool>.Failure(appendRes.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to append signal"));
+                                    }
+
+                                    var changed = new List<string> { "signals" };
+                                    var afterDetails = new Dictionary<string, object?>
+                                    {
+                                        ["signal_type"] = sig.Type.ToString()
+                                    };
+                                    if (sig.DeadlineDate is not null)
+                                    {
+                                        changed.Add("deadline_date");
+                                        afterDetails["deadline_date"] = sig.DeadlineDate;
+                                    }
+
+                                    var signalAudit = AuditLogEntry.CreateForTracking(
+                                        ownerId: context.OwnerId,
+                                        actor: ImportActor,
+                                        operation: AuditOperation.ImportPostingSignalAppend,
+                                        entityType: "posting",
+                                        entityId: newPosting.Id,
+                                        resultingVersionToken: newPosting.VersionToken,
+                                        occurredAtUtc: DateTime.UtcNow,
+                                        details: new AuditDetails(
+                                            ChangedFields: changed,
+                                            After: afterDetails));
+                                    await txCtx.AppendAuditEntryAsync(signalAudit, ct);
+                                    signalsCreatedInRow++;
+                                }
+                            }
+                        }
+
                         return Result<bool>.Success(true);
                     }, cancellationToken);
 
@@ -465,6 +496,8 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                         recon.RecordErrored();
                         continue;
                     }
+
+                    context.Summary.SignalsCreated += signalsCreatedInRow;
 
                     if (autoCreatedCompany && newCompany is not null)
                     {
@@ -556,6 +589,88 @@ public sealed class PostingsJsonStep : ITrackerImportStep
             num *= 1000000m;
 
         return num;
+    }
+
+    private readonly record struct ParsedGhostSignal(SignalType Type, string? DeadlineDate, string Evidence);
+
+    private static List<ParsedGhostSignal> ParseGhostSignals(JsonElement element, TrackerImportContext context)
+    {
+        var list = new List<ParsedGhostSignal>();
+        if (!element.TryGetProperty("ghost", out var ghostProp))
+        {
+            return list;
+        }
+
+        if (ghostProp.ValueKind == JsonValueKind.True)
+        {
+            list.Add(new ParsedGhostSignal(SignalType.Phantom, null, "Imported ghost flag"));
+            return list;
+        }
+
+        if (ghostProp.ValueKind == JsonValueKind.False)
+        {
+            return list;
+        }
+
+        if (ghostProp.ValueKind == JsonValueKind.String)
+        {
+            var raw = Decode(ghostProp.GetString());
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return list;
+            }
+
+            var tokens = raw.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            var seen = new HashSet<(SignalType, string?)>();
+
+            foreach (var rawToken in tokens)
+            {
+                var token = rawToken.Trim();
+                if (string.IsNullOrEmpty(token)) continue;
+
+                if (token.StartsWith("deadline:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var dateStr = token["deadline:".Length..].Trim();
+                    if (DateOnly.TryParseExact(dateStr, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+                    {
+                        if (seen.Add((SignalType.Deadline, dateStr)))
+                        {
+                            list.Add(new ParsedGhostSignal(SignalType.Deadline, dateStr, $"Imported ghost token: {token}"));
+                        }
+                    }
+                    else
+                    {
+                        context.Summary.RecordUnmappedValue("ghost", token);
+                    }
+                    continue;
+                }
+
+                var lower = token.ToLowerInvariant();
+                SignalType? matchedType = lower switch
+                {
+                    "repost" => SignalType.Repost,
+                    "nosalary" => SignalType.NoSalary,
+                    "parallel" => SignalType.ParallelPosting,
+                    "phantom" => SignalType.Phantom,
+                    "gone" => SignalType.Gone,
+                    _ => null
+                };
+
+                if (matchedType is { } st)
+                {
+                    if (seen.Add((st, null)))
+                    {
+                        list.Add(new ParsedGhostSignal(st, null, $"Imported ghost token: {token}"));
+                    }
+                }
+                else
+                {
+                    context.Summary.RecordUnmappedValue("ghost", token);
+                }
+            }
+        }
+
+        return list;
     }
 
     private static CultureLevel FallbackCultureLevel(TrackerImportContext context, string rawValue)

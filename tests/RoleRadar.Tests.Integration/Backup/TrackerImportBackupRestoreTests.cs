@@ -53,7 +53,7 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
                 "Initech,Initech Corp\r\n" +
                 "Cyberdyne,Cyberdyne Systems\r\n");
 
-            // 3. postings.json (object keyed by slug, full field set: compHigh true/false/missing, ghost true/false, status applied/scored)
+            // 3. postings.json (object keyed by slug, full field set: compHigh true/false/missing, ghost tokens/bool, status applied/scored)
             var oversizedCulture = new string('A', 525);
             File.WriteAllText(Path.Combine(tempBundleDir, "postings.json"),
                 $$"""
@@ -66,7 +66,7 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
                     "culture": "{{oversizedCulture}}",
                     "cultureLevel": "stable",
                     "first": "2026-02-28",
-                    "ghost": false,
+                    "ghost": "repost nosalary",
                     "href": "https://example.com/job/101",
                     "loc": "Remote",
                     "note": "Screening note",
@@ -86,7 +86,7 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
                     "culture": "Stable robotics research culture",
                     "cultureLevel": "moderate",
                     "first": "2026-03-04",
-                    "ghost": true,
+                    "ghost": "parallel deadline:2026-05-25",
                     "href": "https://example.com/job/102",
                     "loc": "Austin, TX",
                     "note": "AI research note",
@@ -104,7 +104,7 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
                     "culture": "Advanced biological research",
                     "cultureLevel": "stable",
                     "first": "2026-03-07",
-                    "ghost": false,
+                    "ghost": true,
                     "href": "https://example.com/job/103",
                     "loc": "Raccoon City",
                     "note": "Genetics note",
@@ -119,11 +119,14 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
                 }
                 """);
 
-            // 4. appendix-rows.csv (screened_out, date rollback, ~ date prefix, duplicate linking)
+            // 4. appendix-rows.csv (exercises every proposed_disposition: screened_out, duplicate, closed, unscored, dismissed; blank & non-blank resurface)
             File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"),
-                "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n" +
-                "REQ-201,Initech Corp,Platform Engineer,true,Details,10-15,comp-low,comp-low,never,false,https://example.com/job/201,,\r\n" +
-                "REQ-202,Initech Corp,Platform Engineer Duplicate,true,duplicate of REQ-201,~10/12,comp-low,comp-low,never,false,https://example.com/job/202,,\r\n");
+                "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_disposition,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n" +
+                "REQ-201,Initech Corp,Platform Engineer,true,Details,10-15,comp-low,comp-low,screened_out,never,false,https://example.com/job/201,,\r\n" +
+                "REQ-202,Initech Corp,Platform Engineer Duplicate,true,duplicate of REQ-201,~10/12,comp-low,comp-low,duplicate,,false,https://example.com/job/202,,\r\n" +
+                "REQ-203,Initech Corp,Closed Platform Engineer,true,Details,10-16,comp-low,comp-low,closed,if_reopened,false,https://example.com/job/203,,\r\n" +
+                "REQ-204,Initech Corp,Unscored Platform Engineer,true,Details,10-17,comp-low,comp-low,unscored,,false,https://example.com/job/204,,\r\n" +
+                "REQ-205,Initech Corp,Dismissed Platform Engineer,true,Details,10-18,comp-low,comp-low,dismissed,never,false,https://example.com/job/205,,\r\n");
 
             // 5. applications.csv (transitions posting to applied, standalone_note, contains_people, parenthetical date)
             File.WriteAllText(Path.Combine(tempBundleDir, "applications.csv"),
@@ -179,26 +182,49 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
             Assert.Equal(drySummary.ApplicationsCreated, applySummary.ApplicationsCreated);
             Assert.Equal(drySummary.StandaloneNotesCreated, applySummary.StandaloneNotesCreated);
             Assert.Equal(drySummary.CriteriaCreated, applySummary.CriteriaCreated);
+            Assert.Equal(drySummary.SignalsCreated, applySummary.SignalsCreated);
+            Assert.Equal(5, applySummary.SignalsCreated); // Repost, NoSalary, ParallelPosting, Deadline, Phantom
             Assert.Equal(drySummary.DatesInferred, applySummary.DatesInferred);
             Assert.Equal(drySummary.CultureTruncations, applySummary.CultureTruncations);
             Assert.Equal(drySummary.UnclaimedAppliedPostings, applySummary.UnclaimedAppliedPostings);
 
-            // Verify all dispositions are represented in MongoDB
+            // Verify all 5 dispositions are represented in MongoDB
             var postingsCol = targetDb.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
             var postings = await postingsCol.Find(Builders<BsonDocument>.Filter.Empty).ToListAsync();
 
             Assert.Contains(postings, p => p["disposition"].AsString.Equals("scored", StringComparison.OrdinalIgnoreCase));
             Assert.Contains(postings, p => p["disposition"].AsString.Equals("applied", StringComparison.OrdinalIgnoreCase));
             Assert.Contains(postings, p => p["disposition"].AsString.Equals("screened_out", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(postings, p => p["disposition"].AsString.Equals("closed", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(postings, p => p["disposition"].AsString.Equals("unscored", StringComparison.OrdinalIgnoreCase));
+
+            // Verify closed date populated for closed posting and null for others
+            var closedPosting = postings.First(p => p.Contains("requisition_id") && p["requisition_id"].IsString && p["requisition_id"].AsString == "REQ-203");
+            Assert.True(closedPosting.Contains("closed_date") && !closedPosting["closed_date"].IsBsonNull);
+            Assert.Equal("if_reopened", closedPosting["resurface_policy"].AsString);
+
+            var unscoredPosting = postings.First(p => p.Contains("requisition_id") && p["requisition_id"].IsString && p["requisition_id"].AsString == "REQ-204");
+            Assert.True(!unscoredPosting.Contains("closed_date") || unscoredPosting["closed_date"].IsBsonNull);
+            Assert.Equal("never", unscoredPosting["resurface_policy"].AsString);
 
             // Verify out-of-range score stored as null / empty
             var scoreOutOfRangePosting = postings.First(p => p["title"].AsString == "Autonomous Systems Engineer");
             Assert.True(!scoreOutOfRangePosting.Contains("score") || scoreOutOfRangePosting["score"].IsBsonNull);
 
-            // Verify phantom signal was appended for ghost: true
+            // Verify signals were appended
             var signalsCol = targetDb.GetCollection<BsonDocument>(TrackingMongoOptions.PostingSignalsCollectionName);
             var signals = await signalsCol.Find(Builders<BsonDocument>.Filter.Empty).ToListAsync();
+            Assert.Equal(5, signals.Count);
+            Assert.Contains(signals, s => s["signal_type"].AsString.Equals("repost", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(signals, s => s["signal_type"].AsString.Equals("no_salary", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(signals, s => s["signal_type"].AsString.Equals("parallel_posting", StringComparison.OrdinalIgnoreCase));
+            Assert.Contains(signals, s => s["signal_type"].AsString.Equals("deadline", StringComparison.OrdinalIgnoreCase) && s["deadline_date"].AsString == "2026-05-25");
             Assert.Contains(signals, s => s["signal_type"].AsString.Equals("phantom", StringComparison.OrdinalIgnoreCase));
+
+            // Verify disposition histogram
+            Assert.True(applySummary.DispositionHistogram.ContainsKey("screened_out"));
+            Assert.True(applySummary.DispositionHistogram.ContainsKey("closed"));
+            Assert.True(applySummary.DispositionHistogram.ContainsKey("unscored"));
 
             Assert.True(applySummary.StandaloneNotesCreated > 0,
                 $"StandaloneNotesCreated is {applySummary.StandaloneNotesCreated}. Errors: {string.Join("; ", applySummary.Errors.Select(e => $"{e.SourceFile}:{e.LineNumber} {e.ErrorCode}: {e.Message}"))}");
@@ -218,6 +244,7 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
             Assert.Equal(0, secondSummary.ApplicationsCreated);
             Assert.Equal(0, secondSummary.StandaloneNotesCreated);
             Assert.Equal(0, secondSummary.CriteriaCreated);
+            Assert.Equal(0, secondSummary.SignalsCreated);
 
             // Step D: roleradar verify exits 0 (zero integrity anomalies)
             var verifyHandler = services.GetRequiredService<IQueryHandler<VerifyIntegrityQuery, VerifyIntegrityResultDto>>();
