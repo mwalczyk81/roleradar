@@ -7,8 +7,10 @@ using MongoDB.Driver;
 using RoleRadar.Application;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Integrity;
+using RoleRadar.Application.Notes.Queries;
 using RoleRadar.Application.Tracking.Import;
 using RoleRadar.Application.Tracking.Import.Commands;
+using RoleRadar.Application.Tracking.Queries;
 using RoleRadar.Cli.Commands;
 using RoleRadar.Domain.Common;
 using RoleRadar.Domain.Tracking;
@@ -259,6 +261,30 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
             Assert.Contains(notes, n => n["title"].AsString == "Initech Corp - General Strategy");
             Assert.Contains(notes, n => n["title"].AsString == "Assessment: Initech Corp - Lead Systems Architect");
 
+            // Read data back through MCP query handler and note_search using MCP host's default owner
+            var trackerQueryHandler = services.GetRequiredService<IQueryHandler<TrackerQueryRequest, TrackerQueryResultDto>>();
+            var searchNotesHandler = services.GetRequiredService<IQueryHandler<SearchNotesQuery, NoteSearchResponseDto>>();
+
+            // 1. Postings visible through MCP tracker_query
+            var postingsQueryRes = await trackerQueryHandler.HandleAsync(new TrackerQueryRequest(Entity: "postings", PageSize: 100));
+            Assert.True(postingsQueryRes.IsSuccess);
+            Assert.Equal(8, postingsQueryRes.Value!.TotalCount);
+
+            // 2. Companies visible through MCP tracker_query
+            var companiesQueryRes = await trackerQueryHandler.HandleAsync(new TrackerQueryRequest(Entity: "companies", PageSize: 100));
+            Assert.True(companiesQueryRes.IsSuccess);
+            Assert.Equal(4, companiesQueryRes.Value!.TotalCount);
+
+            // 3. Applications visible through MCP tracker_query
+            var appsQueryRes = await trackerQueryHandler.HandleAsync(new TrackerQueryRequest(Entity: "applications", PageSize: 100));
+            Assert.True(appsQueryRes.IsSuccess);
+            Assert.Equal(1, appsQueryRes.Value!.TotalCount);
+
+            // 4. Assessment notes visible through MCP note_search
+            var noteSearchRes = await searchNotesHandler.HandleAsync(new SearchNotesQuery(Query: "Assessment", Area: "job-search", Limit: 50));
+            Assert.True(noteSearchRes.IsSuccess);
+            Assert.Equal(3, noteSearchRes.Value!.Results.Count);
+
             // Step C: Second --apply execution reports zero created/updated (idempotent no-op)
             var secondApplyResult = await coordinator.ExecuteAsync(applyCmd);
             Assert.True(secondApplyResult.IsSuccess);
@@ -274,7 +300,7 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
 
             // Step D: roleradar verify exits 0 (zero integrity anomalies)
             var verifyHandler = services.GetRequiredService<IQueryHandler<VerifyIntegrityQuery, VerifyIntegrityResultDto>>();
-            var verifyResult = await verifyHandler.HandleAsync(new VerifyIntegrityQuery("default-owner"));
+            var verifyResult = await verifyHandler.HandleAsync(new VerifyIntegrityQuery());
             Assert.True(verifyResult.IsSuccess);
             Assert.Equal(0, verifyResult.Value!.AnomalyCount);
 

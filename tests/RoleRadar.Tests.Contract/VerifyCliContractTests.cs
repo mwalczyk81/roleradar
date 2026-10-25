@@ -91,7 +91,7 @@ public sealed class VerifyCliContractTests : IAsyncLifetime
             ["updated_at"] = new BsonDateTime(DateTime.UtcNow)
         });
 
-        var (exitCode, stdout, stderr) = await RunCliAsync(cliDllPath, "verify --json", env);
+        var (exitCode, stdout, stderr) = await RunCliAsync(cliDllPath, "verify --json --owner-id owner-1", env);
         Assert.Equal(0, exitCode);
         Assert.DoesNotContain("Unhandled exception", stderr, StringComparison.OrdinalIgnoreCase);
 
@@ -233,7 +233,7 @@ public sealed class VerifyCliContractTests : IAsyncLifetime
         var countRunsBefore = await searchRunsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
 
         // Run launched CLI
-        var (exitCode, stdout, stderr) = await RunCliAsync(cliDllPath, "verify --json", env);
+        var (exitCode, stdout, stderr) = await RunCliAsync(cliDllPath, "verify --json --owner-id owner-1", env);
         Assert.Equal(1, exitCode);
         Assert.DoesNotContain("Unhandled exception", stderr, StringComparison.OrdinalIgnoreCase);
 
@@ -266,6 +266,55 @@ public sealed class VerifyCliContractTests : IAsyncLifetime
         Assert.Equal(countSignalsBefore, await signalsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty));
         Assert.Equal(countNotesBefore, await notesCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty));
         Assert.Equal(countRunsBefore, await searchRunsCol.CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty));
+    }
+
+    [Fact]
+    public async Task Verify_WhenOwnerMismatchExists_ReportsAnomalyWithCountOnly()
+    {
+        var cliDllPath = GetCliDllPath();
+        var env = _fixture.CreateProcessEnvironment(_databaseName);
+
+        // Seed 3 companies: 2 with OwnerId.Default.Value and 1 with a different owner
+        var companiesCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName);
+        await companiesCol.InsertOneAsync(new BsonDocument
+        {
+            ["_id"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
+            ["owner_id"] = OwnerId.Default.Value,
+            ["name"] = "Owner Correct Co 1",
+            ["status"] = "target",
+            ["ownership_type"] = "public",
+            ["category_tags"] = new BsonArray(),
+            ["version_token"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
+            ["created_at"] = new BsonDateTime(DateTime.UtcNow),
+            ["updated_at"] = new BsonDateTime(DateTime.UtcNow)
+        });
+        await companiesCol.InsertOneAsync(new BsonDocument
+        {
+            ["_id"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
+            ["owner_id"] = "different-owner",
+            ["name"] = "Owner Mismatch Co",
+            ["status"] = "target",
+            ["ownership_type"] = "public",
+            ["category_tags"] = new BsonArray(),
+            ["version_token"] = new BsonBinaryData(Guid.NewGuid(), GuidRepresentation.Standard),
+            ["created_at"] = new BsonDateTime(DateTime.UtcNow),
+            ["updated_at"] = new BsonDateTime(DateTime.UtcNow)
+        });
+
+        // Run verify without --owner-id (defaults to OwnerId.Default.Value)
+        var (exitCode, stdout, stderr) = await RunCliAsync(cliDllPath, "verify --json", env);
+        Assert.Equal(1, exitCode);
+        Assert.DoesNotContain("Unhandled exception", stderr, StringComparison.OrdinalIgnoreCase);
+
+        using var doc = JsonDocument.Parse(stdout);
+        var root = doc.RootElement;
+        Assert.True(root.GetProperty("ok").GetBoolean());
+        var data = root.GetProperty("data");
+        Assert.True(data.GetProperty("anomalyCount").GetInt32() >= 1);
+
+        var anomalies = data.GetProperty("anomalies").EnumerateArray().ToList();
+        var mismatchAnomaly = Assert.Single(anomalies, a => a.GetProperty("kind").GetString() == "owner_mismatch");
+        Assert.Contains("1 record(s) in collection 'companies' have owner_id differing from configured owner", mismatchAnomaly.GetProperty("description").GetString()!);
     }
 
     private static string GetCliDllPath()

@@ -37,6 +37,9 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
     }
 
     private ServiceProvider BuildServiceProvider(Action<BackupOptions>? configureBackup = null)
+        => BuildServiceProviderForDb(_databaseName, configureBackup);
+
+    private ServiceProvider BuildServiceProviderForDb(string dbName, Action<BackupOptions>? configureBackup = null)
     {
         var services = new ServiceCollection();
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
@@ -45,7 +48,7 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
         services.AddRoleRadarInfrastructure(opts =>
         {
             opts.ConnectionString = _connectionString;
-            opts.DatabaseName = _databaseName;
+            opts.DatabaseName = dbName;
             opts.ReadinessTimeout = TimeSpan.FromSeconds(5);
         });
 
@@ -58,7 +61,7 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
         services.Configure<BackupOptions>(opts =>
         {
             opts.DumpCommand = $"docker exec -i {_fixture.ContainerId} mongodump --uri=\"{internalUri}\" --archive --gzip --oplog";
-            opts.RestoreCommand = $"docker exec -i {_fixture.ContainerId} mongorestore --uri=\"{internalUri}\" --archive --gzip --nsInclude \"{_databaseName}.*\"";
+            opts.RestoreCommand = $"docker exec -i {_fixture.ContainerId} mongorestore --uri=\"{internalUri}\" --archive --gzip --nsInclude \"{dbName}.*\"";
         });
 
         if (configureBackup is not null)
@@ -418,6 +421,123 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
             {
                 File.Delete(backupFile);
             }
+        }
+    }
+
+    [Fact]
+    public async Task RestoreBackup_IntoDifferentlyNamedDatabase_RemapsNamespaceAndPreservesCounts()
+    {
+        await ResetDatabasesAsync();
+
+        var backupFile = Path.Combine(Path.GetTempPath(), $"rr_remap_backup_{Guid.NewGuid():N}.rrbak");
+        var targetDbName = $"rrtest_remapped_{Guid.CreateVersion7():N}";
+        const string passphrase = "SuperSecureRemapPassphrase123!";
+
+        await using var sourceProvider = BuildServiceProvider();
+        await using var targetProvider = BuildServiceProviderForDb(targetDbName);
+
+        try
+        {
+            // 1. Seed data into source database
+            var noteHandler = sourceProvider.GetRequiredService<ICommandHandler<CreateNoteCommand, NoteCreatedDto>>();
+            var noteRes = await noteHandler.HandleAsync(new CreateNoteCommand(
+                Title: "Source DB Note Before Remap",
+                Body: "# Header\nBody for remapping verification",
+                Area: "job-search",
+                Tags: ["tag1"],
+                ProvenanceKind: "stated",
+                ProvenanceDate: "2026-10-24",
+                ProvenanceQualifier: null,
+                Actor: "test-user"));
+            Assert.True(noteRes.IsSuccess);
+
+            // 2. Dump from source database
+            var sourceBackupService = sourceProvider.GetRequiredService<IBackupArchiveService>();
+            var backupRes = await sourceBackupService.CreateBackupAsync(backupFile, passphrase);
+            Assert.True(backupRes.IsSuccess);
+
+            // 3. Restore into differently named target database
+            var targetBackupService = targetProvider.GetRequiredService<IBackupArchiveService>();
+            var restoreRes = await targetBackupService.RestoreBackupAsync(backupFile, passphrase, forceOverwrite: true);
+            Assert.True(restoreRes.IsSuccess, $"Restore failed: {restoreRes.Error?.Message}");
+
+            // 4. Assert data exists in target database with matching counts
+            var mongoClient = targetProvider.GetRequiredService<IMongoClient>();
+            var targetDb = mongoClient.GetDatabase(targetDbName);
+            var targetNotesCol = targetDb.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.NotesCollectionName);
+            var targetCount = await targetNotesCol.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty);
+            Assert.Equal(1, targetCount);
+
+            var doc = await targetNotesCol.Find(Builders<BsonDocument>.Filter.Eq("title", "Source DB Note Before Remap")).FirstOrDefaultAsync();
+            Assert.NotNull(doc);
+            Assert.Equal("job-search", doc["area"].AsString);
+        }
+        finally
+        {
+            if (File.Exists(backupFile)) File.Delete(backupFile);
+            var mongoClient = targetProvider.GetRequiredService<IMongoClient>();
+            await mongoClient.DropDatabaseAsync(targetDbName);
+        }
+    }
+
+    [Fact]
+    public async Task RestoreBackup_WhenNamespaceIsUnmatchedOrZeroDocumentsRestored_FailsWithValidationError()
+    {
+        await ResetDatabasesAsync();
+
+        var backupFile = Path.Combine(Path.GetTempPath(), $"rr_unmatched_backup_{Guid.NewGuid():N}.rrbak");
+        const string passphrase = "SuperSecureUnmatchedPassphrase123!";
+
+        await using var sourceProvider = BuildServiceProvider();
+
+        // Provider for _databaseName (same DB name as source archive so no remapping happens), but with an unmatched namespace filter in RestoreCommand
+        var mongoUrl = new MongoUrl(_connectionString);
+        var authPart = (!string.IsNullOrEmpty(mongoUrl.Username) && !string.IsNullOrEmpty(mongoUrl.Password))
+            ? $"{mongoUrl.Username}:{mongoUrl.Password}@"
+            : string.Empty;
+        var internalUri = $"mongodb://{authPart}localhost:27017/?replicaSet=rs0&authSource=admin";
+
+        await using var restoreProvider = BuildServiceProviderForDb(_databaseName, opts =>
+        {
+            opts.RestoreCommand = $"docker exec -i {_fixture.ContainerId} mongorestore --uri=\"{internalUri}\" --archive --gzip --nsInclude \"completely_unmatched_db.*\"";
+        });
+
+        try
+        {
+            // 1. Seed data into source database
+            var noteHandler = sourceProvider.GetRequiredService<ICommandHandler<CreateNoteCommand, NoteCreatedDto>>();
+            var noteRes = await noteHandler.HandleAsync(new CreateNoteCommand(
+                Title: "Source DB Note For Unmatched Test",
+                Body: "Content",
+                Area: "job-search",
+                Tags: ["tag1"],
+                ProvenanceKind: "stated",
+                ProvenanceDate: "2026-10-24",
+                ProvenanceQualifier: null,
+                Actor: "test-user"));
+            Assert.True(noteRes.IsSuccess);
+
+            // 2. Dump from source database
+            var sourceBackupService = sourceProvider.GetRequiredService<IBackupArchiveService>();
+            var backupRes = await sourceBackupService.CreateBackupAsync(backupFile, passphrase);
+            Assert.True(backupRes.IsSuccess);
+
+            // Wipe database before restoring so existing collections are clean
+            var wipeRes = await sourceBackupService.WipeDatabaseAsync(RoleRadar.Cli.Commands.WipeCommand.ConfirmationToken);
+            Assert.True(wipeRes.IsSuccess);
+
+            // 3. Attempt restore with unmatched namespace filter
+            var restoreService = restoreProvider.GetRequiredService<IBackupArchiveService>();
+            var restoreRes = await restoreService.RestoreBackupAsync(backupFile, passphrase, forceOverwrite: true);
+
+            // 4. Must fail with ValidationError
+            Assert.False(restoreRes.IsSuccess);
+            Assert.Equal(ErrorCode.ValidationError, restoreRes.Error!.Value.Code);
+            Assert.Contains("Unmatched namespace or empty restore", restoreRes.Error!.Value.Message);
+        }
+        finally
+        {
+            if (File.Exists(backupFile)) File.Delete(backupFile);
         }
     }
 

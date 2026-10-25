@@ -184,6 +184,20 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         string passphrase,
         CancellationToken cancellationToken = default)
     {
+        var result = await Pass1VerifyWithMetadataAsync(ciphertextStream, passphrase, cancellationToken);
+        if (!result.IsSuccess || result.Value.DerivedKey is null)
+        {
+            return Result<byte[]>.Failure(result.Error ?? new ResultError(ErrorCode.AuthenticationError, "Archive is invalid or corrupted."));
+        }
+
+        return Result<byte[]>.Success(result.Value.DerivedKey);
+    }
+
+    internal async Task<Result<(byte[] DerivedKey, string? SourceDatabaseName)>> Pass1VerifyWithMetadataAsync(
+        Stream ciphertextStream,
+        string passphrase,
+        CancellationToken cancellationToken = default)
+    {
         ArgumentNullException.ThrowIfNull(ciphertextStream);
         ArgumentException.ThrowIfNullOrWhiteSpace(passphrase);
 
@@ -191,30 +205,30 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         var readHeader = await ReadExactOrToEofAsync(ciphertextStream, header, 0, BackupArchiveConstants.HeaderSize, cancellationToken);
         if (readHeader < BackupArchiveConstants.HeaderSize)
         {
-            return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+            return Result<(byte[], string?)>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
         }
 
         // Strict pre-KDF bounds and format verification
         if (!header.AsSpan(0, 4).SequenceEqual(BackupArchiveConstants.Magic))
         {
-            return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+            return Result<(byte[], string?)>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
         }
 
         if (header[4] != BackupArchiveConstants.CurrentFormatVersion || header[5] != BackupArchiveConstants.ExpectedFlags)
         {
-            return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+            return Result<(byte[], string?)>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
         }
 
         var iterations = BitConverter.ToInt32(header, 6);
         if (iterations < BackupArchiveConstants.MinArgon2Iterations || iterations > BackupArchiveConstants.MaxArgon2Iterations)
         {
-            return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+            return Result<(byte[], string?)>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
         }
 
         var memoryKiB = BitConverter.ToInt32(header, 10);
         if (memoryKiB < BackupArchiveConstants.MinArgon2MemoryKiB || memoryKiB > BackupArchiveConstants.MaxArgon2MemoryKiB)
         {
-            return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+            return Result<(byte[], string?)>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
         }
 
         var salt = header.AsSpan(14, BackupArchiveConstants.SaltSize);
@@ -236,6 +250,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             var lengthBuffer = new byte[4];
             var isFirstChunk = true;
             var observedFinal = false;
+            string? extractedSourceDb = null;
 
             while (true)
             {
@@ -247,19 +262,19 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
                 if (lenRead < 4)
                 {
-                    return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+                    return Result<(byte[], string?)>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
                 }
 
                 var chunkLen = BitConverter.ToInt32(lengthBuffer, 0);
                 if (chunkLen < BackupArchiveConstants.MinCiphertextLength || chunkLen > BackupArchiveConstants.MaxCiphertextLength)
                 {
-                    return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+                    return Result<(byte[], string?)>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
                 }
 
                 var chunkRead = await ReadExactOrToEofAsync(ciphertextStream, chunkBuffer, 0, chunkLen, cancellationToken);
                 if (chunkRead < chunkLen)
                 {
-                    return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+                    return Result<(byte[], string?)>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
                 }
 
                 var ad = isFirstChunk ? header.AsSpan() : ReadOnlySpan<byte>.Empty;
@@ -275,7 +290,12 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                 }
                 catch (Exception)
                 {
-                    return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+                    return Result<(byte[], string?)>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+                }
+
+                if (isFirstChunk)
+                {
+                    TryExtractSourceDatabaseName(scratchPlaintext.AsSpan(0, plainLen), _mongoOptions.DatabaseName, out extractedSourceDb);
                 }
 
                 isFirstChunk = false;
@@ -288,7 +308,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                     var trailingRead = await ciphertextStream.ReadAsync(trailingTest, cancellationToken);
                     if (trailingRead > 0)
                     {
-                        return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+                        return Result<(byte[], string?)>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
                     }
                     break;
                 }
@@ -296,16 +316,16 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
             if (!observedFinal)
             {
-                return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+                return Result<(byte[], string?)>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
             }
 
             // Return derived key so Pass 2 can reuse it without recomputing Argon2
             var keyCopy = (byte[])derivedKey.Clone();
-            return Result<byte[]>.Success(keyCopy);
+            return Result<(byte[], string?)>.Success((keyCopy, extractedSourceDb));
         }
         catch (Exception)
         {
-            return Result<byte[]>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
+            return Result<(byte[], string?)>.Failure(ErrorCode.AuthenticationError, "Archive is invalid or corrupted.");
         }
         finally
         {
@@ -696,13 +716,13 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         // Single FileStream opened for both Pass 1 and Pass 2
         await using var fileStream = new FileStream(backupFilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.Asynchronous);
 
-        var pass1Result = await Pass1VerifyAsync(fileStream, passphrase, cancellationToken);
-        if (!pass1Result.IsSuccess || pass1Result.Value is null)
+        var pass1Result = await Pass1VerifyWithMetadataAsync(fileStream, passphrase, cancellationToken);
+        if (!pass1Result.IsSuccess || pass1Result.Value.DerivedKey is null)
         {
             return Result<RestoreArchiveSummaryDto>.Failure(
                 pass1Result.Error ?? new ResultError(ErrorCode.AuthenticationError, "Archive is invalid or corrupted."));
         }
-        var derivedKey = pass1Result.Value;
+        var (derivedKey, sourceDb) = pass1Result.Value;
 
         // Pass 2: Stream decrypted bytes into mongorestore stdin
         Process? process = null;
@@ -737,25 +757,54 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             string cmdExe;
             string cmdArgs;
 
+            var isRemapped = sourceDb is not null && !string.Equals(sourceDb, _mongoOptions.DatabaseName, StringComparison.Ordinal);
+
             if (isMongoTools)
             {
                 tempConfigFile = CreateAtomicToolsConfigFile(_mongoOptions.ConnectionString);
                 cmdExe = "mongorestore";
                 var dropFlag = forceOverwrite ? "--drop " : string.Empty;
-                cmdArgs = $"--config=\"{tempConfigFile}\" {dropFlag}--nsInclude=\"{_mongoOptions.DatabaseName}.*\" --archive --gzip";
+                var nsArgs = isRemapped
+                    ? $"--nsInclude=\"{sourceDb}.*\" --nsFrom=\"{sourceDb}.*\" --nsTo=\"{_mongoOptions.DatabaseName}.*\""
+                    : $"--nsInclude=\"{_mongoOptions.DatabaseName}.*\"";
+                cmdArgs = $"--config=\"{tempConfigFile}\" {dropFlag}{nsArgs} --archive --gzip";
             }
             else
             {
                 var restoreCmdString = _backupOptions.RestoreCommand;
+                if (isRemapped)
+                {
+                    if (Regex.IsMatch(restoreCmdString, @"--nsInclude(=|\s+)""?[^""\s]+""?", RegexOptions.IgnoreCase))
+                    {
+                        restoreCmdString = Regex.Replace(
+                            restoreCmdString,
+                            @"--nsInclude(=|\s+)""?[^""\s]+""?",
+                            $"--nsInclude=\"{sourceDb}.*\" --nsFrom=\"{sourceDb}.*\" --nsTo=\"{_mongoOptions.DatabaseName}.*\"",
+                            RegexOptions.IgnoreCase);
+                    }
+                    else
+                    {
+                        restoreCmdString += $" --nsInclude=\"{sourceDb}.*\" --nsFrom=\"{sourceDb}.*\" --nsTo=\"{_mongoOptions.DatabaseName}.*\"";
+                    }
+                }
+                else
+                {
+                    if (restoreCmdString.Contains("<db>", StringComparison.OrdinalIgnoreCase))
+                    {
+                        restoreCmdString = restoreCmdString.Replace("<db>", _mongoOptions.DatabaseName);
+                    }
+                }
+
                 if (restoreCmdString.Contains("<db>", StringComparison.OrdinalIgnoreCase))
                 {
                     restoreCmdString = restoreCmdString.Replace("<db>", _mongoOptions.DatabaseName);
                 }
 
-                if (restoreCmdString.Contains("--nsInclude", StringComparison.OrdinalIgnoreCase) &&
+                if ((restoreCmdString.Contains("--nsInclude", StringComparison.OrdinalIgnoreCase) ||
+                     restoreCmdString.Contains("--nsFrom", StringComparison.OrdinalIgnoreCase)) &&
                     restoreCmdString.Contains("--oplogReplay", StringComparison.OrdinalIgnoreCase))
                 {
-                    // mongorestore fails if both --oplogReplay and --nsInclude are present
+                    // mongorestore fails if both --oplogReplay and namespace mapping options are present
                     restoreCmdString = Regex.Replace(restoreCmdString, @"\s*--oplogReplay\b", "");
                 }
 
@@ -841,6 +890,15 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             {
                 var col = db.GetCollection<BsonDocument>(colName);
                 counts[colName] = await col.CountDocumentsAsync(FilterDefinition<BsonDocument>.Empty, cancellationToken: cancellationToken);
+            }
+
+            var totalRestored = counts.Values.Sum();
+            if (sourceDb is not null && totalRestored == 0)
+            {
+                var countsFormatted = string.Join(", ", counts.Select(kv => $"{kv.Value} {kv.Key}"));
+                return Result<RestoreArchiveSummaryDto>.Failure(
+                    ErrorCode.ValidationError,
+                    $"Unmatched namespace or empty restore: archive contained documents from database '{sourceDb}' but zero documents were restored into '{_mongoOptions.DatabaseName}'. Document counts restored per collection: {countsFormatted}.");
             }
 
             return Result<RestoreArchiveSummaryDto>.Success(
@@ -946,6 +1004,107 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
         return Result<WipeSummaryDto>.Success(
             new WipeSummaryDto(droppedCounts, DateTime.UtcNow));
+    }
+
+    internal static bool TryExtractSourceDatabaseName(ReadOnlySpan<byte> chunk, out string? sourceDb)
+        => TryExtractSourceDatabaseName(chunk, targetDatabaseName: null, out sourceDb);
+
+    internal static bool TryExtractSourceDatabaseName(ReadOnlySpan<byte> chunk, string? targetDatabaseName, out string? sourceDb)
+    {
+        sourceDb = null;
+        if (chunk.Length < 4)
+        {
+            return false;
+        }
+
+        // 1. Check if chunk is gzip-compressed (0x1f, 0x8b)
+        if (chunk.Length >= 2 && chunk[0] == 0x1f && chunk[1] == 0x8b)
+        {
+            try
+            {
+                using var ms = new MemoryStream(chunk.ToArray());
+                using var gzip = new GZipStream(ms, CompressionMode.Decompress);
+                var decompBuffer = new byte[262144];
+                var totalRead = 0;
+                while (totalRead < decompBuffer.Length)
+                {
+                    var read = gzip.Read(decompBuffer, totalRead, decompBuffer.Length - totalRead);
+                    if (read == 0) break;
+                    totalRead += read;
+                }
+
+                return TryScanDatabaseNameFromBson(decompBuffer.AsSpan(0, totalRead), targetDatabaseName, out sourceDb);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        // 2. Uncompressed stream
+        return TryScanDatabaseNameFromBson(chunk, targetDatabaseName, out sourceDb);
+    }
+
+    private static bool TryScanDatabaseNameFromBson(ReadOnlySpan<byte> span, string? targetDatabaseName, out string? sourceDb)
+    {
+        sourceDb = null;
+        if (span.Length < 8)
+        {
+            return false;
+        }
+
+        var foundDatabases = new HashSet<string>(StringComparer.Ordinal);
+        ReadOnlySpan<byte> dbElementPattern = [0x02, (byte)'d', (byte)'b', 0x00];
+        var offset = 0;
+
+        while (offset + 8 <= span.Length)
+        {
+            var idx = span.Slice(offset).IndexOf(dbElementPattern);
+            if (idx < 0)
+            {
+                break;
+            }
+
+            var patternPos = offset + idx;
+            if (patternPos + 8 <= span.Length)
+            {
+                var strLen = BitConverter.ToInt32(span.Slice(patternPos + 4, 4));
+                if (strLen > 1 && strLen <= 128 && patternPos + 8 + strLen <= span.Length)
+                {
+                    var nameSpan = span.Slice(patternPos + 8, strLen - 1);
+                    var candidate = Encoding.UTF8.GetString(nameSpan);
+                    if (!string.IsNullOrWhiteSpace(candidate) &&
+                        !candidate.Equals("admin", StringComparison.OrdinalIgnoreCase) &&
+                        !candidate.Equals("config", StringComparison.OrdinalIgnoreCase) &&
+                        !candidate.Equals("local", StringComparison.OrdinalIgnoreCase))
+                    {
+                        foundDatabases.Add(candidate);
+                    }
+                }
+            }
+
+            offset = patternPos + 4;
+        }
+
+        if (foundDatabases.Count == 0)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(targetDatabaseName) && foundDatabases.Contains(targetDatabaseName))
+        {
+            sourceDb = targetDatabaseName;
+            return true;
+        }
+
+        if (foundDatabases.Count == 1)
+        {
+            sourceDb = foundDatabases.First();
+            return true;
+        }
+
+        sourceDb = foundDatabases.First();
+        return true;
     }
 
     private static bool IsValidMongodumpArchive(byte[] chunk, int count)

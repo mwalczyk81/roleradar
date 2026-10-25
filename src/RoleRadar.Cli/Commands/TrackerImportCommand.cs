@@ -37,10 +37,16 @@ public static class TrackerImportCommand
             Description = "Path to write detailed UTF-8 outcome report (refuses paths inside a git working tree)."
         };
 
+        var ownerIdOption = new Option<string?>("--owner-id")
+        {
+            Description = "Optional owner identifier filter."
+        };
+
         command.Add(bundleDirArgument);
         command.Add(defaultDateOption);
         command.Add(applyOption);
         command.Add(reportOption);
+        command.Add(ownerIdOption);
 
         command.SetAction(async (ParseResult parseResult, CancellationToken ct) =>
         {
@@ -50,6 +56,7 @@ public static class TrackerImportCommand
                 var defaultDateStr = parseResult.GetValue(defaultDateOption);
                 var apply = parseResult.GetValue(applyOption);
                 var reportPath = parseResult.GetValue(reportOption);
+                var ownerId = parseResult.GetValue(ownerIdOption);
 
                 DateOnly? defaultDate = null;
                 if (!string.IsNullOrWhiteSpace(defaultDateStr))
@@ -69,7 +76,8 @@ public static class TrackerImportCommand
                     BundleDirectory: bundleDir,
                     DefaultDate: defaultDate,
                     Apply: apply,
-                    ReportPath: reportPath);
+                    ReportPath: reportPath,
+                    OwnerId: ownerId);
 
                 var result = await coordinator.ExecuteAsync(importCommand, ct);
                 if (!result.IsSuccess)

@@ -331,6 +331,47 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
         Assert.Contains((byte)'\r', primaryBytes);
     }
 
+    [Fact]
+    public void OwnerId_StringLiterals_MustNotAppearOutsideOwnerIdClass()
+    {
+        var repoRoot = LocateRepositoryRoot();
+        var srcDir = Path.Combine(repoRoot, "src");
+        Assert.True(Directory.Exists(srcDir), $"Expected src directory at {srcDir}");
+
+        var offendingFiles = new List<string>();
+        var forbiddenLiterals = new[] { "default-owner", "local-owner" };
+
+        var csFiles = Directory.EnumerateFiles(srcDir, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") &&
+                        !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"));
+
+        foreach (var file in csFiles)
+        {
+            var relativePath = Path.GetRelativePath(srcDir, file).Replace('\\', '/');
+            if (relativePath.Equals("RoleRadar.Domain/Common/OwnerId.cs", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                foreach (var literal in forbiddenLiterals)
+                {
+                    if (line.Contains(literal, StringComparison.OrdinalIgnoreCase))
+                    {
+                        offendingFiles.Add($"{relativePath}:{i + 1} contains '{literal}'");
+                    }
+                }
+            }
+        }
+
+        Assert.True(
+            offendingFiles.Count == 0,
+            $"Hardcoded owner string literals must not appear outside Domain/Common/OwnerId.cs. Violations:\n{string.Join("\n", offendingFiles)}");
+    }
+
     private static string LocateRepositoryRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);

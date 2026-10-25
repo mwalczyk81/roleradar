@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using FsCheck;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
@@ -772,5 +773,65 @@ public sealed class SecretStreamBackupCryptoTests
         }
         public override void SetLength(long value) => throw new NotSupportedException();
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public void TryExtractSourceDatabaseName_UncompressedChunk_ExtractsDatabaseName()
+    {
+        // Construct synthetic mongodump collection header containing \x02db\0<len>testdb\0
+        using var ms = new MemoryStream();
+        ms.Write([0x6d, 0xe2, 0x99, 0x81]); // 4-byte archive magic
+        ms.Write(BitConverter.GetBytes(100)); // global header len 100
+        ms.Write(new byte[100]); // dummy global header
+        // Collection header:
+        ms.Write([0x02, (byte)'d', (byte)'b', 0x00]);
+        var dbNameBytes = Encoding.UTF8.GetBytes("sample_source_db");
+        ms.Write(BitConverter.GetBytes(dbNameBytes.Length + 1));
+        ms.Write(dbNameBytes);
+        ms.WriteByte(0x00);
+
+        var chunk = ms.ToArray();
+        var success = SecretStreamBackupArchiveService.TryExtractSourceDatabaseName(chunk, out var extractedDb);
+
+        Assert.True(success);
+        Assert.Equal("sample_source_db", extractedDb);
+    }
+
+    [Fact]
+    public void TryExtractSourceDatabaseName_GzippedChunk_ExtractsDatabaseName()
+    {
+        // Construct synthetic mongodump collection header and compress with GZip
+        using var uncompressedMs = new MemoryStream();
+        uncompressedMs.Write([0x6d, 0xe2, 0x99, 0x81]); // 4-byte archive magic
+        uncompressedMs.Write(BitConverter.GetBytes(50)); // global header len 50
+        uncompressedMs.Write(new byte[50]); // dummy global header
+        // Collection header:
+        uncompressedMs.Write([0x02, (byte)'d', (byte)'b', 0x00]);
+        var dbNameBytes = Encoding.UTF8.GetBytes("gzipped_source_db");
+        uncompressedMs.Write(BitConverter.GetBytes(dbNameBytes.Length + 1));
+        uncompressedMs.Write(dbNameBytes);
+        uncompressedMs.WriteByte(0x00);
+
+        using var compressedMs = new MemoryStream();
+        using (var gzip = new System.IO.Compression.GZipStream(compressedMs, System.IO.Compression.CompressionMode.Compress, leaveOpen: true))
+        {
+            gzip.Write(uncompressedMs.ToArray());
+        }
+
+        var chunk = compressedMs.ToArray();
+        var success = SecretStreamBackupArchiveService.TryExtractSourceDatabaseName(chunk, out var extractedDb);
+
+        Assert.True(success);
+        Assert.Equal("gzipped_source_db", extractedDb);
+    }
+
+    [Fact]
+    public void TryExtractSourceDatabaseName_WhenNoDatabaseElement_ReturnsFalse()
+    {
+        var dummyBytes = new byte[] { 0x6d, 0xe2, 0x99, 0x81, 0x10, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03 };
+        var success = SecretStreamBackupArchiveService.TryExtractSourceDatabaseName(dummyBytes, out var extractedDb);
+
+        Assert.False(success);
+        Assert.Null(extractedDb);
     }
 }

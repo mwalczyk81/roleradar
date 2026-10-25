@@ -70,9 +70,9 @@ public sealed class TrackerImportCoordinator : ITrackerImportCoordinator
             }
         }
 
-        var ownerId = !string.IsNullOrWhiteSpace(command.OwnerId)
-            ? command.OwnerId.Trim()
-            : "default-owner";
+        var ownerId = string.IsNullOrWhiteSpace(command.OwnerId)
+            ? OwnerId.Default.Value
+            : new OwnerId(command.OwnerId).Value;
 
         var targetDbName = _contextFactory.TargetDatabaseName;
 

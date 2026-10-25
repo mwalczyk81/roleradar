@@ -112,6 +112,14 @@ public static class RestoreCommand
             var contacts = summary.RestoredCounts.GetValueOrDefault(TrackingMongoOptions.ContactsCollectionName, 0);
             var searchRuns = summary.RestoredCounts.GetValueOrDefault(TrackingMongoOptions.SearchRunsCollectionName, 0);
 
+            var totalRestored = summary.RestoredCounts.Values.Sum();
+            if (totalRestored == 0)
+            {
+                Console.Error.WriteLine("Restore failed: Zero documents were restored.");
+                Console.Error.WriteLine($"Restored counts: {notes} notes, {revisions} revisions, {audits} audit entries, {companies} companies, {sources} career sources, {postings} postings, {signals} signals, {criteria} criteria, {applications} applications, {appEvents} application events, {contacts} contacts, {searchRuns} search runs.");
+                return 1;
+            }
+
             Console.WriteLine($"Restore completed: {summary.ArchivePath}");
             Console.WriteLine($"Restored counts: {notes} notes, {revisions} revisions, {audits} audit entries, {companies} companies, {sources} career sources, {postings} postings, {signals} signals, {criteria} criteria, {applications} applications, {appEvents} application events, {contacts} contacts, {searchRuns} search runs.");
             return 0;
