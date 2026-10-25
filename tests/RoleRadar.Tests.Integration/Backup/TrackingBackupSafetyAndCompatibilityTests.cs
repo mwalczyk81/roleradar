@@ -438,7 +438,7 @@ public sealed class TrackingBackupSafetyAndCompatibilityTests : IClassFixture<Ba
                 cliDllPath,
                 $"restore \"{tempBackup}\" --passphrase-env BACKUP_PW",
                 backupEnv);
-            Assert.Equal(0, rCode);
+            Assert.True(rCode == 0, $"Restore failed (code={rCode}): stdout={rOut}\nstderr={rErr}");
 
             // 7. Compare per-collection counts and content hashes before and after
             foreach (var colName in allCollections)

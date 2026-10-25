@@ -295,7 +295,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
                 if (isFirstChunk)
                 {
-                    TryExtractSourceDatabaseName(scratchPlaintext.AsSpan(0, plainLen), out extractedSourceDb);
+                    TryExtractSourceDatabaseName(scratchPlaintext.AsSpan(0, plainLen), _mongoOptions.DatabaseName, out extractedSourceDb);
                 }
 
                 isFirstChunk = false;
@@ -489,9 +489,11 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
         try
         {
-            var isMongoTools = string.Equals(_backupOptions.DumpCommand, "mongodump", StringComparison.OrdinalIgnoreCase) ||
-                               _backupOptions.DumpCommand.StartsWith("mongodump ", StringComparison.OrdinalIgnoreCase) ||
-                               File.Exists("/usr/local/bin/mongodump");
+            var isDocker = _backupOptions.DumpCommand.TrimStart().StartsWith("docker", StringComparison.OrdinalIgnoreCase);
+            var isMongoTools = !isDocker && (
+                string.Equals(_backupOptions.DumpCommand, "mongodump", StringComparison.OrdinalIgnoreCase) ||
+                _backupOptions.DumpCommand.StartsWith("mongodump ", StringComparison.OrdinalIgnoreCase) ||
+                File.Exists("/usr/local/bin/mongodump"));
 
             string cmdExe;
             string cmdArgs;
@@ -750,9 +752,11 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
         try
         {
-            var isMongoTools = string.Equals(_backupOptions.RestoreCommand, "mongorestore", StringComparison.OrdinalIgnoreCase) ||
-                               _backupOptions.RestoreCommand.StartsWith("mongorestore ", StringComparison.OrdinalIgnoreCase) ||
-                               File.Exists("/usr/local/bin/mongorestore");
+            var isDocker = _backupOptions.RestoreCommand.TrimStart().StartsWith("docker", StringComparison.OrdinalIgnoreCase);
+            var isMongoTools = !isDocker && (
+                string.Equals(_backupOptions.RestoreCommand, "mongorestore", StringComparison.OrdinalIgnoreCase) ||
+                _backupOptions.RestoreCommand.StartsWith("mongorestore ", StringComparison.OrdinalIgnoreCase) ||
+                File.Exists("/usr/local/bin/mongorestore"));
 
             string cmdExe;
             string cmdArgs;
@@ -765,7 +769,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                 cmdExe = "mongorestore";
                 var dropFlag = forceOverwrite ? "--drop " : string.Empty;
                 var nsArgs = isRemapped
-                    ? $"--nsFrom=\"{sourceDb}.*\" --nsTo=\"{_mongoOptions.DatabaseName}.*\""
+                    ? $"--nsInclude=\"{sourceDb}.*\" --nsFrom=\"{sourceDb}.*\" --nsTo=\"{_mongoOptions.DatabaseName}.*\""
                     : $"--nsInclude=\"{_mongoOptions.DatabaseName}.*\"";
                 cmdArgs = $"--config=\"{tempConfigFile}\" {dropFlag}{nsArgs} --archive --gzip";
             }
@@ -779,12 +783,12 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                         restoreCmdString = Regex.Replace(
                             restoreCmdString,
                             @"--nsInclude(=|\s+)""?[^""\s]+""?",
-                            $"--nsFrom=\"{sourceDb}.*\" --nsTo=\"{_mongoOptions.DatabaseName}.*\"",
+                            $"--nsInclude=\"{sourceDb}.*\" --nsFrom=\"{sourceDb}.*\" --nsTo=\"{_mongoOptions.DatabaseName}.*\"",
                             RegexOptions.IgnoreCase);
                     }
                     else
                     {
-                        restoreCmdString += $" --nsFrom=\"{sourceDb}.*\" --nsTo=\"{_mongoOptions.DatabaseName}.*\"";
+                        restoreCmdString += $" --nsInclude=\"{sourceDb}.*\" --nsFrom=\"{sourceDb}.*\" --nsTo=\"{_mongoOptions.DatabaseName}.*\"";
                     }
                 }
                 else
@@ -1007,6 +1011,9 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
     }
 
     internal static bool TryExtractSourceDatabaseName(ReadOnlySpan<byte> chunk, out string? sourceDb)
+        => TryExtractSourceDatabaseName(chunk, targetDatabaseName: null, out sourceDb);
+
+    internal static bool TryExtractSourceDatabaseName(ReadOnlySpan<byte> chunk, string? targetDatabaseName, out string? sourceDb)
     {
         sourceDb = null;
         if (chunk.Length < 4)
@@ -1021,7 +1028,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             {
                 using var ms = new MemoryStream(chunk.ToArray());
                 using var gzip = new GZipStream(ms, CompressionMode.Decompress);
-                var decompBuffer = new byte[65536];
+                var decompBuffer = new byte[262144];
                 var totalRead = 0;
                 while (totalRead < decompBuffer.Length)
                 {
@@ -1030,7 +1037,7 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
                     totalRead += read;
                 }
 
-                return TryScanDatabaseNameFromBson(decompBuffer.AsSpan(0, totalRead), out sourceDb);
+                return TryScanDatabaseNameFromBson(decompBuffer.AsSpan(0, totalRead), targetDatabaseName, out sourceDb);
             }
             catch
             {
@@ -1039,10 +1046,10 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
         }
 
         // 2. Uncompressed stream
-        return TryScanDatabaseNameFromBson(chunk, out sourceDb);
+        return TryScanDatabaseNameFromBson(chunk, targetDatabaseName, out sourceDb);
     }
 
-    private static bool TryScanDatabaseNameFromBson(ReadOnlySpan<byte> span, out string? sourceDb)
+    private static bool TryScanDatabaseNameFromBson(ReadOnlySpan<byte> span, string? targetDatabaseName, out string? sourceDb)
     {
         sourceDb = null;
         if (span.Length < 8)
@@ -1050,26 +1057,58 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
             return false;
         }
 
-        // In mongodump archive format, collection header BSON document contains element:
-        // byte 0x02 (String), "db\0", 4-byte int32 string length (including \0), UTF-8 string, \0.
+        var foundDatabases = new HashSet<string>(StringComparer.Ordinal);
         ReadOnlySpan<byte> dbElementPattern = [0x02, (byte)'d', (byte)'b', 0x00];
-        var idx = span.IndexOf(dbElementPattern);
-        if (idx >= 0 && idx + 8 <= span.Length)
+        var offset = 0;
+
+        while (offset + 8 <= span.Length)
         {
-            var strLen = BitConverter.ToInt32(span.Slice(idx + 4, 4));
-            if (strLen > 1 && idx + 8 + strLen <= span.Length)
+            var idx = span.Slice(offset).IndexOf(dbElementPattern);
+            if (idx < 0)
             {
-                var nameSpan = span.Slice(idx + 8, strLen - 1);
-                var candidate = Encoding.UTF8.GetString(nameSpan);
-                if (!string.IsNullOrWhiteSpace(candidate))
+                break;
+            }
+
+            var patternPos = offset + idx;
+            if (patternPos + 8 <= span.Length)
+            {
+                var strLen = BitConverter.ToInt32(span.Slice(patternPos + 4, 4));
+                if (strLen > 1 && strLen <= 128 && patternPos + 8 + strLen <= span.Length)
                 {
-                    sourceDb = candidate;
-                    return true;
+                    var nameSpan = span.Slice(patternPos + 8, strLen - 1);
+                    var candidate = Encoding.UTF8.GetString(nameSpan);
+                    if (!string.IsNullOrWhiteSpace(candidate) &&
+                        !candidate.Equals("admin", StringComparison.OrdinalIgnoreCase) &&
+                        !candidate.Equals("config", StringComparison.OrdinalIgnoreCase) &&
+                        !candidate.Equals("local", StringComparison.OrdinalIgnoreCase))
+                    {
+                        foundDatabases.Add(candidate);
+                    }
                 }
             }
+
+            offset = patternPos + 4;
         }
 
-        return false;
+        if (foundDatabases.Count == 0)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(targetDatabaseName) && foundDatabases.Contains(targetDatabaseName))
+        {
+            sourceDb = targetDatabaseName;
+            return true;
+        }
+
+        if (foundDatabases.Count == 1)
+        {
+            sourceDb = foundDatabases.First();
+            return true;
+        }
+
+        sourceDb = foundDatabases.First();
+        return true;
     }
 
     private static bool IsValidMongodumpArchive(byte[] chunk, int count)
