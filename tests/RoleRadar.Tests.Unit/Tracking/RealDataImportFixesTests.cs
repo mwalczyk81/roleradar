@@ -419,4 +419,237 @@ public sealed class RealDataImportFixesTests
             Directory.Delete(tempDir, true);
         }
     }
+
+    [Fact]
+    public async Task ImporterTextHygiene_ConvertsFormattingTagsToMarkdown_StripsOthers_MatchesCleanedTitle()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var postingsJson = """
+                {
+                    "role-1": {
+                        "company": "Acme Corp",
+                        "title": "<b>Staff</b> Software Engineer",
+                        "culture": "<strong>High</strong> trust<br>Collaborative",
+                        "note": "<i>Initial</i> screening review<!-- secret --><script>alert(1)</script>",
+                        "status": "scored",
+                        "added": "2026-05-01"
+                    }
+                }
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
+
+            var applicationsCsv = """
+                kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes
+                application,Acme Corp,Staff Software Engineer,,2026-05-02,false,,,,,unspecified,,,"<b>Applied</b> via portal<br>Follow up next week",,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "applications.csv"), applicationsCsv);
+
+            var inMemoryCtx = new PostingImportStepTests.InMemoryPostingContext();
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var parser = new Rfc4180CsvParser();
+            var postingsStep = new PostingsJsonStep(inMemoryCtx, criteriaStep);
+            var appsStep = new ApplicationsStep(parser, inMemoryCtx);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var postResult = await postingsStep.ExecuteAsync(context);
+            Assert.True(postResult.IsSuccess);
+
+            var appResult = await appsStep.ExecuteAsync(context);
+            Assert.True(appResult.IsSuccess);
+
+            Assert.Single(inMemoryCtx.SavedPostings);
+            var posting = inMemoryCtx.SavedPostings[0];
+
+            // Posting title is cleaned of HTML tags
+            Assert.Equal("Staff Software Engineer", posting.Title);
+
+            // Culture converted strong -> **, br -> \n
+            Assert.Equal("**High** trust\nCollaborative", posting.CultureSummary);
+
+            // Screening note was created with em -> * and script/comment stripped
+            Assert.Single(inMemoryCtx.SavedNotes);
+            Assert.Equal("*Initial* screening review", inMemoryCtx.SavedNotes[0].Body);
+
+            // Application matched posting by cleaned title!
+            Assert.Single(inMemoryCtx.SavedApplications);
+            var app = inMemoryCtx.SavedApplications[0];
+            Assert.Equal(posting.Id, app.PostingId);
+
+            // Event notes sanitized strong -> ** and br -> \n
+            Assert.Single(inMemoryCtx.SavedEvents);
+            var evt = inMemoryCtx.SavedEvents[0];
+            Assert.Contains("**Applied** via portal\nFollow up next week", evt.Notes);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task PostingsJsonParent_AppendsToExistingCompanyDescription_WhenUnder300Chars()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var existingCompany = Company.Create(
+                ownerId: TestOwnerId,
+                name: "Acme Corp",
+                status: CompanyStatus.Neutral,
+                description: "Enterprise cloud software");
+
+            var inMemoryCtx = new PostingImportStepTests.InMemoryPostingContext();
+            inMemoryCtx.SavedCompanies.Add(existingCompany);
+
+            var postingsJson = """
+                {
+                    "role-1": {
+                        "company": "Acme Corp",
+                        "title": "Principal Engineer",
+                        "parent": "Global Parent Industries",
+                        "status": "scored",
+                        "added": "2026-05-01"
+                    }
+                }
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
+
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var postingsStep = new PostingsJsonStep(inMemoryCtx, criteriaStep);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var postResult = await postingsStep.ExecuteAsync(context);
+            Assert.True(postResult.IsSuccess);
+
+            var company = inMemoryCtx.SavedCompanies.First(c => c.Name == "Acme Corp");
+            Assert.Equal("Enterprise cloud software; Global Parent Industries", company.Description);
+
+            // Audit entry for company update was appended
+            Assert.Contains(inMemoryCtx.AppendedAuditEntries, a =>
+                a.Operation == AuditOperation.ImportCompanyUpdate &&
+                a.EntityType == "company" &&
+                a.EntityId == company.Id);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task PostingsJsonParent_DropsAndCountsTruncation_WhenExceeds300Chars()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var initialDesc = new string('A', 280);
+            var existingCompany = Company.Create(
+                ownerId: TestOwnerId,
+                name: "Acme Corp",
+                status: CompanyStatus.Neutral,
+                description: initialDesc);
+
+            var inMemoryCtx = new PostingImportStepTests.InMemoryPostingContext();
+            inMemoryCtx.SavedCompanies.Add(existingCompany);
+
+            var longParent = new string('B', 50); // 280 + 2 + 50 = 332 > 300
+            var postingsJson = $$"""
+                {
+                    "role-1": {
+                        "company": "Acme Corp",
+                        "title": "Principal Engineer",
+                        "parent": "{{longParent}}",
+                        "status": "scored",
+                        "added": "2026-05-01"
+                    }
+                }
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
+
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var postingsStep = new PostingsJsonStep(inMemoryCtx, criteriaStep);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var postResult = await postingsStep.ExecuteAsync(context);
+            Assert.True(postResult.IsSuccess);
+
+            var company = inMemoryCtx.SavedCompanies.First(c => c.Name == "Acme Corp");
+            Assert.Equal(initialDesc, company.Description); // Dropped, description unchanged
+            Assert.Equal(1, context.Summary.FieldTruncations["company_description"]);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task PostingsJsonParent_Idempotent_DoesNotDuplicateParent_WhenAlreadyContained()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            var existingCompany = Company.Create(
+                ownerId: TestOwnerId,
+                name: "Acme Corp",
+                status: CompanyStatus.Neutral,
+                description: "Enterprise cloud software; Global Parent Industries");
+
+            var inMemoryCtx = new PostingImportStepTests.InMemoryPostingContext();
+            inMemoryCtx.SavedCompanies.Add(existingCompany);
+
+            var postingsJson = """
+                {
+                    "role-1": {
+                        "company": "Acme Corp",
+                        "title": "Principal Engineer",
+                        "parent": "Global Parent Industries",
+                        "status": "scored",
+                        "added": "2026-05-01"
+                    }
+                }
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
+
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var postingsStep = new PostingsJsonStep(inMemoryCtx, criteriaStep);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var postResult = await postingsStep.ExecuteAsync(context);
+            Assert.True(postResult.IsSuccess);
+
+            var company = inMemoryCtx.SavedCompanies.First(c => c.Name == "Acme Corp");
+            Assert.Equal("Enterprise cloud software; Global Parent Industries", company.Description);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
 }

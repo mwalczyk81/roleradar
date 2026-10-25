@@ -12,7 +12,7 @@ flowchart TD
     end
 
     subgraph HostApp["RoleRadar Local Host (net10.0)"]
-        McpServer["RoleRadar.Mcp.Stdio<br/>(6 Tools, Zero Delete Tools, stderr logging)"]
+        McpServer["RoleRadar.Mcp.Stdio<br/>(12 Tools, Zero Delete Tools, stderr logging)"]
         CliApp["RoleRadar.Cli<br/>(import, backup, restore, wipe, status)"]
         AppLayer["RoleRadar.Application<br/>(Audit, Logging, Transactions)"]
         InfraLayer["RoleRadar.Infrastructure<br/>(Geralt SecretStream, Mongo Drivers)"]
@@ -103,13 +103,13 @@ The compiled binary will be located at `./dist/mcp/RoleRadar.Mcp.Stdio.exe` (or 
 Register RoleRadar into Claude Code (the target path must be absolute because Claude Code launches MCP servers from arbitrary working directories):
 
 ```powershell
-claude mcp add roleradar -- dotnet C:/Users/<username>/source/repos/roleradar/dist/mcp/RoleRadar.Mcp.Stdio.dll
+claude mcp add roleradar -e ROLERADAR_MONGO_CONNECTION_STRING="mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true" -e ROLERADAR_MONGO_DATABASE="roleradar" -- dotnet C:/Users/<username>/source/repos/roleradar/dist/mcp/RoleRadar.Mcp.Stdio.dll
 ```
 
 Or using the published Windows executable directly:
 
 ```powershell
-claude mcp add roleradar -- C:/Users/<username>/source/repos/roleradar/dist/mcp/RoleRadar.Mcp.Stdio.exe
+claude mcp add roleradar -e ROLERADAR_MONGO_CONNECTION_STRING="mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true" -e ROLERADAR_MONGO_DATABASE="roleradar" -- C:/Users/<username>/source/repos/roleradar/dist/mcp/RoleRadar.Mcp.Stdio.exe
 ```
 
 ### Claude Desktop
@@ -138,6 +138,8 @@ Add RoleRadar to your Claude Desktop configuration (`%APPDATA%\Claude\claude_des
 To launch RoleRadar in headless agentic workflows or scheduled background automation, execute:
 
 ```powershell
+$env:ROLERADAR_MONGO_CONNECTION_STRING = "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"
+$env:ROLERADAR_MONGO_DATABASE = "roleradar"
 dotnet C:/Users/<username>/source/repos/roleradar/dist/mcp/RoleRadar.Mcp.Stdio.dll
 ```
 
@@ -147,16 +149,22 @@ Standard input/output will process JSON-RPC MCP messages, while diagnostic logs 
 
 ## MCP Tool Surface
 
-RoleRadar exposes exactly 6 high-level memory tools under a strict 8-tool ceiling with **zero hard-delete tools**:
+RoleRadar exposes exactly 12 high-level memory tools across notes and job search tracking with **zero hard-delete tools**:
 
 | Tool Name | Purpose |
 | :--- | :--- |
-| `note_create` | Create a new durable note with title, body, area, and tags. |
-| `note_get` | Retrieve a note by its identifier, including its active version token. |
-| `note_append` | Atomically append content to an existing note under optimistic concurrency control. |
-| `note_replace_section` | Replace or update a markdown section heading while creating an immutable `note_revision`. |
-| `note_search` | Search notes across title, body, and tags (excludes archived notes by default). |
-| `note_archive` | Mark a note as archived, preserving all content and revision history while hiding it from default search. |
+| `note_create` | Creates a durable markdown note with title, body, area label, tags, and provenance marker. |
+| `note_get` | Reads a single note by its unique id, including archived notes, returning character-paged body, pagination metadata, and version token. |
+| `note_append` | Atomically appends markdown text to the end of an existing note inside a snapshot transaction without requiring a version token. |
+| `note_replace_section` | Replaces the markdown content under a specific heading in an existing note under optimistic concurrency control, preserving prior body in revision history. |
+| `note_search` | Searches notes by plain text query across title, body, and tags, with optional filtering by area, tags, provenance, and archived status. |
+| `note_archive` | Archives a note under optimistic concurrency control, hiding it from default search while preserving all content and revision history. |
+| `company_record` | Creates a new company target with initial research status, or updates status and research metadata of an existing company. |
+| `posting_record` | Records a newly discovered job posting, deduping against company+title, canonical URL, and requisition ID. |
+| `posting_transition` | Evaluates and applies state transitions to an active posting under optimistic concurrency control, supporting screening out, closing, or advancing. |
+| `tracker_query` | Queries the job search pipeline across postings, applications, and companies with multi-field filtering, state filtering, and cursor pagination. |
+| `tracker_log` | Records operational screening criteria revisions and search run execution batches linked to report notes. |
+| `application_record` | Creates or updates a job application, appends timeline events, records resume variant pointers and desired salary, and supports atomic reopen-and-apply override for decided postings. |
 
 ---
 

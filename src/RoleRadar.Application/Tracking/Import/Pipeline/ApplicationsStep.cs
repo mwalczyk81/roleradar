@@ -78,7 +78,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
 
             foreach (var def in SourceFieldCatalog.ByFile["applications.csv"])
             {
-                var val = Decode(row[def.Field])?.Trim();
+                var val = TrackerImportTextSanitizer.SanitizePlainText(row[def.Field])?.Trim();
                 context.Summary.RecordFieldRead("applications.csv", def.Field, !string.IsNullOrWhiteSpace(val));
             }
 
@@ -158,8 +158,8 @@ public sealed class ApplicationsStep : ITrackerImportStep
                 }
 
                 // 2. Application branch validation
-                var rawCompany = Decode(row["company"])?.Trim();
-                var rawTitle = (Decode(row["title"]) ?? Decode(row["role"]))?.Trim();
+                var rawCompany = TrackerImportTextSanitizer.SanitizePlainText(row["company"])?.Trim();
+                var rawTitle = (TrackerImportTextSanitizer.SanitizePlainText(row["title"]) ?? TrackerImportTextSanitizer.SanitizePlainText(row["role"]))?.Trim();
                 if (string.IsNullOrWhiteSpace(rawCompany) || string.IsNullOrWhiteSpace(rawTitle))
                 {
                     context.Summary.Errors.Add(new TrackerImportRowError(
@@ -224,12 +224,12 @@ public sealed class ApplicationsStep : ITrackerImportStep
         CancellationToken cancellationToken)
     {
         _standaloneNoteOrdinal++;
-        var company = Decode(row["company"])?.Trim();
-        var title = (Decode(row["title"]) ?? Decode(row["role"]))?.Trim();
-        var appliedOn = (Decode(row["applied_on"]) ?? Decode(row["applied_date_md"]))?.Trim();
-        var raw = Decode(row["raw"])?.Trim();
-        var correctedNotes = Decode(row["corrected_notes"])?.Trim();
-        var notes = Decode(row["notes"])?.Trim();
+        var company = TrackerImportTextSanitizer.SanitizePlainText(row["company"])?.Trim();
+        var title = (TrackerImportTextSanitizer.SanitizePlainText(row["title"]) ?? TrackerImportTextSanitizer.SanitizePlainText(row["role"]))?.Trim();
+        var appliedOn = (TrackerImportTextSanitizer.SanitizePlainText(row["applied_on"]) ?? TrackerImportTextSanitizer.SanitizePlainText(row["applied_date_md"]))?.Trim();
+        var raw = TrackerImportTextSanitizer.SanitizeFreeText(row["raw"])?.Trim();
+        var correctedNotes = TrackerImportTextSanitizer.SanitizeFreeText(row["corrected_notes"])?.Trim();
+        var notes = TrackerImportTextSanitizer.SanitizeFreeText(row["notes"])?.Trim();
         var rawBody = !string.IsNullOrWhiteSpace(correctedNotes)
             ? correctedNotes
             : (!string.IsNullOrWhiteSpace(notes) ? notes : (!string.IsNullOrWhiteSpace(raw) ? raw : "Standalone note"));
@@ -302,11 +302,11 @@ public sealed class ApplicationsStep : ITrackerImportStep
         string? reviewFlags,
         CancellationToken cancellationToken)
     {
-        var rawCompanyName = Decode(row["company"])?.Trim();
-        var rawTitle = (Decode(row["title"]) ?? Decode(row["role"]))?.Trim();
-        var rawReq = (Decode(row["req"]) ?? Decode(row["req_id"]))?.Trim();
-        var appliedOn = (Decode(row["applied_on"]) ?? Decode(row["applied_date_md"]))?.Trim();
-        var rejectedStr = Decode(row["rejected"])?.Trim();
+        var rawCompanyName = TrackerImportTextSanitizer.SanitizePlainText(row["company"])?.Trim();
+        var rawTitle = (TrackerImportTextSanitizer.SanitizePlainText(row["title"]) ?? TrackerImportTextSanitizer.SanitizePlainText(row["role"]))?.Trim();
+        var rawReq = (TrackerImportTextSanitizer.SanitizePlainText(row["req"]) ?? TrackerImportTextSanitizer.SanitizePlainText(row["req_id"]))?.Trim();
+        var appliedOn = (TrackerImportTextSanitizer.SanitizePlainText(row["applied_on"]) ?? TrackerImportTextSanitizer.SanitizePlainText(row["applied_date_md"]))?.Trim();
+        var rejectedStr = TrackerImportTextSanitizer.SanitizePlainText(row["rejected"])?.Trim();
         var isRejected = false;
         if (!string.IsNullOrWhiteSpace(rejectedStr))
         {
@@ -324,14 +324,14 @@ public sealed class ApplicationsStep : ITrackerImportStep
                 context.Summary.RecordUnmappedValue("rejected", rejectedStr);
             }
         }
-        var rejectedDateMd = Decode(row["rejected_date_md"])?.Trim();
+        var rejectedDateMd = TrackerImportTextSanitizer.SanitizePlainText(row["rejected_date_md"])?.Trim();
 
         var companyName = TrackerImportFieldLimiter.LimitCompanyName(rawCompanyName, context.Summary);
         var title = TrackerImportFieldLimiter.LimitTitle(rawTitle, context.Summary) ?? "Role";
         var req = TrackerImportFieldLimiter.LimitRequisitionId(rawReq, context.Summary);
 
         // Also limit optional free-text inputs for referral, fit, resume_variant
-        var referralRaw = Decode(row["referral"])?.Trim();
+        var referralRaw = TrackerImportTextSanitizer.SanitizePlainText(row["referral"])?.Trim();
         TrackerImportFieldLimiter.LimitReferral(referralRaw, context.Summary);
         var isReferral = false;
         if (!string.IsNullOrWhiteSpace(referralRaw))
@@ -351,7 +351,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
             }
         }
 
-        var fitRaw = Decode(row["fit"])?.Trim();
+        var fitRaw = TrackerImportTextSanitizer.SanitizePlainText(row["fit"])?.Trim();
         TrackerImportFieldLimiter.LimitFit(fitRaw, context.Summary);
         decimal? fitScore = null;
         string? fitNoteText = null;
@@ -378,7 +378,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
             context.Summary.MappedToEventNotes++;
         }
 
-        var rvRaw = TrackerImportFieldLimiter.LimitResumeVariant(Decode(row["resume_variant"])?.Trim(), context.Summary);
+        var rvRaw = TrackerImportFieldLimiter.LimitResumeVariant(TrackerImportTextSanitizer.SanitizePlainText(row["resume_variant"])?.Trim(), context.Summary);
         ResumeVariant resumeVariant;
         string? resumeVariantNoteText = null;
         if (string.IsNullOrWhiteSpace(rvRaw))
@@ -399,7 +399,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
             context.Summary.ResumeVariantsDefaulted++;
         }
 
-        var rawSalary = Decode(row["desired_salary"])?.Trim();
+        var rawSalary = TrackerImportTextSanitizer.SanitizePlainText(row["desired_salary"])?.Trim();
         DesiredSalary? desiredSalary = null;
         string? unparseableSalaryNote = null;
         if (!string.IsNullOrWhiteSpace(rawSalary))
@@ -438,7 +438,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
                                reviewFlags.Contains("date_is_stated_not_submitted", StringComparison.OrdinalIgnoreCase);
 
         var statedFlagText = isDateStatedFlag ? "date_is_stated_not_submitted" : null;
-        var rawNotes = Decode(!string.IsNullOrWhiteSpace(row["corrected_notes"]) ? row["corrected_notes"]?.Trim() : row["raw"]?.Trim());
+        var rawNotes = TrackerImportTextSanitizer.SanitizeFreeText(!string.IsNullOrWhiteSpace(row["corrected_notes"]) ? row["corrected_notes"]?.Trim() : row["raw"]?.Trim());
         var combinedNotes = string.Join("; ", new[] { statedFlagText, fitNoteText, referralNoteText, unparseableSalaryNote, rawNotes, resumeVariantNoteText }.Where(s => !string.IsNullOrWhiteSpace(s)));
 
         var canonicalCompany = !string.IsNullOrWhiteSpace(companyName) && context.CompanyAliases.TryGetValue(companyName, out var alias)
@@ -802,9 +802,6 @@ public sealed class ApplicationsStep : ITrackerImportStep
 
         return Result<bool>.Success(true);
     }
-
-    private static string? Decode(string? value) =>
-        string.IsNullOrWhiteSpace(value) ? value : WebUtility.HtmlDecode(value);
 
     private static void TrackDateInference(TrackerImportContext context, ResolvedDateOutcome outcome)
     {
