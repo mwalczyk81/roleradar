@@ -10,8 +10,9 @@ Base URI: `/api/v1`
 
 ## 1. System Endpoints
 
-### `GET /health`
-- **Auth**: Anonymous (internal network probe)
+### `GET /health` and CLI `--healthcheck`
+- **Auth**: Anonymous (internal loopback binding `http://127.0.0.1:8080/health`)
+- **Self-Contained Probe**: Invoking `RoleRadar.Api --healthcheck` requests this internal endpoint and exits with code 0 on healthy, 1 on failure.
 - **Status**: 200 OK
 - **Response**: `{"status": "Healthy"}`
 

@@ -31,15 +31,17 @@ All design decisions adhere strictly to Constitution Principles I–IX, especial
 
 ## 2. Duende IdentityServer Community Edition & Fallback Strategy
 
-- **Decision**: Adopt `Duende.IdentityServer` version `8.0.10` under the free Community Edition license for personal projects, isolated strictly behind an architecture boundary.
-- **Rationale**:
-  - RoleRadar is a personal project by an individual maintainer and meets Community Edition criteria (<$1M annual gross revenue).
-  - No license key is required for development/testing; production keys (if applicable) are passed strictly via environment variables.
+- **Decision**: Adopt `Duende.IdentityServer` version `8.0.10` under the official Community Edition license for personal projects, strictly isolated behind an architecture boundary with a zero-public-distribution constraint.
+- **Official Terms & Eligibility (Retrieved October 25, 2026)**:
+  - Official Pages Cited: [Duende Software Community Edition](https://duendesoftware.com/products/communityedition) and [Duende License Terms](https://duendesoftware.com/license).
+  - Eligibility Thresholds: for-profit entities under $1M projected annual gross revenue AND under $3M capital access; non-profits under $1M budget; personal projects.
+  - License Key Policy: No license key is required for evaluation, development, test environments, or personal projects (a startup notice appears in logs); a license key is required via application for production use.
+  - Redistribution Exclusion: Software shipped to third parties (redistribution) requires a commercial redistribution license and is excluded from standard Community Edition terms.
+  - **Hard Packaging Constraint**: The `roleradar-identity` container image and any package bundling Duende MUST NEVER be published to a public registry (e.g. Docker Hub, GHCR) or attached to release assets; CI builds it strictly for tests and scanning.
+  - Terms must be re-verified prior to any public cloud hosting.
   - The fallback IdP is **OpenIddict** (Apache 2.0).
-  - An automated NetArchTest architecture test ensures that only `RoleRadar.Identity` references Duende packages.
-  - An IdP-agnostic end-to-end integration test suite executes strictly against standard discovery (`.well-known/openid-configuration`), standard token endpoints, and standard JWT claims.
-- **Alternatives Considered**:
-  - *Direct OpenIddict implementation*: Duende was selected for this milestone to provide mature out-of-the-box key management and PKCE workflows, while retaining zero-cost swapability.
+  - NetArchTest ensures that only `RoleRadar.Identity` references Duende packages.
+  - Provider-neutral end-to-end integration test suite executes strictly against standard discovery (`.well-known/openid-configuration`), standard token endpoints, and standard JWT claims.
 - **Governing ADR**: [ADR-0016](../../docs/adr/0016-duende-identityserver-community-edition-and-fallback.md).
 
 ---
@@ -86,11 +88,14 @@ All design decisions adhere strictly to Constitution Principles I–IX, especial
 
 ---
 
-## 6. Transport Security, Local Certificates, and Health Checks
+## 6. Transport Security, Local Certificates, and Self-Contained Health Probing
 
-- **Decision**: HTTPS everywhere via mounted development certificates, fixed issuer URL, internal health probe listener, and zero CORS.
+- **Decision**: HTTPS everywhere via mounted development certificates, fixed issuer URL, self-contained `--healthcheck` binary probe, and zero CORS.
 - **Rationale**:
   - Eliminates unencrypted token transmissions across all environments.
-  - Multi-binding Kestrel configuration binds HTTPS externally and an anonymous plain HTTP probe internally on `http://localhost:8080/health`.
+  - Chiseled runtime images (`mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled`) contain no shell and no curl utility.
+  - Self-contained probe mode: both services implement a `--healthcheck` CLI flag in `Program.cs` that performs an HTTP request to `http://127.0.0.1:8080/health` and exits 0 on success, 1 on failure.
+  - Exec-form healthchecks in Dockerfile and Compose: `CMD ["/app/RoleRadar.Identity", "--healthcheck"]`.
+  - Launched-host test verifies containers report healthy under supported read-only mode (`docker run --read-only`).
   - CORS is completely disabled (rejected) as the API is strictly called server-to-server.
 - **Governing ADR**: [ADR-0020](../../docs/adr/0020-https-transport-and-local-compose-certificates.md).

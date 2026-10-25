@@ -60,9 +60,8 @@ docker compose -f deploy/docker-compose.apps.yml up -d
 
 Verify service health:
 ```powershell
-# Probe API internal health endpoint
-curl -k https://localhost:5002/health
-# Returns: {"status":"Healthy"}
+# Verify container health status reported by internal exec-form --healthcheck probe
+docker compose -f deploy/docker-compose.apps.yml ps
 
 # Probe Identity discovery endpoint
 curl -k https://localhost:5001/.well-known/openid-configuration

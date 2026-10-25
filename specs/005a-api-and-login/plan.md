@@ -17,6 +17,14 @@ Key architectural deliverables:
    - 15-minute account lockout after 5 failed attempts; ASP.NET Core 10 rate limiting on login and token endpoints.
    - Token lifetimes: 10m access tokens, 30d rotating refresh tokens with reuse detection, 5m client credentials, 60s authorization codes.
    - Identity store is intentionally excluded from RoleRadar backups (ADR-0015).
+   - **Duende Community Edition Compliance & Packaging Constraint (ADR-0016)**:
+     - Terms cited from official pages retrieved on October 25, 2026: [Community Edition](https://duendesoftware.com/products/communityedition) and [License Terms](https://duendesoftware.com/license).
+     - Eligibility: for-profit under $1M projected annual gross revenue and under $3M capital access; non-profits under $1M budget; personal projects.
+     - No license key required for evaluation, development, test environments, or personal projects (an informational startup notice is emitted).
+     - A license key is required via an application for production use.
+     - Redistribution is excluded: "software you ship to third parties" requires a commercial redistribution license.
+     - **Hard Packaging Constraint**: The `roleradar-identity` container image and any package bundling Duende binaries **MUST NEVER be published to a public registry (e.g. Docker Hub, GHCR) or attached to public release assets**; CI builds the image strictly for tests and vulnerability scanning and discards it.
+     - The maintainer will verify licensing terms again prior to any public cloud hosting.
 2. **Strict Token Validation Resource Server (`RoleRadar.Api`)**:
    - Plain OIDC resource server using `Microsoft.AspNetCore.Authentication.JwtBearer` 10.0.14 (zero Duende types).
    - Validates tokens via standard OIDC discovery, exact issuer matching, exact audience matching (`roleradar.api`), algorithm allowlist (RS256, ES256), and small clock skew.
@@ -32,11 +40,13 @@ Key architectural deliverables:
    - Built-in `Microsoft.AspNetCore.OpenApi` 10.0.14 + `Microsoft.Extensions.ApiDescription.Server` 10.0.14 generating `contracts/openapi/roleradar-api.json` with explicit scalar types for all parameters and properties.
    - Committed contract snapshot test in `RoleRadar.Tests.Contract` fails on unreviewed schema drift.
    - Typed TypeScript client generated via `openapi-typescript` for Feature 005b.
-5. **Container Packaging & HTTPS Everywhere**:
-   - Hardened chiseled container images for both services following Feature 003 conventions (non-root UID, read-only rootfs, tmpfs `/tmp`, digest-pinned bases).
+5. **Container Packaging, HTTPS Everywhere & Self-Contained Health Probing (ADR-0020)**:
+   - Hardened chiseled container images (`mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled`) following Feature 003 conventions (non-root UID, read-only rootfs, tmpfs `/tmp`, digest-pinned bases).
    - HTTPS enforced everywhere via mounted local development certificate (`/https/cert.pfx`).
-   - Internal anonymous health check probe (`http://localhost:8080/health`).
-6. **IdP-Agnostic Standard OIDC Test Suite**:
+   - Because chiseled images have no shell and no curl utility, each service implements a **self-contained probe mode** via a `--healthcheck` CLI flag in `Program.cs` that requests `http://127.0.0.1:8080/health` and exits 0 on success, 1 on failure.
+   - Exec-form healthchecks in Dockerfile and Compose (`CMD ["/app/RoleRadar.Identity", "--healthcheck"]` and `CMD ["/app/RoleRadar.Api", "--healthcheck"]`).
+   - Launched-host test asserts the container reports `healthy` under the supported read-only run mode (`docker run --read-only`).
+6. **Provider-Neutral Standard OIDC Test Suite**:
    - End-to-end integration test suite exercising discovery, token issuance, and API operations using strictly standard OIDC claims against `IsolatedContainerMongoFixture` and an ephemeral test identity host; dev Mongo is never touched.
 
 ---
@@ -60,10 +70,12 @@ Key architectural deliverables:
 - Domain Store: MongoDB 8.0.34 replica set (unchanged from ADR-0001 / ADR-0008).
 - Identity Operational Store: SQLite file volume (`/data/identity/identity.db`) excluded from domain backups.
 
-**Testing**:
-- xUnit v3 across existing test projects: `RoleRadar.Tests.Unit`, `RoleRadar.Tests.Architecture`, `RoleRadar.Tests.Contract`, `RoleRadar.Tests.Integration`.
-- Ephemeral MongoDB via `IsolatedContainerMongoFixture`.
-- Ephemeral test identity host for standard OIDC integration testing.
+**Testing Architecture (No New Test Projects)**:
+- **Zero new test projects are added**. All test coverage is distributed across the existing four test projects:
+  1. `tests/RoleRadar.Tests.Unit`: Unit tests for token validation logic, owner resolution mapping, DTO validation, CLI create-owner interactive parsing, and lockout/rate-limiting calculations.
+  2. `tests/RoleRadar.Tests.Architecture`: Architecture tests enforcing inward dependencies, verifying that only `RoleRadar.Identity` references Duende, ensuring zero MongoDB driver types in `RoleRadar.Api`, and confirming zero hardcoded owner string literals outside `Domain/Common/OwnerId.cs`.
+  3. `tests/RoleRadar.Tests.Contract`: Contract tests for every REST endpoint (status codes, error envelopes, bounded pagination, 409 concurrency conflicts, omitted company fields), the committed OpenAPI specification snapshot diff test, and launched-host container `--healthcheck` readiness tests.
+  4. `tests/RoleRadar.Tests.Integration`: End-to-end tests exercising the provider-neutral OIDC authentication flow against an ephemeral test identity host and `IsolatedContainerMongoFixture` (never touching dev Mongo), validating API vs. MCP data visibility parity and audit entry creation with actor `api-user`.
 
 **Target Platform**: Linux (`linux/amd64` and `linux/arm64`), Windows (`x86_64`), macOS (`arm64`).
 
@@ -81,6 +93,7 @@ Key architectural deliverables:
 - Strict architecture tests enforcing project references.
 - Contacts endpoints are strictly forbidden (CLI-only).
 - Zero hard-delete endpoints.
+- Zero public distribution of the `roleradar-identity` container image or packages bundling Duende.
 
 ---
 
@@ -91,7 +104,7 @@ Key architectural deliverables:
 | Principle | Requirement | Status | Architecture Justification |
 | :--- | :--- | :---: | :--- |
 | **I. Privacy First** | No real job/personal data in repo, fixtures, logs, or image layers. Denylist check. | **PASS** | Fictional fixtures only. Secrets supplied via environment or mounted files. CLI interactive setup reads password with masking and renders QR code once to terminal. Denylist hook verified on all new files. |
-| **II. Test-First Development** | Tests written before implementation. Ephemeral Testcontainers. Minimum coverage gate (>=85%). | **PASS** | Tests in `RoleRadar.Tests.Integration` use `IsolatedContainerMongoFixture` and ephemeral test identity host; dev Mongo never touched. Domain+Application coverage gate (>=85%) strictly maintained. |
+| **II. Test-First Development** | Tests written before implementation. Ephemeral Testcontainers. Minimum coverage gate (>=85%). | **PASS** | Tests in `RoleRadar.Tests.Integration` use `IsolatedContainerMongoFixture` and ephemeral test identity host; dev Mongo never touched. Domain+Application coverage gate (>=85%) strictly maintained across existing four test projects. |
 | **III. Test-Enforced Layering** | Strict inward dependencies. Command handlers wrapped in transaction & audit decorators. | **PASS** | Endpoints delegate directly to `Application` handlers. Architecture tests verify: (1) `RoleRadar.Api` depends only on `Application` and `Domain`; (2) no MongoDB driver types in `RoleRadar.Api`; (3) all command handlers wrapped by transaction & audit decorators. |
 | **IV. Named Seams Only** | Aggregate-level repositories, plain command/query handlers, typed failure results. IdP seam. | **PASS** | NetArchTest verifies ONLY `RoleRadar.Identity` references Duende packages. `RoleRadar.Api` is a plain OIDC resource server using standard `JwtBearer`. Switching IdP touches 0 lines of Api, Domain, or Application. |
 | **V. Agent Safety & Auditability** | No hard delete endpoints. Untrusted text treated as data. Append-only audit logging. | **PASS** | Zero hard-delete endpoints in API. Posting/note text returned as plain JSON strings. Every write records an append-only audit entry with actor `api-user` and identical MCP tool operation names. |
@@ -149,7 +162,7 @@ src/
 │   │   └── Login.cshtml / Login.cshtml.cs
 │   ├── Services/
 │   │   └── TotpAuthenticationService.cs
-│   └── Program.cs
+│   └── Program.cs                 # Supports `--healthcheck` self-contained probe
 └── RoleRadar.Api/                 # NEW: Plain OIDC REST resource server
     ├── Authentication/
     │   ├── ApiOwnerIdProvider.cs
@@ -164,18 +177,18 @@ src/
     ├── Envelopes/
     │   ├── PagedResult.cs
     │   └── ErrorEnvelope.cs
-    └── Program.cs
+    └── Program.cs                 # Supports `--healthcheck` self-contained probe
 
-tests/
+tests/ (Zero new test projects; tests added to existing four projects)
 ├── RoleRadar.Tests.Unit/          # Token validation logic, owner mapping, DTO tests
 ├── RoleRadar.Tests.Architecture/  # Project dependencies, Duende seam, zero Mongo in Api
-├── RoleRadar.Tests.Contract/      # Endpoint contracts, 409 conflicts, OpenAPI snapshot test
+├── RoleRadar.Tests.Contract/      # Endpoint contracts, 409 conflicts, OpenAPI snapshot, healthcheck probe tests
 └── RoleRadar.Tests.Integration/   # Testcontainers Mongo + test IdP end-to-end suite
 
 deploy/
-├── Dockerfile.identity            # Hardened chiseled identity host image
-├── Dockerfile.api                 # Hardened chiseled REST API image
-└── docker-compose.apps.yml        # Compose overlay adding identity and api services
+├── Dockerfile.identity            # Hardened chiseled identity host image with exec-form healthcheck
+├── Dockerfile.api                 # Hardened chiseled REST API image with exec-form healthcheck
+└── docker-compose.apps.yml        # Compose overlay adding identity and api services with exec healthchecks
 ```
 
 ---
@@ -189,7 +202,7 @@ The following six ADRs govern Feature 005a implementation:
 3. [ADR-0017: Single-Owner Credential Handling and Authentication Security Controls](../../docs/adr/0017-owner-credential-and-security-controls.md)
 4. [ADR-0018: REST API Style, Error Envelope, Paging, and Owner Mapping](../../docs/adr/0018-rest-api-style-and-owner-mapping.md)
 5. [ADR-0019: OpenAPI Contract Generation, Committed Snapshot Verification, and Typed Client Generation](../../docs/adr/0019-openapi-generation-and-typed-client.md)
-6. [ADR-0020: Transport Security, Local Compose Certificates, and Internal Health Probing](../../docs/adr/0020-https-transport-and-local-compose-certificates.md)
+6. [ADR-0020: Transport Security, Local Compose Certificates, and Self-Contained Health Probing](../../docs/adr/0020-https-transport-and-local-compose-certificates.md)
 
 ---
 

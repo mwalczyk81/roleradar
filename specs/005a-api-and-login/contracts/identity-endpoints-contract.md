@@ -26,6 +26,12 @@ The identity host (`RoleRadar.Identity`) exposes standard OpenID Connect and OAu
 - **Auth**: Anonymous
 - **Response**: Standard JWKS JSON object containing `keys` array with `kty`, `use: "sig"`, `kid`, `alg`, and key modulus/exponent.
 
+### `GET /health` and CLI `--healthcheck`
+- **Auth**: Anonymous (internal loopback binding `http://127.0.0.1:8080/health`)
+- **Self-Contained Probe**: Invoking `RoleRadar.Identity --healthcheck` requests this internal endpoint and exits with code 0 on healthy, 1 on failure.
+- **Status**: 200 OK
+- **Response**: `{"status": "Healthy"}`
+
 ---
 
 ## 2. Interactive Authentication Endpoints
