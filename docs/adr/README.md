@@ -18,3 +18,9 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0012](./0012-azure-container-runtime-target.md) | Azure Container Runtime Target — Container Apps vs. AKS | Proposed | `003-linux-container-readiness` |
 | [ADR-0013](./0013-tracker-import-dry-run-scratch-database.md) | Tracker Import Dry-Run Mechanism — Ephemeral Scratch Database vs. Outer Rolled-Back Transaction | Accepted | `004-tracker-import` |
 | [ADR-0014](./0014-csv-parsing-strategy.md) | CSV Parsing Strategy — Hand-Rolled RFC 4180 Parser vs. External Library | Accepted | `004-tracker-import` |
+| [ADR-0015](./0015-identity-operational-store-selection.md) | Identity Operational Store Selection — SQLite File Volume vs. PostgreSQL Container | Accepted | `005a-api-and-login` |
+| [ADR-0016](./0016-duende-identityserver-community-edition-and-fallback.md) | Duende IdentityServer Community Edition Licensing and IdP Fallback Strategy | Accepted | `005a-api-and-login` |
+| [ADR-0017](./0017-owner-credential-and-security-controls.md) | Single-Owner Credential Handling and Authentication Security Controls | Accepted | `005a-api-and-login` |
+| [ADR-0018](./0018-rest-api-style-and-owner-mapping.md) | REST API Style, Error Envelope, Paging, and Owner Mapping | Accepted | `005a-api-and-login` |
+| [ADR-0019](./0019-openapi-generation-and-typed-client.md) | OpenAPI Contract Generation, Committed Snapshot Verification, and Typed Client Generation | Accepted | `005a-api-and-login` |
+| [ADR-0020](./0020-https-transport-and-local-compose-certificates.md) | Transport Security, Local Compose Certificates, and Internal Health Probing | Accepted | `005a-api-and-login` |

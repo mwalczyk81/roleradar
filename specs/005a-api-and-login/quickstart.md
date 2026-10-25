@@ -1,0 +1,140 @@
+# Quickstart Validation Guide: 005a REST API and Duende Identity Host
+
+**Feature**: `005a-api-and-login` | **Date**: 2026-10-25
+
+This guide provides step-by-step instructions for provisioning the single owner account, exporting the local HTTPS certificate, launching the services in Docker Compose, and verifying authenticated API access.
+
+---
+
+## 1. Prerequisites
+
+1. .NET 10 SDK (`10.0.402` pinned in `global.json`).
+2. Docker Engine & Docker Compose.
+3. An RFC 6238 TOTP authenticator application (such as a mobile or desktop authenticator app).
+
+---
+
+## 2. Step 1: Export Local Development HTTPS Certificate
+
+Because both the identity host and the REST API enforce HTTPS across all environments, export a locally-trusted development certificate:
+
+```powershell
+# Create certificate directory if not present
+New-Item -ItemType Directory -Force -Path "./deploy/certs"
+
+# Export trusted dev certificate
+dotnet dev-certs https -ep "./deploy/certs/dev-cert.pfx" -p "DevCertPassword123!" --trust
+```
+
+---
+
+## 3. Step 2: Provision Single Owner Account via CLI
+
+Run the CLI command to initialize the identity operational datastore and enroll the single owner with password + TOTP 2FA:
+
+```powershell
+dotnet run --project src/RoleRadar.Cli -- identity create-owner
+```
+
+**Interactive Prompts**:
+1. Enter username: `matt`
+2. Enter password (input hidden): `[SecurePassword123!]`
+3. Confirm password: `[SecurePassword123!]`
+4. The terminal renders an ASCII QR code alongside the raw Base32 secret string.
+5. Scan the QR code with your authenticator app.
+6. Enter the 6-digit TOTP code displayed in your app to verify setup: `123456`
+7. Confirmation message: `[OK] Owner account 'matt' successfully created with TOTP two-factor authentication.`
+
+> [!NOTE]
+> **Backup Policy Note**: The identity store (`/data/identity/identity.db`) is intentionally excluded from RoleRadar database backups. Losing the identity file only invalidates active sessions; domain job-search data in MongoDB remains completely unaffected, and you can re-create the owner account at any time using this command.
+
+---
+
+## 4. Step 3: Launch Services via Docker Compose
+
+Start MongoDB, the Duende Identity host, and the REST API:
+
+```powershell
+docker compose -f deploy/docker-compose.apps.yml up -d
+```
+
+Verify service health:
+```powershell
+# Probe API internal health endpoint
+curl -k https://localhost:5002/health
+# Returns: {"status":"Healthy"}
+
+# Probe Identity discovery endpoint
+curl -k https://localhost:5001/.well-known/openid-configuration
+# Returns: OIDC discovery JSON
+```
+
+---
+
+## 5. Step 4: Obtain Access Token via Client Credentials
+
+To quickly test headless API access:
+
+```powershell
+$tokenResponse = Invoke-RestMethod -Uri "https://localhost:5001/connect/token" `
+    -Method Post `
+    -SkipCertificateCheck `
+    -Body @{
+        grant_type    = "client_credentials"
+        client_id     = "roleradar-headless"
+        client_secret = "HeadlessClientSecret123!"
+        scope         = "roleradar.api.read"
+    }
+
+$accessToken = $tokenResponse.access_token
+```
+
+---
+
+## 6. Step 5: Execute Authenticated REST API Query
+
+Query job postings via the REST API using the bearer token:
+
+```powershell
+$headers = @{
+    Authorization = "Bearer $accessToken"
+}
+
+$postings = Invoke-RestMethod -Uri "https://localhost:5002/api/v1/postings?limit=10" `
+    -Headers $headers `
+    -SkipCertificateCheck
+
+Write-Host "Total postings visible through API: $($postings.totalCount)"
+```
+
+**Expected Outcome**:
+- Total count matches the number of postings stored in MongoDB for `local-owner` (e.g. 232 postings if populated from 004 import).
+- Data matches MCP tool query results (`tracker_query`).
+
+---
+
+## 7. Step 6: Verify Concurrency Conflict Detection (HTTP 409)
+
+Attempt to transition a posting using a stale version token:
+
+```powershell
+$postingId = $postings.items[0].id
+
+try {
+    Invoke-RestMethod -Uri "https://localhost:5002/api/v1/postings/$postingId/transition" `
+        -Method Post `
+        -Headers $headers `
+        -SkipCertificateCheck `
+        -ContentType "application/json" `
+        -Body (@{
+            toDisposition = "interviewing"
+            reason        = "Test transition"
+            versionToken  = "stale-version-token-12345"
+        } | ConvertTo-Json)
+} catch {
+    $response = $_.Exception.Response
+    Write-Host "Expected HTTP Status: $($response.StatusCode.value__)" # 409
+}
+```
+
+**Expected Outcome**: Returns HTTP 409 Conflict with `errorCode: "concurrency_conflict"`.
