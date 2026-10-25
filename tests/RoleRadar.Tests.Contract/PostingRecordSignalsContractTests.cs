@@ -360,7 +360,7 @@ public sealed class PostingRecordSignalsContractTests : IAsyncLifetime
     [InlineData("posting_record", "signals", "[123]", "Invalid argument for 'signals': expected array of signal strings or objects.")]
     [InlineData("note_create", "tags", "\"single-string\"", "Invalid argument for 'tags': expected array of strings.")]
     [InlineData("note_get", "id", "\"not-a-uuid\"", "Invalid argument for 'id': expected UUID string.")]
-    [InlineData("application_record", "overrideDecided", "\"true\"", "Invalid argument for 'overrideDecided': expected boolean.")]
+    [InlineData("application_record", "overrideDecided", "\"not-a-bool\"", "Invalid argument for 'overrideDecided': expected boolean.")]
     public async Task FilterPipeline_WithMisshapenArgument_ReturnsValidationError(
         string toolName,
         string paramName,

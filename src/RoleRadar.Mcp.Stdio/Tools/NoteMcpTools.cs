@@ -53,7 +53,7 @@ public sealed class NoteMcpTools
     public async Task<string> NoteCreateAsync(
         [Description("Non-empty title of the note (1..300 characters after trimming).")] string title,
         [Description("Markdown body (at most 8 MiB / 8,388,608 bytes of UTF-8).")] string body,
-        [Description("Area label (1..64 characters after trimming; e.g., 'criteria', 'runbook', 'preferences', 'general').")] string area,
+        [Description("String area label (1..64 characters after trimming; e.g. 'criteria', 'runbook', 'preferences', 'general').")] string area,
         [Description("Optional list of tag labels (at most 32 tags, each 1..64 characters after trimming).")] string[]? tags,
         [Description("One of 'stated', 'researched', or 'inferred'.")] string provenanceKind,
         [Description("ISO date 'YYYY-MM-DD'.")] string provenanceDate,
@@ -103,7 +103,7 @@ public sealed class NoteMcpTools
     [McpServerTool(Name = "note_replace_section"), Description("Replaces the markdown content under a specific heading in an existing note (newSectionBody <= 8 MiB UTF-8 and resulting note body <= 8 MiB UTF-8). Requires the current versionToken and saves the full prior body in revision history.")]
     public async Task<string> NoteReplaceSectionAsync(
         [Description("Unique identifier of the note.")] Guid id,
-        [Description("Heading title or heading path to replace (e.g., '## Compensation' or 'Compensation').")] string heading,
+        [Description("String heading title or heading path to replace (e.g. '## Compensation' or 'Compensation').")] string heading,
         [Description("Replacement markdown content for that section (at most 8 MiB / 8,388,608 bytes of UTF-8; resulting note body must also be at most 8 MiB of UTF-8).")] string newSectionBody,
         [Description("Current concurrency versionToken of the note.")] Guid versionToken,
         CancellationToken cancellationToken = default)
@@ -121,7 +121,7 @@ public sealed class NoteMcpTools
 
     [McpServerTool(Name = "note_search"), Description("Searches notes by case-insensitive text query (supporting stemmed whole words and quoted phrases), tag filter, and area label. Multi-word queries rank notes by relevance rather than requiring every term; quoted phrases match exactly; prefix matching is not supported. Excludes archived notes by default.")]
     public async Task<string> NoteSearchAsync(
-        [Description("Free-text search query. Multi-word queries rank notes by relevance rather than requiring every term; quoted phrases (e.g. '\"staff engineer\"') match as exact phrases; prefix matching is not supported.")] string? query = null,
+        [Description("String free-text search query. Multi-word queries rank notes by relevance rather than requiring every term; quoted phrases (e.g. '\"staff engineer\"') match as exact phrases; prefix matching is not supported.")] string? query = null,
         [Description("Tag filters combined with logical AND.")] string[]? tags = null,
         [Description("Area label filter combined with logical AND.")] string? area = null,
         [Description("Whether to include archived notes (default false).")] bool includeArchived = false,
