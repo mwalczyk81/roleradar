@@ -56,6 +56,7 @@ public sealed class TrackerImportSummary
     public int ApplicationsCreated { get; set; }
     public int ApplicationsUnchanged { get; set; }
     public int StandaloneNotesCreated { get; set; }
+    public int ScreeningNotesCreated { get; set; }
     public int CriteriaCreated { get; set; }
     public int SignalsCreated { get; set; }
     public int MappedToEventNotes { get; set; }
@@ -129,11 +130,39 @@ public sealed class TrackerImportSummary
 
     public Dictionary<string, int> DispositionHistogram { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+    public Dictionary<string, Dictionary<string, int>> SourceFieldNonEmptyCounts { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public void RecordFieldRead(string fileName, string fieldName, bool isNonEmpty)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fileName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(fieldName);
+
+        if (!SourceFieldNonEmptyCounts.TryGetValue(fileName, out var fieldCounts))
+        {
+            fieldCounts = new(StringComparer.OrdinalIgnoreCase);
+            SourceFieldNonEmptyCounts[fileName] = fieldCounts;
+        }
+
+        fieldCounts.TryGetValue(fieldName, out var currentCount);
+        fieldCounts[fieldName] = isNonEmpty ? currentCount + 1 : currentCount;
+    }
+
+    public int GetSourceFieldNonEmptyCount(string fileName, string fieldName)
+    {
+        if (SourceFieldNonEmptyCounts.TryGetValue(fileName, out var fieldCounts) &&
+            fieldCounts.TryGetValue(fieldName, out var count))
+        {
+            return count;
+        }
+        return 0;
+    }
+
     public bool IsIdempotentNoOp =>
         CompaniesCreated == 0 &&
         PostingsCreated == 0 &&
         ApplicationsCreated == 0 &&
         StandaloneNotesCreated == 0 &&
+        ScreeningNotesCreated == 0 &&
         CriteriaCreated == 0 &&
         SignalsCreated == 0 &&
         Errors.Count == 0;

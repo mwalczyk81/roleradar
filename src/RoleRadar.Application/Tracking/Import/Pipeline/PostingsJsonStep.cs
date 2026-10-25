@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Domain.Audit;
 using RoleRadar.Domain.Common;
+using RoleRadar.Domain.Notes;
 using RoleRadar.Domain.Tracking;
 
 namespace RoleRadar.Application.Tracking.Import.Pipeline;
@@ -99,6 +100,23 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                 cancellationToken.ThrowIfCancellationRequested();
                 entryOrdinal++;
                 recon.RecordRead();
+
+                foreach (var def in SourceFieldCatalog.ByFile["postings.json"])
+                {
+                    var isNonEmpty = false;
+                    if (element.TryGetProperty(def.Field, out var prop) && prop.ValueKind != JsonValueKind.Null && prop.ValueKind != JsonValueKind.Undefined)
+                    {
+                        if (prop.ValueKind == JsonValueKind.String)
+                        {
+                            isNonEmpty = !string.IsNullOrWhiteSpace(prop.GetString());
+                        }
+                        else if (prop.ValueKind is JsonValueKind.True or JsonValueKind.False or JsonValueKind.Number)
+                        {
+                            isNonEmpty = true;
+                        }
+                    }
+                    context.Summary.RecordFieldRead("postings.json", def.Field, isNonEmpty);
+                }
 
                 if (element.ValueKind != JsonValueKind.Object)
                 {
@@ -259,12 +277,14 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                     var autoCreatedCompany = false;
                     var isNewlyCreated = false;
                     var signalsCreatedInRow = 0;
+                    var notesCreatedInRow = 0;
                     Company? newCompany = null;
                     Posting? newPosting = null;
 
                     var rowResult = await _context.ExecuteInTransactionAsync(async (txCtx, ct) =>
                     {
                         signalsCreatedInRow = 0;
+                        notesCreatedInRow = 0;
                         Company? resolvedCompany = null;
                         if (!context.CanonicalCompanies.TryGetValue(canonicalName, out resolvedCompany))
                         {
@@ -374,6 +394,51 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                         }
                         else
                         {
+                            Guid? screeningNoteId = null;
+                            if (!string.IsNullOrWhiteSpace(rawNote) && resolvedCompany is not null)
+                            {
+                                var noteTitle = TrackerImportFieldLimiter.LimitNoteTitle($"Assessment: {canonicalName} - {title}", context.Summary)
+                                    ?? $"Assessment: {canonicalName} - {title}";
+                                var noteBody = TrackerImportFieldLimiter.LimitNoteBody(rawNote, context.Summary) ?? string.Empty;
+
+                                var existingNoteRes = await txCtx.GetNoteIdByTitleAndAreaAsync(context.OwnerId, noteTitle, "job-search", ct);
+                                if (existingNoteRes.IsSuccess && existingNoteRes.Value.HasValue)
+                                {
+                                    screeningNoteId = existingNoteRes.Value.Value;
+                                }
+                                else
+                                {
+                                    var noteDateStr = dateOutcome.ResolvedDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                                    var note = Note.Create(
+                                        ownerId: context.OwnerId,
+                                        title: noteTitle,
+                                        body: noteBody,
+                                        tags: ["imported"],
+                                        area: "job-search",
+                                        provenance: new ProvenanceMarker(RoleRadar.Domain.Notes.ProvenanceKind.Stated, noteDateStr, null),
+                                        createdAtUtc: dateOutcome.ResolvedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc));
+
+                                    var saveNote = await txCtx.UpsertNoteAsync(note, ct);
+                                    if (!saveNote.IsSuccess)
+                                    {
+                                        return Result<bool>.Failure(saveNote.Error ?? new ResultError(ErrorCode.ValidationError, "Failed to save screening note"));
+                                    }
+
+                                    var noteAudit = AuditLogEntry.CreateForImportCreate(
+                                        ownerId: context.OwnerId,
+                                        actor: ImportActor,
+                                        targetNoteId: note.Id,
+                                        resultingVersionToken: note.VersionToken,
+                                        resolvedDefaultDate: defaultDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                                        occurredAtUtc: DateTime.UtcNow,
+                                        afterSummary: AuditContentSummary.FromNote(note));
+                                    await txCtx.AppendAuditEntryAsync(noteAudit, ct);
+
+                                    screeningNoteId = note.Id;
+                                    notesCreatedInRow++;
+                                }
+                            }
+
                             var posting = Posting.Create(
                                 ownerId: context.OwnerId,
                                 companyId: resolvedCompany?.Id ?? Guid.NewGuid(),
@@ -390,6 +455,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                                 cultureLevel: cultureLevel,
                                 cultureSummary: cultureSummary,
                                 disposition: PostingDisposition.Scored,
+                                screeningNoteId: screeningNoteId,
                                 now: dateOutcome.ResolvedDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc),
                                 compHighPriority: compHigh);
 
@@ -414,6 +480,11 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                             {
                                 changedFields.Add("note");
                                 afterDetails["note"] = rawNote;
+                            }
+                            if (screeningNoteId.HasValue)
+                            {
+                                changedFields.Add("screening_note_id");
+                                afterDetails["screening_note_id"] = screeningNoteId.Value;
                             }
 
                             var auditP = AuditLogEntry.CreateForTracking(
@@ -505,6 +576,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
                     }
 
                     context.Summary.SignalsCreated += signalsCreatedInRow;
+                    context.Summary.ScreeningNotesCreated += notesCreatedInRow;
 
                     if (autoCreatedCompany && newCompany is not null)
                     {
@@ -515,14 +587,7 @@ public sealed class PostingsJsonStep : ITrackerImportStep
 
                     if (newPosting is not null)
                     {
-                        context.AllPostings[newPosting.Id] = newPosting;
-                        if (!string.IsNullOrWhiteSpace(reqId))
-                        {
-                            context.PostingsByReqOrUrl[reqId] = newPosting;
-                            context.PostingsByCompanyAndReq[$"{canonicalName}|{reqId}"] = newPosting;
-                        }
-                        if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = newPosting;
-                        context.PostingsByCompanyAndTitle[$"{canonicalName}|{newPosting.NormalizedTitle}"] = newPosting;
+                        context.IndexPosting(newPosting, canonicalName);
 
                         if (isNewlyCreated)
                         {

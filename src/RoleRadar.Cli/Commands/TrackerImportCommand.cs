@@ -92,6 +92,7 @@ public static class TrackerImportCommand
                 Console.WriteLine($"Postings Unchanged:      {summary.PostingsUnchanged}");
                 Console.WriteLine($"Applications Created:    {summary.ApplicationsCreated}");
                 Console.WriteLine($"Standalone Notes:        {summary.StandaloneNotesCreated}");
+                Console.WriteLine($"Screening Notes Created: {summary.ScreeningNotesCreated}");
                 Console.WriteLine($"Criteria Created:        {summary.CriteriaCreated}");
                 Console.WriteLine($"Signals Created:         {summary.SignalsCreated}");
                 Console.WriteLine($"Mapped to Event Notes:   {summary.MappedToEventNotes}");
@@ -119,6 +120,16 @@ public static class TrackerImportCommand
                             Console.WriteLine($"{file.FileName,-25} {file.Read,8} {file.Created,8} {file.Updated,8} {file.Unchanged,10} {file.TotalSkipped,8} {file.Errored,8}");
                         }
                     }
+                }
+
+                Console.WriteLine();
+                Console.WriteLine("Source Field Coverage:");
+                Console.WriteLine($"{"File",-23} {"Field",-20} {"Non-Empty",10}  {"Handling"}");
+                Console.WriteLine(new string('-', 88));
+                foreach (var def in SourceFieldCatalog.AllFields)
+                {
+                    var nonNullCount = summary.GetSourceFieldNonEmptyCount(def.File, def.Field);
+                    Console.WriteLine($"{def.File,-23} {def.Field,-20} {nonNullCount,10}  {def.Handling}");
                 }
 
                 if (summary.UnmappedValues.Count > 0)

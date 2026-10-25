@@ -66,6 +66,7 @@ public static class TrackerImportReportGenerator
         sb.AppendLine(inv, $"Applications Created:                  {summary.ApplicationsCreated}");
         sb.AppendLine(inv, $"Applications Unchanged/Skipped:        {summary.ApplicationsUnchanged}");
         sb.AppendLine(inv, $"Standalone Notes Created:              {summary.StandaloneNotesCreated}");
+        sb.AppendLine(inv, $"Screening Notes Created:               {summary.ScreeningNotesCreated}");
         sb.AppendLine(inv, $"Criteria Registered:                   {summary.CriteriaCreated}");
         sb.AppendLine(inv, $"Signals Created:                       {summary.SignalsCreated}");
         sb.AppendLine(inv, $"Mapped to Event Notes:                 {summary.MappedToEventNotes}");
@@ -127,6 +128,19 @@ public static class TrackerImportReportGenerator
                     }
                 }
             }
+        }
+        sb.AppendLine();
+
+        // 2c. Source Field Coverage
+        sb.AppendLine("--------------------------------------------------------------------------------");
+        sb.AppendLine("                           Source Field Coverage                                ");
+        sb.AppendLine("--------------------------------------------------------------------------------");
+        sb.AppendLine(string.Format(inv, "{0,-23} {1,-20} {2,10}  {3}", "File", "Field", "Non-Empty", "Handling"));
+        sb.AppendLine(new string('-', 88));
+        foreach (var def in SourceFieldCatalog.AllFields)
+        {
+            var nonNullCount = summary.GetSourceFieldNonEmptyCount(def.File, def.Field);
+            sb.AppendLine(string.Format(inv, "{0,-23} {1,-20} {2,10}  {3}", def.File, def.Field, nonNullCount, def.Handling));
         }
         sb.AppendLine();
 

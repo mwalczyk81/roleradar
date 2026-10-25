@@ -49,7 +49,7 @@ public sealed class ApplicationsImportStepTests
                 BundleDirectory = tempDir,
                 DefaultDate = TestDefaultDate
             };
-            context.PostingsByReqOrUrl["REQ-101"] = existingPosting;
+            context.IndexPosting(existingPosting, "Acme Corp");
             context.Summary.UnclaimedAppliedPostingTitles.Add(existingPosting.Title);
             context.Summary.UnclaimedAppliedPostings = 1;
 
@@ -275,6 +275,12 @@ public sealed class ApplicationsImportStepTests
         {
             var exists = SavedNotes.Any(n => n.OwnerId == ownerId && n.Title == title && n.Area == area);
             return Task.FromResult(Result<bool>.Success(exists));
+        }
+
+        public Task<Result<Guid?>> GetNoteIdByTitleAndAreaAsync(string ownerId, string title, string area, CancellationToken cancellationToken = default)
+        {
+            var note = SavedNotes.FirstOrDefault(n => n.OwnerId == ownerId && n.Title == title && n.Area == area);
+            return Task.FromResult(Result<Guid?>.Success(note?.Id));
         }
 
         private sealed class FakeCompanyRepository : ICompanyRepository

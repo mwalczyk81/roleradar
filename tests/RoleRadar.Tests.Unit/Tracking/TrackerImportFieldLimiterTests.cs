@@ -121,13 +121,26 @@ public sealed class TrackerImportFieldLimiterTests
     [Fact]
     public void RequisitionId_OverLimit_TruncatedToDomainLimitAndCounted()
     {
-        var input = new string('R', Posting.MaxRequisitionIdLength + 25);
+        var input = "J" + new string('9', Posting.MaxRequisitionIdLength + 25);
 
         var result = TrackerImportFieldLimiter.LimitRequisitionId(input, _summary);
 
         Assert.NotNull(result);
         Assert.Equal(Posting.MaxRequisitionIdLength, result.Length);
         Assert.Equal(1, _summary.FieldTruncations["requisition_id"]);
+    }
+
+    [Theory]
+    [InlineData("s")]
+    [InlineData("uirement")]
+    [InlineData("uires")]
+    [InlineData("REQ-ABC")]
+    public void RequisitionId_NoDigits_TreatedAsMissingAndCounted(string rawReq)
+    {
+        var result = TrackerImportFieldLimiter.LimitRequisitionId(rawReq, _summary);
+
+        Assert.Null(result);
+        Assert.Equal(1, _summary.UnmappedValues["req (no digit)"]);
     }
 
     [Fact]

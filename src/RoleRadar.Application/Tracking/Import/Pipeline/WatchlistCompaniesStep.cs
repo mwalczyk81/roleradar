@@ -73,6 +73,12 @@ public sealed class WatchlistCompaniesStep : ITrackerImportStep
                     continue;
                 }
 
+                context.Summary.RecordFieldRead("watchlist-companies.csv", "company", !string.IsNullOrWhiteSpace(row["company"]));
+                context.Summary.RecordFieldRead("watchlist-companies.csv", "proposed_status", !string.IsNullOrWhiteSpace(row["proposed_status"]));
+                context.Summary.RecordFieldRead("watchlist-companies.csv", "text", !string.IsNullOrWhiteSpace(row["text"]));
+                context.Summary.RecordFieldRead("watchlist-companies.csv", "decision", !string.IsNullOrWhiteSpace(row["decision"]));
+                context.Summary.RecordFieldRead("watchlist-companies.csv", "corrected_notes", !string.IsNullOrWhiteSpace(row["corrected_notes"]));
+
                 var companyName = Decode(row["company"])?.Trim();
                 if (string.IsNullOrWhiteSpace(companyName))
                 {

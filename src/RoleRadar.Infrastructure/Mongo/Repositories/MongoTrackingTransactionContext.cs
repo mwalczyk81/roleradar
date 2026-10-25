@@ -299,5 +299,31 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
         return Result<bool>.Success(count > 0);
     }
 
+    public async Task<Result<Guid?>> GetNoteIdByTitleAndAreaAsync(string ownerId, string title, string area, CancellationToken cancellationToken = default)
+    {
+        if (_notesCollection is null)
+        {
+            return Result<Guid?>.Success(null);
+        }
+
+        var filter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("owner_id", ownerId),
+            Builders<BsonDocument>.Filter.Eq("title", title),
+            Builders<BsonDocument>.Filter.Eq("area", area));
+
+        var session = _session ?? MongoNoteRepository.CurrentSession;
+        var doc = session is not null
+            ? await _notesCollection.Find(session, filter).FirstOrDefaultAsync(cancellationToken)
+            : await _notesCollection.Find(filter).FirstOrDefaultAsync(cancellationToken);
+
+        if (doc is null || !doc.Contains("_id"))
+        {
+            return Result<Guid?>.Success(null);
+        }
+
+        var idBinary = doc["_id"].AsBsonBinaryData;
+        return Result<Guid?>.Success(idBinary.ToGuid(GuidRepresentation.Standard));
+    }
+
     private sealed class RollbackOnResultFailureException : Exception;
 }

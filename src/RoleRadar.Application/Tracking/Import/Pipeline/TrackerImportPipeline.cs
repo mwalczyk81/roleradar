@@ -13,11 +13,40 @@ public sealed class TrackerImportContext
 
     public Dictionary<string, string> CompanyAliases { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, Company> CanonicalCompanies { get; } = new(StringComparer.OrdinalIgnoreCase);
-    public Dictionary<string, Posting> PostingsByReqOrUrl { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, Posting> PostingsByUrl { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, Posting> PostingsByCompanyAndTitle { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, Posting> PostingsByCompanyAndReq { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<Guid, Posting> AllPostings { get; } = new();
     public HashSet<Guid> ClaimedPostingIds { get; } = new();
+    public HashSet<Guid> ClaimedPostingIdsInRun { get; } = new();
+
+    public void IndexPosting(Posting posting, string? canonicalCompanyName)
+    {
+        AllPostings[posting.Id] = posting;
+        if (!string.IsNullOrWhiteSpace(posting.OriginalUrl))
+        {
+            var normUrl = UrlNormalizer.Normalize(posting.OriginalUrl);
+            if (normUrl is not null)
+            {
+                PostingsByUrl[normUrl] = posting;
+            }
+            PostingsByUrl[posting.OriginalUrl] = posting;
+        }
+
+        if (!string.IsNullOrWhiteSpace(posting.RequisitionId))
+        {
+            PostingsByCompanyAndReq[$"{posting.CompanyId:D}|{posting.RequisitionId.Trim()}"] = posting;
+            if (!string.IsNullOrWhiteSpace(canonicalCompanyName))
+            {
+                PostingsByCompanyAndReq[$"{canonicalCompanyName}|{posting.RequisitionId.Trim()}"] = posting;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(canonicalCompanyName) && !string.IsNullOrWhiteSpace(posting.NormalizedTitle))
+        {
+            PostingsByCompanyAndTitle[$"{canonicalCompanyName}|{posting.NormalizedTitle}"] = posting;
+        }
+    }
 }
 
 public interface ITrackerImportStep

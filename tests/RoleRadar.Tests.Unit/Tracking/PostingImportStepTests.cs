@@ -618,8 +618,8 @@ public sealed class PostingImportStepTests
         {
             var csv = """
                 source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes
-                aggregator,duplicate,Acme Corp,Software Engineer,REQ-DUP,,,yes,Details,2026-05-01,duplicate,duplicate,never,false,,,,
-                aggregator,screened_out,Acme Corp,Software Engineer,REQ-ORIG,,,yes,Details,2026-05-01,no-remote,no-remote,never,false,,,,
+                aggregator,duplicate,Acme Corp,Software Engineer,-12822,,,yes,Details,2026-05-01,duplicate,duplicate,never,false,,,,
+                aggregator,screened_out,Acme Corp,Software Engineer,J28518,,,yes,Details,2026-05-01,no-remote,no-remote,never,false,,,,
                 """;
             File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), csv);
 
@@ -640,8 +640,8 @@ public sealed class PostingImportStepTests
             Assert.True(result.IsSuccess);
             Assert.Equal(2, context.Summary.PostingsCreated);
 
-            var orig = inMemoryCtx.SavedPostings.FirstOrDefault(p => p.RequisitionId == "REQ-ORIG");
-            var dup = inMemoryCtx.SavedPostings.FirstOrDefault(p => p.RequisitionId == "REQ-DUP");
+            var orig = inMemoryCtx.SavedPostings.FirstOrDefault(p => p.RequisitionId == "J28518");
+            var dup = inMemoryCtx.SavedPostings.FirstOrDefault(p => p.RequisitionId == "-12822");
 
             Assert.NotNull(orig);
             Assert.NotNull(dup);
@@ -799,12 +799,12 @@ public sealed class PostingImportStepTests
         {
             var csv = """
                 source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes
-                aggregator,screened_out,Acme Corp,Screened Role,REQ-S,,,yes,Details,05/01,reason-screened,reason-screened,never,false,,,,
-                aggregator,closed,Acme Corp,Closed Role,REQ-C,,,yes,Details,05/02,reason-closed,reason-closed,if_reopened,false,,,,
-                aggregator,unscored,Acme Corp,Unscored Role,REQ-U,,,yes,Details,05/03,reason-unscored,reason-unscored,,false,,,,
-                aggregator,dismissed,Acme Corp,Dismissed Role,REQ-D,,,yes,Details,05/04,,dismissed,,false,,,,
-                aggregator,duplicate,Acme Corp,Screened Role,REQ-DUP,,,yes,Details,05/05,duplicate,duplicate,,false,,,,
-                aggregator,invalid_disposition,Acme Corp,Invalid Role,REQ-INV,,,yes,Details,05/06,bad,bad,,false,,,,
+                aggregator,screened_out,Acme Corp,Screened Role,J28518,,,yes,Details,05/01,reason-screened,reason-screened,never,false,,,,
+                aggregator,closed,Acme Corp,Closed Role,-12822,,,yes,Details,05/02,reason-closed,reason-closed,if_reopened,false,,,,
+                aggregator,unscored,Acme Corp,Unscored Role,R-20260720,,,yes,Details,05/03,reason-unscored,reason-unscored,,false,,,,
+                aggregator,dismissed,Acme Corp,Dismissed Role,JR-000829,,,yes,Details,05/04,,dismissed,,false,,,,
+                aggregator,duplicate,Acme Corp,Screened Role,19505,,,yes,Details,05/05,duplicate,duplicate,,false,,,,
+                aggregator,invalid_disposition,Acme Corp,Invalid Role,20261,,,yes,Details,05/06,bad,bad,,false,,,,
                 """;
             File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), csv);
 
@@ -829,27 +829,27 @@ public sealed class PostingImportStepTests
             Assert.Equal(5, recon.Created);
             Assert.Equal(1, recon.Errored);
 
-            var pScreened = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-S");
+            var pScreened = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "J28518");
             Assert.Equal(PostingDisposition.ScreenedOut, pScreened.Disposition);
             Assert.Equal(ResurfacePolicy.Never, pScreened.ResurfacePolicy);
             Assert.Null(pScreened.ClosedDate);
 
-            var pClosed = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-C");
+            var pClosed = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "-12822");
             Assert.Equal(PostingDisposition.Closed, pClosed.Disposition);
             Assert.Equal(ResurfacePolicy.IfReopened, pClosed.ResurfacePolicy);
             Assert.NotNull(pClosed.ClosedDate);
 
-            var pUnscored = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-U");
+            var pUnscored = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "R-20260720");
             Assert.Equal(PostingDisposition.Unscored, pUnscored.Disposition);
             // Blank resurface policy leaves domain default (Never)
             Assert.Equal(ResurfacePolicy.Never, pUnscored.ResurfacePolicy);
             Assert.Null(pUnscored.ClosedDate);
 
-            var pDismissed = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-D");
+            var pDismissed = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "JR-000829");
             Assert.Equal(PostingDisposition.ScreenedOut, pDismissed.Disposition);
             Assert.Null(pDismissed.ClosedDate);
 
-            var pDup = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-DUP");
+            var pDup = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "19505");
             Assert.Equal(pScreened.Id, pDup.DuplicateOfId);
             Assert.Equal(PostingDisposition.ScreenedOut, pDup.Disposition);
 
@@ -1008,9 +1008,9 @@ public sealed class PostingImportStepTests
             // Row 3: remote_mentioned "yes"
             var csv = """
                 source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes
-                aggregator,screened_out,Comp Corp,Range Role,REQ-R,"$203.6k-$366.4k",yes,no,Details,2026-05-01,reason,reason,never,false,,,,
-                aggregator,screened_out,Comp Corp,Single Role,REQ-S,"$237k",no,no,Details,2026-05-02,reason,reason,never,false,,,,
-                aggregator,screened_out,Comp Corp,Remote Role,REQ-REM,,,yes,Details,2026-05-03,reason,reason,never,false,,,,
+                aggregator,screened_out,Comp Corp,Range Role,J28518,"$203.6k-$366.4k",yes,no,Details,2026-05-01,reason,reason,never,false,,,,
+                aggregator,screened_out,Comp Corp,Single Role,-12822,"$237k",no,no,Details,2026-05-02,reason,reason,never,false,,,,
+                aggregator,screened_out,Comp Corp,Remote Role,R-20260720,,,yes,Details,2026-05-03,reason,reason,never,false,,,,
                 """;
             File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), csv);
 
@@ -1030,18 +1030,18 @@ public sealed class PostingImportStepTests
             Assert.True(result.IsSuccess);
             Assert.Equal(3, context.Summary.PostingsCreated);
 
-            var pRange = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-R");
+            var pRange = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "J28518");
             Assert.NotNull(pRange.Compensation);
             Assert.Equal(203600m, pRange.Compensation.Min);
             Assert.Equal(366400m, pRange.Compensation.Max);
             Assert.Contains("estimate", pRange.Compensation.Text, StringComparison.OrdinalIgnoreCase);
 
-            var pSingle = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-S");
+            var pSingle = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "-12822");
             Assert.NotNull(pSingle.Compensation);
             Assert.Equal(237000m, pSingle.Compensation.Min);
             Assert.Null(pSingle.Compensation.Max);
 
-            var pRemote = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-REM");
+            var pRemote = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "R-20260720");
             Assert.Equal(RemoteType.Unknown, pRemote.RemoteType);
             Assert.Null(pRemote.CultureSummary);
             Assert.Equal(1, context.Summary.UnmappedValues["remote_mentioned"]);
@@ -1061,7 +1061,7 @@ public sealed class PostingImportStepTests
             // Row 1: fit="6.0.", referral="true", blank resume_variant
             var csv = """
                 kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes
-                application,App Note Corp,Lead Dev,REQ-A,2026-04-10,false,,195000,true,6.0.,,,,Applied via website,,
+                application,App Note Corp,Lead Dev,J28518,2026-04-10,false,,195000,true,6.0.,,,,Applied via website,,
                 """;
             File.WriteAllText(Path.Combine(tempDir, "applications.csv"), csv);
 
@@ -1205,7 +1205,7 @@ public sealed class PostingImportStepTests
         return path;
     }
 
-    private sealed class InMemoryPostingContext : ITrackingTransactionContext
+    internal sealed class InMemoryPostingContext : ITrackingTransactionContext
     {
         public List<Company> SavedCompanies { get; } = new();
         public List<Posting> SavedPostings { get; } = new();
@@ -1239,6 +1239,12 @@ public sealed class PostingImportStepTests
         {
             var exists = SavedNotes.Any(n => n.OwnerId == ownerId && n.Title == title && n.Area == area);
             return Task.FromResult(Result<bool>.Success(exists));
+        }
+
+        public Task<Result<Guid?>> GetNoteIdByTitleAndAreaAsync(string ownerId, string title, string area, CancellationToken cancellationToken = default)
+        {
+            var note = SavedNotes.FirstOrDefault(n => n.OwnerId == ownerId && n.Title == title && n.Area == area);
+            return Task.FromResult(Result<Guid?>.Success(note?.Id));
         }
 
         private sealed class FakeCompanyRepository : ICompanyRepository
