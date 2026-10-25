@@ -68,6 +68,8 @@ public static class TrackerImportReportGenerator
         sb.AppendLine(inv, $"Standalone Notes Created:              {summary.StandaloneNotesCreated}");
         sb.AppendLine(inv, $"Criteria Registered:                   {summary.CriteriaCreated}");
         sb.AppendLine(inv, $"Signals Created:                       {summary.SignalsCreated}");
+        sb.AppendLine(inv, $"Mapped to Event Notes:                 {summary.MappedToEventNotes}");
+        sb.AppendLine(inv, $"Resume Variants Defaulted:             {summary.ResumeVariantsDefaulted}");
         sb.AppendLine(inv, $"Dates Defaulted:                       {summary.DatesDefaulted}");
         sb.AppendLine(inv, $"Dates Inferred (Rollback/SameYear):    {summary.DatesInferred}");
         sb.AppendLine(inv, $"Dates Flagged (or Scores Flagged):     {summary.DatesFlagged}");
@@ -140,6 +142,18 @@ public static class TrackerImportReportGenerator
             sb.AppendLine();
         }
 
+        sb.AppendLine("--------------------------------------------------------------------------------");
+        sb.AppendLine("                              Mapping Decisions                                 ");
+        sb.AppendLine("--------------------------------------------------------------------------------");
+        sb.AppendLine("  - Remote Type: 'remote_mentioned' is preserved as RemoteType.Unknown without storing text in");
+        sb.AppendLine("    culture summary (counted under Unmapped Values as 'remote_mentioned: N not stored').");
+        sb.AppendLine("  - Resume Variant: Domain entity requires non-nullable ResumeVariant; blank values default");
+        sb.AppendLine("    to ResumeVariant.AsIs with 'resume variant unspecified' appended to applied event notes");
+        sb.AppendLine("    (counted under Resume Variants Defaulted).");
+        sb.AppendLine("  - Fit & Referral: Fit values and referral=true are mapped to applied event notes");
+        sb.AppendLine("    (counted under Mapped to Event Notes).");
+        sb.AppendLine();
+
         if (summary.UnmappedValues.Count > 0)
         {
             sb.AppendLine("--------------------------------------------------------------------------------");
@@ -147,6 +161,11 @@ public static class TrackerImportReportGenerator
             sb.AppendLine("--------------------------------------------------------------------------------");
             foreach (var (field, count) in summary.UnmappedValues.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
             {
+                if (string.Equals(field, "remote_mentioned", StringComparison.OrdinalIgnoreCase))
+                {
+                    sb.AppendLine(inv, $"  - remote_mentioned: {count} not stored");
+                    continue;
+                }
                 var samples = summary.UnmappedValueSamples.TryGetValue(field, out var list) && list.Count > 0
                     ? $" (samples: {string.Join(", ", list.Take(5))})"
                     : string.Empty;

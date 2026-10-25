@@ -37,9 +37,9 @@ public sealed class TrackerImportRowIsolationTests : IClassFixture<IsolatedConta
         {
             // 1. watchlist-companies.csv: Row 2 is valid; Row 3 has bad enum (decision: invalid_choice)
             await File.WriteAllTextAsync(Path.Combine(tempBundleDir, "watchlist-companies.csv"),
-                $"company,tier,source,notes,decision,corrected_notes\r\n" +
-                $"{validCompany},watch,referral,Valid company description,,\r\n" +
-                $"BadEnumCompany,watch,referral,Notes,invalid_decision_choice,\r\n");
+                $"company,proposed_status,text,decision,corrected_notes\r\n" +
+                $"{validCompany},watch,Valid company description,,\r\n" +
+                $"BadEnumCompany,watch,Notes,invalid_decision_choice,\r\n");
 
             // 2. postings.json: Entry 1 is valid; Entry 2 has missing required column (missing company)
             await File.WriteAllTextAsync(Path.Combine(tempBundleDir, "postings.json"),
@@ -61,15 +61,15 @@ public sealed class TrackerImportRowIsolationTests : IClassFixture<IsolatedConta
 
             // 3. appendix-rows.csv: Row 2 is valid; Row 3 has malformed date
             await File.WriteAllTextAsync(Path.Combine(tempBundleDir, "appendix-rows.csv"),
-                $"req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n" +
-                $"ISO-101,{validCompany},{validTitle2},true,Raw,2026-10-15,comp_below_floor,comp_below_floor,never,false,https://example.com/job/iso-valid2,,\r\n" +
-                $"ISO-102,{validCompany},Malformed Date Role,false,Raw,malformed-date-value,comp_below_floor,comp_below_floor,never,false,,,\r\n");
+                $"source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes\r\n" +
+                $"aggregator,screened_out,{validCompany},{validTitle2},ISO-101,,,yes,Raw,2026-10-15,comp_below_floor,comp_below_floor,never,false,,,,\r\n" +
+                $"aggregator,screened_out,{validCompany},Malformed Date Role,ISO-102,,,no,Raw,malformed-date-value,comp_below_floor,comp_below_floor,never,false,,,,\r\n");
 
             // 4. applications.csv: Row 2 is valid; Row 3 has invalid domain argument (negative desired salary)
             await File.WriteAllTextAsync(Path.Combine(tempBundleDir, "applications.csv"),
-                $"req_id,company,role,applied_date_md,desired_salary,resume_variant,notes,raw,outcome,status,rejected_date_md,reason_rejected,rejected_stage,contains_people,decision,corrected_notes\r\n" +
-                $"ISO-101,{validCompany},{validTitle2},2026-10-15,210000,tailored,Applied note,raw,applied,applied,,,,,,,\r\n" +
-                $"ISO-103,{validCompany},Negative Salary Role,2026-10-15,-50000,tailored,Note,raw,applied,applied,,,,,,,\r\n");
+                $"kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes\r\n" +
+                $"application,{validCompany},{validTitle2},ISO-101,2026-10-15,false,,210000,false,good,tailored,,,raw,,\r\n" +
+                $"application,{validCompany},Negative Salary Role,ISO-103,2026-10-15,false,,-50000,false,good,tailored,,,raw,,\r\n");
 
             var dbName = $"rrtest_iso_{Guid.NewGuid():N}";
             var services = BuildServiceProvider(dbName);

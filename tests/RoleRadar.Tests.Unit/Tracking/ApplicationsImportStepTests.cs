@@ -212,7 +212,7 @@ public sealed class ApplicationsImportStepTests
 
             var app2 = inMemoryCtx.SavedApplications.FirstOrDefault(a => a.PostingId == inMemoryCtx.SavedPostings.First(p => p.Title == "Cloud Architect").Id);
             Assert.NotNull(app2);
-            Assert.Equal(ResumeVariant.Tailored, app2.ResumeVariant); // Unknown "junk_variant" defaulted to Tailored!
+            Assert.Equal(ResumeVariant.AsIs, app2.ResumeVariant); // Unknown "junk_variant" defaulted to AsIs!
 
             var app3 = inMemoryCtx.SavedApplications.FirstOrDefault(a => a.PostingId == inMemoryCtx.SavedPostings.First(p => p.Title == "Data Engineer").Id);
             Assert.NotNull(app3);

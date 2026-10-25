@@ -48,6 +48,20 @@ public sealed class AppendixRowsStep : ITrackerImportStep
             return Result<bool>.Failure(ErrorCode.ValidationError, "appendix-rows.csv is present but empty.");
         }
 
+        using var headerReader = new StringReader(content);
+        var headers = _csvParser.ReadHeader(headerReader);
+        var headerValidation = CsvHeaderValidator.Validate("appendix-rows.csv", headers, CsvHeaderValidator.AppendixHeaders);
+        if (!headerValidation.IsSuccess)
+        {
+            recon.RecordErrored();
+            context.Summary.Errors.Add(new TrackerImportRowError(
+                "appendix-rows.csv",
+                1,
+                ErrorCode.ValidationError.ToString(),
+                headerValidation.Error!.Value.Message));
+            return Result<bool>.Failure(headerValidation.Error!.Value);
+        }
+
         var records = new List<ICsvRecord>();
         using (var reader = new StringReader(content))
         {
@@ -147,14 +161,38 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                 Posting? createdPosting = null;
                 var isUnchanged = false;
 
-                var rawReqId = Decode(row["req_id"])?.Trim();
+                var rawReqId = (Decode(row["req"]) ?? Decode(row["req_id"]))?.Trim();
                 var reqId = TrackerImportFieldLimiter.LimitRequisitionId(rawReqId, context.Summary);
-                var rawUrl = Decode(row["url"])?.Trim();
-                var url = TrackerImportFieldLimiter.LimitUrl(rawUrl, context.Summary);
                 var rawReasonPrimary = Decode(row["reason_primary"])?.Trim();
                 var reasonPrimary = TrackerImportFieldLimiter.LimitDispositionReason(rawReasonPrimary, context.Summary);
                 var reasonAll = Decode(row["reason_all"])?.Trim();
                 var rawProposedDisp = (Decode(row["proposed_disposition"]) ?? Decode(row["disposition"]))?.Trim();
+
+                var rawComp = Decode(row["comp_detected"])?.Trim();
+                var rawCompEstimate = Decode(row["comp_is_estimate"])?.Trim();
+                Compensation? compensation = null;
+                if (!string.IsNullOrWhiteSpace(rawComp))
+                {
+                    if (string.Equals(rawCompEstimate, "yes", StringComparison.OrdinalIgnoreCase) || string.Equals(rawCompEstimate, "true", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!rawComp.Contains("estimate", StringComparison.OrdinalIgnoreCase))
+                        {
+                            rawComp = $"{rawComp} (estimate)";
+                        }
+                    }
+                    var compText = TrackerImportFieldLimiter.LimitCompensationText(rawComp, context.Summary);
+                    var (compMin, compMax) = PostingsJsonStep.TryParseCompensationRange(compText);
+                    compensation = compText != null ? new Compensation(compMin, compMax, "USD", compText) : null;
+                }
+
+                var remoteMentioned = Decode(row["remote_mentioned"])?.Trim();
+                var isRemoteMentioned = string.Equals(remoteMentioned, "yes", StringComparison.OrdinalIgnoreCase) || string.Equals(remoteMentioned, "true", StringComparison.OrdinalIgnoreCase);
+                if (isRemoteMentioned || (!string.IsNullOrWhiteSpace(remoteMentioned) && !string.Equals(remoteMentioned, "no", StringComparison.OrdinalIgnoreCase) && !string.Equals(remoteMentioned, "false", StringComparison.OrdinalIgnoreCase)))
+                {
+                    context.Summary.RecordUnmappedValue("remote_mentioned", "not stored");
+                }
+                var remoteType = RemoteType.Unknown;
+                string? cultureSummary = null;
 
                 var isDuplicateRow = string.Equals(rawProposedDisp, "duplicate", StringComparison.OrdinalIgnoreCase) ||
                                      string.Equals(reasonPrimary, "duplicate", StringComparison.OrdinalIgnoreCase) ||
@@ -269,34 +307,6 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                         }
                     }
 
-                    var remoteRaw = (Decode(row["remote_mentioned"]) ?? Decode(row["remote_type"]))?.Trim();
-                    var remoteType = RemoteType.Unknown;
-                    if (!string.IsNullOrWhiteSpace(remoteRaw))
-                    {
-                        var s = remoteRaw.Trim().ToLowerInvariant();
-                        if (s is "true" or "yes" or "1" or "remote")
-                        {
-                            remoteType = RemoteType.Remote;
-                        }
-                        else if (s is "false" or "no" or "0" or "none" or "unknown")
-                        {
-                            remoteType = RemoteType.Unknown;
-                        }
-                        else if (s is "hybrid")
-                        {
-                            remoteType = RemoteType.Hybrid;
-                        }
-                        else if (s is "onsite" or "in_office" or "inoffice")
-                        {
-                            remoteType = RemoteType.Onsite;
-                        }
-                        else
-                        {
-                            context.Summary.RecordUnmappedValue("remote_type", remoteRaw);
-                            remoteType = RemoteType.Unknown;
-                        }
-                    }
-
                     // Duplicate link resolution
                     Guid? duplicateOfId = null;
                     if (isDuplicateRow)
@@ -318,52 +328,51 @@ public sealed class AppendixRowsStep : ITrackerImportStep
 
                     // Match against existing posting in context or repository
                     Posting? existingPosting = null;
-                    if (!string.IsNullOrWhiteSpace(reqId) && context.PostingsByReqOrUrl.TryGetValue(reqId, out var byReq))
+                    if (!string.IsNullOrWhiteSpace(reqId))
                     {
-                        existingPosting = byReq;
-                    }
-                    else if (!string.IsNullOrWhiteSpace(url) && context.PostingsByReqOrUrl.TryGetValue(url, out var byUrl))
-                    {
-                        existingPosting = byUrl;
-                    }
-                    else if (!isDuplicateRow)
-                    {
-                        var titleKey = $"{canonicalCompany}|{TitleNormalizer.Normalize(title)}";
-                        context.PostingsByCompanyAndTitle.TryGetValue(titleKey, out existingPosting);
-                    }
-
-                    if (existingPosting is null && !string.IsNullOrWhiteSpace(url))
-                    {
-                        var normUrl = UrlNormalizer.Normalize(url);
-                        if (normUrl is not null)
+                        if (context.PostingsByCompanyAndReq.TryGetValue($"{canonicalCompany}|{reqId}", out var byReq))
                         {
-                            var byUrlRes = await txCtx.Postings.GetByDedupKeyBAsync(context.OwnerId, normUrl, ct);
-                            if (byUrlRes.IsSuccess && byUrlRes.Value is not null)
+                            existingPosting = byReq;
+                        }
+                        else if (company is not null)
+                        {
+                            var dedupC = $"{company.Id:D}|{reqId.Trim()}";
+                            var byCRes = await txCtx.Postings.GetByDedupKeyCAsync(context.OwnerId, dedupC, ct);
+                            if (byCRes.IsSuccess && byCRes.Value is not null)
                             {
-                                existingPosting = byUrlRes.Value;
+                                existingPosting = byCRes.Value;
                             }
                         }
                     }
 
-                    if (existingPosting is null && !string.IsNullOrWhiteSpace(reqId) && company is not null)
+                    // If not matched by req, match by company + title ONLY IF candidate has no requisitionId (or same req)
+                    if (existingPosting is null && !isDuplicateRow)
                     {
-                        var dedupC = $"{company.Id:D}|{reqId.Trim()}";
-                        var byCRes = await txCtx.Postings.GetByDedupKeyCAsync(context.OwnerId, dedupC, ct);
-                        if (byCRes.IsSuccess && byCRes.Value is not null)
+                        var titleKey = $"{canonicalCompany}|{TitleNormalizer.Normalize(title)}";
+                        if (context.PostingsByCompanyAndTitle.TryGetValue(titleKey, out var candByTitle))
                         {
-                            existingPosting = byCRes.Value;
-                        }
-                    }
-
-                    if (existingPosting is null && !isDuplicateRow && company is not null)
-                    {
-                        var candRes = await txCtx.Postings.FindCandidatesByCompanyAndTitleAsync(context.OwnerId, company.Id, TitleNormalizer.Normalize(title), ct);
-                        if (candRes.IsSuccess && candRes.Value is { Count: > 0 } candidates)
-                        {
-                            var byIdRes = await txCtx.Postings.GetByIdAsync(context.OwnerId, candidates[0].Id, ct);
-                            if (byIdRes.IsSuccess && byIdRes.Value is not null)
+                            if (string.IsNullOrWhiteSpace(candByTitle.RequisitionId) || string.Equals(candByTitle.RequisitionId, reqId, StringComparison.OrdinalIgnoreCase))
                             {
-                                existingPosting = byIdRes.Value;
+                                existingPosting = candByTitle;
+                            }
+                        }
+                        else if (company is not null)
+                        {
+                            var candRes = await txCtx.Postings.FindCandidatesByCompanyAndTitleAsync(context.OwnerId, company.Id, TitleNormalizer.Normalize(title), ct);
+                            if (candRes.IsSuccess && candRes.Value is { Count: > 0 } candidates)
+                            {
+                                foreach (var c in candidates)
+                                {
+                                    var byIdRes = await txCtx.Postings.GetByIdAsync(context.OwnerId, c.Id, ct);
+                                    if (byIdRes.IsSuccess && byIdRes.Value is not null)
+                                    {
+                                        if (string.IsNullOrWhiteSpace(byIdRes.Value.RequisitionId) || string.Equals(byIdRes.Value.RequisitionId, reqId, StringComparison.OrdinalIgnoreCase))
+                                        {
+                                            existingPosting = byIdRes.Value;
+                                            break;
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
@@ -465,9 +474,11 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                         companyId: company?.Id ?? Guid.NewGuid(),
                         title: title,
                         sourceKind: sourceKind,
-                        originalUrl: url,
+                        originalUrl: null,
                         requisitionId: reqId,
                         remoteType: remoteType,
+                        compensation: compensation,
+                        cultureSummary: cultureSummary,
                         disposition: targetDisposition,
                         dispositionReason: finalReason,
                         dispositionCriterionId: criterionId,
@@ -529,27 +540,30 @@ public sealed class AppendixRowsStep : ITrackerImportStep
                     context.Summary.AutoCreatedCompanies.Add(canonicalCompany);
                 }
 
+                var affectedPosting = updatedPosting ?? createdPosting;
+                if (affectedPosting is not null)
+                {
+                    context.AllPostings[affectedPosting.Id] = affectedPosting;
+                    if (!string.IsNullOrWhiteSpace(affectedPosting.RequisitionId))
+                    {
+                        context.PostingsByCompanyAndReq[$"{canonicalCompany}|{affectedPosting.RequisitionId}"] = affectedPosting;
+                        context.PostingsByReqOrUrl[affectedPosting.RequisitionId] = affectedPosting;
+                    }
+                    context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{affectedPosting.NormalizedTitle}"] = affectedPosting;
+                }
+
                 if (isUnchanged && updatedPosting is not null)
                 {
-                    if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = updatedPosting;
-                    if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = updatedPosting;
-                    context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{updatedPosting.NormalizedTitle}"] = updatedPosting;
                     context.Summary.PostingsUnchanged++;
                     recon.RecordUnchanged("merged");
                 }
                 else if (updatedPosting is not null)
                 {
-                    if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = updatedPosting;
-                    if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = updatedPosting;
-                    context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{updatedPosting.NormalizedTitle}"] = updatedPosting;
                     context.Summary.PostingsUpdated++;
                     recon.RecordUpdated();
                 }
                 else if (createdPosting is not null)
                 {
-                    if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = createdPosting;
-                    if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = createdPosting;
-                    context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{createdPosting.NormalizedTitle}"] = createdPosting;
                     context.Summary.PostingsCreated++;
                     recon.RecordCreated();
                 }

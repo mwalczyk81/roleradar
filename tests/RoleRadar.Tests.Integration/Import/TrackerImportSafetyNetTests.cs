@@ -34,7 +34,7 @@ public sealed class TrackerImportSafetyNetTests : IClassFixture<IsolatedContaine
         try
         {
             await File.WriteAllTextAsync(Path.Combine(tempBundleDir, "watchlist-companies.csv"),
-                "company,tier,source,notes,decision,corrected_notes\r\nAcmeCorp,watch,referral,Some note,,\r\n");
+                "company,proposed_status,text,decision,corrected_notes\r\nAcmeCorp,watch,Some note,,\r\n");
 
             var dbName = $"rrtest_safety_{Guid.NewGuid():N}";
             var services = BuildServiceProviderWithFailingCoordinator(dbName, "SecretInternalDiagnosticData");

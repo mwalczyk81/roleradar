@@ -40,7 +40,7 @@ public sealed class TrackerImportReportingTests : IClassFixture<IsolatedContaine
         try
         {
             File.WriteAllText(Path.Combine(tempBundleDir, "watchlist-companies.csv"),
-                $"company,tier,source,notes,decision,corrected_notes\r\n{sentinelCompany},watch,recruiter,{sentinelCulture},,\r\nBadCompany,watch,recruiter,notes,invalid_decision,\r\n");
+                $"company,proposed_status,text,decision,corrected_notes\r\n{sentinelCompany},watch,{sentinelCulture},,\r\nBadCompany,watch,notes,invalid_decision,\r\n");
 
             File.WriteAllText(Path.Combine(tempBundleDir, "company-aliases.csv"),
                 $"alias,canonical\r\nSentinelAlias,{sentinelCompany}\r\n");
@@ -59,10 +59,10 @@ public sealed class TrackerImportReportingTests : IClassFixture<IsolatedContaine
                 """);
 
             File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"),
-                $"req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n101,{sentinelCompany},{sentinelRole},true,Details,2026-10-15,{sentinelReason},{sentinelReason},never,false,https://example.com/job/sentinel1,,\r\n");
+                $"source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes\r\naggregator,screened_out,{sentinelCompany},{sentinelRole},101,,,yes,Details,2026-10-15,{sentinelReason},{sentinelReason},never,false,,,,\r\n");
 
             File.WriteAllText(Path.Combine(tempBundleDir, "applications.csv"),
-                $"req_id,company,role,applied_date_md,fit,interview_lead,notes,raw,outcome,status,rejected_date_md,reason_rejected,rejected_stage,contains_people,decision,corrected_notes\r\n101,{sentinelCompany},{sentinelRole},2026-10-15,good,lead,{sentinelNote},raw,rejected,applied,2026-10-20,comp,stage,contains_people,,\r\n");
+                $"kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes\r\napplication,{sentinelCompany},{sentinelRole},101,2026-10-15,true,2026-10-20,200000,false,good,tailored,,contains_people,{sentinelNote},,\r\n");
 
             var dbName = $"rrtest_report_{Guid.NewGuid():N}";
             var services = BuildServiceProvider(dbName);
@@ -129,10 +129,10 @@ public sealed class TrackerImportReportingTests : IClassFixture<IsolatedContaine
 
         try
         {
-            File.WriteAllText(Path.Combine(tempBundleDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\n");
+            File.WriteAllText(Path.Combine(tempBundleDir, "watchlist-companies.csv"), "company,proposed_status,text,decision,corrected_notes\r\n");
             File.WriteAllText(Path.Combine(tempBundleDir, "company-aliases.csv"), "alias,canonical\r\n");
-            File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");
-            File.WriteAllText(Path.Combine(tempBundleDir, "applications.csv"), "req_id,company,role,applied_date_md,fit,interview_lead,notes,raw,outcome,status,rejected_date_md,reason_rejected,rejected_stage,contains_people,decision,corrected_notes\r\n");
+            File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"), "source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes\r\n");
+            File.WriteAllText(Path.Combine(tempBundleDir, "applications.csv"), "kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes\r\n");
 
             // Element 1 is valid, element 2 is missing company and title (row error)
             File.WriteAllText(Path.Combine(tempBundleDir, "postings.json"),
@@ -187,11 +187,11 @@ public sealed class TrackerImportReportingTests : IClassFixture<IsolatedContaine
 
         try
         {
-            File.WriteAllText(Path.Combine(tempBundleDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\n");
+            File.WriteAllText(Path.Combine(tempBundleDir, "watchlist-companies.csv"), "company,proposed_status,text,decision,corrected_notes\r\n");
             File.WriteAllText(Path.Combine(tempBundleDir, "company-aliases.csv"), "alias,canonical\r\n");
             File.WriteAllText(Path.Combine(tempBundleDir, "postings.json"), "{}");
-            File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");
-            File.WriteAllText(Path.Combine(tempBundleDir, "applications.csv"), "req_id,company,role,applied_date_md,fit,interview_lead,notes,raw,outcome,status,rejected_date_md,reason_rejected,rejected_stage,contains_people,decision,corrected_notes\r\n");
+            File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"), "source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes\r\n");
+            File.WriteAllText(Path.Combine(tempBundleDir, "applications.csv"), "kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes\r\n");
 
             var dbName = $"rrtest_gitrefuse_{Guid.NewGuid():N}";
             var services = BuildServiceProvider(dbName);
@@ -228,7 +228,7 @@ public sealed class TrackerImportReportingTests : IClassFixture<IsolatedContaine
 
         try
         {
-            File.WriteAllText(Path.Combine(tempBundleDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\n");
+            File.WriteAllText(Path.Combine(tempBundleDir, "watchlist-companies.csv"), "company,proposed_status,text,decision,corrected_notes\r\n");
             File.WriteAllText(Path.Combine(tempBundleDir, "company-aliases.csv"), "alias,canonical\r\n");
 
             // Postings has an auto-created neutral company, and an unclaimed applied posting (object keyed by slug)
@@ -244,12 +244,12 @@ public sealed class TrackerImportReportingTests : IClassFixture<IsolatedContaine
                 }
                 """);
 
-            File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");
+            File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"), "source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes\r\n");
 
             // Applications has a detected person
             File.WriteAllText(Path.Combine(tempBundleDir, "applications.csv"),
-                "req_id,company,role,applied_date_md,fit,interview_lead,notes,raw,outcome,status,rejected_date_md,reason_rejected,rejected_stage,review_flags,people_detected,decision,corrected_notes\r\n" +
-                "201,Other Corp,Dev,2026-10-15,good,lead,notes,raw,active,applied,,,,contains_people,Jane Doe,,\r\n");
+                "kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes\r\n" +
+                "application,Other Corp,Dev,201,2026-10-15,false,,200000,false,good,tailored,Jane Doe,contains_people,raw,,\r\n");
 
             var dbName = $"rrtest_reportext_{Guid.NewGuid():N}";
             var services = BuildServiceProvider(dbName);

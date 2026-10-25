@@ -43,9 +43,9 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
         {
             // 1. watchlist-companies.csv (watch and avoid statuses)
             File.WriteAllText(Path.Combine(tempBundleDir, "watchlist-companies.csv"),
-                "company,tier,source,notes,decision,corrected_notes\r\n" +
-                "Initech Corp,target,recruiter,Core target watchlist company,,\r\n" +
-                "Badco Industries,avoid,recruiter,Known poor engineering culture,,\r\n");
+                "company,proposed_status,text,decision,corrected_notes\r\n" +
+                "Initech Corp,target,Core target watchlist company,,\r\n" +
+                "Badco Industries,avoid,Known poor engineering culture,,\r\n");
 
             // 2. company-aliases.csv (alias mappings)
             File.WriteAllText(Path.Combine(tempBundleDir, "company-aliases.csv"),
@@ -121,12 +121,12 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
 
             // 4. appendix-rows.csv (exercises every proposed_disposition: screened_out, duplicate, closed, unscored, dismissed; blank & non-blank resurface)
             File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"),
-                "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_disposition,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n" +
-                "REQ-201,Initech Corp,Platform Engineer,true,Details,10-15,comp-low,comp-low,screened_out,never,false,https://example.com/job/201,,\r\n" +
-                "REQ-202,Initech Corp,Platform Engineer Duplicate,true,duplicate of REQ-201,~10/12,comp-low,comp-low,duplicate,,false,https://example.com/job/202,,\r\n" +
-                "REQ-203,Initech Corp,Closed Platform Engineer,true,Details,10-16,comp-low,comp-low,closed,if_reopened,false,https://example.com/job/203,,\r\n" +
-                "REQ-204,Initech Corp,Unscored Platform Engineer,true,Details,10-17,comp-low,comp-low,unscored,,false,https://example.com/job/204,,\r\n" +
-                "REQ-205,Initech Corp,Dismissed Platform Engineer,true,Details,10-18,comp-low,comp-low,dismissed,never,false,https://example.com/job/205,,\r\n");
+                "source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes\r\n" +
+                "aggregator,screened_out,Initech Corp,Platform Engineer,REQ-201,,,yes,Details,10-15,comp-low,comp-low,never,false,,,,\r\n" +
+                "aggregator,duplicate,Initech Corp,Platform Engineer Duplicate,REQ-202,,,yes,duplicate of REQ-201,~10/12,comp-low,comp-low,,false,,,,\r\n" +
+                "aggregator,closed,Initech Corp,Closed Platform Engineer,REQ-203,,,yes,Details,10-16,comp-low,comp-low,if_reopened,false,,,,\r\n" +
+                "aggregator,unscored,Initech Corp,Unscored Platform Engineer,REQ-204,,,yes,Details,10-17,comp-low,comp-low,,false,,,,\r\n" +
+                "aggregator,dismissed,Initech Corp,Dismissed Platform Engineer,REQ-205,,,yes,Details,10-18,comp-low,comp-low,never,false,,,,\r\n");
 
             // 5. applications.csv (transitions posting to applied, standalone_note, contains_people, parenthetical date)
             File.WriteAllText(Path.Combine(tempBundleDir, "applications.csv"),

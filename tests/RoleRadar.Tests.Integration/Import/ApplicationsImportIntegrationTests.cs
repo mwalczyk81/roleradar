@@ -35,7 +35,7 @@ public sealed class ApplicationsImportIntegrationTests : IClassFixture<IsolatedC
         try
         {
             File.WriteAllText(Path.Combine(tempDir, "company-aliases.csv"), "alias,canonical\r\n");
-            File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\nAcme Corp,target,recruiter,Note,,\r\n");
+            File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), "company,proposed_status,text,decision,corrected_notes\r\nAcme Corp,target,Note,,\r\n");
 
             // postings.json: 2 postings with status "applied"
             // Role 1 (Claimed Role) will be claimed by applications.csv and reach Applied
@@ -61,7 +61,7 @@ public sealed class ApplicationsImportIntegrationTests : IClassFixture<IsolatedC
                 }
                 """;
             File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
-            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");
+            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes\r\n");
 
             // applications.csv: 1 application for "Claimed Role" (rejected=true) + 1 standalone_note + people_detected
             var appCsv = """
@@ -151,7 +151,7 @@ public sealed class ApplicationsImportIntegrationTests : IClassFixture<IsolatedC
         try
         {
             File.WriteAllText(Path.Combine(tempDir, "company-aliases.csv"), "alias,canonical\r\n");
-            File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\nAcme Corp,target,recruiter,Note,,\r\n");
+            File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), "company,proposed_status,text,decision,corrected_notes\r\nAcme Corp,target,Note,,\r\n");
 
             // postings.json: 3 postings (object keyed by slug)
             var postingsJson = """
@@ -162,7 +162,7 @@ public sealed class ApplicationsImportIntegrationTests : IClassFixture<IsolatedC
                 }
                 """;
             File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
-            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");
+            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes\r\n");
 
             // applications.csv: 3 rows (Line 2: Role 1, Line 3: Role 2, Line 4: Role 3)
             var appCsv = """

@@ -331,11 +331,18 @@ public sealed class PostingsJsonStep : ITrackerImportStep
 
                         if (existingPosting is null && !string.IsNullOrWhiteSpace(reqId) && resolvedCompany is not null)
                         {
-                            var dedupC = $"{resolvedCompany.Id:D}|{reqId.Trim()}";
-                            var byCRes = await txCtx.Postings.GetByDedupKeyCAsync(context.OwnerId, dedupC, ct);
-                            if (byCRes.IsSuccess && byCRes.Value is not null)
+                            if (context.PostingsByCompanyAndReq.TryGetValue($"{canonicalName}|{reqId}", out var cachedByReq))
                             {
-                                existingPosting = byCRes.Value;
+                                existingPosting = cachedByReq;
+                            }
+                            else
+                            {
+                                var dedupC = $"{resolvedCompany.Id:D}|{reqId.Trim()}";
+                                var byCRes = await txCtx.Postings.GetByDedupKeyCAsync(context.OwnerId, dedupC, ct);
+                                if (byCRes.IsSuccess && byCRes.Value is not null)
+                                {
+                                    existingPosting = byCRes.Value;
+                                }
                             }
                         }
 
@@ -508,7 +515,12 @@ public sealed class PostingsJsonStep : ITrackerImportStep
 
                     if (newPosting is not null)
                     {
-                        if (!string.IsNullOrWhiteSpace(reqId)) context.PostingsByReqOrUrl[reqId] = newPosting;
+                        context.AllPostings[newPosting.Id] = newPosting;
+                        if (!string.IsNullOrWhiteSpace(reqId))
+                        {
+                            context.PostingsByReqOrUrl[reqId] = newPosting;
+                            context.PostingsByCompanyAndReq[$"{canonicalName}|{reqId}"] = newPosting;
+                        }
                         if (!string.IsNullOrWhiteSpace(url)) context.PostingsByReqOrUrl[url] = newPosting;
                         context.PostingsByCompanyAndTitle[$"{canonicalName}|{newPosting.NormalizedTitle}"] = newPosting;
 

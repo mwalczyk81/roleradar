@@ -113,7 +113,7 @@ public sealed class CriteriaImportIntegrationTests : IClassFixture<IsolatedConta
         try
         {
             File.WriteAllText(Path.Combine(tempDir, "company-aliases.csv"), "alias,canonical\r\n");
-            File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\nAcme Corp,target,recruiter,Note,,\r\n");
+            File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), "company,proposed_status,text,decision,corrected_notes\r\nAcme Corp,target,Note,,\r\n");
 
             // postings.json with explicit full date (object keyed by slug)
             var postingsJson = """
@@ -122,7 +122,7 @@ public sealed class CriteriaImportIntegrationTests : IClassFixture<IsolatedConta
                 }
                 """;
             File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
-            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");
+            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes\r\n");
 
             // applications.csv with explicit full date
             var appCsv = """

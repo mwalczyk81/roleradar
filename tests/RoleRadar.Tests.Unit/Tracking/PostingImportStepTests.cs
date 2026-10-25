@@ -256,8 +256,8 @@ public sealed class PostingImportStepTests
             File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
 
             var applicationsCsv = """
-                decision,company,title,kind,applied_on,rejected,rejected_date_md,req,referral,fit,resume_variant,raw,notes,corrected_notes,people_detected,review_flags,contains_people
-                ,Fan & Club Products,Lead Architect,application,2026-03-05,,,,,,,,,,,
+                kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes
+                application,Fan & Club Products,Lead Architect,,2026-03-05,,,,,,,,,,,
                 """;
             File.WriteAllText(Path.Combine(tempDir, "applications.csv"), applicationsCsv);
 
@@ -617,9 +617,9 @@ public sealed class PostingImportStepTests
         try
         {
             var csv = """
-                req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes
-                REQ-DUP,Acme Corp,Software Engineer,true,Details,2026-05-01,duplicate,duplicate,never,false,https://example.com/job/dup,,
-                REQ-ORIG,Acme Corp,Software Engineer,true,Details,2026-05-01,no-remote,no-remote,never,false,https://example.com/job/orig,,
+                source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes
+                aggregator,duplicate,Acme Corp,Software Engineer,REQ-DUP,,,yes,Details,2026-05-01,duplicate,duplicate,never,false,,,,
+                aggregator,screened_out,Acme Corp,Software Engineer,REQ-ORIG,,,yes,Details,2026-05-01,no-remote,no-remote,never,false,,,,
                 """;
             File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), csv);
 
@@ -660,12 +660,12 @@ public sealed class PostingImportStepTests
         try
         {
             var csv = """
-                req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes
-                REQ-1,Acme Corp,Software Engineer,true,Details,2026-05-01,no-remote,no-remote,never,false,https://example.com/job/1,,
-                REQ-2,Acme Corp,Skipped Engineer,true,Details,2026-05-01,no-remote,no-remote,never,false,https://example.com/job/2,skip,
-                ,Acme Corp,,true,Details,2026-05-01,no-remote,no-remote,never,false,,,
-                ,,,,,,,,,,,,
-                REQ-5,Acme Corp,Software Engineer,true,Details,2026-05-01,no-remote,no-remote,never,false,https://example.com/job/5,,
+                source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes
+                aggregator,screened_out,Acme Corp,Software Engineer,REQ-1,,,yes,Details,2026-05-01,no-remote,no-remote,never,false,,,,
+                aggregator,screened_out,Acme Corp,Skipped Engineer,REQ-2,,,yes,Details,2026-05-01,no-remote,no-remote,never,false,,,skip,
+                aggregator,screened_out,Acme Corp,,REQ-3,,,yes,Details,2026-05-01,no-remote,no-remote,never,false,,,,
+                ,,,,,,,,,,,,,,,,,
+                aggregator,screened_out,Acme Corp,Software Engineer,REQ-1,,,yes,Details,2026-05-01,no-remote,no-remote,never,false,,,,
                 """;
             File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), csv);
 
@@ -798,13 +798,13 @@ public sealed class PostingImportStepTests
         try
         {
             var csv = """
-                req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_disposition,proposed_resurface,company_also_in_db,url,decision,corrected_notes
-                REQ-S,Acme Corp,Screened Role,true,Details,05/01,reason-screened,reason-screened,screened_out,never,false,https://example.com/job/s,,
-                REQ-C,Acme Corp,Closed Role,true,Details,05/02,reason-closed,reason-closed,closed,if_reopened,false,https://example.com/job/c,,
-                REQ-U,Acme Corp,Unscored Role,true,Details,05/03,reason-unscored,reason-unscored,unscored,,false,https://example.com/job/u,,
-                REQ-D,Acme Corp,Dismissed Role,true,Details,05/04,,dismissed,screened_out,never,false,https://example.com/job/d,,
-                REQ-DUP,Acme Corp,Screened Role,true,Details,05/05,duplicate,duplicate,duplicate,,false,https://example.com/job/dup,,
-                REQ-INV,Acme Corp,Invalid Role,true,Details,05/06,bad,bad,invalid_disposition,,false,https://example.com/job/inv,,
+                source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes
+                aggregator,screened_out,Acme Corp,Screened Role,REQ-S,,,yes,Details,05/01,reason-screened,reason-screened,never,false,,,,
+                aggregator,closed,Acme Corp,Closed Role,REQ-C,,,yes,Details,05/02,reason-closed,reason-closed,if_reopened,false,,,,
+                aggregator,unscored,Acme Corp,Unscored Role,REQ-U,,,yes,Details,05/03,reason-unscored,reason-unscored,,false,,,,
+                aggregator,dismissed,Acme Corp,Dismissed Role,REQ-D,,,yes,Details,05/04,,dismissed,,false,,,,
+                aggregator,duplicate,Acme Corp,Screened Role,REQ-DUP,,,yes,Details,05/05,duplicate,duplicate,,false,,,,
+                aggregator,invalid_disposition,Acme Corp,Invalid Role,REQ-INV,,,yes,Details,05/06,bad,bad,,false,,,,
                 """;
             File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), csv);
 
@@ -855,6 +855,342 @@ public sealed class PostingImportStepTests
 
             // CriteriaCreated was incremented dynamically when reason criteria were seeded
             Assert.True(context.Summary.CriteriaCreated > 0);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task AppendixRowsStep_MissingOrMisspelledHeader_FailsUpfrontWithValidationError()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            // Missing comp_detected column
+            var badCsv = """
+                source,proposed_disposition,company,title,req,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes
+                aggregator,screened_out,Acme Corp,Engineer,REQ-1,,true,Raw,2026-05-01,no-remote,no-remote,never,false,,,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), badCsv);
+
+            var inMemoryCtx = new InMemoryPostingContext();
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var parser = new Rfc4180CsvParser();
+            var step = new AppendixRowsStep(parser, inMemoryCtx, criteriaStep);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result = await step.ExecuteAsync(context);
+            Assert.False(result.IsSuccess);
+            Assert.Equal(ErrorCode.ValidationError, result.Error!.Value.Code);
+            Assert.Contains("appendix-rows.csv", result.Error.Value.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("comp_detected", result.Error.Value.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task ApplicationsStep_MissingOrMisspelledHeader_FailsUpfrontWithValidationError()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            // Misspelled desired_salary as target_salary
+            var badCsv = """
+                kind,company,title,req,applied_on,rejected,rejected_date_md,target_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes
+                application,Acme Corp,Engineer,REQ-1,2026-05-01,false,,200000,false,good,tailored,,,raw,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "applications.csv"), badCsv);
+
+            var inMemoryCtx = new InMemoryPostingContext();
+            var parser = new Rfc4180CsvParser();
+            var step = new ApplicationsStep(parser, inMemoryCtx);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result = await step.ExecuteAsync(context);
+            Assert.False(result.IsSuccess);
+            Assert.Equal(ErrorCode.ValidationError, result.Error!.Value.Code);
+            Assert.Contains("applications.csv", result.Error.Value.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("desired_salary", result.Error.Value.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task AppendixRowsStep_RealShapedReqValues_DeduplicationAndDedupKeyC()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            // Exercises real-shaped req values: J28518, -12822, R-20260720
+            // Two rows with same company & title but different req (J28518 and -12822) create 2 postings
+            // Same req twice (R-20260720 twice) creates 1 posting and 1 unchanged (merged)
+            var csv = """
+                source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes
+                aggregator,screened_out,Real Corp,Staff Architect,J28518,,,yes,Details,2026-05-01,no-remote,no-remote,never,false,,,,
+                aggregator,screened_out,Real Corp,Staff Architect,-12822,,,yes,Details,2026-05-01,no-remote,no-remote,never,false,,,,
+                aggregator,screened_out,Real Corp,Principal Engineer,R-20260720,,,yes,Details,2026-05-02,no-remote,no-remote,never,false,,,,
+                aggregator,screened_out,Real Corp,Principal Engineer,R-20260720,,,yes,Details,2026-05-02,no-remote,no-remote,never,false,,,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), csv);
+
+            var inMemoryCtx = new InMemoryPostingContext();
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var parser = new Rfc4180CsvParser();
+            var step = new AppendixRowsStep(parser, inMemoryCtx, criteriaStep);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result = await step.ExecuteAsync(context);
+            Assert.True(result.IsSuccess);
+
+            // 3 postings created (J28518, -12822, and first R-20260720), 1 unchanged (merged second R-20260720)
+            Assert.Equal(3, context.Summary.PostingsCreated);
+            Assert.Equal(1, context.Summary.PostingsUnchanged);
+
+            var p1 = inMemoryCtx.SavedPostings.FirstOrDefault(p => p.RequisitionId == "J28518");
+            var p2 = inMemoryCtx.SavedPostings.FirstOrDefault(p => p.RequisitionId == "-12822");
+            var p3 = inMemoryCtx.SavedPostings.FirstOrDefault(p => p.RequisitionId == "R-20260720");
+
+            Assert.NotNull(p1);
+            Assert.NotNull(p2);
+            Assert.NotNull(p3);
+
+            // Verify they are distinct postings
+            Assert.NotEqual(p1.Id, p2.Id);
+            Assert.Equal("J28518", p1.RequisitionId);
+            Assert.Equal("-12822", p2.RequisitionId);
+            Assert.Equal("R-20260720", p3.RequisitionId);
+
+            // Verify dedup tier C format: $"{CompanyId:D}|{RequisitionId}"
+            Assert.Equal($"{p1.CompanyId:D}|J28518", p1.DedupKeyC);
+            Assert.Equal($"{p2.CompanyId:D}|-12822", p2.DedupKeyC);
+            Assert.Equal($"{p3.CompanyId:D}|R-20260720", p3.DedupKeyC);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task AppendixRowsStep_CompensationAndRemoteMentioned_ParsedAndStored()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            // Row 1: comp range with estimate ("$203.6k-$366.4k", comp_is_estimate "yes")
+            // Row 2: single comp value ("$237k")
+            // Row 3: remote_mentioned "yes"
+            var csv = """
+                source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes
+                aggregator,screened_out,Comp Corp,Range Role,REQ-R,"$203.6k-$366.4k",yes,no,Details,2026-05-01,reason,reason,never,false,,,,
+                aggregator,screened_out,Comp Corp,Single Role,REQ-S,"$237k",no,no,Details,2026-05-02,reason,reason,never,false,,,,
+                aggregator,screened_out,Comp Corp,Remote Role,REQ-REM,,,yes,Details,2026-05-03,reason,reason,never,false,,,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), csv);
+
+            var inMemoryCtx = new InMemoryPostingContext();
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var parser = new Rfc4180CsvParser();
+            var step = new AppendixRowsStep(parser, inMemoryCtx, criteriaStep);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result = await step.ExecuteAsync(context);
+            Assert.True(result.IsSuccess);
+            Assert.Equal(3, context.Summary.PostingsCreated);
+
+            var pRange = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-R");
+            Assert.NotNull(pRange.Compensation);
+            Assert.Equal(203600m, pRange.Compensation.Min);
+            Assert.Equal(366400m, pRange.Compensation.Max);
+            Assert.Contains("estimate", pRange.Compensation.Text, StringComparison.OrdinalIgnoreCase);
+
+            var pSingle = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-S");
+            Assert.NotNull(pSingle.Compensation);
+            Assert.Equal(237000m, pSingle.Compensation.Min);
+            Assert.Null(pSingle.Compensation.Max);
+
+            var pRemote = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-REM");
+            Assert.Equal(RemoteType.Unknown, pRemote.RemoteType);
+            Assert.Null(pRemote.CultureSummary);
+            Assert.Equal(1, context.Summary.UnmappedValues["remote_mentioned"]);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task ApplicationsStep_FitAndReferral_MappedToEventNotes_AndResumeVariantsDefaulted()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            // Row 1: fit="6.0.", referral="true", blank resume_variant
+            var csv = """
+                kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes
+                application,App Note Corp,Lead Dev,REQ-A,2026-04-10,false,,195000,true,6.0.,,,,Applied via website,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "applications.csv"), csv);
+
+            var inMemoryCtx = new InMemoryPostingContext();
+            var parser = new Rfc4180CsvParser();
+            var step = new ApplicationsStep(parser, inMemoryCtx);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result = await step.ExecuteAsync(context);
+            Assert.True(result.IsSuccess);
+
+            // Mapped to event notes: 2 (1 for fit: 6.0, 1 for referral=true)
+            Assert.Equal(2, context.Summary.MappedToEventNotes);
+
+            // Resume variants defaulted: 1 (blank defaulted to AsIs)
+            Assert.Equal(1, context.Summary.ResumeVariantsDefaulted);
+
+            // Assert applied event notes
+            Assert.Single(inMemoryCtx.SavedEvents);
+            var appliedEvent = inMemoryCtx.SavedEvents[0];
+            Assert.Equal(ApplicationEventType.Applied, appliedEvent.EventType);
+            Assert.NotNull(appliedEvent.Notes);
+            Assert.Contains("fit: 6.0", appliedEvent.Notes);
+            Assert.Contains("referral=true", appliedEvent.Notes);
+            Assert.Contains("resume variant unspecified", appliedEvent.Notes);
+
+            // Assert application entity has ResumeVariant.AsIs
+            Assert.Single(inMemoryCtx.SavedApplications);
+            var app = inMemoryCtx.SavedApplications[0];
+            Assert.Equal(ResumeVariant.AsIs, app.ResumeVariant);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
+    public async Task TrackerImportPipeline_DispositionHistogram_TotalEqualsPostingsCreatedPlusExisting()
+    {
+        var tempDir = CreateTempDir();
+        try
+        {
+            // Bundle has:
+            // 1 posting in postings.json (scored)
+            // 2 postings in appendix-rows.csv (1 screened_out, 1 duplicate linked with duplicate_of_id)
+            var postingsJson = """
+                {
+                  "hist-lead-arch": {
+                    "company": "Hist Corp",
+                    "title": "Lead Architect",
+                    "status": "scored",
+                    "href": "https://example.com/job/hist1"
+                  }
+                }
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
+
+            var appendixCsv = """
+                source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes
+                aggregator,screened_out,Hist Corp,Platform Eng,REQ-H1,,,yes,Details,2026-05-01,reason,reason,never,false,,,,
+                aggregator,duplicate,Hist Corp,Platform Eng,REQ-H2,,,yes,Details,2026-05-02,duplicate,duplicate,never,false,,,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), appendixCsv);
+
+            var inMemoryCtx = new InMemoryPostingContext();
+
+            // Pre-seed 2 existing postings in repository with different dispositions
+            var existing1 = Posting.Create(
+                ownerId: TestOwnerId,
+                companyId: Guid.NewGuid(),
+                title: "Existing Rejected Role",
+                sourceKind: SourceKind.Ats,
+                disposition: PostingDisposition.Rejected);
+            inMemoryCtx.SavedPostings.Add(existing1);
+
+            var existing2 = Posting.Create(
+                ownerId: TestOwnerId,
+                companyId: Guid.NewGuid(),
+                title: "Existing Closed Role",
+                sourceKind: SourceKind.Ats,
+                disposition: PostingDisposition.Closed);
+            inMemoryCtx.SavedPostings.Add(existing2);
+
+            var criteriaStep = new CriteriaSeedingStep(inMemoryCtx);
+            var csvParser = new Rfc4180CsvParser();
+            var pipeline = new TrackerImportPipeline(
+                steps: new ITrackerImportStep[]
+                {
+                    new CompanyAliasesStep(csvParser),
+                    new WatchlistCompaniesStep(csvParser, inMemoryCtx),
+                    new PostingsJsonStep(inMemoryCtx, criteriaStep),
+                    new AppendixRowsStep(csvParser, inMemoryCtx, criteriaStep),
+                    new ApplicationsStep(csvParser, inMemoryCtx)
+                },
+                trackingContext: inMemoryCtx);
+
+            var context = new TrackerImportContext
+            {
+                OwnerId = TestOwnerId,
+                BundleDirectory = tempDir,
+                DefaultDate = TestDefaultDate
+            };
+
+            var result = await pipeline.ExecuteAsync(context);
+            Assert.True(result.IsSuccess);
+
+            var summary = result.Value!;
+            var existingCount = 2;
+
+            // Total created during run = 1 (postings.json) + 2 (appendix-rows including duplicate) = 3
+            Assert.Equal(3, summary.PostingsCreated);
+
+            // Total in histogram must equal Postings Created + existing postings = 3 + 2 = 5
+            var histogramTotal = summary.DispositionHistogram.Values.Sum();
+            Assert.Equal(summary.PostingsCreated + existingCount, histogramTotal);
+            Assert.Equal(5, histogramTotal);
+
+            // Assert individual dispositions are counted
+            Assert.True(summary.DispositionHistogram.ContainsKey("scored"));
+            Assert.True(summary.DispositionHistogram.ContainsKey("screened_out"));
+            Assert.True(summary.DispositionHistogram.ContainsKey("rejected"));
+            Assert.True(summary.DispositionHistogram.ContainsKey("closed"));
         }
         finally
         {
