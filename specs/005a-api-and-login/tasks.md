@@ -20,12 +20,12 @@
 
 **Purpose**: Project initialization, central package management, and architecture seam enforcement.
 
-- [ ] T001 Register dependencies centrally in Directory.Packages.props: Duende.IdentityServer 8.0.10, Duende.IdentityServer.AspNetIdentity 8.0.10, Duende.IdentityServer.EntityFramework 8.0.10, Microsoft.AspNetCore.Authentication.JwtBearer 10.0.14, Microsoft.AspNetCore.OpenApi 10.0.14, Microsoft.Extensions.ApiDescription.Server 10.0.14, Microsoft.EntityFrameworkCore.Sqlite 10.0.14, Microsoft.AspNetCore.Identity.EntityFrameworkCore 10.0.14
-- [ ] T002 [P] Create identity host project in src/RoleRadar.Identity/RoleRadar.Identity.csproj referencing Duende packages, EF Core SQLite, and ASP.NET Core Identity with Nullable and TreatWarningsAsErrors enabled
-- [ ] T003 [P] Create REST API project in src/RoleRadar.Api/RoleRadar.Api.csproj referencing RoleRadar.Application, RoleRadar.Domain, Microsoft.AspNetCore.Authentication.JwtBearer, Microsoft.AspNetCore.OpenApi, and Microsoft.Extensions.ApiDescription.Server (zero Duende, zero Mongo driver)
-- [ ] T004 Add RoleRadar.Identity and RoleRadar.Api to the solution in RoleRadar.slnx
-- [ ] T005 Add architecture tests in tests/RoleRadar.Tests.Architecture/LayerDependencyArchitectureTests.cs asserting: only RoleRadar.Identity references Duende packages; RoleRadar.Api has zero references to MongoDB driver types or RoleRadar.Infrastructure; zero hardcoded owner ID string literals exist outside Domain/Common/OwnerId.cs
-- [ ] T006 Measured Checkpoint: Run scripts/test-fast.ps1 and verify the solution compiles and all architecture seam tests pass
+- [X] T001 Register dependencies centrally in Directory.Packages.props: Duende.IdentityServer 8.0.10, Duende.IdentityServer.AspNetIdentity 8.0.10, Duende.IdentityServer.EntityFramework 8.0.10, Microsoft.AspNetCore.Authentication.JwtBearer 10.0.14, Microsoft.AspNetCore.OpenApi 10.0.14, Microsoft.Extensions.ApiDescription.Server 10.0.14, Microsoft.EntityFrameworkCore.Sqlite 10.0.14, Microsoft.AspNetCore.Identity.EntityFrameworkCore 10.0.14
+- [X] T002 [P] Create identity host project in src/RoleRadar.Identity/RoleRadar.Identity.csproj referencing Duende packages, EF Core SQLite, and ASP.NET Core Identity with Nullable and TreatWarningsAsErrors enabled
+- [X] T003 [P] Create REST API project in src/RoleRadar.Api/RoleRadar.Api.csproj referencing RoleRadar.Application, RoleRadar.Domain, Microsoft.AspNetCore.Authentication.JwtBearer, Microsoft.AspNetCore.OpenApi, and Microsoft.Extensions.ApiDescription.Server (zero Duende, zero Mongo driver)
+- [X] T004 Add RoleRadar.Identity and RoleRadar.Api to the solution in RoleRadar.slnx
+- [X] T005 Add architecture tests in tests/RoleRadar.Tests.Architecture/LayerDependencyArchitectureTests.cs asserting: only RoleRadar.Identity references Duende packages; RoleRadar.Api has zero references to MongoDB driver types or RoleRadar.Infrastructure; zero hardcoded owner ID string literals exist outside Domain/Common/OwnerId.cs
+- [X] T006 Measured Checkpoint: Run scripts/test-fast.ps1 and verify the solution compiles and all architecture seam tests pass
 
 ---
 
@@ -35,12 +35,12 @@
 
 **⚠️ CRITICAL**: Blocks all user stories.
 
-- [ ] T007 [P] Implement IdentityAppDbContext in src/RoleRadar.Identity/Data/IdentityAppDbContext.cs inheriting from IdentityDbContext<IdentityUser<Guid>, IdentityRole<Guid>, Guid> and implementing Duende IPersistedGrantDbContext and IConfigurationDbContext
-- [ ] T008 [P] Implement EF Core SQLite initial migrations in src/RoleRadar.Identity/Data/Migrations/ for AspNetUsers, AspNetUserTokens, PersistedGrants, and Keys tables
-- [ ] T009 [P] Implement OwnerSecurityOptions in src/RoleRadar.Api/Authentication/OwnerSecurityOptions.cs configuring AllowedSubjects string array
-- [ ] T010 Implement HttpUserOwnerIdProvider in src/RoleRadar.Api/Authentication/HttpUserOwnerIdProvider.cs implementing Domain.Common.IOwnerIdProvider, validating the token sub claim against AllowedSubjects and dynamically resolving OwnerId.DefaultValue without string literals
-- [ ] T011 [P] Unit tests for HttpUserOwnerIdProvider in tests/RoleRadar.Tests.Unit/Authentication/HttpUserOwnerIdProviderTests.cs asserting allowlisted subject returns OwnerId.DefaultValue and non-allowlisted subject throws a security exception
-- [ ] T012 Measured Checkpoint: Run scripts/test-fast.ps1 and verify foundational database and owner resolution tests pass
+- [X] T007 [P] Implement IdentityAppDbContext in src/RoleRadar.Identity/Data/IdentityAppDbContext.cs inheriting from IdentityDbContext<IdentityUser<Guid>, IdentityRole<Guid>, Guid> and implementing Duende IPersistedGrantDbContext and IConfigurationDbContext
+- [X] T008 [P] Implement EF Core SQLite initial migrations in src/RoleRadar.Identity/Data/Migrations/ for AspNetUsers, AspNetUserTokens, PersistedGrants, and Keys tables
+- [X] T009 [P] Implement OwnerSecurityOptions in src/RoleRadar.Api/Authentication/OwnerSecurityOptions.cs configuring AllowedSubjects string array
+- [X] T010 Implement HttpUserOwnerIdProvider in src/RoleRadar.Api/Authentication/HttpUserOwnerIdProvider.cs implementing Domain.Common.IOwnerIdProvider, validating the token sub claim against AllowedSubjects and dynamically resolving OwnerId.DefaultValue without string literals
+- [X] T011 [P] Unit tests for HttpUserOwnerIdProvider in tests/RoleRadar.Tests.Unit/Authentication/HttpUserOwnerIdProviderTests.cs asserting allowlisted subject returns OwnerId.DefaultValue and non-allowlisted subject throws a security exception
+- [X] T012 Measured Checkpoint: Run scripts/test-fast.ps1 and verify foundational database and owner resolution tests pass
 
 ---
 
