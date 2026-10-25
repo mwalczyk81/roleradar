@@ -58,6 +58,8 @@ public sealed class TrackerImportSummary
     public int StandaloneNotesCreated { get; set; }
     public int CriteriaCreated { get; set; }
     public int SignalsCreated { get; set; }
+    public int MappedToEventNotes { get; set; }
+    public int ResumeVariantsDefaulted { get; set; }
     public int DatesDefaulted { get; set; }
     public int DatesInferred { get; set; }
     public int DatesFlagged { get; set; }

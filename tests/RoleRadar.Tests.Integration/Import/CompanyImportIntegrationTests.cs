@@ -39,10 +39,10 @@ public sealed class CompanyImportIntegrationTests : IClassFixture<IsolatedContai
 
             // 2. Watchlist: Acme Corporation (watch), Tyrell (avoid), Initech (skip)
             var watchlistCsv = """
-                company,tier,source,notes,decision,corrected_notes
-                Acme Corporation,watch,referral,Leading widget manufacturer,,
-                Tyrell Corp,avoid,news,Cybernetics turbulence,,
-                Initech,watch,direct,Skip this,skip,
+                company,proposed_status,text,decision,corrected_notes
+                Acme Corporation,watch,Leading widget manufacturer,,
+                Tyrell Corp,avoid,Cybernetics turbulence,,
+                Initech,watch,Skip this,skip,
                 """;
             File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), watchlistCsv);
 
@@ -58,7 +58,7 @@ public sealed class CompanyImportIntegrationTests : IClassFixture<IsolatedContai
                 }
                 """;
             File.WriteAllText(Path.Combine(tempDir, "postings.json"), postingsJson);
-            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes\r\n");
+            File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), "source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes\r\n");
             File.WriteAllText(Path.Combine(tempDir, "applications.csv"), "kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes\r\n");
 
             var provider = BuildServiceProvider(dbName);

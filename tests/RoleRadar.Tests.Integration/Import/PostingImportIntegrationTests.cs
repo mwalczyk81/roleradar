@@ -35,7 +35,7 @@ public sealed class PostingImportIntegrationTests : IClassFixture<IsolatedContai
         try
         {
             File.WriteAllText(Path.Combine(tempDir, "company-aliases.csv"), "alias,canonical\r\n");
-            File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), "company,tier,source,notes,decision,corrected_notes\r\nAcme Corp,target,recruiter,Leading firm,,\r\n");
+            File.WriteAllText(Path.Combine(tempDir, "watchlist-companies.csv"), "company,proposed_status,text,decision,corrected_notes\r\nAcme Corp,target,Leading firm,,\r\n");
 
             // postings.json with status "applied", compHigh=true, out-of-range score=15.0 (object keyed by slug)
             var postingsJson = """
@@ -66,9 +66,9 @@ public sealed class PostingImportIntegrationTests : IClassFixture<IsolatedContai
 
             // appendix-rows.csv with duplicate appearing before non-duplicate
             var appendixCsv = """
-                req_id,company,title,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,url,decision,corrected_notes
-                REQ-2,Acme Corp,Staff Engineer,true,Details,2026-06-01,duplicate,duplicate,never,false,https://example.com/job/402,,
-                REQ-1,Acme Corp,Staff Engineer,true,Details,2026-06-01,no-remote,no-remote,never,false,https://example.com/job/403,,
+                source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes
+                aggregator,duplicate,Acme Corp,Staff Engineer,REQ-2,,,yes,Details,2026-06-01,duplicate,duplicate,never,false,,,,
+                aggregator,screened_out,Acme Corp,Staff Engineer,REQ-1,,,yes,Details,2026-06-01,no-remote,no-remote,never,false,,,,
                 """;
             File.WriteAllText(Path.Combine(tempDir, "appendix-rows.csv"), appendixCsv);
             File.WriteAllText(Path.Combine(tempDir, "applications.csv"), "kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes\r\n");

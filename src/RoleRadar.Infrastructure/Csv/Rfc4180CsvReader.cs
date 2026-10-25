@@ -11,11 +11,16 @@ public sealed class CsvRow : ICsvRecord
 {
     private readonly IReadOnlyDictionary<string, int>? _headerIndex;
 
-    public CsvRow(int lineNumber, IReadOnlyList<string> fields, IReadOnlyDictionary<string, int>? headerIndex = null)
+    public CsvRow(
+        int lineNumber,
+        IReadOnlyList<string> fields,
+        IReadOnlyDictionary<string, int>? headerIndex = null,
+        IReadOnlyList<string>? headers = null)
     {
         LineNumber = lineNumber;
         Fields = fields;
         _headerIndex = headerIndex;
+        Headers = headers;
     }
 
     /// <summary>
@@ -27,6 +32,11 @@ public sealed class CsvRow : ICsvRecord
     /// Parsed fields for this record.
     /// </summary>
     public IReadOnlyList<string> Fields { get; }
+
+    /// <summary>
+    /// Column headers for this record, if parsed with hasHeader = true.
+    /// </summary>
+    public IReadOnlyList<string>? Headers { get; }
 
     /// <summary>
     /// The number of fields in this record.
@@ -68,9 +78,20 @@ public sealed class CsvRow : ICsvRecord
 /// </summary>
 public static class Rfc4180CsvReader
 {
+    public static IReadOnlyList<string> ReadHeader(TextReader reader)
+    {
+        foreach (var (_, fields) in ParseRecords(reader))
+        {
+            return fields.Select(f => f.Trim()).ToList();
+        }
+
+        return Array.Empty<string>();
+    }
+
     public static IEnumerable<CsvRow> Read(TextReader reader, bool hasHeader = true)
     {
         Dictionary<string, int>? headerIndex = null;
+        List<string>? headers = null;
         var isFirstRecord = true;
 
         foreach (var (startLine, fields) in ParseRecords(reader))
@@ -80,6 +101,7 @@ public static class Rfc4180CsvReader
                 isFirstRecord = false;
                 if (hasHeader)
                 {
+                    headers = fields.Select(f => f.Trim()).ToList();
                     headerIndex = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                     for (var i = 0; i < fields.Count; i++)
                     {
@@ -94,7 +116,7 @@ public static class Rfc4180CsvReader
                 }
             }
 
-            yield return new CsvRow(startLine, fields, headerIndex);
+            yield return new CsvRow(startLine, fields, headerIndex, headers);
         }
     }
 
@@ -229,4 +251,7 @@ public sealed class Rfc4180CsvParser : ICsvParser
 {
     public IEnumerable<ICsvRecord> Read(TextReader reader, bool hasHeader = true)
         => Rfc4180CsvReader.Read(reader, hasHeader);
+
+    public IReadOnlyList<string> ReadHeader(TextReader reader)
+        => Rfc4180CsvReader.ReadHeader(reader);
 }

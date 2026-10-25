@@ -15,6 +15,8 @@ public sealed class TrackerImportContext
     public Dictionary<string, Company> CanonicalCompanies { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, Posting> PostingsByReqOrUrl { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, Posting> PostingsByCompanyAndTitle { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<string, Posting> PostingsByCompanyAndReq { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public Dictionary<Guid, Posting> AllPostings { get; } = new();
     public HashSet<Guid> ClaimedPostingIds { get; } = new();
 }
 
@@ -60,7 +62,7 @@ public sealed class TrackerImportPipelineFactory : ITrackerImportPipelineFactory
             applicationsStep
         };
 
-        return new TrackerImportPipeline(steps);
+        return new TrackerImportPipeline(steps, context);
     }
 }
 
@@ -96,10 +98,12 @@ internal sealed class CriteriaSeedingPipelineStep : ITrackerImportStep
 public sealed class TrackerImportPipeline
 {
     private readonly IReadOnlyList<ITrackerImportStep> _steps;
+    private readonly ITrackingTransactionContext? _trackingContext;
 
-    public TrackerImportPipeline(IReadOnlyList<ITrackerImportStep> steps)
+    public TrackerImportPipeline(IReadOnlyList<ITrackerImportStep> steps, ITrackingTransactionContext? trackingContext = null)
     {
         _steps = steps ?? throw new ArgumentNullException(nameof(steps));
+        _trackingContext = trackingContext;
     }
 
     public async Task<Result<TrackerImportSummary>> ExecuteAsync(
@@ -137,11 +141,33 @@ public sealed class TrackerImportPipeline
         }
 
         context.Summary.DispositionHistogram.Clear();
-        var distinctPostings = context.PostingsByCompanyAndTitle.Values
-            .Concat(context.PostingsByReqOrUrl.Values)
-            .DistinctBy(p => p.Id);
 
-        foreach (var p in distinctPostings)
+        if (_trackingContext is not null)
+        {
+            var page = 1;
+            while (true)
+            {
+                var existingRes = await _trackingContext.Postings.ListPostingsAsync(context.OwnerId, page: page, pageSize: 200, cancellationToken: cancellationToken);
+                if (!existingRes.IsSuccess || existingRes.Value is null || existingRes.Value.Count == 0)
+                {
+                    break;
+                }
+                foreach (var p in existingRes.Value)
+                {
+                    if (!context.AllPostings.ContainsKey(p.Id))
+                    {
+                        context.AllPostings[p.Id] = p;
+                    }
+                }
+                if (existingRes.Value.Count < 200)
+                {
+                    break;
+                }
+                page++;
+            }
+        }
+
+        foreach (var p in context.AllPostings.Values)
         {
             var dispName = p.Disposition.ToSnakeCase();
             context.Summary.DispositionHistogram.TryGetValue(dispName, out var count);

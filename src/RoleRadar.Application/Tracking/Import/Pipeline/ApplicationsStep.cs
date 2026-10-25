@@ -52,6 +52,20 @@ public sealed class ApplicationsStep : ITrackerImportStep
             return Result<bool>.Failure(ErrorCode.ValidationError, "applications.csv is present but empty.");
         }
 
+        using var headerReader = new StringReader(content);
+        var headers = _csvParser.ReadHeader(headerReader);
+        var headerValidation = CsvHeaderValidator.Validate("applications.csv", headers, CsvHeaderValidator.ApplicationsHeaders);
+        if (!headerValidation.IsSuccess)
+        {
+            recon.RecordErrored();
+            context.Summary.Errors.Add(new TrackerImportRowError(
+                "applications.csv",
+                1,
+                ErrorCode.ValidationError.ToString(),
+                headerValidation.Error!.Value.Message));
+            return Result<bool>.Failure(headerValidation.Error!.Value);
+        }
+
         _standaloneNoteOrdinal = 0;
 
         using var reader = new StringReader(content);
@@ -308,10 +322,19 @@ public sealed class ApplicationsStep : ITrackerImportStep
         // Also limit optional free-text inputs for referral, fit, resume_variant
         var referralRaw = Decode(row["referral"])?.Trim();
         TrackerImportFieldLimiter.LimitReferral(referralRaw, context.Summary);
+        var isReferral = false;
         if (!string.IsNullOrWhiteSpace(referralRaw))
         {
             var s = referralRaw.Trim().ToLowerInvariant();
-            if (s is not ("true" or "yes" or "1" or "false" or "no" or "0"))
+            if (s is "true" or "yes" or "1" or "t" or "y")
+            {
+                isReferral = true;
+            }
+            else if (s is "false" or "no" or "0" or "f" or "n")
+            {
+                isReferral = false;
+            }
+            else
             {
                 context.Summary.RecordUnmappedValue("referral", referralRaw);
             }
@@ -320,6 +343,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
         var fitRaw = Decode(row["fit"])?.Trim();
         TrackerImportFieldLimiter.LimitFit(fitRaw, context.Summary);
         decimal? fitScore = null;
+        string? fitNoteText = null;
         if (!string.IsNullOrWhiteSpace(fitRaw))
         {
             var cleanFit = fitRaw.TrimEnd('.');
@@ -332,6 +356,15 @@ public sealed class ApplicationsStep : ITrackerImportStep
             {
                 context.Summary.RecordUnmappedValue("fit", fitRaw);
             }
+            fitNoteText = $"fit: {cleanFit}";
+            context.Summary.MappedToEventNotes++;
+        }
+
+        string? referralNoteText = null;
+        if (isReferral)
+        {
+            referralNoteText = "referral=true";
+            context.Summary.MappedToEventNotes++;
         }
 
         TrackerImportFieldLimiter.LimitResumeVariant(Decode(row["resume_variant"])?.Trim(), context.Summary);
@@ -351,24 +384,99 @@ public sealed class ApplicationsStep : ITrackerImportStep
                                reviewFlags.Contains("date_is_stated_not_submitted", StringComparison.OrdinalIgnoreCase);
 
         var statedFlagText = isDateStatedFlag ? "date_is_stated_not_submitted" : null;
-        var fitNoteText = !string.IsNullOrWhiteSpace(fitRaw) ? $"fit: {fitRaw.TrimEnd('.')}" : null;
         var rawNotes = Decode(!string.IsNullOrWhiteSpace(row["corrected_notes"]) ? row["corrected_notes"]?.Trim() : row["raw"]?.Trim());
-        var combinedNotes = string.Join("; ", new[] { statedFlagText, fitNoteText, rawNotes }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        var combinedNotes = string.Join("; ", new[] { statedFlagText, fitNoteText, referralNoteText, rawNotes }.Where(s => !string.IsNullOrWhiteSpace(s)));
 
         var canonicalCompany = !string.IsNullOrWhiteSpace(companyName) && context.CompanyAliases.TryGetValue(companyName, out var alias)
             ? alias
             : companyName;
 
-        // Resolve matching posting
+        // Resolve matching posting: req first, then company + title (only if candidate has no req or matching req)
         Posting? foundPosting = null;
-        if (!string.IsNullOrWhiteSpace(req) && context.PostingsByReqOrUrl.TryGetValue(req, out var byReq))
+        if (!string.IsNullOrWhiteSpace(req))
         {
-            foundPosting = byReq;
+            if (!string.IsNullOrWhiteSpace(canonicalCompany) && context.PostingsByCompanyAndReq.TryGetValue($"{canonicalCompany}|{req}", out var byReq))
+            {
+                foundPosting = byReq;
+            }
+            else if (context.PostingsByReqOrUrl.TryGetValue(req, out var byLegacyReq))
+            {
+                foundPosting = byLegacyReq;
+            }
+            else if (!string.IsNullOrWhiteSpace(canonicalCompany))
+            {
+                Company? cObj = null;
+                if (context.CanonicalCompanies.TryGetValue(canonicalCompany, out var foundComp))
+                {
+                    cObj = foundComp;
+                }
+                else
+                {
+                    var existingCompRes = await _context.Companies.GetByNormalizedNameAsync(context.OwnerId, canonicalCompany, cancellationToken);
+                    if (existingCompRes.IsSuccess && existingCompRes.Value is not null)
+                    {
+                        cObj = existingCompRes.Value;
+                    }
+                }
+
+                if (cObj is not null)
+                {
+                    var dedupC = $"{cObj.Id:D}|{req.Trim()}";
+                    var byCRes = await _context.Postings.GetByDedupKeyCAsync(context.OwnerId, dedupC, cancellationToken);
+                    if (byCRes.IsSuccess && byCRes.Value is not null)
+                    {
+                        foundPosting = byCRes.Value;
+                    }
+                }
+            }
         }
-        else if (!string.IsNullOrWhiteSpace(canonicalCompany) && !string.IsNullOrWhiteSpace(title) &&
-                 context.PostingsByCompanyAndTitle.TryGetValue($"{canonicalCompany}|{TitleNormalizer.Normalize(title)}", out var byTitle))
+
+        if (foundPosting is null && !string.IsNullOrWhiteSpace(canonicalCompany) && !string.IsNullOrWhiteSpace(title))
         {
-            foundPosting = byTitle;
+            var titleKey = $"{canonicalCompany}|{TitleNormalizer.Normalize(title)}";
+            if (context.PostingsByCompanyAndTitle.TryGetValue(titleKey, out var byTitle))
+            {
+                if (string.IsNullOrWhiteSpace(byTitle.RequisitionId) || string.Equals(byTitle.RequisitionId, req, StringComparison.OrdinalIgnoreCase))
+                {
+                    foundPosting = byTitle;
+                }
+            }
+            else
+            {
+                Company? cObj = null;
+                if (context.CanonicalCompanies.TryGetValue(canonicalCompany, out var foundComp))
+                {
+                    cObj = foundComp;
+                }
+                else
+                {
+                    var existingCompRes = await _context.Companies.GetByNormalizedNameAsync(context.OwnerId, canonicalCompany, cancellationToken);
+                    if (existingCompRes.IsSuccess && existingCompRes.Value is not null)
+                    {
+                        cObj = existingCompRes.Value;
+                    }
+                }
+
+                if (cObj is not null)
+                {
+                    var candRes = await _context.Postings.FindCandidatesByCompanyAndTitleAsync(context.OwnerId, cObj.Id, TitleNormalizer.Normalize(title), cancellationToken);
+                    if (candRes.IsSuccess && candRes.Value is { Count: > 0 } candidates)
+                    {
+                        foreach (var c in candidates)
+                        {
+                            var byIdRes = await _context.Postings.GetByIdAsync(context.OwnerId, c.Id, cancellationToken);
+                            if (byIdRes.IsSuccess && byIdRes.Value is not null)
+                            {
+                                if (string.IsNullOrWhiteSpace(byIdRes.Value.RequisitionId) || string.Equals(byIdRes.Value.RequisitionId, req, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    foundPosting = byIdRes.Value;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
 
         Guid postingId;
@@ -411,6 +519,16 @@ public sealed class ApplicationsStep : ITrackerImportStep
             }
 
             postingId = foundPosting.Id;
+            context.AllPostings[foundPosting.Id] = foundPosting;
+            if (!string.IsNullOrWhiteSpace(canonicalCompany))
+            {
+                context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{foundPosting.NormalizedTitle}"] = foundPosting;
+                if (!string.IsNullOrWhiteSpace(foundPosting.RequisitionId))
+                {
+                    context.PostingsByCompanyAndReq[$"{canonicalCompany}|{foundPosting.RequisitionId}"] = foundPosting;
+                    context.PostingsByReqOrUrl[foundPosting.RequisitionId] = foundPosting;
+                }
+            }
         }
         else
         {
@@ -496,22 +614,35 @@ public sealed class ApplicationsStep : ITrackerImportStep
             await _context.AppendAuditEntryAsync(auditP, cancellationToken);
             context.Summary.PostingsCreated++;
             postingId = newPosting.Id;
+            context.AllPostings[newPosting.Id] = newPosting;
+            if (!string.IsNullOrWhiteSpace(canonicalCompany))
+            {
+                context.PostingsByCompanyAndTitle[$"{canonicalCompany}|{newPosting.NormalizedTitle}"] = newPosting;
+                if (!string.IsNullOrWhiteSpace(newPosting.RequisitionId))
+                {
+                    context.PostingsByCompanyAndReq[$"{canonicalCompany}|{newPosting.RequisitionId}"] = newPosting;
+                    context.PostingsByReqOrUrl[newPosting.RequisitionId] = newPosting;
+                }
+            }
         }
 
         // Parse resume variant with validation
-        var rvRaw = row["resume_variant"]?.Trim();
+        var rvRaw = Decode(row["resume_variant"])?.Trim();
         var resumeVariant = ResumeVariant.Tailored;
-        if (!string.IsNullOrWhiteSpace(rvRaw))
+        if (string.IsNullOrWhiteSpace(rvRaw))
         {
-            if (TrackingEnumExtensions.TryParseResumeVariant(rvRaw, out var parsedRv))
-            {
-                resumeVariant = parsedRv;
-            }
-            else
-            {
-                context.Summary.RecordUnmappedValue("resume_variant", rvRaw);
-                resumeVariant = ResumeVariant.Tailored;
-            }
+            resumeVariant = ResumeVariant.Tailored;
+            context.Summary.ResumeVariantsDefaulted++;
+        }
+        else if (TrackingEnumExtensions.TryParseResumeVariant(rvRaw, out var parsedRv))
+        {
+            resumeVariant = parsedRv;
+        }
+        else
+        {
+            context.Summary.RecordUnmappedValue("resume_variant", rvRaw);
+            resumeVariant = ResumeVariant.Tailored;
+            context.Summary.ResumeVariantsDefaulted++;
         }
 
         DesiredSalary? desiredSalary = null;

@@ -5,6 +5,7 @@ public interface ICsvRecord
     int LineNumber { get; }
     int FieldCount { get; }
     IReadOnlyList<string> Fields { get; }
+    IReadOnlyList<string>? Headers { get; }
     string? this[int index] { get; }
     string? this[string headerName] { get; }
     bool TryGet(string headerName, out string? value);
@@ -13,6 +14,7 @@ public interface ICsvRecord
 public interface ICsvParser
 {
     IEnumerable<ICsvRecord> Read(TextReader reader, bool hasHeader = true);
+    IReadOnlyList<string> ReadHeader(TextReader reader);
 }
 
 public interface ITrackerScratchScope : IAsyncDisposable
