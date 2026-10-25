@@ -133,11 +133,12 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
         Assert.NotNull(res1.Value);
         Assert.Equal("created", res1.Value.Status);
 
-        // 2. Submit second posting with same company and title but no matching ATS IDs or URL
+        // 2. Submit second posting with same company and title but different requisition (REQ-002 vs REQ-001)
         var cmd2 = new RecordPostingCommand(
             CompanyId: company.Id,
             Title: "Staff Backend Engineer",
             SourceKind: "aggregator",
+            RequisitionId: "REQ-002",
             OwnerId: "owner-1");
         var res2 = await handler.HandleAsync(cmd2);
         Assert.True(res2.IsSuccess);
@@ -146,6 +147,18 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
         Assert.NotNull(res2.Value.Candidates);
         Assert.Single(res2.Value.Candidates);
         Assert.Equal(res1.Value.Posting!.Id, res2.Value.Candidates[0].Id);
+
+        // 3. Submit third posting with same company and title and no requisition -> matches as already_tracked
+        var cmd3 = new RecordPostingCommand(
+            CompanyId: company.Id,
+            Title: "Staff Backend Engineer",
+            SourceKind: "aggregator",
+            OwnerId: "owner-1");
+        var res3 = await handler.HandleAsync(cmd3);
+        Assert.True(res3.IsSuccess);
+        Assert.NotNull(res3.Value);
+        Assert.Equal("already_tracked", res3.Value.Status);
+        Assert.Equal(res1.Value.Posting!.Id, res3.Value.Posting!.Id);
     }
 
     [Fact]
@@ -246,6 +259,42 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
         Assert.Equal("already_decided", reEncounterRes.Value.Status);
         Assert.Equal(true, reEncounterRes.Value.CanReopen);
         Assert.Equal("Below required salary threshold", reEncounterRes.Value.PriorReason);
+    }
+
+    [Fact]
+    public async Task PostingRecord_Repro_ImportedScreenedOutPostingWithReq_posting_record_ReturnsAlreadyDecided()
+    {
+        var company = Company.Create("local-owner", "Acme Corp");
+        await _companyRepo.UpsertCompanyAsync(company);
+
+        var now = DateTimeOffset.UtcNow;
+        var importedPosting = Posting.Create(
+            ownerId: "local-owner",
+            companyId: company.Id,
+            title: "Director, Software Engineering",
+            sourceKind: SourceKind.Aggregator,
+            originalUrl: null,
+            atsTenant: null,
+            requisitionId: "19505",
+            disposition: PostingDisposition.ScreenedOut,
+            dispositionReason: "Overqualified",
+            resurfacePolicy: ResurfacePolicy.IfReopened,
+            decidedAt: now,
+            now: now);
+        await _postingRepo.UpsertPostingAsync(importedPosting);
+
+        var clock = new SystemUtcClock();
+        var handler = new RecordPostingCommandHandler(_context, clock);
+
+        var cmd = new RecordPostingCommand(
+            CompanyId: company.Id,
+            Title: "Director, Software Engineering",
+            RequisitionId: "19505");
+
+        var res = await handler.HandleAsync(cmd);
+        Assert.True(res.IsSuccess);
+        Assert.NotNull(res.Value);
+        Assert.Equal("already_decided", res.Value.Status);
     }
 
     private sealed class TrackingTransactionContextReal : ITrackingTransactionContext

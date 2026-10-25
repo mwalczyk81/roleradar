@@ -98,6 +98,7 @@ public static class UnknownArgumentValidationFilter
                     return result;
                 }
 
+                Console.Error.WriteLine($"[ERROR] Unexpected error invoking tool '{toolName}': {contentText}");
                 var msg = ExtractErrorMessage(result, toolName);
                 return CreateValidationErrorResult(msg);
             }
@@ -106,8 +107,9 @@ public static class UnknownArgumentValidationFilter
         }
         catch (Exception ex)
         {
-            // Never include stack traces or user data
-            var msg = ExtractExceptionMessage(ex, toolName, validParams);
+            var actualEx = ex is TargetInvocationException tie && tie.InnerException != null ? tie.InnerException : ex;
+            Console.Error.WriteLine($"[ERROR] Unexpected exception invoking tool '{toolName}': {actualEx.GetType().FullName}: {actualEx.Message}\n{actualEx.StackTrace}");
+            var msg = ExtractExceptionMessage(actualEx, toolName, validParams);
             return CreateValidationErrorResult(msg);
         }
     }

@@ -1,4 +1,5 @@
 using System.CommandLine;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -8,6 +9,7 @@ using RoleRadar.Application;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Integrity;
 using RoleRadar.Application.Notes.Queries;
+using RoleRadar.Application.Tracking.Commands;
 using RoleRadar.Application.Tracking.Import;
 using RoleRadar.Application.Tracking.Import.Commands;
 using RoleRadar.Application.Tracking.Queries;
@@ -352,6 +354,193 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
         {
             try { Directory.Delete(tempBundleDir, true); } catch { }
             if (File.Exists(tempBackupFile)) { File.Delete(tempBackupFile); }
+        }
+    }
+
+    [Fact]
+    public async Task TrackerImport_PostingRecordDedupTiers_ReturnAlreadyDecidedAndTrackedWithoutDuplicatesOrAudits()
+    {
+        var tempBundleDir = Path.Combine(Path.GetTempPath(), $"rr_dedup_tiers_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempBundleDir);
+
+        try
+        {
+            File.WriteAllText(Path.Combine(tempBundleDir, "watchlist-companies.csv"),
+                "company,proposed_status,text,decision,corrected_notes\r\n" +
+                "Acme Corp,target,Target company,,\r\n");
+
+            File.WriteAllText(Path.Combine(tempBundleDir, "company-aliases.csv"),
+                "alias,canonical\r\n" +
+                "Acme,Acme Corp\r\n");
+
+            File.WriteAllText(Path.Combine(tempBundleDir, "postings.json"),
+                """
+                {
+                  "acme-staff-eng": {
+                    "company": "Acme Corp",
+                    "title": "Staff Software Engineer",
+                    "href": "https://example.com/job/staff-20001",
+                    "req_id": "20001",
+                    "score": 8.0,
+                    "status": "applied"
+                  }
+                }
+                """);
+
+            File.WriteAllText(Path.Combine(tempBundleDir, "appendix-rows.csv"),
+                "source,proposed_disposition,company,title,req,comp_detected,comp_is_estimate,remote_mentioned,details_raw,added_md,reason_primary,reason_all,proposed_resurface,company_also_in_db,review_flags,reason_text,decision,corrected_notes\r\n" +
+                "aggregator,screened_out,Acme Corp,\"Director, Software Engineering\",19505,,,yes,Details,05/05,duplicate,duplicate,if_reopened,false,,,,\r\n");
+
+            File.WriteAllText(Path.Combine(tempBundleDir, "applications.csv"),
+                "kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes\r\n");
+
+            var dbName = $"rrtest_deduptiers_{Guid.NewGuid():N}";
+            var services = BuildServiceProvider(dbName);
+            var coordinator = services.GetRequiredService<ITrackerImportCoordinator>();
+            var defaultDate = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            var applyCmd = new ImportTrackerCommand(
+                BundleDirectory: tempBundleDir,
+                DefaultDate: defaultDate,
+                Apply: true);
+
+            var applyResult = await coordinator.ExecuteAsync(applyCmd);
+            Assert.True(applyResult.IsSuccess);
+
+            var client = new MongoClient(_fixture.HostMongoUri);
+            var targetDb = client.GetDatabase(dbName);
+
+            var initialPostingsCount = await targetDb.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName)
+                .CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
+            Assert.Equal(2, initialPostingsCount);
+
+            var initialAuditCount = await targetDb.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName)
+                .CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
+
+            var trackerQueryHandler = services.GetRequiredService<IQueryHandler<TrackerQueryRequest, TrackerQueryResultDto>>();
+            var recordPostingHandler = services.GetRequiredService<ICommandHandler<RecordPostingCommand, PostingRecordResultDto>>();
+            var tools = ActivatorUtilities.CreateInstance<RoleRadar.Mcp.Stdio.Tools.TrackingMcpTools>(services);
+
+            // 1. Resolve companyId from imported company
+            var compRes = await trackerQueryHandler.HandleAsync(new TrackerQueryRequest(Entity: "companies"));
+            Assert.True(compRes.IsSuccess);
+            var acmeCompany = Assert.Single(compRes.Value!.Items.Cast<CompanySummaryItemDto>());
+            var companyId = acmeCompany.Id;
+
+            // 2. Query Tier C dedup lookup for the screened_out posting imported via appendix-rows
+            var dedupLookupRes = await trackerQueryHandler.HandleAsync(new TrackerQueryRequest(
+                Entity: "posting_dedup_lookup",
+                DedupKey: $"{companyId:D}|19505"));
+            Assert.True(dedupLookupRes.IsSuccess);
+            Assert.Equal(1, dedupLookupRes.Value!.TotalCount);
+            var lookupPosting = Assert.Single(dedupLookupRes.Value.Items.Cast<PostingSummaryItemDto>());
+            Assert.Equal("screened_out", lookupPosting.Disposition);
+
+            // 3. Call posting_record handler and MCP tool with same company + requisition (Tier C, screened_out -> already_decided)
+            var resReqHandler = await recordPostingHandler.HandleAsync(new RecordPostingCommand(
+                CompanyId: companyId,
+                Title: "Director, Software Engineering",
+                RequisitionId: "19505"));
+            Assert.True(resReqHandler.IsSuccess);
+            Assert.Equal("already_decided", resReqHandler.Value!.Status);
+            Assert.Equal("screened_out", resReqHandler.Value.Posting!.Disposition);
+            Assert.Equal(true, resReqHandler.Value.CanReopen);
+
+            var mcpReqJson = await tools.PostingRecordAsync(
+                companyId: companyId,
+                title: "Director, Software Engineering",
+                requisitionId: "19505");
+            using (var doc = JsonDocument.Parse(mcpReqJson))
+            {
+                Assert.True(doc.RootElement.GetProperty("ok").GetBoolean());
+                Assert.Equal("already_decided", doc.RootElement.GetProperty("data").GetProperty("status").GetString());
+            }
+
+            // 4. Call posting_record handler and MCP tool with same company + title (Tier D, screened_out -> already_decided)
+            var resTitleDecidedHandler = await recordPostingHandler.HandleAsync(new RecordPostingCommand(
+                CompanyId: companyId,
+                Title: "Director, Software Engineering"));
+            Assert.True(resTitleDecidedHandler.IsSuccess);
+            Assert.Equal("already_decided", resTitleDecidedHandler.Value!.Status);
+            Assert.Equal("screened_out", resTitleDecidedHandler.Value.Posting!.Disposition);
+            Assert.Equal(true, resTitleDecidedHandler.Value.CanReopen);
+
+            var mcpTitleDecidedJson = await tools.PostingRecordAsync(
+                companyId: companyId,
+                title: "Director, Software Engineering");
+            using (var doc = JsonDocument.Parse(mcpTitleDecidedJson))
+            {
+                Assert.True(doc.RootElement.GetProperty("ok").GetBoolean());
+                Assert.Equal("already_decided", doc.RootElement.GetProperty("data").GetProperty("status").GetString());
+            }
+
+            // 5. Call posting_record handler and MCP tool with same URL (Tier B, active -> already_tracked)
+            var resUrlHandler = await recordPostingHandler.HandleAsync(new RecordPostingCommand(
+                CompanyId: companyId,
+                Title: "Staff Software Engineer",
+                Url: "https://example.com/job/staff-20001"));
+            Assert.True(resUrlHandler.IsSuccess);
+            Assert.Equal("already_tracked", resUrlHandler.Value!.Status);
+            Assert.Equal("scored", resUrlHandler.Value.Posting!.Disposition);
+
+            var mcpUrlJson = await tools.PostingRecordAsync(
+                companyId: companyId,
+                title: "Staff Software Engineer",
+                url: "https://example.com/job/staff-20001");
+            using (var doc = JsonDocument.Parse(mcpUrlJson))
+            {
+                Assert.True(doc.RootElement.GetProperty("ok").GetBoolean());
+                Assert.Equal("already_tracked", doc.RootElement.GetProperty("data").GetProperty("status").GetString());
+            }
+
+            // 6. Call posting_record handler and MCP tool with same company + requisition (Tier C, active -> already_tracked)
+            var resActiveReqHandler = await recordPostingHandler.HandleAsync(new RecordPostingCommand(
+                CompanyId: companyId,
+                Title: "Staff Software Engineer",
+                RequisitionId: "20001"));
+            Assert.True(resActiveReqHandler.IsSuccess);
+            Assert.Equal("already_tracked", resActiveReqHandler.Value!.Status);
+
+            var mcpActiveReqJson = await tools.PostingRecordAsync(
+                companyId: companyId,
+                title: "Staff Software Engineer",
+                requisitionId: "20001");
+            using (var doc = JsonDocument.Parse(mcpActiveReqJson))
+            {
+                Assert.True(doc.RootElement.GetProperty("ok").GetBoolean());
+                Assert.Equal("already_tracked", doc.RootElement.GetProperty("data").GetProperty("status").GetString());
+            }
+
+            // 7. Call posting_record handler and MCP tool with same company + title (Tier D, active -> already_tracked)
+            var resActiveTitleHandler = await recordPostingHandler.HandleAsync(new RecordPostingCommand(
+                CompanyId: companyId,
+                Title: "Staff Software Engineer"));
+            Assert.True(resActiveTitleHandler.IsSuccess);
+            Assert.Equal("already_tracked", resActiveTitleHandler.Value!.Status);
+
+            var mcpActiveTitleJson = await tools.PostingRecordAsync(
+                companyId: companyId,
+                title: "Staff Software Engineer");
+            using (var doc = JsonDocument.Parse(mcpActiveTitleJson))
+            {
+                Assert.True(doc.RootElement.GetProperty("ok").GetBoolean());
+                Assert.Equal("already_tracked", doc.RootElement.GetProperty("data").GetProperty("status").GetString());
+            }
+
+            // 6. Verify NO duplicate postings and NO audit entries were created
+            var postPostingsCount = await targetDb.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName)
+                .CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
+            Assert.Equal(initialPostingsCount, postPostingsCount);
+
+            var postAuditCount = await targetDb.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName)
+                .CountDocumentsAsync(Builders<BsonDocument>.Filter.Empty);
+            Assert.Equal(initialAuditCount, postAuditCount);
+
+            await client.DropDatabaseAsync(dbName);
+        }
+        finally
+        {
+            try { Directory.Delete(tempBundleDir, true); } catch { }
         }
     }
 

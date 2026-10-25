@@ -458,6 +458,10 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
 
         var trimmedTenant = string.IsNullOrWhiteSpace(command.AtsTenant) ? null : command.AtsTenant.Trim();
         var trimmedReqId = string.IsNullOrWhiteSpace(command.RequisitionId) ? null : command.RequisitionId.Trim();
+        if (trimmedReqId is not null && !trimmedReqId.Any(char.IsDigit))
+        {
+            trimmedReqId = null;
+        }
         var normalizedUrl = UrlNormalizer.Normalize(command.Url);
 
         string? dedupKeyA = (!string.IsNullOrWhiteSpace(trimmedTenant) && !string.IsNullOrWhiteSpace(trimmedReqId))
@@ -514,17 +518,24 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
                 ownerId, command.CompanyId.Value, normalizedTitle, cancellationToken);
             if (candidatesResult.IsSuccess && candidatesResult.Value is not null && candidatesResult.Value.Count > 0)
             {
-                // Concurrency resolution: if any candidate matches a definitive key (Tier A/B/C), treat as definitive match
+                // Concurrency resolution & Tier D deduplication:
+                // If any candidate matches a definitive key (Tier A/B/C) or matches by company + title with compatible requisition, treat as definitive match
                 foreach (var candidate in candidatesResult.Value)
                 {
                     var candPostingRes = await _context.Postings.GetByIdAsync(ownerId, candidate.Id, cancellationToken);
                     if (candPostingRes.IsSuccess && candPostingRes.Value is not null)
                     {
                         var cand = candPostingRes.Value;
-                        var isMatch = (!string.IsNullOrWhiteSpace(dedupKeyA) && cand.DedupKeyA == dedupKeyA)
-                                   || (!string.IsNullOrWhiteSpace(dedupKeyB) && cand.DedupKeyB == dedupKeyB)
-                                   || (!string.IsNullOrWhiteSpace(dedupKeyC) && cand.DedupKeyC == dedupKeyC);
-                        if (isMatch)
+                        var isDefinitiveKeyMatch = (!string.IsNullOrWhiteSpace(dedupKeyA) && cand.DedupKeyA == dedupKeyA)
+                                                || (!string.IsNullOrWhiteSpace(dedupKeyB) && cand.DedupKeyB == dedupKeyB)
+                                                || (!string.IsNullOrWhiteSpace(dedupKeyC) && cand.DedupKeyC == dedupKeyC);
+
+                        // Tier D match: identical company + title if candidate has no req, or incoming has no req, or both share the same req
+                        var isTierDMatch = string.IsNullOrWhiteSpace(cand.RequisitionId)
+                                        || string.IsNullOrWhiteSpace(trimmedReqId)
+                                        || string.Equals(cand.RequisitionId, trimmedReqId, StringComparison.OrdinalIgnoreCase);
+
+                        if (isDefinitiveKeyMatch || isTierDMatch)
                         {
                             return await HandleDedupMatchAsync(cand, command, ownerId, now, cancellationToken);
                         }
