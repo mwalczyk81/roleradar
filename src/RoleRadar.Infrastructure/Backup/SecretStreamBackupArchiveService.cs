@@ -489,11 +489,9 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
         try
         {
-            var isDocker = _backupOptions.DumpCommand.TrimStart().StartsWith("docker", StringComparison.OrdinalIgnoreCase);
-            var isMongoTools = !isDocker && (
-                string.Equals(_backupOptions.DumpCommand, "mongodump", StringComparison.OrdinalIgnoreCase) ||
-                _backupOptions.DumpCommand.StartsWith("mongodump ", StringComparison.OrdinalIgnoreCase) ||
-                File.Exists("/usr/local/bin/mongodump"));
+            var isMongoTools = string.Equals(_backupOptions.DumpCommand, "mongodump", StringComparison.OrdinalIgnoreCase) ||
+                               _backupOptions.DumpCommand.StartsWith("mongodump ", StringComparison.OrdinalIgnoreCase) ||
+                               File.Exists("/usr/local/bin/mongodump");
 
             string cmdExe;
             string cmdArgs;
@@ -752,11 +750,9 @@ public sealed class SecretStreamBackupArchiveService : IBackupArchiveService
 
         try
         {
-            var isDocker = _backupOptions.RestoreCommand.TrimStart().StartsWith("docker", StringComparison.OrdinalIgnoreCase);
-            var isMongoTools = !isDocker && (
-                string.Equals(_backupOptions.RestoreCommand, "mongorestore", StringComparison.OrdinalIgnoreCase) ||
-                _backupOptions.RestoreCommand.StartsWith("mongorestore ", StringComparison.OrdinalIgnoreCase) ||
-                File.Exists("/usr/local/bin/mongorestore"));
+            var isMongoTools = string.Equals(_backupOptions.RestoreCommand, "mongorestore", StringComparison.OrdinalIgnoreCase) ||
+                               _backupOptions.RestoreCommand.StartsWith("mongorestore ", StringComparison.OrdinalIgnoreCase) ||
+                               File.Exists("/usr/local/bin/mongorestore");
 
             string cmdExe;
             string cmdArgs;
