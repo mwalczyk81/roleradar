@@ -2,6 +2,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Integrity;
+using RoleRadar.Domain.Common;
 
 namespace RoleRadar.Infrastructure.Mongo.Repositories;
 
@@ -19,9 +20,11 @@ public sealed class MongoIntegrityRepository : IIntegrityRepository
     {
         await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
 
-        var filter = string.IsNullOrWhiteSpace(ownerId)
-            ? Builders<BsonDocument>.Filter.Empty
-            : Builders<BsonDocument>.Filter.Eq(TrackingBsonFieldNames.Common.OwnerId, ownerId);
+        var configuredOwner = string.IsNullOrWhiteSpace(ownerId)
+            ? OwnerId.Default.Value
+            : new OwnerId(ownerId).Value;
+
+        var filter = Builders<BsonDocument>.Filter.Eq(TrackingBsonFieldNames.Common.OwnerId, configuredOwner);
 
         var companiesCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName);
         var postingsCol = _database.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
@@ -242,6 +245,37 @@ public sealed class MongoIntegrityRepository : IIntegrityRepository
                     "Posting has applied disposition but no matching application record exists.",
                     appliedPostingId,
                     null));
+            }
+        }
+
+        // Anomaly Check 8: Records in any collection whose owner_id differs from configured owner (count only)
+        var allCollections = new[]
+        {
+            TrackingMongoOptions.CompaniesCollectionName,
+            TrackingMongoOptions.CareerSourcesCollectionName,
+            TrackingMongoOptions.PostingsCollectionName,
+            TrackingMongoOptions.PostingSignalsCollectionName,
+            TrackingMongoOptions.CriteriaCollectionName,
+            TrackingMongoOptions.ApplicationsCollectionName,
+            TrackingMongoOptions.ApplicationEventsCollectionName,
+            TrackingMongoOptions.ContactsCollectionName,
+            TrackingMongoOptions.SearchRunsCollectionName,
+            MongoBootstrapAndIndexes.NotesCollectionName,
+            MongoBootstrapAndIndexes.NoteRevisionsCollectionName,
+            MongoBootstrapAndIndexes.AuditLogCollectionName
+        };
+
+        foreach (var colName in allCollections)
+        {
+            var col = _database.GetCollection<BsonDocument>(colName);
+            var mismatchFilter = Builders<BsonDocument>.Filter.Ne(TrackingBsonFieldNames.Common.OwnerId, configuredOwner);
+            var mismatchCount = await col.CountDocumentsAsync(mismatchFilter, cancellationToken: cancellationToken);
+            if (mismatchCount > 0)
+            {
+                anomalies.Add(new IntegrityAnomalyDto(
+                    "owner_mismatch",
+                    $"{mismatchCount} record(s) in collection '{colName}' have owner_id differing from configured owner '{configuredOwner}'.",
+                    Guid.Empty));
             }
         }
 
