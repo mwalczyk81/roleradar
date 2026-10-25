@@ -38,12 +38,23 @@ public sealed class TrackingValidatorAndDtoCoverageTests
         // Tag length max 50
         Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", CategoryTags: [new string('t', 51)])));
 
+        // Invalid OwnershipType
+        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", OwnershipType: "bogus_ownership")));
+
+        // Invalid Status
+        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", Status: "bogus_status")));
+
+        // Update mode by ID allows omitted name
+        Assert.Null(validator.Validate(new RecordCompanyCommand(Id: Guid.NewGuid(), CareerSources: [])));
+
         // Valid command returns null
         var valid = new RecordCompanyCommand(
             Name: "Acme Corp",
             Description: "Valid description",
             ParentCompany: "Acme Holdings",
             Headquarters: "Chicago, IL",
+            OwnershipType: "public",
+            Status: "target",
             CategoryTags: ["fintech", "remote"]);
         Assert.Null(validator.Validate(valid));
     }

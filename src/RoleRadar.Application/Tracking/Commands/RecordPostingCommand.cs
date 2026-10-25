@@ -366,11 +366,12 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
         Compensation? comp = null;
         if (command.CompensationMin.HasValue || command.CompensationMax.HasValue || command.CompensationCurrency is not null || command.CompensationText is not null)
         {
+            var existingComp = posting.Compensation;
             comp = new Compensation(
-                command.CompensationMin,
-                command.CompensationMax,
-                command.CompensationCurrency ?? "USD",
-                command.CompensationText);
+                command.CompensationMin ?? existingComp?.Min,
+                command.CompensationMax ?? existingComp?.Max,
+                command.CompensationCurrency ?? existingComp?.Currency ?? "USD",
+                command.CompensationText ?? existingComp?.Text);
         }
 
         // Duplicate collapsing if duplicateOfId passed
