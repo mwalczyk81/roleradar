@@ -1,3 +1,6 @@
+using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Domain.Audit;
 using RoleRadar.Domain.Common;
@@ -20,11 +23,106 @@ public sealed record PostingDto(
     DateTimeOffset? LastVerifiedAt = null,
     bool? CompHighPriority = null);
 
+[JsonConverter(typeof(SignalInputDtoConverter))]
 public sealed record SignalInputDto(
     string SignalType,
-    string Evidence,
+    string Evidence = "reported by agent",
     string? ObservedAt = null,
     string? DeadlineDate = null);
+
+public sealed class SignalInputDtoConverter : JsonConverter<SignalInputDto>
+{
+    private const string DefaultEvidence = "reported by agent";
+
+    public override SignalInputDto? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null)
+        {
+            return null;
+        }
+
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            var text = reader.GetString()?.Trim() ?? string.Empty;
+            if (text.StartsWith("deadline:", StringComparison.OrdinalIgnoreCase))
+            {
+                var deadlineDate = text["deadline:".Length..].Trim();
+                return new SignalInputDto(
+                    SignalType: "deadline",
+                    Evidence: DefaultEvidence,
+                    ObservedAt: null,
+                    DeadlineDate: deadlineDate);
+            }
+
+            return new SignalInputDto(
+                SignalType: text,
+                Evidence: DefaultEvidence,
+                ObservedAt: null,
+                DeadlineDate: null);
+        }
+
+        if (reader.TokenType == JsonTokenType.StartObject)
+        {
+            using var doc = JsonDocument.ParseValue(ref reader);
+            var root = doc.RootElement;
+
+            string? signalType = null;
+            if (root.TryGetProperty("signalType", out var stElem) || root.TryGetProperty("signal_type", out stElem))
+            {
+                signalType = stElem.GetString();
+            }
+
+            string? evidence = null;
+            if (root.TryGetProperty("evidence", out var evElem))
+            {
+                evidence = evElem.GetString();
+            }
+            if (string.IsNullOrWhiteSpace(evidence))
+            {
+                evidence = DefaultEvidence;
+            }
+
+            string? deadlineDate = null;
+            if (root.TryGetProperty("deadlineDate", out var dlElem) || root.TryGetProperty("deadline_date", out dlElem))
+            {
+                deadlineDate = dlElem.GetString();
+            }
+
+            string? observedAt = null;
+            if (root.TryGetProperty("observedAt", out var obsElem) || root.TryGetProperty("observed_at", out obsElem))
+            {
+                observedAt = obsElem.GetString();
+            }
+
+            return new SignalInputDto(
+                SignalType: signalType ?? string.Empty,
+                Evidence: evidence,
+                ObservedAt: observedAt,
+                DeadlineDate: deadlineDate);
+        }
+
+        throw new JsonException($"Expected string or object for signal, but encountered {reader.TokenType}.");
+    }
+
+    public override void Write(Utf8JsonWriter writer, SignalInputDto value, JsonSerializerOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(value);
+
+        writer.WriteStartObject();
+        writer.WriteString("signalType", value.SignalType);
+        writer.WriteString("evidence", value.Evidence);
+        if (value.ObservedAt is not null)
+        {
+            writer.WriteString("observedAt", value.ObservedAt);
+        }
+        if (value.DeadlineDate is not null)
+        {
+            writer.WriteString("deadlineDate", value.DeadlineDate);
+        }
+        writer.WriteEndObject();
+    }
+}
 
 public sealed record PostingRecordResultDto(
     string Status,
@@ -104,6 +202,14 @@ public sealed class RecordPostingCommandValidator : ICommandValidator<RecordPost
                         return new ResultError(ErrorCode.ValidationError, $"Invalid signalType '{sig.SignalType}'.");
                     }
 
+                    if (!string.IsNullOrWhiteSpace(sig.DeadlineDate))
+                    {
+                        if (!DateOnly.TryParseExact(sig.DeadlineDate.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+                        {
+                            return new ResultError(ErrorCode.ValidationError, "Deadline date must be in YYYY-MM-DD format.");
+                        }
+                    }
+
                     if (string.IsNullOrWhiteSpace(sig.Evidence) || sig.Evidence.Trim().Length > 500)
                     {
                         return new ResultError(ErrorCode.ValidationError, "Signal evidence is required and cannot exceed 500 characters.");
@@ -152,6 +258,14 @@ public sealed class RecordPostingCommandValidator : ICommandValidator<RecordPost
                 if (!TrackingEnumExtensions.TryParseSignalType(sig.SignalType, out _))
                 {
                     return new ResultError(ErrorCode.ValidationError, $"Invalid signalType '{sig.SignalType}'.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(sig.DeadlineDate))
+                {
+                    if (!DateOnly.TryParseExact(sig.DeadlineDate.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
+                    {
+                        return new ResultError(ErrorCode.ValidationError, "Deadline date must be in YYYY-MM-DD format.");
+                    }
                 }
 
                 if (string.IsNullOrWhiteSpace(sig.Evidence) || sig.Evidence.Trim().Length > 500)
@@ -486,7 +600,7 @@ public sealed class RecordPostingCommandHandler : ICommandHandler<RecordPostingC
         {
             foreach (var sig in command.Signals)
             {
-                if (Enum.TryParse<SignalType>(sig.SignalType, true, out var st))
+                if (TrackingEnumExtensions.TryParseSignalType(sig.SignalType, out var st))
                 {
                     var observedAt = !string.IsNullOrWhiteSpace(sig.ObservedAt) && DateTimeOffset.TryParse(sig.ObservedAt, out var obs)
                         ? obs
