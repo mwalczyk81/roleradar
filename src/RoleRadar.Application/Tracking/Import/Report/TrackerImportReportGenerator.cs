@@ -145,10 +145,11 @@ public static class TrackerImportReportGenerator
         sb.AppendLine("--------------------------------------------------------------------------------");
         sb.AppendLine("                              Mapping Decisions                                 ");
         sb.AppendLine("--------------------------------------------------------------------------------");
-        sb.AppendLine("  - Remote Type: 'remote_mentioned' is preserved as RemoteType.Unknown with 'remote mentioned'");
-        sb.AppendLine("    recorded in the posting summary/notes, avoiding premature classification as full remote.");
+        sb.AppendLine("  - Remote Type: 'remote_mentioned' is preserved as RemoteType.Unknown without storing text in");
+        sb.AppendLine("    culture summary (counted under Unmapped Values as 'remote_mentioned: N not stored').");
         sb.AppendLine("  - Resume Variant: Domain entity requires non-nullable ResumeVariant; blank values default");
-        sb.AppendLine("    to ResumeVariant.Tailored (counted under Resume Variants Defaulted).");
+        sb.AppendLine("    to ResumeVariant.AsIs with 'resume variant unspecified' appended to applied event notes");
+        sb.AppendLine("    (counted under Resume Variants Defaulted).");
         sb.AppendLine("  - Fit & Referral: Fit values and referral=true are mapped to applied event notes");
         sb.AppendLine("    (counted under Mapped to Event Notes).");
         sb.AppendLine();
@@ -160,6 +161,11 @@ public static class TrackerImportReportGenerator
             sb.AppendLine("--------------------------------------------------------------------------------");
             foreach (var (field, count) in summary.UnmappedValues.OrderBy(kv => kv.Key, StringComparer.OrdinalIgnoreCase))
             {
+                if (string.Equals(field, "remote_mentioned", StringComparison.OrdinalIgnoreCase))
+                {
+                    sb.AppendLine(inv, $"  - remote_mentioned: {count} not stored");
+                    continue;
+                }
                 var samples = summary.UnmappedValueSamples.TryGetValue(field, out var list) && list.Count > 0
                     ? $" (samples: {string.Join(", ", list.Take(5))})"
                     : string.Empty;

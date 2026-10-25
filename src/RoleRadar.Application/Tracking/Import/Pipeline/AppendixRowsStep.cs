@@ -187,12 +187,12 @@ public sealed class AppendixRowsStep : ITrackerImportStep
 
                 var remoteMentioned = Decode(row["remote_mentioned"])?.Trim();
                 var isRemoteMentioned = string.Equals(remoteMentioned, "yes", StringComparison.OrdinalIgnoreCase) || string.Equals(remoteMentioned, "true", StringComparison.OrdinalIgnoreCase);
-                var remoteType = RemoteType.Unknown;
-                string? cultureSummary = isRemoteMentioned ? "remote mentioned" : null;
-                if (cultureSummary is not null)
+                if (isRemoteMentioned || (!string.IsNullOrWhiteSpace(remoteMentioned) && !string.Equals(remoteMentioned, "no", StringComparison.OrdinalIgnoreCase) && !string.Equals(remoteMentioned, "false", StringComparison.OrdinalIgnoreCase)))
                 {
-                    cultureSummary = TrackerImportFieldLimiter.LimitCultureSummary(cultureSummary, context.Summary);
+                    context.Summary.RecordUnmappedValue("remote_mentioned", "not stored");
                 }
+                var remoteType = RemoteType.Unknown;
+                string? cultureSummary = null;
 
                 var isDuplicateRow = string.Equals(rawProposedDisp, "duplicate", StringComparison.OrdinalIgnoreCase) ||
                                      string.Equals(reasonPrimary, "duplicate", StringComparison.OrdinalIgnoreCase) ||

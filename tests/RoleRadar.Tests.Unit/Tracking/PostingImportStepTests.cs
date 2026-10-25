@@ -1043,8 +1043,8 @@ public sealed class PostingImportStepTests
 
             var pRemote = inMemoryCtx.SavedPostings.First(p => p.RequisitionId == "REQ-REM");
             Assert.Equal(RemoteType.Unknown, pRemote.RemoteType);
-            Assert.NotNull(pRemote.CultureSummary);
-            Assert.Contains("remote mentioned", pRemote.CultureSummary, StringComparison.OrdinalIgnoreCase);
+            Assert.Null(pRemote.CultureSummary);
+            Assert.Equal(1, context.Summary.UnmappedValues["remote_mentioned"]);
         }
         finally
         {
@@ -1082,7 +1082,7 @@ public sealed class PostingImportStepTests
             // Mapped to event notes: 2 (1 for fit: 6.0, 1 for referral=true)
             Assert.Equal(2, context.Summary.MappedToEventNotes);
 
-            // Resume variants defaulted: 1 (blank defaulted to Tailored)
+            // Resume variants defaulted: 1 (blank defaulted to AsIs)
             Assert.Equal(1, context.Summary.ResumeVariantsDefaulted);
 
             // Assert applied event notes
@@ -1092,11 +1092,12 @@ public sealed class PostingImportStepTests
             Assert.NotNull(appliedEvent.Notes);
             Assert.Contains("fit: 6.0", appliedEvent.Notes);
             Assert.Contains("referral=true", appliedEvent.Notes);
+            Assert.Contains("resume variant unspecified", appliedEvent.Notes);
 
-            // Assert application entity has ResumeVariant.Tailored
+            // Assert application entity has ResumeVariant.AsIs
             Assert.Single(inMemoryCtx.SavedApplications);
             var app = inMemoryCtx.SavedApplications[0];
-            Assert.Equal(ResumeVariant.Tailored, app.ResumeVariant);
+            Assert.Equal(ResumeVariant.AsIs, app.ResumeVariant);
         }
         finally
         {

@@ -367,7 +367,26 @@ public sealed class ApplicationsStep : ITrackerImportStep
             context.Summary.MappedToEventNotes++;
         }
 
-        TrackerImportFieldLimiter.LimitResumeVariant(Decode(row["resume_variant"])?.Trim(), context.Summary);
+        var rvRaw = TrackerImportFieldLimiter.LimitResumeVariant(Decode(row["resume_variant"])?.Trim(), context.Summary);
+        ResumeVariant resumeVariant;
+        string? resumeVariantNoteText = null;
+        if (string.IsNullOrWhiteSpace(rvRaw))
+        {
+            resumeVariant = ResumeVariant.AsIs;
+            resumeVariantNoteText = "resume variant unspecified";
+            context.Summary.ResumeVariantsDefaulted++;
+        }
+        else if (TrackingEnumExtensions.TryParseResumeVariant(rvRaw, out var parsedRv))
+        {
+            resumeVariant = parsedRv;
+        }
+        else
+        {
+            context.Summary.RecordUnmappedValue("resume_variant", rvRaw);
+            resumeVariant = ResumeVariant.AsIs;
+            resumeVariantNoteText = "resume variant unspecified";
+            context.Summary.ResumeVariantsDefaulted++;
+        }
 
         var dateOutcome = DateInferenceRule.Resolve(appliedOn, defaultDate);
         TrackDateInference(context, dateOutcome);
@@ -385,7 +404,7 @@ public sealed class ApplicationsStep : ITrackerImportStep
 
         var statedFlagText = isDateStatedFlag ? "date_is_stated_not_submitted" : null;
         var rawNotes = Decode(!string.IsNullOrWhiteSpace(row["corrected_notes"]) ? row["corrected_notes"]?.Trim() : row["raw"]?.Trim());
-        var combinedNotes = string.Join("; ", new[] { statedFlagText, fitNoteText, referralNoteText, rawNotes }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        var combinedNotes = string.Join("; ", new[] { statedFlagText, fitNoteText, referralNoteText, rawNotes, resumeVariantNoteText }.Where(s => !string.IsNullOrWhiteSpace(s)));
 
         var canonicalCompany = !string.IsNullOrWhiteSpace(companyName) && context.CompanyAliases.TryGetValue(companyName, out var alias)
             ? alias
@@ -624,25 +643,6 @@ public sealed class ApplicationsStep : ITrackerImportStep
                     context.PostingsByReqOrUrl[newPosting.RequisitionId] = newPosting;
                 }
             }
-        }
-
-        // Parse resume variant with validation
-        var rvRaw = Decode(row["resume_variant"])?.Trim();
-        var resumeVariant = ResumeVariant.Tailored;
-        if (string.IsNullOrWhiteSpace(rvRaw))
-        {
-            resumeVariant = ResumeVariant.Tailored;
-            context.Summary.ResumeVariantsDefaulted++;
-        }
-        else if (TrackingEnumExtensions.TryParseResumeVariant(rvRaw, out var parsedRv))
-        {
-            resumeVariant = parsedRv;
-        }
-        else
-        {
-            context.Summary.RecordUnmappedValue("resume_variant", rvRaw);
-            resumeVariant = ResumeVariant.Tailored;
-            context.Summary.ResumeVariantsDefaulted++;
         }
 
         DesiredSalary? desiredSalary = null;
