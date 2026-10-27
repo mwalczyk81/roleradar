@@ -1,19 +1,3 @@
-<!--
-Sync Impact Report
-- Version change: 1.0.1 -> 1.1.0 (MINOR: material expansion of Principles III and IV)
-- Modified principles:
-  - III. Test-Enforced Layering (added mandatory architecture test verifying every command handler registration is wrapped by the transaction-and-audit decorator; updated delivery adapter rule to reference command/query handlers)
-  - IV. Named Seams Only (replaced INoteStore with aggregate-level INoteRepository; adopted plain ICommandHandler / IQueryHandler pattern with decorator pipeline for transaction, audit, validation, and logging; required typed result returns for expected failures instead of exceptions; gated mediator libraries including MediatR behind an ADR addressing MIT license compatibility alongside factories, plugin frameworks, event buses, and generic IRepository<T>)
-- Added sections: None
-- Removed sections: None
-- Templates & downstream artifacts status:
-  - .specify/templates/plan-template.md: compatible (reads constitution dynamically)
-  - .specify/templates/spec-template.md: compatible
-  - .specify/templates/tasks-template.md: compatible
-  - Follow-up action needed in specs/001-memory-replacement/ (plan.md, research.md, contracts/, and docs/adr/0002) via /speckit-plan to align Feature 001 design artifacts with INoteRepository, ICommandHandler/IQueryHandler decorators, and typed results.
-- Follow-up TODOs: None
--->
-
 # RoleRadar Constitution
 
 RoleRadar is a single-owner, local-first job search tracker that an AI agent reads and writes
@@ -34,10 +18,7 @@ specifications, plans, tasks, and implementations in strict priority order (I th
   real-name check MUST run locally against a denylist stored outside the repository and never
   committed; CI MUST NOT need the denylist.
 
-**Rationale**: RoleRadar is a public portfolio repository backing a private personal workflow; a
-single leaked fixture, log line, or commit containing real job-search or third-party contact data
-permanently compromises privacy and professional confidentiality. Keeping the real-name denylist
-outside the repository prevents the denylist itself from leaking private company or contact names.
+**Rationale**: A single leaked fixture, log line, or commit with real job-search or contact data permanently compromises privacy, and keeping the denylist outside the repository stops it from leaking names itself.
 
 ### II. Test-First Development (NON-NEGOTIABLE)
 
@@ -47,9 +28,7 @@ outside the repository prevents the denylist itself from leaking private company
 - Every storage port MUST have a dedicated contract test suite verifying its behavioral invariants.
 - A minimum code coverage gate MUST be enforced as a blocking check in CI.
 
-**Rationale**: Writing tests first prevents untested implementation drift, while Testcontainers and
-contract test suites guarantee deterministic, repeatable verification without risking local
-job-search data.
+**Rationale**: Writing tests first prevents implementation drift, and isolated Testcontainers plus contract suites make verification repeatable without risking local data.
 
 ### III. Test-Enforced Layering
 
@@ -62,9 +41,7 @@ job-search data.
   the transaction-and-audit decorator, ensuring a write path cannot skip transaction or audit
   enforcement.
 
-**Rationale**: Architectural boundaries and cross-cutting write invariants degrade when left to
-code-review convention alone; automated architecture tests make dependency violations or un-audited
-command handler registrations fail the build immediately.
+**Rationale**: Automated architecture tests make dependency violations and un-audited command handlers fail the build instead of relying on code review.
 
 ### IV. Named Seams Only
 
@@ -89,10 +66,7 @@ command handler registrations fail the build immediately.
 - Factories, plugin frameworks, and event buses MUST NOT be introduced without a prior MADR ADR
   justifying the complexity.
 
-**Rationale**: Adopting aggregate-level use-case repositories, plain command/query handlers with
-explicit decorators, and typed failure results keeps control flow explicit, testable, and free of
-third-party licensing risk while preserving the ability to swap narrative storage or identity
-providers.
+**Rationale**: Aggregate-level repositories, plain handlers with decorators, and typed failure results keep control flow explicit, testable, and free of licensing risk.
 
 ### V. Agent Safety & Auditability
 
@@ -104,9 +78,7 @@ providers.
   application code, and each entry MUST capture the actor identity and tool or command name.
 - MCP tool descriptions MUST be accurate and concise to minimize context overhead and ambiguity.
 
-**Rationale**: An AI agent processes untrusted external job descriptions that could contain prompt
-injections; narrow idempotent tools, no destructive deletes, and mandatory append-only audit
-logging bound the blast radius of any unintended agent action.
+**Rationale**: An agent reading untrusted postings can be prompt-injected, so narrow idempotent tools, no deletes, and append-only audit bound the blast radius.
 
 ### VI. stdio Protocol Hygiene
 
@@ -116,9 +88,7 @@ logging bound the blast radius of any unintended agent action.
   (`stderr`).
 - The stdio host MUST NOT open or bind any network listener.
 
-**Rationale**: Any non-protocol byte written to `stdout` corrupts the JSON-RPC stream and breaks
-MCP client communication, while forbidding network listeners eliminates local network attack
-surfaces.
+**Rationale**: Any non-protocol byte on stdout corrupts the JSON-RPC stream, and forbidding listeners removes local network attack surface.
 
 ### VII. Data Durability & Safe Recovery
 
@@ -129,8 +99,7 @@ surfaces.
 - Database backups MUST be encrypted before leaving the local machine or landing in cloud-synced
   storage.
 
-**Rationale**: As a local-first system of record, routine container lifecycle commands must never
-destroy state, and off-machine backups require encryption at rest to uphold Principle I.
+**Rationale**: A local-first system of record must survive routine container lifecycle commands, and off-machine backups need encryption to uphold Principle I.
 
 ### VIII. Recorded Decisions & Pinned Dependencies
 
@@ -139,8 +108,7 @@ destroy state, and off-machine backups require encryption at rest to uphold Prin
 - All NuGet package versions and container image tags MUST be explicitly pinned; floating versions
   and `:latest` container tags are forbidden.
 
-**Rationale**: Recording decisions in MADR format preserves context across sessions, and pinning
-every package and container tag guarantees reproducible builds and prevents supply-chain drift.
+**Rationale**: MADR records preserve decisions across sessions, and pinned versions and tags make builds reproducible and prevent supply-chain drift.
 
 ### IX. Baseline Technical Conventions
 
@@ -152,9 +120,7 @@ every package and container tag guarantees reproducible builds and prevents supp
 - Every relational table and document collection MUST carry an `owner_id` field from initial
   creation.
 
-**Rationale**: Consistent compiler strictness, time-ordered UUIDv7 identifiers, standard GUID
-serialization, and pervasive `owner_id` scoping eliminate common persistence bugs and avoid costly
-schema retrofits later.
+**Rationale**: Strict compiler settings, UTC time, UUIDv7 ids, standard GUID serialization, and owner_id scoping avoid common persistence bugs and costly retrofits.
 
 ## Operational & Scope Constraints
 
@@ -183,7 +149,7 @@ schema retrofits later.
 - **Authority**: This constitution supersedes all other repository conventions, templates, and
   ad-hoc implementation choices.
 - **Amendment Procedure**: Any change to this constitution requires an explicit pull request or
-  specification step documenting the rationale, an updated Sync Impact Report during review, and
+  specification step documenting the rationale, a new entry in `docs/constitution-changelog.md`, and
   synchronized updates to affected `.specify/templates/` files or ADRs.
 - **Versioning Policy**: The constitution version follows Semantic Versioning (`MAJOR.MINOR.PATCH`):
   - **MAJOR**: Removal, re-ordering, or backward-incompatible redefinition of an existing principle.
@@ -194,4 +160,4 @@ schema retrofits later.
   proposed deviation from Principle IV (Named Seams Only) or Principle VIII requires an approved
   ADR under `docs/adr/` prior to implementation.
 
-**Version**: 1.1.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-17
+**Version**: 1.1.1 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-27

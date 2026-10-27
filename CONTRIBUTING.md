@@ -1,6 +1,6 @@
 # Contributing to RoleRadar
 
-RoleRadar is governed by the [RoleRadar Constitution](./.specify/memory/constitution.md) (v1.1.0). Every contribution must adhere to Principles I through IX.
+RoleRadar is governed by the [RoleRadar Constitution](./.specify/memory/constitution.md). Every contribution must adhere to Principles I through IX.
 
 ## Non-Negotiable Rules
 
