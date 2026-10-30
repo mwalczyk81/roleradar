@@ -33,8 +33,27 @@ public static class IdentityServerConfig
 
     public static IEnumerable<Client> GetClients(IConfiguration configuration)
     {
-        var webSecret = configuration["Clients:Web:Secret"] ?? "insecure-fallback-web-secret-for-dev";
-        var headlessSecret = configuration["Clients:Headless:Secret"] ?? "insecure-fallback-headless-secret-for-dev";
+        var webSecret = configuration["Clients:Web:Secret"]
+            ?? Environment.GetEnvironmentVariable("ROLERADAR_WEB_CLIENT_SECRET");
+        if (string.IsNullOrWhiteSpace(webSecret))
+        {
+            webSecret = "insecure-fallback-web-secret-for-dev";
+        }
+
+        var headlessSecret = configuration["Clients:Headless:Secret"]
+            ?? Environment.GetEnvironmentVariable("ROLERADAR_HEADLESS_CLIENT_SECRET");
+        if (string.IsNullOrWhiteSpace(headlessSecret))
+        {
+            headlessSecret = "insecure-fallback-headless-secret-for-dev";
+        }
+
+        var headlessSubject = configuration["Clients:Headless:Subject"]
+            ?? Environment.GetEnvironmentVariable("ROLERADAR_OWNER_ALLOWED_SUBJECT");
+        if (string.IsNullOrWhiteSpace(headlessSubject))
+        {
+            headlessSubject = "roleradar-headless";
+        }
+
         var webRedirectUri = configuration["Clients:Web:RedirectUri"] ?? "https://localhost:5002/signin-oidc";
         var webPostLogoutUri = configuration["Clients:Web:PostLogoutRedirectUri"] ?? "https://localhost:5002/signout-callback-oidc";
 
@@ -69,7 +88,9 @@ public static class IdentityServerConfig
                 AllowedGrantTypes = GrantTypes.ClientCredentials,
                 ClientSecrets = { new Secret(headlessSecret.Sha256()) },
                 AllowedScopes = { "roleradar.api.read" },
-                AccessTokenLifetime = 300              // 5 minutes
+                AccessTokenLifetime = 300,             // 5 minutes
+                ClientClaimsPrefix = string.Empty,
+                Claims = { new ClientClaim("sub", headlessSubject.Trim()) }
             }
         ];
     }

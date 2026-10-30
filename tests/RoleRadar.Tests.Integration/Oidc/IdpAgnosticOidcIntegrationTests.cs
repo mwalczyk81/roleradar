@@ -2,16 +2,19 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Web;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Tokens;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Tracking.Commands;
 using RoleRadar.Identity.Data;
@@ -25,6 +28,9 @@ public sealed class IdpAgnosticOidcIntegrationTests(IsolatedContainerMongoFixtur
     : IClassFixture<IsolatedContainerMongoFixture>
 {
     private const string ClientSecret = "IdpAgnosticWebSecret!2026";
+    private static readonly string[] StubResponseTypes = ["code", "token", "id_token"];
+    private static readonly string[] StubSubjectTypes = ["public"];
+    private static readonly string[] StubSigningAlgs = ["RS256"];
     private readonly IsolatedContainerMongoFixture _mongo = mongoFixture;
 
     [Fact]
@@ -95,9 +101,9 @@ public sealed class IdpAgnosticOidcIntegrationTests(IsolatedContainerMongoFixtur
             Assert.False(string.IsNullOrWhiteSpace(tokenEndpoint));
             Assert.False(string.IsNullOrWhiteSpace(jwksUri));
 
-            // 3. Start RoleRadar.Api configured strictly with standard OIDC discovery against the Identity host
+            // 3. Start RoleRadar.Api configured strictly with standard OIDC discovery against the Identity host (unmodified JwtBearer setup)
             await using var apiApp = RoleRadar.Api.Program.CreateApp(
-                ["--urls", "http://127.0.0.1:0"],
+                ["--urls", "http://127.0.0.1:0", "--environment", "Development"],
                 builder =>
                 {
                     builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
@@ -107,15 +113,6 @@ public sealed class IdpAgnosticOidcIntegrationTests(IsolatedContainerMongoFixtur
                         ["Authentication:Authority"] = discoveredIssuer,
                         ["Authentication:Audience"] = "roleradar.api",
                         ["Owner:AllowedSubjects:0"] = ownerSubId.ToString()
-                    });
-
-                    builder.Services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
-                    {
-                        options.Authority = discoveredIssuer;
-                        options.MetadataAddress = $"{identityBaseUrl}/.well-known/openid-configuration";
-                        options.RequireHttpsMetadata = false;
-                        options.TokenValidationParameters.ValidIssuer = discoveredIssuer;
-                        options.TokenValidationParameters.ValidAudience = "roleradar.api";
                     });
                 });
 
@@ -267,6 +264,118 @@ public sealed class IdpAgnosticOidcIntegrationTests(IsolatedContainerMongoFixtur
                 try { Directory.Delete(keyDir, recursive: true); } catch { }
             }
         }
+    }
+
+    [Fact]
+    public async Task StubOidcIssuer_WithOwnRsaKeyAndDiscoveryAndJwks_ValidatesAgainstUnmodifiedApiJwtBearerSetup()
+    {
+        var mongoDbName = $"rrtest_oidc_stub_{Guid.CreateVersion7():N}";
+        const string stubOwnerSubject = "stub-external-idp-owner-sub-001";
+        const string keyId = "stub-oidc-rsa-key-1";
+
+        using var stubRsa = RSA.Create(2048);
+        var rsaParams = stubRsa.ExportParameters(includePrivateParameters: false);
+        var rsaSecurityKey = new RsaSecurityKey(stubRsa) { KeyId = keyId };
+
+        // 1. Start a minimal non-Duende in-test stub OIDC issuer serving only discovery + JWKS
+        var stubBuilder = WebApplication.CreateBuilder(["--urls", "http://127.0.0.1:0"]);
+        await using var stubIdpApp = stubBuilder.Build();
+
+        var stubIssuerUrl = string.Empty;
+
+        stubIdpApp.MapGet("/.well-known/openid-configuration", () => Results.Json(new
+        {
+            issuer = stubIssuerUrl,
+            jwks_uri = $"{stubIssuerUrl}/.well-known/jwks",
+            authorization_endpoint = $"{stubIssuerUrl}/authorize",
+            token_endpoint = $"{stubIssuerUrl}/token",
+            response_types_supported = StubResponseTypes,
+            subject_types_supported = StubSubjectTypes,
+            id_token_signing_alg_values_supported = StubSigningAlgs
+        }));
+
+        stubIdpApp.MapGet("/.well-known/jwks", () => Results.Json(new
+        {
+            keys = new[]
+            {
+                new
+                {
+                    kty = "RSA",
+                    use = "sig",
+                    kid = keyId,
+                    alg = "RS256",
+                    n = Base64UrlEncoder(rsaParams.Modulus!),
+                    e = Base64UrlEncoder(rsaParams.Exponent!)
+                }
+            }
+        }));
+
+        await stubIdpApp.StartAsync();
+        var stubServer = stubIdpApp.Services.GetRequiredService<IServer>();
+        stubIssuerUrl = stubServer.Features.Get<IServerAddressesFeature>()!.Addresses.Single().TrimEnd('/');
+
+        // 2. Start RoleRadar.Api against the stub OIDC issuer with ZERO JwtBearerOptions overrides
+        await using var apiApp = RoleRadar.Api.Program.CreateApp(
+            ["--urls", "http://127.0.0.1:0", "--environment", "Development"],
+            builder =>
+            {
+                builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["ConnectionStrings:MongoConnection"] = _mongo.HostMongoUri,
+                    ["DatabaseName"] = mongoDbName,
+                    ["Authentication:Authority"] = stubIssuerUrl,
+                    ["Authentication:Audience"] = "roleradar.api",
+                    ["Owner:AllowedSubjects:0"] = stubOwnerSubject
+                });
+            });
+
+        await apiApp.StartAsync();
+        var apiServer = apiApp.Services.GetRequiredService<IServer>();
+        var apiBaseUrl = apiServer.Features.Get<IServerAddressesFeature>()!.Addresses.Single();
+
+        // 3. Mint an RS256 JWT signed by the stub issuer's RSA key
+        var signingCredentials = new SigningCredentials(rsaSecurityKey, SecurityAlgorithms.RsaSha256);
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Issuer = stubIssuerUrl,
+            Audience = "roleradar.api",
+            Subject = new ClaimsIdentity(
+            [
+                new Claim("sub", stubOwnerSubject),
+                new Claim("scope", "roleradar.api.read")
+            ]),
+            NotBefore = DateTime.UtcNow.AddMinutes(-1),
+            Expires = DateTime.UtcNow.AddMinutes(5),
+            SigningCredentials = signingCredentials
+        };
+        var token = new JwtSecurityTokenHandler().CreateEncodedJwt(tokenDescriptor);
+
+        using var apiClient = new HttpClient { BaseAddress = new Uri(apiBaseUrl) };
+        apiClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        var response = await apiClient.GetAsync("/api/v1/companies");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        // 4. Verify a token signed by an unknown RSA key is rejected with 401
+        using var rogueRsa = RSA.Create(2048);
+        var rogueKey = new RsaSecurityKey(rogueRsa) { KeyId = keyId };
+        var rogueDescriptor = new SecurityTokenDescriptor
+        {
+            Issuer = stubIssuerUrl,
+            Audience = "roleradar.api",
+            Subject = new ClaimsIdentity([new Claim("sub", stubOwnerSubject)]),
+            NotBefore = DateTime.UtcNow.AddMinutes(-1),
+            Expires = DateTime.UtcNow.AddMinutes(5),
+            SigningCredentials = new SigningCredentials(rogueKey, SecurityAlgorithms.RsaSha256)
+        };
+        var rogueToken = new JwtSecurityTokenHandler().CreateEncodedJwt(rogueDescriptor);
+        apiClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", rogueToken);
+
+        var rogueResponse = await apiClient.GetAsync("/api/v1/companies");
+        Assert.Equal(HttpStatusCode.Unauthorized, rogueResponse.StatusCode);
+
+        await apiApp.StopAsync();
+        await stubIdpApp.StopAsync();
     }
 
     private static string ExtractRequestVerificationToken(string html, string url, HttpStatusCode status)

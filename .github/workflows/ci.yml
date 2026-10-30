@@ -55,6 +55,9 @@ jobs:
       - name: Build solution
         run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
 
+      - name: Verify OpenAPI contract has zero drift
+        run: git diff --exit-code -- contracts
+
       - name: Run Unit and Architecture tests
         env:
           SKIP: roleradar-denylist,no-commit-to-branch
@@ -96,6 +99,9 @@ jobs:
 
       - name: Build solution
         run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
+
+      - name: Verify OpenAPI contract has zero drift
+        run: git diff --exit-code -- contracts
 
       - name: Run Unit and Architecture tests
         run: |
@@ -157,6 +163,12 @@ jobs:
 
       - name: Build solution
         run: dotnet build RoleRadar.sln -c Release --no-restore -warnaserror
+
+      - name: Verify OpenAPI and TypeScript client contract have zero drift
+        run: |
+          git diff --exit-code -- contracts
+          npx --yes openapi-typescript@7.10.1 contracts/openapi/roleradar-api.json -o contracts/client/api-types.ts
+          git diff --exit-code -- contracts
 
       - name: Run Database Tools update check
         shell: pwsh

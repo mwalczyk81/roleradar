@@ -1,3 +1,18 @@
+# TLS Certificate & Container Trust Requirements:
+# 1. Subject Alternative Name (SAN) requirement:
+#    The development certificate mounted from ./certs/dev-cert.pfx (and PEM ./certs/dev-cert.crt)
+#    MUST include Subject Alternative Names for the compose service hostname as well as localhost:
+#      SAN = DNS:identity, DNS:api, DNS:localhost, IP:127.0.0.1
+#    Both Identity (ROLERADAR_IDENTITY_ISSUER_URI) and API (ROLERADAR_OIDC_AUTHORITY) use
+#    https://identity:5001 as the canonical issuer/authority URL. A certificate with only
+#    CN=localhost / SAN=DNS:localhost will fail TLS hostname validation when the API container
+#    fetches OIDC discovery and JWKS from https://identity:5001.
+# 2. How the API container trusts the dev cert:
+#    The roleradar-api image uses mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled (distroless,
+#    no shell, no update-ca-certificates). To trust the self-signed dev certificate inside the API
+#    container, mount the PEM-encoded public certificate at /https/dev-cert.crt:ro and set
+#    SSL_CERT_FILE=/https/dev-cert.crt so OpenSSL trusts it for outbound HTTPS connections.
+
 services:
   cli:
     profiles: ["apps"]
@@ -60,7 +75,10 @@ services:
       - "127.0.0.1:5001:5001"
     environment:
       - ROLERADAR_IDENTITY_DB=Data Source=/data/identity/identity.db
-      - ROLERADAR_IDENTITY_ISSUER_URI=https://localhost:5001
+      - ROLERADAR_IDENTITY_ISSUER_URI=https://identity:5001
+      - ROLERADAR_WEB_CLIENT_SECRET=${ROLERADAR_WEB_CLIENT_SECRET:-}
+      - ROLERADAR_HEADLESS_CLIENT_SECRET=${ROLERADAR_HEADLESS_CLIENT_SECRET:-}
+      - ROLERADAR_OWNER_ALLOWED_SUBJECT=${ROLERADAR_OWNER_ALLOWED_SUBJECT:-}
       - Kestrel__Endpoints__LoopbackHealth__Url=http://127.0.0.1:8080
       - Kestrel__Endpoints__Https__Url=https://*:5001
       - Kestrel__Endpoints__Https__Certificate__Path=/https/cert.pfx
@@ -77,7 +95,6 @@ services:
       timeout: 3s
       retries: 3
       start_period: 4s
-    network_mode: default
 
   api:
     profiles: ["apps"]
@@ -96,9 +113,11 @@ services:
       - "127.0.0.1:5002:5002"
     environment:
       - ROLERADAR_MONGO_CONNECTION_STRING=mongodb://mongo:27017/?directConnection=true
-      - ROLERADAR_MONGO_DATABASE=roleradar
+      - ROLERADAR_MONGO_DATABASE=${ROLERADAR_MONGO_DATABASE:-roleradar}
       - ROLERADAR_OIDC_AUTHORITY=https://identity:5001
       - ROLERADAR_OIDC_AUDIENCE=roleradar.api
+      - Owner__AllowedSubjects__0=${ROLERADAR_OWNER_ALLOWED_SUBJECT:-}
+      - SSL_CERT_FILE=/https/dev-cert.crt
       - Kestrel__Endpoints__LoopbackHealth__Url=http://127.0.0.1:8080
       - Kestrel__Endpoints__Https__Url=https://*:5002
       - Kestrel__Endpoints__Https__Certificate__Path=/https/cert.pfx
@@ -108,13 +127,16 @@ services:
       - DOTNET_gcServer=0
     volumes:
       - ./certs/dev-cert.pfx:/https/cert.pfx:ro
+      - ./certs/dev-cert.crt:/https/dev-cert.crt:ro
+    depends_on:
+      identity:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "/app/RoleRadar.Api", "--healthcheck"]
       interval: 5s
       timeout: 3s
       retries: 3
       start_period: 4s
-    network_mode: default
 
 volumes:
   identity-data:

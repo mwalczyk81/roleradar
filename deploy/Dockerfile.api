@@ -22,6 +22,11 @@ COPY src/RoleRadar.Api/ src/RoleRadar.Api/
 RUN dotnet publish src/RoleRadar.Api/RoleRadar.Api.csproj -c Release --no-restore -p:OpenApiGenerateDocumentsOnBuild=false -o /app/api
 
 # Stage 2: Hardened Chiseled Runtime (roleradar-api)
+# Note on TLS trust in chiseled runtime:
+# This image has no shell and no update-ca-certificates utility. To trust a local development
+# or private CA certificate for outbound OIDC backchannel HTTPS calls (e.g., https://identity:5001),
+# mount the PEM certificate (whose SAN includes DNS:identity) read-only into the container
+# (e.g., /https/dev-cert.crt) and set SSL_CERT_FILE=/https/dev-cert.crt.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:c89a6a61f494f20a5ae302990e814627a8d91b332fd4a8e7c1707c2d4da9555d AS api
 WORKDIR /app
 COPY --from=build --chown=1654:1654 /app/api /app

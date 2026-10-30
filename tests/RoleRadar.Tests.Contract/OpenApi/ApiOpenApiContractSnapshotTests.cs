@@ -62,8 +62,8 @@ public sealed class ApiOpenApiContractSnapshotTests
         var schemas = snapshotRoot.GetProperty("components").GetProperty("schemas");
         AssertExplicitTypesInComponentSchemas(schemas);
 
-        // 3. Compare live runtime OpenAPI endpoint (/openapi/v1.json) against the committed snapshot
-        await using var app = RoleRadar.Api.Program.CreateApp(["--urls", "http://127.0.0.1:0"]);
+        // 3. Compare live runtime OpenAPI endpoint (/openapi/v1.json) against the committed snapshot in Development
+        await using var app = RoleRadar.Api.Program.CreateApp(["--urls", "http://127.0.0.1:0", "--environment", "Development"]);
         await app.StartAsync();
 
         var server = app.Services.GetRequiredService<IServer>();
@@ -80,6 +80,16 @@ public sealed class ApiOpenApiContractSnapshotTests
         var normalizedLive = NormalizeJson(liveDoc.RootElement);
 
         Assert.Equal(normalizedSnapshot, normalizedLive);
+
+        // Verify /openapi/v1.json is NOT exposed in Production
+        await using var prodApp = RoleRadar.Api.Program.CreateApp(["--urls", "http://127.0.0.1:0", "--environment", "Production"]);
+        await prodApp.StartAsync();
+        var prodServer = prodApp.Services.GetRequiredService<IServer>();
+        var prodBaseAddress = prodServer.Features.Get<IServerAddressesFeature>()!.Addresses.Single();
+        using var prodClient = new HttpClient { BaseAddress = new Uri(prodBaseAddress) };
+        var prodResp = await prodClient.GetAsync("/openapi/v1.json");
+        Assert.Equal(HttpStatusCode.NotFound, prodResp.StatusCode);
+        await prodApp.StopAsync();
 
         // 4. Verify generated TypeScript client exists and is non-empty
         var tsClientPath = Path.Combine(repoRoot, "contracts", "client", "api-types.ts");

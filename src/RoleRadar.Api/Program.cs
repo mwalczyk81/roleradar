@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using RoleRadar.Api.Authentication;
@@ -54,14 +53,8 @@ public partial class Program
 
         configureBuilder?.Invoke(builder);
 
-        var dpKeysDir = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "roleradar-api-dpkeys"));
-        dpKeysDir.Create();
-        builder.Services.AddDataProtection()
-            .PersistKeysToFileSystem(dpKeysDir);
-
         builder.Services.AddHttpContextAccessor();
         builder.Services.Configure<OwnerSecurityOptions>(builder.Configuration.GetSection(OwnerSecurityOptions.SectionName));
-        builder.Services.Configure<OwnerSecurityOptions>(builder.Configuration.GetSection("Owner"));
         builder.Services.AddScoped<IOwnerIdProvider, HttpUserOwnerIdProvider>();
         builder.Services.AddSingleton<IAuthorizationHandler, OwnerAllowlistHandler>();
 
@@ -78,6 +71,7 @@ public partial class Program
             {
                 options.Authority = authority;
                 options.Audience = audience;
+                options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
                 options.MapInboundClaims = false;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
@@ -130,7 +124,10 @@ public partial class Program
         app.UseAuthentication();
         app.UseAuthorization();
 
-        app.MapOpenApi();
+        if (app.Environment.IsDevelopment())
+        {
+            app.MapOpenApi();
+        }
 
         app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }))
             .AllowAnonymous();

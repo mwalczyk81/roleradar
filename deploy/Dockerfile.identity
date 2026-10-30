@@ -15,12 +15,14 @@ RUN dotnet restore src/RoleRadar.Identity/RoleRadar.Identity.csproj --locked-mod
 COPY src/RoleRadar.Domain/ src/RoleRadar.Domain/
 COPY src/RoleRadar.Identity/ src/RoleRadar.Identity/
 
-RUN dotnet publish src/RoleRadar.Identity/RoleRadar.Identity.csproj -c Release --no-restore -o /app/identity
+RUN dotnet publish src/RoleRadar.Identity/RoleRadar.Identity.csproj -c Release --no-restore -o /app/identity && \
+    mkdir -p /empty-identity-data
 
 # Stage 2: Hardened Chiseled Runtime (roleradar-identity)
 # IMPORTANT (ADR-0016): This image bundles Duende IdentityServer Community Edition and MUST NEVER be published to an external registry.
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:c89a6a61f494f20a5ae302990e814627a8d91b332fd4a8e7c1707c2d4da9555d AS identity
 WORKDIR /app
+COPY --from=build --chown=1654:1654 /empty-identity-data /data/identity
 COPY --from=build --chown=1654:1654 /app/identity /app
 USER 1654:1654
 ENV ASPNETCORE_URLS=http://127.0.0.1:8080 \

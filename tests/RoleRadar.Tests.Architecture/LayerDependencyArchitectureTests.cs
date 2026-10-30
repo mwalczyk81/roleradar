@@ -67,6 +67,32 @@ public sealed class LayerDependencyArchitectureTests
     }
 
     [Fact]
+    public void RoleRadarApi_MustNotReference_Duende()
+    {
+        var netArchResult = Types.InAssembly(ApiAssembly)
+            .ShouldNot()
+            .HaveDependencyOnAny(
+                "Duende",
+                "Duende.IdentityServer",
+                "Duende.IdentityModel",
+                "RoleRadar.Identity")
+            .GetResult();
+
+        Assert.True(
+            netArchResult.IsSuccessful,
+            $"RoleRadar.Api must not depend on Duende or RoleRadar.Identity: {string.Join(", ", netArchResult.FailingTypeNames ?? [])}");
+
+        var referencedAssemblies = ApiAssembly.GetReferencedAssemblies()
+            .Select(a => a.Name ?? string.Empty)
+            .ToArray();
+
+        Assert.DoesNotContain(
+            referencedAssemblies,
+            name => name.StartsWith("Duende", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("RoleRadar.Identity", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void RoleRadarApi_Types_MustNotDependOn_MongoDriver()
     {
         // 1. NetArchTest assembly dependency check: no types in RoleRadar.Api may depend on Mongo driver/BSON

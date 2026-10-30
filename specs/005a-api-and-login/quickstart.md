@@ -14,16 +14,29 @@ This guide provides step-by-step instructions for provisioning the single owner 
 
 ---
 
-## 2. Step 1: Export Local Development HTTPS Certificate
+## 2. Step 1: Generate Development HTTPS Certificate with Container SANs
 
-Because both the identity host and the REST API enforce HTTPS across all environments, export a locally-trusted development certificate:
+Because both the identity host (`https://identity:5001`) and the REST API (`https://api:5002`) enforce HTTPS across all environments and use `https://identity:5001` as the canonical OIDC issuer/authority, the TLS certificate **must** include Subject Alternative Names (SANs) for `DNS:identity`, `DNS:api`, `DNS:localhost`, and `IP:127.0.0.1`.
+
+Because `roleradar-api` runs on `mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled` (which has no shell or `update-ca-certificates`), the API container trusts the development certificate by mounting the public PEM certificate at `/https/dev-cert.crt:ro` and setting `SSL_CERT_FILE=/https/dev-cert.crt` in `deploy/docker-compose.apps.yml`.
 
 ```powershell
-# Create certificate directory if not present
+# Create certificate directory if not present (git-ignored via deploy/certs/ and *.pfx)
 New-Item -ItemType Directory -Force -Path "./deploy/certs"
 
-# Export trusted dev certificate
-dotnet dev-certs https -ep "./deploy/certs/dev-cert.pfx" -p "DevCertPassword123!" --trust
+# Generate a self-signed certificate with SANs for identity, api, localhost, and 127.0.0.1,
+# exporting both PKCS#12 (dev-cert.pfx for Kestrel) and PEM (dev-cert.crt for SSL_CERT_FILE trust):
+openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes `
+    -keyout "./deploy/certs/dev-cert.key" `
+    -out "./deploy/certs/dev-cert.crt" `
+    -subj "/CN=identity" `
+    -addext "subjectAltName=DNS:identity,DNS:api,DNS:localhost,IP:127.0.0.1"
+
+openssl pkcs12 -export `
+    -out "./deploy/certs/dev-cert.pfx" `
+    -inkey "./deploy/certs/dev-cert.key" `
+    -in "./deploy/certs/dev-cert.crt" `
+    -passout pass:DevCertPassword123!
 ```
 
 ---

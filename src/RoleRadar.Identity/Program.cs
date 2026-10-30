@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using RoleRadar.Identity.Configuration;
 using RoleRadar.Identity.Data;
@@ -44,17 +45,27 @@ public partial class Program
 
         configureBuilder?.Invoke(builder);
 
-        var dpKeysDir = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "roleradar-identity-dpkeys"));
+        var identityConnectionString = builder.Configuration.GetConnectionString("IdentityConnection")
+            ?? Environment.GetEnvironmentVariable("ROLERADAR_IDENTITY_DB")
+            ?? "Data Source=/data/identity/identity.db";
+
+        var sqliteDataSource = new SqliteConnectionStringBuilder(identityConnectionString).DataSource;
+        var identityDataDir = Path.GetDirectoryName(sqliteDataSource);
+        if (string.IsNullOrWhiteSpace(identityDataDir))
+        {
+            identityDataDir = "/data/identity";
+        }
+
+        var dpKeysDir = new DirectoryInfo(Path.Combine(identityDataDir, "dpkeys"));
         dpKeysDir.Create();
         builder.Services.AddDataProtection()
             .PersistKeysToFileSystem(dpKeysDir);
 
+        var signingKeysDir = Path.Combine(identityDataDir, "keys");
+        Directory.CreateDirectory(signingKeysDir);
+
         builder.Services.AddRazorPages()
             .AddApplicationPart(typeof(Program).Assembly);
-
-        var identityConnectionString = builder.Configuration.GetConnectionString("IdentityConnection")
-            ?? Environment.GetEnvironmentVariable("ROLERADAR_IDENTITY_DB")
-            ?? "Data Source=identity.db";
 
         builder.Services.AddDbContext<IdentityAppDbContext>(options =>
             options.UseSqlite(identityConnectionString));
@@ -84,7 +95,7 @@ public partial class Program
             options.Events.RaiseSuccessEvents = true;
             options.KeyManagement.Enabled = true;
             options.KeyManagement.RotationInterval = TimeSpan.FromDays(30);
-            options.KeyManagement.KeyPath = Path.Combine(Path.GetTempPath(), "roleradar-identity-keys");
+            options.KeyManagement.KeyPath = signingKeysDir;
         })
         .AddAspNetIdentity<IdentityUser<Guid>>()
         .AddOperationalStore<IdentityAppDbContext>(options =>
