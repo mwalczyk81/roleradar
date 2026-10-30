@@ -137,3 +137,33 @@ try {
 ```
 
 **Expected Outcome**: Returns HTTP 409 Conflict with `errorCode: "concurrency_conflict"`.
+
+---
+
+## 8. Operator Real-Data Rehearsal Procedure (Throwaway Database Override)
+
+Before pointing `RoleRadar.Api` at the primary `roleradar` database, rehearse the API and OIDC workflow against a throwaway database restored from an encrypted backup using the `ROLERADAR_MONGO_DATABASE` environment variable override:
+
+```powershell
+# 1. Restore a recent encrypted backup into an isolated throwaway database
+$env:ROLERADAR_MONGO_DATABASE = "roleradar_rehearsal_005a"
+dotnet run --project src/RoleRadar.Cli -- restore --input "./backups/latest.rrbak"
+
+# 2. Provision the owner account in a dedicated rehearsal SQLite store
+$env:ROLERADAR_IDENTITY_DB = "Data Source=./rehearsal-identity.db"
+dotnet run --project src/RoleRadar.Cli -- identity create-owner --username owner
+
+# 3. Note the provisioned UserId (or query AspNetUsers.Id) and launch RoleRadar.Identity and RoleRadar.Api
+$env:Owner__AllowedSubjects__0 = "<provisioned-owner-user-guid>"
+dotnet run --project src/RoleRadar.Api
+
+# 4. Verify read and write parity against the throwaway database:
+#    - GET /api/v1/postings, /api/v1/companies, /api/v1/applications, /api/v1/criteria, /api/v1/notes, /api/v1/search-runs
+#    - Perform a sample PATCH /api/v1/companies/{id} and POST /api/v1/postings/{id}/transition
+#    - Confirm audit_log entries in roleradar_rehearsal_005a record actor = "api-user"
+
+# 5. Clean up the throwaway rehearsal database and temporary SQLite file when satisfied
+Remove-Item -Force "./rehearsal-identity.db" -ErrorAction SilentlyContinue
+Remove-Item Env:ROLERADAR_MONGO_DATABASE -ErrorAction SilentlyContinue
+Remove-Item Env:ROLERADAR_IDENTITY_DB -ErrorAction SilentlyContinue
+```

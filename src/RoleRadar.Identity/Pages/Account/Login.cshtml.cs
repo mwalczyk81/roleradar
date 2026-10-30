@@ -4,6 +4,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using RoleRadar.Identity.Data;
+using RoleRadar.Identity.Services;
 
 namespace RoleRadar.Identity.Pages.Account;
 
@@ -11,10 +13,12 @@ namespace RoleRadar.Identity.Pages.Account;
 public class LoginModel(
     SignInManager<IdentityUser<Guid>> signInManager,
     UserManager<IdentityUser<Guid>> userManager,
+    IdentityAppDbContext dbContext,
     IIdentityServerInteractionService interactionService) : PageModel
 {
     private readonly SignInManager<IdentityUser<Guid>> _signInManager = signInManager;
     private readonly UserManager<IdentityUser<Guid>> _userManager = userManager;
+    private readonly IdentityAppDbContext _dbContext = dbContext;
     private readonly IIdentityServerInteractionService _interactionService = interactionService;
 
     [BindProperty]
@@ -64,6 +68,34 @@ public class LoginModel(
             }
 
             var cleanCode = TwoFactorInput.Code.Replace(" ", string.Empty).Replace("-", string.Empty);
+            var twoFactorUser = await _signInManager.GetTwoFactorAuthenticationUserAsync();
+            if (twoFactorUser is not null)
+            {
+                if (await _userManager.IsLockedOutAsync(twoFactorUser))
+                {
+                    ModelState.AddModelError(string.Empty, "Account is locked due to multiple failed login attempts. Please try again after 15 minutes.");
+                    return Page();
+                }
+
+                var provisioningService = new OwnerProvisioningService(_dbContext);
+                if (await provisioningService.VerifyTotpAndActivateAsync(twoFactorUser.Id, cleanCode))
+                {
+                    await _userManager.ResetAccessFailedCountAsync(twoFactorUser);
+                    await _signInManager.SignInAsync(twoFactorUser, isPersistent: false);
+                    return ValidateAndRedirect(ReturnUrl);
+                }
+
+                await _userManager.AccessFailedAsync(twoFactorUser);
+                if (await _userManager.IsLockedOutAsync(twoFactorUser))
+                {
+                    ModelState.AddModelError(string.Empty, "Account is locked due to multiple failed login attempts. Please try again after 15 minutes.");
+                    return Page();
+                }
+
+                ModelState.AddModelError(string.Empty, "Invalid verification code.");
+                return Page();
+            }
+
             var twoFactorResult = await _signInManager.TwoFactorAuthenticatorSignInAsync(
                 cleanCode,
                 isPersistent: false,

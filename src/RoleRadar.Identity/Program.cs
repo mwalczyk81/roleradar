@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using RoleRadar.Identity.Configuration;
@@ -9,6 +10,23 @@ public partial class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        if (args.Contains("--healthcheck", StringComparer.OrdinalIgnoreCase))
+        {
+            var healthUrl = Environment.GetEnvironmentVariable("ROLERADAR_HEALTHCHECK_URL")
+                ?? "http://127.0.0.1:8080/health";
+            using var handler = new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(2) };
+            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };
+            try
+            {
+                using var response = await client.GetAsync(healthUrl);
+                return response.IsSuccessStatusCode ? 0 : 1;
+            }
+            catch
+            {
+                return 1;
+            }
+        }
+
         var app = CreateApp(args);
         await app.RunAsync();
         return 0;
@@ -18,11 +36,21 @@ public partial class Program
         string[]? args = null,
         Action<WebApplicationBuilder>? configureBuilder = null)
     {
-        var builder = WebApplication.CreateBuilder(args ?? []);
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions
+        {
+            Args = args ?? [],
+            ApplicationName = typeof(Program).Assembly.GetName().Name
+        });
 
         configureBuilder?.Invoke(builder);
 
-        builder.Services.AddRazorPages();
+        var dpKeysDir = new DirectoryInfo(Path.Combine(Path.GetTempPath(), "roleradar-identity-dpkeys"));
+        dpKeysDir.Create();
+        builder.Services.AddDataProtection()
+            .PersistKeysToFileSystem(dpKeysDir);
+
+        builder.Services.AddRazorPages()
+            .AddApplicationPart(typeof(Program).Assembly);
 
         var identityConnectionString = builder.Configuration.GetConnectionString("IdentityConnection")
             ?? Environment.GetEnvironmentVariable("ROLERADAR_IDENTITY_DB")
@@ -40,17 +68,25 @@ public partial class Program
         .AddEntityFrameworkStores<IdentityAppDbContext>()
         .AddDefaultTokenProviders();
 
+        var issuerUri = builder.Configuration["Identity:IssuerUri"]
+            ?? Environment.GetEnvironmentVariable("ROLERADAR_IDENTITY_ISSUER_URI");
+
         builder.Services.AddIdentityServer(options =>
         {
+            if (!string.IsNullOrWhiteSpace(issuerUri))
+            {
+                options.IssuerUri = issuerUri.Trim();
+            }
+
             options.Events.RaiseErrorEvents = true;
             options.Events.RaiseInformationEvents = true;
             options.Events.RaiseFailureEvents = true;
             options.Events.RaiseSuccessEvents = true;
             options.KeyManagement.Enabled = true;
             options.KeyManagement.RotationInterval = TimeSpan.FromDays(30);
+            options.KeyManagement.KeyPath = Path.Combine(Path.GetTempPath(), "roleradar-identity-keys");
         })
         .AddAspNetIdentity<IdentityUser<Guid>>()
-        .AddConfigurationStore<IdentityAppDbContext>()
         .AddOperationalStore<IdentityAppDbContext>(options =>
         {
             options.EnableTokenCleanup = true;

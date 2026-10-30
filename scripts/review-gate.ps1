@@ -48,11 +48,35 @@ $cliSizeMb = "N/A"
 $mcpSizeMb = "N/A"
 
 try {
-    # 1. Clone repository to temp folder
+    # 1. Clone repository to temp folder and overlay uncommitted working-tree changes
     & git clone --branch $Branch "file:///$($repoRoot -replace '\\', '/')" $tempDir --quiet 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
         # Fallback to local file clone without file URI
         & git clone --branch $Branch $repoRoot $tempDir --quiet 2>&1 | Out-Null
+    }
+
+    $porcelain = & git -C $repoRoot status --porcelain -uall
+    foreach ($entry in $porcelain) {
+        if ([string]::IsNullOrWhiteSpace($entry) -or $entry.Length -lt 4) { continue }
+        $xy = $entry.Substring(0, 2)
+        $relPath = $entry.Substring(3).Trim().Trim('"')
+        if ($relPath -match ' -> ') {
+            $parts = $relPath -split ' -> '
+            $oldDest = Join-Path $tempDir $parts[0].Trim('"')
+            if (Test-Path -LiteralPath $oldDest) { Remove-Item -LiteralPath $oldDest -Force }
+            $relPath = $parts[1].Trim('"')
+        }
+        $srcPath = Join-Path $repoRoot $relPath
+        $dstPath = Join-Path $tempDir $relPath
+        if ($xy -match 'D' -or -not (Test-Path -LiteralPath $srcPath)) {
+            if (Test-Path -LiteralPath $dstPath) { Remove-Item -LiteralPath $dstPath -Force }
+        } else {
+            $dstParent = Split-Path -Parent $dstPath
+            if (-not (Test-Path -LiteralPath $dstParent)) {
+                New-Item -ItemType Directory -Path $dstParent -Force | Out-Null
+            }
+            Copy-Item -LiteralPath $srcPath -Destination $dstPath -Force
+        }
     }
 
     Push-Location $tempDir

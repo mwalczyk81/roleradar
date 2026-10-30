@@ -9,6 +9,7 @@ COPY global.json Directory.Build.props Directory.Packages.props .editorconfig ./
 COPY src/RoleRadar.Domain/RoleRadar.Domain.csproj src/RoleRadar.Domain/packages.lock.json src/RoleRadar.Domain/
 COPY src/RoleRadar.Application/RoleRadar.Application.csproj src/RoleRadar.Application/packages.lock.json src/RoleRadar.Application/
 COPY src/RoleRadar.Infrastructure/RoleRadar.Infrastructure.csproj src/RoleRadar.Infrastructure/packages.lock.json src/RoleRadar.Infrastructure/
+COPY src/RoleRadar.Identity/RoleRadar.Identity.csproj src/RoleRadar.Identity/packages.lock.json src/RoleRadar.Identity/
 COPY src/RoleRadar.Cli/RoleRadar.Cli.csproj src/RoleRadar.Cli/packages.lock.json src/RoleRadar.Cli/
 COPY src/RoleRadar.Mcp.Stdio/RoleRadar.Mcp.Stdio.csproj src/RoleRadar.Mcp.Stdio/packages.lock.json src/RoleRadar.Mcp.Stdio/
 
@@ -70,7 +71,7 @@ ENV DOTNET_EnableDiagnostics=0 \
 ENTRYPOINT ["/app/RoleRadar.Mcp.Stdio"]
 
 # Stage 4: CLI Runtime (roleradar-cli)
-FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled@sha256:7ac579eeb88591c261c85576d7094e8f65949ff9e9502cdaab1de2457e506505 AS cli
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:c89a6a61f494f20a5ae302990e814627a8d91b332fd4a8e7c1707c2d4da9555d AS cli
 COPY --from=tools-downloader /out/usr/ /usr/
 COPY --from=tools-downloader /out/var/ /var/
 WORKDIR /app

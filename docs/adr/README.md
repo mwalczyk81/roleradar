@@ -23,4 +23,4 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0017](./0017-owner-credential-and-security-controls.md) | Single-Owner Credential Handling and Authentication Security Controls | Accepted | `005a-api-and-login` |
 | [ADR-0018](./0018-rest-api-style-and-owner-mapping.md) | REST API Style, Error Envelope, Paging, and Owner Mapping | Accepted | `005a-api-and-login` |
 | [ADR-0019](./0019-openapi-generation-and-typed-client.md) | OpenAPI Contract Generation, Committed Snapshot Verification, and Typed Client Generation | Accepted | `005a-api-and-login` |
-| [ADR-0020](./0020-https-transport-and-local-compose-certificates.md) | Transport Security, Local Compose Certificates, and Internal Health Probing | Accepted | `005a-api-and-login` |
+| [ADR-0020](./0020-https-transport-and-local-compose-certificates.md) | Transport Security, Local Compose Certificates, and Self-Contained Health Probing | Accepted | `005a-api-and-login` |

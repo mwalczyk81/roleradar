@@ -101,8 +101,9 @@
         }
 
         <form method="post">
-            <input type="hidden" asp-for="ReturnUrl" />
-            <input type="hidden" asp-for="RequiresTwoFactor" />
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ReturnUrl" value="@Model.ReturnUrl" />
+            <input type="hidden" name="RequiresTwoFactor" value="@(Model.RequiresTwoFactor ? "true" : "false")" />
 
             @if (!Model.RequiresTwoFactor)
             {

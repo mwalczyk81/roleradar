@@ -2,6 +2,7 @@
   <PropertyGroup>
     <OpenApiDocumentsDirectory>$(MSBuildThisFileDirectory)../../contracts/openapi</OpenApiDocumentsDirectory>
     <OpenApiGenerateDocumentsOnBuild>true</OpenApiGenerateDocumentsOnBuild>
+    <OpenApiGenerateDocumentsOptions>--file-name roleradar-api</OpenApiGenerateDocumentsOptions>
   </PropertyGroup>
 
   <ItemGroup>

@@ -42,3 +42,80 @@ services:
       - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
       - DOTNET_gcServer=0
     network_mode: default
+
+  identity:
+    profiles: ["apps"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.identity
+    image: roleradar-identity:local
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:5001:5001"
+    environment:
+      - ROLERADAR_IDENTITY_DB=Data Source=/data/identity/identity.db
+      - ROLERADAR_IDENTITY_ISSUER_URI=https://localhost:5001
+      - Kestrel__Endpoints__LoopbackHealth__Url=http://127.0.0.1:8080
+      - Kestrel__Endpoints__Https__Url=https://*:5001
+      - Kestrel__Endpoints__Https__Certificate__Path=/https/cert.pfx
+      - Kestrel__Endpoints__Https__Certificate__Password=${ROLERADAR_HTTPS_CERT_PASSWORD:-}
+      - DOTNET_EnableDiagnostics=0
+      - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+      - DOTNET_gcServer=0
+    volumes:
+      - identity-data:/data/identity:rw
+      - ./certs/dev-cert.pfx:/https/cert.pfx:ro
+    healthcheck:
+      test: ["CMD", "/app/RoleRadar.Identity", "--healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 4s
+    network_mode: default
+
+  api:
+    profiles: ["apps"]
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    image: roleradar-api:local
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:5002:5002"
+    environment:
+      - ROLERADAR_MONGO_CONNECTION_STRING=mongodb://mongo:27017/?directConnection=true
+      - ROLERADAR_MONGO_DATABASE=roleradar
+      - ROLERADAR_OIDC_AUTHORITY=https://identity:5001
+      - ROLERADAR_OIDC_AUDIENCE=roleradar.api
+      - Kestrel__Endpoints__LoopbackHealth__Url=http://127.0.0.1:8080
+      - Kestrel__Endpoints__Https__Url=https://*:5002
+      - Kestrel__Endpoints__Https__Certificate__Path=/https/cert.pfx
+      - Kestrel__Endpoints__Https__Certificate__Password=${ROLERADAR_HTTPS_CERT_PASSWORD:-}
+      - DOTNET_EnableDiagnostics=0
+      - DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1
+      - DOTNET_gcServer=0
+    volumes:
+      - ./certs/dev-cert.pfx:/https/cert.pfx:ro
+    healthcheck:
+      test: ["CMD", "/app/RoleRadar.Api", "--healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 4s
+    network_mode: default
+
+volumes:
+  identity-data:
+    name: roleradar-identity-data

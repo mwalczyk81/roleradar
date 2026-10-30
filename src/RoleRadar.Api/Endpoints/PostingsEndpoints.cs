@@ -13,9 +13,17 @@ public static class PostingsEndpoints
 
     public static RouteGroupBuilder MapPostingsEndpoints(this RouteGroupBuilder group)
     {
-        group.MapGet("/postings", GetPostingsAsync);
-        group.MapGet("/postings/{id:guid}", GetPostingByIdAsync);
-        group.MapPost("/postings/{id:guid}/transition", TransitionPostingAsync);
+        group.MapGet("/postings", GetPostingsAsync)
+            .Produces<PagedResult<PostingListItemDto>>(StatusCodes.Status200OK)
+            .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest);
+        group.MapGet("/postings/{id:guid}", GetPostingByIdAsync)
+            .Produces<PostingDetailDto>(StatusCodes.Status200OK)
+            .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
+        group.MapPost("/postings/{id:guid}/transition", TransitionPostingAsync)
+            .Produces<PostingDetailDto>(StatusCodes.Status200OK)
+            .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest)
+            .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound)
+            .Produces<ErrorEnvelope>(StatusCodes.Status409Conflict);
         return group;
     }
 

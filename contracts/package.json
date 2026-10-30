@@ -1,0 +1,12 @@
+{
+  "name": "@roleradar/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "RoleRadar OpenAPI v3.1 contract and generated TypeScript client definitions",
+  "scripts": {
+    "generate-client": "openapi-typescript openapi/roleradar-api.json -o client/api-types.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "7.10.1"
+  }
+}

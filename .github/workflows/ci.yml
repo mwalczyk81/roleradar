@@ -212,23 +212,32 @@ jobs:
               throw "Merged line coverage $pct% is below the mandatory 85.0% threshold."
           }
 
-      - name: Lint Dockerfile with hadolint
-        run: docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < Dockerfile
+      - name: Lint Dockerfiles with hadolint
+        run: |
+          docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < Dockerfile
+          docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < deploy/Dockerfile.identity
+          docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < deploy/Dockerfile.api
 
-      - name: Build local container images
+      - name: Build local container images (never pushed/published per ADR-0016)
         run: |
           docker build --target cli -t roleradar-cli:local .
           docker build --target mcp -t roleradar-mcp:local .
+          docker build -f deploy/Dockerfile.identity -t roleradar-identity:local .
+          docker build -f deploy/Dockerfile.api -t roleradar-api:local .
 
       - name: Run Trivy vulnerability scan on container images
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --list-all-pkgs --severity CRITICAL --exit-code 1 --ignore-unfixed --format json --output /TestResults/trivy-report-cli.json roleradar-cli:local
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --list-all-pkgs --severity CRITICAL --exit-code 1 --ignore-unfixed --format json --output /TestResults/trivy-report-mcp.json roleradar-mcp:local
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --list-all-pkgs --severity CRITICAL --exit-code 1 --ignore-unfixed --format json --output /TestResults/trivy-report-identity.json roleradar-identity:local
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --list-all-pkgs --severity CRITICAL --exit-code 1 --ignore-unfixed --format json --output /TestResults/trivy-report-api.json roleradar-api:local
 
       - name: Generate CycloneDX SBOMs for container images
         run: |
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --format cyclonedx --output /TestResults/sbom-cli.json roleradar-cli:local
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --format cyclonedx --output /TestResults/sbom-mcp.json roleradar-mcp:local
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --format cyclonedx --output /TestResults/sbom-identity.json roleradar-identity:local
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --format cyclonedx --output /TestResults/sbom-api.json roleradar-api:local
 
       - name: Upload Security Reports and SBOMs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

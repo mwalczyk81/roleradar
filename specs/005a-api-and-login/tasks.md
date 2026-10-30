@@ -125,14 +125,14 @@
 
 ### Tests for User Story 4 (MANDATORY - Test-First per Principle II) ⚠️
 
-- [ ] T038 [US4] Contract snapshot test in tests/RoleRadar.Tests.Contract/OpenApi/ApiOpenApiContractSnapshotTests.cs asserting generated roleradar-api.json exactly matches the committed reference snapshot (expected to fail before generation)
+- [X] T038 [US4] Contract snapshot test in tests/RoleRadar.Tests.Contract/OpenApi/ApiOpenApiContractSnapshotTests.cs asserting generated roleradar-api.json exactly matches the committed reference snapshot (expected to fail before generation)
 
 ### Implementation for User Story 4
 
-- [ ] T039 [P] [US4] Configure build-time OpenAPI document generation in src/RoleRadar.Api/RoleRadar.Api.csproj targeting contracts/openapi/roleradar-api.json with explicit scalar types for all parameters, properties, and enums
-- [ ] T040 [P] [US4] Implement OpenAPI schema and operation transformers in src/RoleRadar.Api/OpenApi/ExplicitTypeSchemaTransformers.cs ensuring zero untyped scalar parameters and explicit nullability
-- [ ] T041 [US4] Add npm script and client generation configuration in contracts/package.json invoking openapi-typescript to produce contracts/client/api-types.ts
-- [ ] T042 [US4] Measured Checkpoint: Build solution to generate OpenAPI specification, verify contract snapshot test passes, and report measured metrics
+- [X] T039 [P] [US4] Configure build-time OpenAPI document generation in src/RoleRadar.Api/RoleRadar.Api.csproj targeting contracts/openapi/roleradar-api.json with explicit scalar types for all parameters, properties, and enums
+- [X] T040 [P] [US4] Implement OpenAPI schema and operation transformers in src/RoleRadar.Api/OpenApi/ExplicitTypeSchemaTransformers.cs ensuring zero untyped scalar parameters and explicit nullability
+- [X] T041 [US4] Add npm script and client generation configuration in contracts/package.json invoking openapi-typescript to produce contracts/client/api-types.ts
+- [X] T042 [US4] Measured Checkpoint: Build solution to generate OpenAPI specification, verify contract snapshot test passes, and report measured metrics
 
 ---
 
@@ -144,17 +144,17 @@
 
 ### Tests for User Story 5 (MANDATORY - Test-First per Principle II) ⚠️
 
-- [ ] T043 [US5] Contract/launched-host test in tests/RoleRadar.Tests.Contract/Containers/ContainerHealthCheckLaunchedHostTests.cs asserting identity and api containers report healthy in docker inspect under supported read-only mode (expected to fail before implementation)
+- [X] T043 [US5] Contract/launched-host test in tests/RoleRadar.Tests.Contract/Containers/ContainerHealthCheckLaunchedHostTests.cs asserting identity and api containers report healthy in docker inspect under supported read-only mode (expected to fail before implementation)
 
 ### Implementation for User Story 5
 
-- [ ] T044 [P] [US5] Implement self-contained probe mode (--healthcheck) in src/RoleRadar.Identity/Program.cs querying http://127.0.0.1:8080/health and exiting 0 on success, 1 on failure
-- [ ] T045 [P] [US5] Implement self-contained probe mode (--healthcheck) in src/RoleRadar.Api/Program.cs querying http://127.0.0.1:8080/health and exiting 0 on success, 1 on failure
-- [ ] T046 [P] [US5] Create hardened chiseled deploy/Dockerfile.identity following Feature 003 conventions (non-root, read-only rootfs, digest-pinned base, exec-form HEALTHCHECK CMD ["/app/RoleRadar.Identity", "--healthcheck"])
-- [ ] T047 [P] [US5] Create hardened chiseled deploy/Dockerfile.api following Feature 003 conventions (non-root, read-only rootfs, digest-pinned base, exec-form HEALTHCHECK CMD ["/app/RoleRadar.Api", "--healthcheck"])
-- [ ] T048 [US5] Add identity and api service definitions to deploy/docker-compose.apps.yml with mounted certificate /https/cert.pfx, persistent volume identity-data, environment configuration, and exec-form healthchecks
-- [ ] T049 [US5] Update CI workflow .github/workflows/ci.yml with hadolint, Trivy vulnerability scan, and SBOM generation for both new images, enforcing that the identity image is never published or pushed to any external registry
-- [ ] T050 [US5] Measured Checkpoint: Run container build and launched-host health check tests and report measured metrics
+- [X] T044 [P] [US5] Implement self-contained probe mode (--healthcheck) in src/RoleRadar.Identity/Program.cs querying http://127.0.0.1:8080/health and exiting 0 on success, 1 on failure
+- [X] T045 [P] [US5] Implement self-contained probe mode (--healthcheck) in src/RoleRadar.Api/Program.cs querying http://127.0.0.1:8080/health and exiting 0 on success, 1 on failure
+- [X] T046 [P] [US5] Create hardened chiseled deploy/Dockerfile.identity following Feature 003 conventions (non-root, read-only rootfs, digest-pinned base, exec-form HEALTHCHECK CMD ["/app/RoleRadar.Identity", "--healthcheck"])
+- [X] T047 [P] [US5] Create hardened chiseled deploy/Dockerfile.api following Feature 003 conventions (non-root, read-only rootfs, digest-pinned base, exec-form HEALTHCHECK CMD ["/app/RoleRadar.Api", "--healthcheck"])
+- [X] T048 [US5] Add identity and api service definitions to deploy/docker-compose.apps.yml with mounted certificate /https/cert.pfx, persistent volume identity-data, environment configuration, and exec-form healthchecks
+- [X] T049 [US5] Update CI workflow .github/workflows/ci.yml with hadolint, Trivy vulnerability scan, and SBOM generation for both new images, enforcing that the identity image is never published or pushed to any external registry
+- [X] T050 [US5] Measured Checkpoint: Run container build and launched-host health check tests and report measured metrics
 
 ---
 
@@ -166,8 +166,8 @@
 
 ### Tests for User Story 6 (MANDATORY - Test-First per Principle II) ⚠️
 
-- [ ] T051 [US6] Implement provider-neutral OIDC integration test suite in tests/RoleRadar.Tests.Integration/Oidc/IdpAgnosticOidcIntegrationTests.cs using discovery metadata, standard token endpoint requests, and standard JWT claims against an ephemeral test identity host and IsolatedContainerMongoFixture (expected to fail before implementation)
-- [ ] T052 [US6] Measured Checkpoint: Run IdpAgnosticOidcIntegrationTests and report measured test counts
+- [X] T051 [US6] Implement provider-neutral OIDC integration test suite in tests/RoleRadar.Tests.Integration/Oidc/IdpAgnosticOidcIntegrationTests.cs using discovery metadata, standard token endpoint requests, and standard JWT claims against an ephemeral test identity host and IsolatedContainerMongoFixture (expected to fail before implementation)
+- [X] T052 [US6] Measured Checkpoint: Run IdpAgnosticOidcIntegrationTests and report measured test counts
 
 ---
 
@@ -175,9 +175,9 @@
 
 **Purpose**: Final quality gates, documentation, and operator real-data rehearsal procedure.
 
-- [ ] T053 [P] Update documentation in docs/adr/README.md and feature design artifacts in specs/005a-api-and-login/
-- [ ] T054 Run scripts/review-gate.ps1 to assert all unit, architecture, contract, and integration tests pass across the four existing test projects, Domain+Application coverage is >=85%, dev-stack canary remains untouched, and container images build cleanly
-- [ ] T055 Document operator real-data rehearsal procedure in specs/005a-api-and-login/quickstart.md for execution by Matt against a throwaway database restored from backup via ROLERADAR_MONGO_DATABASE override
+- [X] T053 [P] Update documentation in docs/adr/README.md and feature design artifacts in specs/005a-api-and-login/
+- [X] T054 Run scripts/review-gate.ps1 to assert all unit, architecture, contract, and integration tests pass across the four existing test projects, Domain+Application coverage is >=85%, dev-stack canary remains untouched, and container images build cleanly
+- [X] T055 Document operator real-data rehearsal procedure in specs/005a-api-and-login/quickstart.md for execution by Matt against a throwaway database restored from backup via ROLERADAR_MONGO_DATABASE override
 
 ---
 

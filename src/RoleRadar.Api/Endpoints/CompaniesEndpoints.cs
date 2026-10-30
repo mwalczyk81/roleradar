@@ -13,9 +13,17 @@ public static class CompaniesEndpoints
 
     public static RouteGroupBuilder MapCompaniesEndpoints(this RouteGroupBuilder group)
     {
-        group.MapGet("/companies", ListCompaniesAsync);
-        group.MapGet("/companies/{id:guid}", GetCompanyByIdAsync);
-        group.MapPatch("/companies/{id:guid}", PatchCompanyAsync);
+        group.MapGet("/companies", ListCompaniesAsync)
+            .Produces<PagedResult<CompanyDetailDto>>(StatusCodes.Status200OK)
+            .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest);
+        group.MapGet("/companies/{id:guid}", GetCompanyByIdAsync)
+            .Produces<CompanyDetailDto>(StatusCodes.Status200OK)
+            .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
+        group.MapPatch("/companies/{id:guid}", PatchCompanyAsync)
+            .Produces<CompanyDetailDto>(StatusCodes.Status200OK)
+            .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest)
+            .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound)
+            .Produces<ErrorEnvelope>(StatusCodes.Status409Conflict);
         return group;
     }
 

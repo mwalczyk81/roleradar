@@ -50,6 +50,7 @@ public static class IdentityServerConfig
                 ClientSecrets = { new Secret(webSecret.Sha256()) },
                 RedirectUris = { webRedirectUri },
                 PostLogoutRedirectUris = { webPostLogoutUri },
+                AllowOfflineAccess = true,
                 AllowedScopes = { "openid", "profile", "roleradar.api", "offline_access" },
 
                 // Strict token and code lifetimes per ADR-0017
