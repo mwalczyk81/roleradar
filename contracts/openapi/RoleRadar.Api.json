@@ -4,5 +4,44 @@
     "title": "RoleRadar.Api | v1",
     "version": "1.0.0"
   },
-  "paths": { }
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "RoleRadar.Api"
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    },
+    "/api/v1/criteria": {
+      "get": {
+        "tags": [
+          "RoleRadar.Api"
+        ],
+        "parameters": [
+          {
+            "name": "effectiveDate",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "RoleRadar.Api"
+    }
+  ]
 }

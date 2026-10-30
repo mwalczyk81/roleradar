@@ -79,14 +79,14 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T022 [P] [US2] Contract test for token validation matrix in tests/RoleRadar.Tests.Contract/Authentication/TokenValidationMatrixContractTests.cs: wrong issuer (401), wrong audience (401), unauthorized algorithm (401), expired token (401), missing token (401), non-allowlisted subject (403), valid allowlisted subject (200) (expected to fail before implementation)
-- [ ] T023 [P] [US2] Contract test for browser CORS rejection in tests/RoleRadar.Tests.Contract/Authentication/CorsRejectionContractTests.cs asserting request with Origin header receives no Access-Control-Allow-Origin header (expected to fail before implementation)
+- [X] T022 [P] [US2] Contract test for token validation matrix in tests/RoleRadar.Tests.Contract/Authentication/TokenValidationMatrixContractTests.cs: wrong issuer (401), wrong audience (401), unauthorized algorithm (401), expired token (401), missing token (401), non-allowlisted subject (403), valid allowlisted subject (200) (expected to fail before implementation)
+- [X] T023 [P] [US2] Contract test for browser CORS rejection in tests/RoleRadar.Tests.Contract/Authentication/CorsRejectionContractTests.cs asserting request with Origin header receives no Access-Control-Allow-Origin header (expected to fail before implementation)
 
 ### Implementation for User Story 2
 
-- [ ] T024 [US2] Configure JwtBearer authentication in src/RoleRadar.Api/Program.cs with standard OIDC authority discovery, exact issuer validation, exact audience validation (roleradar.api), algorithm allowlist (RS256, ES256), small clock skew (max 60s), and owner subject allowlist authorization policy
-- [ ] T025 [US2] Configure zero-CORS policy and map anonymous /health endpoint on internal loopback in src/RoleRadar.Api/Program.cs
-- [ ] T026 [US2] Measured Checkpoint: Run scripts/test-fast.ps1 plus User Story 2 tests and report measured test counts
+- [X] T024 [US2] Configure JwtBearer authentication in src/RoleRadar.Api/Program.cs with standard OIDC authority discovery, exact issuer validation, exact audience validation (roleradar.api), algorithm allowlist (RS256, ES256), small clock skew (max 60s), and owner subject allowlist authorization policy
+- [X] T025 [US2] Configure zero-CORS policy and map anonymous /health endpoint on internal loopback in src/RoleRadar.Api/Program.cs
+- [X] T026 [US2] Measured Checkpoint: Run scripts/test-fast.ps1 plus User Story 2 tests and report measured test counts
 
 ---
 
