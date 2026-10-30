@@ -37,6 +37,7 @@ public static class Program
             rootCommand.Add(ContactCommand.Create(services));
             rootCommand.Add(TrackerImportCommand.Create(services));
             rootCommand.Add(VerifyCommand.Create(services));
+            rootCommand.Add(RoleRadar.Cli.Commands.Identity.IdentityCommand.Create(services));
 
             var parseResult = rootCommand.Parse(args);
 
@@ -115,6 +116,14 @@ public static class Program
                 options.RestoreCommand = backupRestoreCommand.Trim();
             }
         });
+
+        var identityDb = Environment.GetEnvironmentVariable("ROLERADAR_IDENTITY_DB");
+        var identityConnectionString = !string.IsNullOrWhiteSpace(identityDb)
+            ? identityDb.Trim()
+            : "Data Source=identity.db";
+
+        services.AddDbContext<RoleRadar.Identity.Data.IdentityAppDbContext>(options =>
+            Microsoft.EntityFrameworkCore.SqliteDbContextOptionsBuilderExtensions.UseSqlite(options, identityConnectionString));
 
         configure?.Invoke(services);
 

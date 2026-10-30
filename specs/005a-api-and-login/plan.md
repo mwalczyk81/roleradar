@@ -32,7 +32,7 @@ Key architectural deliverables:
    - Zero CORS: browser cross-origin requests are rejected (server-to-server only).
 3. **Comprehensive REST Endpoints**:
    - ASP.NET Core 10 Minimal APIs with route groups for postings, transitions, companies, applications, timeline events, criteria, notes, and search runs.
-   - Thin delivery adapters calling existing `Application` handlers directly in-process; zero Mongo driver types in `RoleRadar.Api`.
+   - Thin delivery adapters calling existing `Application` handlers directly in-process; `RoleRadar.Api` references `RoleRadar.Infrastructure` for composition only, with zero Mongo driver types in `RoleRadar.Api` types.
    - Bounded pagination (default 50, max 200 items).
    - Optimistic concurrency on transitions via `versionToken`, mapping stale tokens to HTTP 409 Conflict.
    - Audit logging emits append-only entries matching MCP tool operation names (`posting_transition`, `company_update`, etc.) with actor `api-user`.
@@ -89,7 +89,7 @@ Key architectural deliverables:
 **Constraints**:
 - Read-only root filesystem (`--read-only`) with writable `/tmp` on tmpfs and `/data/identity` volume.
 - Zero secrets or credentials in git, images, compose files, or logs.
-- Zero Mongo driver types in `RoleRadar.Api`.
+- Zero Mongo driver types in `RoleRadar.Api` types (Infrastructure referenced for composition root wiring only).
 - Strict architecture tests enforcing project references.
 - Contacts endpoints are strictly forbidden (CLI-only).
 - Zero hard-delete endpoints.

@@ -7,6 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\RoleRadar.Application\RoleRadar.Application.csproj" />
     <ProjectReference Include="..\RoleRadar.Domain\RoleRadar.Domain.csproj" />
+    <ProjectReference Include="..\RoleRadar.Infrastructure\RoleRadar.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

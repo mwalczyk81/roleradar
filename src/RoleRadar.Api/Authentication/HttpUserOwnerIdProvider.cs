@@ -31,11 +31,11 @@ public sealed class HttpUserOwnerIdProvider(
         }
 
         var subject = subClaim.Value.Trim();
-        var isAllowed = _options.AllowedSubjects.Any(s => string.Equals(s, subject, StringComparison.OrdinalIgnoreCase));
+        var isAllowed = _options.AllowedSubjects.Any(s => string.Equals(s, subject, StringComparison.Ordinal));
 
         if (!isAllowed)
         {
-            throw new SecurityException($"Subject '{subject}' is not authorized as an owner.");
+            throw new SecurityException("Subject is not authorized as an owner.");
         }
 
         // Resolves dynamically via Domain OwnerId constants without hardcoding string literals

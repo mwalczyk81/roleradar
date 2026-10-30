@@ -10,6 +10,8 @@
     <ProjectReference Include="..\..\src\RoleRadar.Application\RoleRadar.Application.csproj" />
     <ProjectReference Include="..\..\src\RoleRadar.Infrastructure\RoleRadar.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\RoleRadar.Mcp.Stdio\RoleRadar.Mcp.Stdio.csproj" />
+    <ProjectReference Include="..\..\src\RoleRadar.Identity\RoleRadar.Identity.csproj" />
+    <ProjectReference Include="..\..\src\RoleRadar.Api\RoleRadar.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -25,4 +27,11 @@
     </PackageReference>
     <PackageReference Include="xunit.v3" />
   </ItemGroup>
+
+  <Target Name="CopyMcpStdioRuntimeDependencies" AfterTargets="Build">
+    <ItemGroup>
+      <McpStdioRuntimeFiles Include="..\..\src\RoleRadar.Mcp.Stdio\bin\$(Configuration)\$(TargetFramework)\*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(McpStdioRuntimeFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

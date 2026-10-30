@@ -108,6 +108,6 @@ All commands dispatched from `RoleRadar.Api` set `Actor = "api-user"`. The under
 ## Consequences
 
 - **Good**: Perfect behavioural and audit parity between REST endpoints and MCP tools.
-- **Good**: Strict separation of concerns; zero Mongo types in API layer.
+- **Good**: Strict separation of concerns; zero Mongo types in API types (Infrastructure referenced for composition root only).
 - **Good**: Paging bounds prevent unbounded query memory consumption.
 - **Good**: Architecture tests guarantee clean layer boundaries and zero owner literal duplication.

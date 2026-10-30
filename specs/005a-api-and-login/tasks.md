@@ -24,7 +24,7 @@
 - [X] T002 [P] Create identity host project in src/RoleRadar.Identity/RoleRadar.Identity.csproj referencing Duende packages, EF Core SQLite, and ASP.NET Core Identity with Nullable and TreatWarningsAsErrors enabled
 - [X] T003 [P] Create REST API project in src/RoleRadar.Api/RoleRadar.Api.csproj referencing RoleRadar.Application, RoleRadar.Domain, Microsoft.AspNetCore.Authentication.JwtBearer, Microsoft.AspNetCore.OpenApi, and Microsoft.Extensions.ApiDescription.Server (zero Duende, zero Mongo driver)
 - [X] T004 Add RoleRadar.Identity and RoleRadar.Api to the solution in RoleRadar.slnx
-- [X] T005 Add architecture tests in tests/RoleRadar.Tests.Architecture/LayerDependencyArchitectureTests.cs asserting: only RoleRadar.Identity references Duende packages; RoleRadar.Api has zero references to MongoDB driver types or RoleRadar.Infrastructure; zero hardcoded owner ID string literals exist outside Domain/Common/OwnerId.cs
+- [X] T005 Add architecture tests in tests/RoleRadar.Tests.Architecture/LayerDependencyArchitectureTests.cs asserting: only RoleRadar.Identity references Duende packages; RoleRadar.Api references RoleRadar.Infrastructure for composition only with zero dependencies on MongoDB.* driver types in Api types; zero hardcoded owner ID string literals exist outside Domain/Common/OwnerId.cs
 - [X] T006 Measured Checkpoint: Run scripts/test-fast.ps1 and verify the solution compiles and all architecture seam tests pass
 
 ---
@@ -54,18 +54,18 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T013 [P] [US1] Unit test for owner provisioning logic and PBKDF2 password hashing in tests/RoleRadar.Tests.Unit/Identity/OwnerProvisioningTests.cs (expected to fail before implementation)
-- [ ] T014 [P] [US1] Unit test for 15-minute lockout after 5 consecutive failures and rate-limiting policy in tests/RoleRadar.Tests.Unit/Identity/LockoutAndRateLimitingTests.cs (expected to fail before implementation)
-- [ ] T015 [P] [US1] Contract test for client credentials grant and token lifetimes (5m CC, 10m access, 60s auth code) in tests/RoleRadar.Tests.Contract/Identity/IdentityTokenIssuanceContractTests.cs (expected to fail before implementation)
-- [ ] T016 [P] [US1] Contract test for refresh token rotation, one-time use, and reuse detection in tests/RoleRadar.Tests.Contract/Identity/RefreshTokenReuseContractTests.cs (expected to fail before implementation)
+- [X] T013 [P] [US1] Unit test for owner provisioning logic and PBKDF2 password hashing in tests/RoleRadar.Tests.Unit/Identity/OwnerProvisioningTests.cs (expected to fail before implementation)
+- [X] T014 [P] [US1] Unit test for 15-minute lockout after 5 consecutive failures and rate-limiting policy in tests/RoleRadar.Tests.Unit/Identity/LockoutAndRateLimitingTests.cs (expected to fail before implementation)
+- [X] T015 [P] [US1] Contract test for client credentials grant and token lifetimes (5m CC, 10m access, 60s auth code) in tests/RoleRadar.Tests.Contract/Identity/IdentityTokenIssuanceContractTests.cs (expected to fail before implementation)
+- [X] T016 [P] [US1] Contract test for refresh token rotation, one-time use, and reuse detection in tests/RoleRadar.Tests.Contract/Identity/RefreshTokenReuseContractTests.cs (expected to fail before implementation)
 
 ### Implementation for User Story 1
 
-- [ ] T017 [US1] Implement interactive identity create-owner command in src/RoleRadar.Cli/Commands/Identity/CreateOwnerCommand.cs with masked password prompt, TOTP secret generation, single-display ASCII terminal QR code, and zero credentials in files/logs
-- [ ] T018 [US1] Configure Duende IdentityServer in src/RoleRadar.Identity/Configuration/IdentityServerConfig.cs with confidential web client (PKCE, secret, exact redirect URIs, 10m access, 30d rotating refresh token), headless client (5m access, narrow scopes), and automatic key management with rotation
-- [ ] T019 [US1] Implement login endpoint and Razor page in src/RoleRadar.Identity/Pages/Account/Login.cshtml and Login.cshtml.cs with password verification, TOTP challenge, 5-failure lockout, and rate limiting
-- [ ] T020 [US1] Wire startup, services, rate limiter (AddRateLimiter), and EF Core SQLite migration in src/RoleRadar.Identity/Program.cs
-- [ ] T021 [US1] Measured Checkpoint: Run scripts/test-fast.ps1 plus User Story 1 tests and report measured test counts
+- [X] T017 [US1] Implement interactive identity create-owner command in src/RoleRadar.Cli/Commands/Identity/CreateOwnerCommand.cs with masked password prompt, TOTP secret generation, single-display ASCII terminal QR code, and zero credentials in files/logs
+- [X] T018 [US1] Configure Duende IdentityServer in src/RoleRadar.Identity/Configuration/IdentityServerConfig.cs with confidential web client (PKCE, secret, exact redirect URIs, 10m access, 30d rotating refresh token), headless client (5m access, narrow scopes), and automatic key management with rotation
+- [X] T019 [US1] Implement login endpoint and Razor page in src/RoleRadar.Identity/Pages/Account/Login.cshtml and Login.cshtml.cs with password verification, TOTP challenge, 5-failure lockout, and rate limiting
+- [X] T020 [US1] Wire startup, services, rate limiter (AddRateLimiter), and EF Core SQLite migration in src/RoleRadar.Identity/Program.cs
+- [X] T021 [US1] Measured Checkpoint: Run scripts/test-fast.ps1 plus User Story 1 tests and report measured test counts
 
 ---
 

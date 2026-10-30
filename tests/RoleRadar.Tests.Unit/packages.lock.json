@@ -716,7 +716,8 @@
           "Microsoft.AspNetCore.Authentication.JwtBearer": "[10.0.14, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.14, )",
           "RoleRadar.Application": "[1.0.0, )",
-          "RoleRadar.Domain": "[1.0.0, )"
+          "RoleRadar.Domain": "[1.0.0, )",
+          "RoleRadar.Infrastructure": "[1.0.0, )"
         }
       },
       "roleradar.application": {
@@ -733,6 +734,7 @@
           "Microsoft.Extensions.DependencyInjection": "[10.0.14, )",
           "Microsoft.Extensions.Hosting": "[10.0.14, )",
           "RoleRadar.Application": "[1.0.0, )",
+          "RoleRadar.Identity": "[1.0.0, )",
           "RoleRadar.Infrastructure": "[1.0.0, )",
           "System.CommandLine": "[2.0.13, )"
         }

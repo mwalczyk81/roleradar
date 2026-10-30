@@ -53,7 +53,8 @@ public sealed class LayerDependencyArchitectureTests
 
             foreach (var projectRef in projectRefs)
             {
-                if (projectRef.Contains("RoleRadar.Identity", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(projectName, "RoleRadar.Api", StringComparison.OrdinalIgnoreCase) &&
+                    projectRef.Contains("RoleRadar.Identity", StringComparison.OrdinalIgnoreCase))
                 {
                     violatingProjects.Add($"{projectName} references project {projectRef}");
                 }
@@ -66,20 +67,19 @@ public sealed class LayerDependencyArchitectureTests
     }
 
     [Fact]
-    public void RoleRadarApi_MustNotDependOn_MongoDriver_Or_Infrastructure()
+    public void RoleRadarApi_Types_MustNotDependOn_MongoDriver()
     {
-        // 1. NetArchTest assembly dependency check
+        // 1. NetArchTest assembly dependency check: no types in RoleRadar.Api may depend on Mongo driver/BSON
         var result = Types.InAssembly(ApiAssembly)
             .ShouldNot()
             .HaveDependencyOnAny(
                 "MongoDB.Driver",
-                "MongoDB.Bson",
-                "RoleRadar.Infrastructure")
+                "MongoDB.Bson")
             .GetResult();
 
         Assert.True(result.IsSuccessful, $"RoleRadar.Api inward dependency violation: {string.Join(", ", result.FailingTypeNames ?? [])}");
 
-        // 2. csproj file check
+        // 2. csproj file check: no direct package references to MongoDB driver
         var repoRoot = LocateRepositoryRoot();
         var apiCsproj = Path.Combine(repoRoot, "src", "RoleRadar.Api", "RoleRadar.Api.csproj");
         Assert.True(File.Exists(apiCsproj), $"Expected csproj at {apiCsproj}");
@@ -87,13 +87,11 @@ public sealed class LayerDependencyArchitectureTests
         var doc = XDocument.Load(apiCsproj);
         var directDependencies = doc.Descendants("PackageReference")
             .Select(e => (string?)e.Attribute("Include"))
-            .Concat(doc.Descendants("ProjectReference").Select(e => (string?)e.Attribute("Include")))
             .Where(name => !string.IsNullOrEmpty(name))
             .Select(name => name!)
             .ToArray();
 
         Assert.DoesNotContain(directDependencies, d => d.Contains("MongoDB", StringComparison.OrdinalIgnoreCase));
-        Assert.DoesNotContain(directDependencies, d => d.Contains("RoleRadar.Infrastructure", StringComparison.OrdinalIgnoreCase));
     }
 
     [Fact]

@@ -65,7 +65,7 @@ public sealed class HttpUserOwnerIdProviderTests
     }
 
     [Fact]
-    public void GetOwnerId_WhenSubClaimIsNotInAllowedSubjects_ThrowsSecurityException()
+    public void GetOwnerId_WhenSubClaimIsNotInAllowedSubjects_ThrowsSecurityExceptionWithoutClaimValuesInMessage()
     {
         // Arrange
         var context = new DefaultHttpContext();
@@ -84,11 +84,38 @@ public sealed class HttpUserOwnerIdProviderTests
 
         // Act & Assert
         var ex = Assert.Throws<SecurityException>(() => provider.GetOwnerId());
-        Assert.Contains(NonAllowedSub, ex.Message);
+        Assert.DoesNotContain(NonAllowedSub, ex.Message);
+        Assert.DoesNotContain(AllowedSub, ex.Message);
     }
 
     [Fact]
-    public void GetOwnerId_WhenHttpContextIsNull_ThrowsSecurityException()
+    public void GetOwnerId_WhenSubDiffersOnlyInCasing_UsesOrdinalComparisonAndFails()
+    {
+        const string exactAllowedSub = "Owner-Subject-123";
+        const string casingDiffSub = "owner-subject-123";
+
+        var context = new DefaultHttpContext();
+        var identity = new ClaimsIdentity(
+            [new Claim("sub", casingDiffSub)],
+            authenticationType: "TestAuth");
+        context.User = new ClaimsPrincipal(identity);
+
+        var contextAccessor = new HttpContextAccessor { HttpContext = context };
+        var options = Options.Create(new OwnerSecurityOptions
+        {
+            AllowedSubjects = [exactAllowedSub]
+        });
+
+        var provider = new HttpUserOwnerIdProvider(contextAccessor, options);
+
+        // Act & Assert (Ordinal comparison ensures differing casing does not match)
+        var ex = Assert.Throws<SecurityException>(() => provider.GetOwnerId());
+        Assert.DoesNotContain(casingDiffSub, ex.Message);
+        Assert.DoesNotContain(exactAllowedSub, ex.Message);
+    }
+
+    [Fact]
+    public void GetOwnerId_WhenHttpContextIsNull_ThrowsSecurityExceptionWithoutClaimValues()
     {
         var contextAccessor = new HttpContextAccessor { HttpContext = null };
         var options = Options.Create(new OwnerSecurityOptions
@@ -98,11 +125,12 @@ public sealed class HttpUserOwnerIdProviderTests
 
         var provider = new HttpUserOwnerIdProvider(contextAccessor, options);
 
-        Assert.Throws<SecurityException>(() => provider.GetOwnerId());
+        var ex = Assert.Throws<SecurityException>(() => provider.GetOwnerId());
+        Assert.DoesNotContain(AllowedSub, ex.Message);
     }
 
     [Fact]
-    public void GetOwnerId_WhenUserIsNotAuthenticated_ThrowsSecurityException()
+    public void GetOwnerId_WhenUserIsNotAuthenticated_ThrowsSecurityExceptionWithoutClaimValues()
     {
         var context = new DefaultHttpContext();
         context.User = new ClaimsPrincipal(new ClaimsIdentity()); // unauthenticated
@@ -115,11 +143,12 @@ public sealed class HttpUserOwnerIdProviderTests
 
         var provider = new HttpUserOwnerIdProvider(contextAccessor, options);
 
-        Assert.Throws<SecurityException>(() => provider.GetOwnerId());
+        var ex = Assert.Throws<SecurityException>(() => provider.GetOwnerId());
+        Assert.DoesNotContain(AllowedSub, ex.Message);
     }
 
     [Fact]
-    public void GetOwnerId_WhenSubClaimIsMissing_ThrowsSecurityException()
+    public void GetOwnerId_WhenSubClaimIsMissing_ThrowsSecurityExceptionWithoutClaimValues()
     {
         var context = new DefaultHttpContext();
         var identity = new ClaimsIdentity(
@@ -135,6 +164,8 @@ public sealed class HttpUserOwnerIdProviderTests
 
         var provider = new HttpUserOwnerIdProvider(contextAccessor, options);
 
-        Assert.Throws<SecurityException>(() => provider.GetOwnerId());
+        var ex = Assert.Throws<SecurityException>(() => provider.GetOwnerId());
+        Assert.DoesNotContain(AllowedSub, ex.Message);
+        Assert.DoesNotContain("Admin", ex.Message);
     }
 }
