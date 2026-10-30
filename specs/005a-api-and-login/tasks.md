@@ -100,20 +100,20 @@
 
 > **NOTE: Write these tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T027 [P] [US3] Contract tests for Postings endpoints (GET /api/v1/postings, GET /api/v1/postings/{id}, POST /api/v1/postings/{id}/transition) including bounded pagination (50 default, 200 max) and 409 concurrency conflict on stale versionToken in tests/RoleRadar.Tests.Contract/Api/PostingsEndpointsContractTests.cs (expected to fail before implementation)
-- [ ] T028 [P] [US3] Contract tests for Companies endpoints (GET /api/v1/companies, GET /api/v1/companies/{id}, PATCH /api/v1/companies/{id}) verifying omitted fields remain unchanged in tests/RoleRadar.Tests.Contract/Api/CompaniesEndpointsContractTests.cs (expected to fail before implementation)
-- [ ] T029 [P] [US3] Contract tests for Applications endpoints (GET /api/v1/applications, GET /api/v1/applications/{id}, POST /api/v1/applications, POST /api/v1/applications/{id}/events) in tests/RoleRadar.Tests.Contract/Api/ApplicationsEndpointsContractTests.cs (expected to fail before implementation)
-- [ ] T030 [P] [US3] Contract tests for Criteria, Notes, and SearchRuns endpoints in tests/RoleRadar.Tests.Contract/Api/AncillaryEndpointsContractTests.cs (expected to fail before implementation)
-- [ ] T031 [P] [US3] Integration test for API vs. MCP data visibility parity and audit entry operation name/actor (api-user) verification in tests/RoleRadar.Tests.Integration/Api/ApiMcpParityIntegrationTests.cs using real-shaped fixtures and IsolatedContainerMongoFixture (expected to fail before implementation)
+- [X] T027 [P] [US3] Contract tests for Postings endpoints (GET /api/v1/postings, GET /api/v1/postings/{id}, POST /api/v1/postings/{id}/transition) including bounded pagination (50 default, 200 max) and 409 concurrency conflict on stale versionToken in tests/RoleRadar.Tests.Contract/Api/PostingsEndpointsContractTests.cs (expected to fail before implementation)
+- [X] T028 [P] [US3] Contract tests for Companies endpoints (GET /api/v1/companies, GET /api/v1/companies/{id}, PATCH /api/v1/companies/{id}) verifying omitted fields remain unchanged in tests/RoleRadar.Tests.Contract/Api/CompaniesEndpointsContractTests.cs (expected to fail before implementation)
+- [X] T029 [P] [US3] Contract tests for Applications endpoints (GET /api/v1/applications, GET /api/v1/applications/{id}, POST /api/v1/applications, POST /api/v1/applications/{id}/events) in tests/RoleRadar.Tests.Contract/Api/ApplicationsEndpointsContractTests.cs (expected to fail before implementation)
+- [X] T030 [P] [US3] Contract tests for Criteria, Notes, and SearchRuns endpoints in tests/RoleRadar.Tests.Contract/Api/AncillaryEndpointsContractTests.cs (expected to fail before implementation)
+- [X] T031 [P] [US3] Integration test for API vs. MCP data visibility parity and audit entry operation name/actor (api-user) verification in tests/RoleRadar.Tests.Integration/Api/ApiMcpParityIntegrationTests.cs using real-shaped fixtures and IsolatedContainerMongoFixture (expected to fail before implementation)
 
 ### Implementation for User Story 3
 
-- [ ] T032 [P] [US3] Implement transport DTOs and envelopes in src/RoleRadar.Api/Envelopes/ and src/RoleRadar.Api/Models/ per data-model.md
-- [ ] T033 [US3] Implement Postings endpoints route group in src/RoleRadar.Api/Endpoints/PostingsEndpoints.cs delegating to Application handlers with api-user actor and mapping stale version token to HTTP 409
-- [ ] T034 [US3] Implement Companies endpoints route group in src/RoleRadar.Api/Endpoints/CompaniesEndpoints.cs delegating to Application handlers with omitted fields preserved on patch
-- [ ] T035 [US3] Implement Applications and Events endpoints route group in src/RoleRadar.Api/Endpoints/ApplicationsEndpoints.cs delegating to Application handlers with api-user actor
-- [ ] T036 [US3] Implement Criteria, Notes, and SearchRuns endpoints route groups in src/RoleRadar.Api/Endpoints/AncillaryEndpoints.cs delegating to Application query handlers
-- [ ] T037 [US3] Measured Checkpoint: Run scripts/test-fast.ps1 plus User Story 3 tests and report measured test counts
+- [X] T032 [P] [US3] Implement transport DTOs and envelopes in src/RoleRadar.Api/Envelopes/ and src/RoleRadar.Api/Models/ per data-model.md
+- [X] T033 [US3] Implement Postings endpoints route group in src/RoleRadar.Api/Endpoints/PostingsEndpoints.cs delegating to Application handlers with api-user actor and mapping stale version token to HTTP 409
+- [X] T034 [US3] Implement Companies endpoints route group in src/RoleRadar.Api/Endpoints/CompaniesEndpoints.cs delegating to Application handlers with omitted fields preserved on patch
+- [X] T035 [US3] Implement Applications and Events endpoints route group in src/RoleRadar.Api/Endpoints/ApplicationsEndpoints.cs delegating to Application handlers with api-user actor
+- [X] T036 [US3] Implement Criteria, Notes, and SearchRuns endpoints route groups in src/RoleRadar.Api/Endpoints/AncillaryEndpoints.cs delegating to Application query handlers
+- [X] T037 [US3] Measured Checkpoint: Run scripts/test-fast.ps1 plus User Story 3 tests and report measured test counts
 
 ---
 

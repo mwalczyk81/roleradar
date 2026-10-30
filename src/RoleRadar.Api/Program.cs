@@ -4,22 +4,26 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using RoleRadar.Api.Authentication;
+using RoleRadar.Api.Endpoints;
 using RoleRadar.Application;
 using RoleRadar.Application.Abstractions;
-using RoleRadar.Application.Tracking.Queries;
 using RoleRadar.Domain.Common;
 using RoleRadar.Infrastructure;
 
-var app = RoleRadar.Api.Program.CreateApp(args);
-app.Run();
+namespace RoleRadar.Api;
 
-namespace RoleRadar.Api
+public partial class Program
 {
-    public partial class Program
-    {
-        public const string OwnerPolicyName = "OwnerAllowlistPolicy";
+    public const string OwnerPolicyName = "OwnerAllowlistPolicy";
 
-        public static WebApplication CreateApp(
+    public static async Task<int> Main(string[] args)
+    {
+        var app = CreateApp(args);
+        await app.RunAsync();
+        return 0;
+    }
+
+    public static WebApplication CreateApp(
             string[]? args = null,
             Action<WebApplicationBuilder>? configureBuilder = null)
         {
@@ -103,21 +107,10 @@ namespace RoleRadar.Api
             var apiV1 = app.MapGroup("/api/v1")
                 .RequireAuthorization(OwnerPolicyName);
 
-            apiV1.MapGet("/criteria", async (
-                string? effectiveDate,
-                IOwnerIdProvider ownerIdProvider,
-                IQueryHandler<TrackerQueryRequest, TrackerQueryResultDto> queryHandler,
-                CancellationToken cancellationToken) =>
-            {
-                var ownerId = ownerIdProvider.GetOwnerId().Value;
-                var result = await queryHandler.HandleAsync(
-                    new TrackerQueryRequest("criteria", EffectiveDate: effectiveDate, Page: 1, PageSize: 200, OwnerId: ownerId),
-                    cancellationToken);
-
-                return result.IsSuccess
-                    ? Results.Ok(result.Value!.Items)
-                    : Results.BadRequest(new { ok = false, errorCode = "validation_error", message = result.Error?.Message });
-            });
+            apiV1.MapPostingsEndpoints();
+            apiV1.MapCompaniesEndpoints();
+            apiV1.MapApplicationsEndpoints();
+            apiV1.MapAncillaryEndpoints();
 
             return app;
         }
@@ -143,8 +136,7 @@ namespace RoleRadar.Api
                     context.Succeed(requirement);
                 }
 
-                return Task.CompletedTask;
-            }
+            return Task.CompletedTask;
         }
     }
 }

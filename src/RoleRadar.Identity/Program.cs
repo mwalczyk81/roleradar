@@ -3,68 +3,85 @@ using Microsoft.EntityFrameworkCore;
 using RoleRadar.Identity.Configuration;
 using RoleRadar.Identity.Data;
 
-var builder = WebApplication.CreateBuilder(args);
+namespace RoleRadar.Identity;
 
-builder.Services.AddRazorPages();
-
-var identityConnectionString = builder.Configuration.GetConnectionString("IdentityConnection")
-    ?? Environment.GetEnvironmentVariable("ROLERADAR_IDENTITY_DB")
-    ?? "Data Source=identity.db";
-
-builder.Services.AddDbContext<IdentityAppDbContext>(options =>
-    options.UseSqlite(identityConnectionString));
-
-builder.Services.AddIdentity<IdentityUser<Guid>, IdentityRole<Guid>>(options =>
+public partial class Program
 {
-    options.Lockout.AllowedForNewUsers = true;
-    options.Lockout.MaxFailedAccessAttempts = 5;
-    options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
-})
-.AddEntityFrameworkStores<IdentityAppDbContext>()
-.AddDefaultTokenProviders();
+    public static async Task<int> Main(string[] args)
+    {
+        var app = CreateApp(args);
+        await app.RunAsync();
+        return 0;
+    }
 
-builder.Services.AddIdentityServer(options =>
-{
-    options.Events.RaiseErrorEvents = true;
-    options.Events.RaiseInformationEvents = true;
-    options.Events.RaiseFailureEvents = true;
-    options.Events.RaiseSuccessEvents = true;
-    options.KeyManagement.Enabled = true;
-    options.KeyManagement.RotationInterval = TimeSpan.FromDays(30);
-})
-.AddAspNetIdentity<IdentityUser<Guid>>()
-.AddConfigurationStore<IdentityAppDbContext>()
-.AddOperationalStore<IdentityAppDbContext>(options =>
-{
-    options.EnableTokenCleanup = true;
-    options.TokenCleanupInterval = 3600;
-})
-.AddInMemoryIdentityResources(IdentityServerConfig.GetIdentityResources())
-.AddInMemoryApiScopes(IdentityServerConfig.GetApiScopes())
-.AddInMemoryApiResources(IdentityServerConfig.GetApiResources())
-.AddInMemoryClients(IdentityServerConfig.GetClients(builder.Configuration));
+    public static WebApplication CreateApp(
+        string[]? args = null,
+        Action<WebApplicationBuilder>? configureBuilder = null)
+    {
+        var builder = WebApplication.CreateBuilder(args ?? []);
 
-IdentityServerConfig.ConfigureRateLimiting(builder.Services);
+        configureBuilder?.Invoke(builder);
 
-var app = builder.Build();
+        builder.Services.AddRazorPages();
 
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>();
-    dbContext.Database.Migrate();
-}
+        var identityConnectionString = builder.Configuration.GetConnectionString("IdentityConnection")
+            ?? Environment.GetEnvironmentVariable("ROLERADAR_IDENTITY_DB")
+            ?? "Data Source=identity.db";
 
-app.UseRateLimiter();
-app.UseRouting();
+        builder.Services.AddDbContext<IdentityAppDbContext>(options =>
+            options.UseSqlite(identityConnectionString));
 
-app.UseIdentityServer();
-app.UseAuthorization();
+        builder.Services.AddIdentity<IdentityUser<Guid>, IdentityRole<Guid>>(options =>
+        {
+            options.Lockout.AllowedForNewUsers = true;
+            options.Lockout.MaxFailedAccessAttempts = 5;
+            options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+        })
+        .AddEntityFrameworkStores<IdentityAppDbContext>()
+        .AddDefaultTokenProviders();
 
-app.MapRazorPages().RequireRateLimiting(IdentityServerConfig.AuthRateLimitPolicy);
+        builder.Services.AddIdentityServer(options =>
+        {
+            options.Events.RaiseErrorEvents = true;
+            options.Events.RaiseInformationEvents = true;
+            options.Events.RaiseFailureEvents = true;
+            options.Events.RaiseSuccessEvents = true;
+            options.KeyManagement.Enabled = true;
+            options.KeyManagement.RotationInterval = TimeSpan.FromDays(30);
+        })
+        .AddAspNetIdentity<IdentityUser<Guid>>()
+        .AddConfigurationStore<IdentityAppDbContext>()
+        .AddOperationalStore<IdentityAppDbContext>(options =>
+        {
+            options.EnableTokenCleanup = true;
+            options.TokenCleanupInterval = 3600;
+        })
+        .AddInMemoryIdentityResources(IdentityServerConfig.GetIdentityResources())
+        .AddInMemoryApiScopes(IdentityServerConfig.GetApiScopes())
+        .AddInMemoryApiResources(IdentityServerConfig.GetApiResources())
+        .AddInMemoryClients(IdentityServerConfig.GetClients(builder.Configuration));
 
-app.Run();
+        IdentityServerConfig.ConfigureRateLimiting(builder.Services);
 
-namespace RoleRadar.Identity
-{
-    public partial class Program;
+        var app = builder.Build();
+
+        using (var scope = app.Services.CreateScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>();
+            dbContext.Database.Migrate();
+        }
+
+        app.UseRateLimiter();
+        app.UseRouting();
+
+        app.UseIdentityServer();
+        app.UseAuthorization();
+
+        app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }))
+            .AllowAnonymous();
+
+        app.MapRazorPages().RequireRateLimiting(IdentityServerConfig.AuthRateLimitPolicy);
+
+        return app;
+    }
 }
