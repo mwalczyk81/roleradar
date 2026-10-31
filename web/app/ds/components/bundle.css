@@ -1,0 +1,46 @@
+/* =========================================================================
+   Matt's Design System — component stylesheet. Load after tokens.css.
+   Values live in tokens.json (compiled to tokens.css). This file keeps only
+   what tokens.json has no place for: the motion tokens, the --ds-font-*
+   names the components read, and the base behaviours from the old base.css.
+   ========================================================================= */
+
+:root {
+  /* Font names the components read; the stacks themselves are tokens.json type.families. */
+  --ds-font-sans: var(--font-sans);
+  --ds-font-mono: var(--font-mono);
+
+  /* Motion. Animate opacity/transform only. */
+  --ds-duration-fast: 120ms;  /* hovers, small state */
+  --ds-duration-base: 200ms;  /* most transitions    */
+  --ds-duration-slow: 320ms;  /* modals, drawers     */
+
+  --ds-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ds-ease-out:      cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* Focus: always visible. 2px --ds-focus-ring, offset 2px. Inputs, selects and
+   textareas draw their own ring (offset 0 plus a border recolor) inline. */
+:focus-visible {
+  outline: var(--ds-border-thick) solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Checkbox, Radio and Switch hide the native input (opacity 0) and draw their
+   own box. Ring the drawn box when its input has keyboard focus. */
+[data-ds-focus-target]:has(> input:focus-visible) {
+  outline: var(--ds-border-thick) solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Respect reduced motion. !important beats the components' inline transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}
