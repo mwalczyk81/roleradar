@@ -90,14 +90,20 @@ internal sealed class ApiContractTestHost : IAsyncDisposable
         return host;
     }
 
-    public string CreateValidOwnerToken(string subject = AllowedSubject)
+    public string CreateValidOwnerToken(string subject = AllowedSubject, string? scope = "roleradar.api")
     {
+        var claims = new List<Claim> { new("sub", subject) };
+        if (!string.IsNullOrWhiteSpace(scope))
+        {
+            claims.Add(new Claim("scope", scope));
+        }
+
         var creds = new SigningCredentials(_rsaKey, SecurityAlgorithms.RsaSha256);
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = ValidIssuer,
             Audience = ValidAudience,
-            Subject = new ClaimsIdentity([new Claim("sub", subject)]),
+            Subject = new ClaimsIdentity(claims),
             NotBefore = DateTime.UtcNow.AddMinutes(-1),
             Expires = DateTime.UtcNow.AddMinutes(10),
             SigningCredentials = creds

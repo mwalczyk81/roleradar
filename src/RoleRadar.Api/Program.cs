@@ -16,6 +16,10 @@ namespace RoleRadar.Api;
 public partial class Program
 {
     public const string OwnerPolicyName = "OwnerAllowlistPolicy";
+    public const string ReadPolicyName = "ApiReadScopePolicy";
+    public const string WritePolicyName = "ApiWriteScopePolicy";
+    public const string FullAccessScope = "roleradar.api";
+    public const string ReadOnlyScope = "roleradar.api.read";
 
     public static async Task<int> Main(string[] args)
     {
@@ -57,6 +61,7 @@ public partial class Program
         builder.Services.Configure<OwnerSecurityOptions>(builder.Configuration.GetSection(OwnerSecurityOptions.SectionName));
         builder.Services.AddScoped<IOwnerIdProvider, HttpUserOwnerIdProvider>();
         builder.Services.AddSingleton<IAuthorizationHandler, OwnerAllowlistHandler>();
+        builder.Services.AddSingleton<IAuthorizationHandler, ScopeAuthorizationHandler>();
 
         var authority = builder.Configuration["Authentication:Authority"]
             ?? Environment.GetEnvironmentVariable("ROLERADAR_OIDC_AUTHORITY")
@@ -93,6 +98,20 @@ public partial class Program
             {
                 policy.RequireAuthenticatedUser();
                 policy.AddRequirements(new OwnerAllowlistRequirement());
+            })
+            .AddPolicy(ReadPolicyName, policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.AddRequirements(
+                    new OwnerAllowlistRequirement(),
+                    new ScopeRequirement(FullAccessScope, ReadOnlyScope));
+            })
+            .AddPolicy(WritePolicyName, policy =>
+            {
+                policy.RequireAuthenticatedUser();
+                policy.AddRequirements(
+                    new OwnerAllowlistRequirement(),
+                    new ScopeRequirement(FullAccessScope));
             });
 
         builder.Services.AddRoleRadarApplication();
@@ -159,7 +178,30 @@ public partial class Program
 
             if (!string.IsNullOrWhiteSpace(sub) &&
                 _options.AllowedSubjects is { Length: > 0 } allowed &&
-                allowed.Contains(sub, StringComparer.Ordinal))
+                allowed.Any(s => !string.IsNullOrWhiteSpace(s) && string.Equals(s, sub, StringComparison.Ordinal)))
+            {
+                context.Succeed(requirement);
+            }
+
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ScopeRequirement(params string[] allowedScopes) : IAuthorizationRequirement
+    {
+        public IReadOnlyList<string> AllowedScopes { get; } = allowedScopes;
+    }
+
+    private sealed class ScopeAuthorizationHandler : AuthorizationHandler<ScopeRequirement>
+    {
+        protected override Task HandleRequirementAsync(
+            AuthorizationHandlerContext context,
+            ScopeRequirement requirement)
+        {
+            var tokenScopes = context.User.FindAll("scope")
+                .SelectMany(c => c.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+
+            if (tokenScopes.Any(s => requirement.AllowedScopes.Contains(s, StringComparer.Ordinal)))
             {
                 context.Succeed(requirement);
             }

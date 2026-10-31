@@ -76,9 +76,9 @@ services:
     environment:
       - ROLERADAR_IDENTITY_DB=Data Source=/data/identity/identity.db
       - ROLERADAR_IDENTITY_ISSUER_URI=https://identity:5001
-      - ROLERADAR_WEB_CLIENT_SECRET=${ROLERADAR_WEB_CLIENT_SECRET:-}
-      - ROLERADAR_HEADLESS_CLIENT_SECRET=${ROLERADAR_HEADLESS_CLIENT_SECRET:-}
-      - ROLERADAR_OWNER_ALLOWED_SUBJECT=${ROLERADAR_OWNER_ALLOWED_SUBJECT:-}
+      - ROLERADAR_WEB_CLIENT_SECRET=${ROLERADAR_WEB_CLIENT_SECRET:?set it}
+      - ROLERADAR_HEADLESS_CLIENT_SECRET=${ROLERADAR_HEADLESS_CLIENT_SECRET:?set it}
+      - ROLERADAR_HEADLESS_ALLOWED_SUBJECT=${ROLERADAR_HEADLESS_ALLOWED_SUBJECT:-roleradar-headless}
       - Kestrel__Endpoints__LoopbackHealth__Url=http://127.0.0.1:8080
       - Kestrel__Endpoints__Https__Url=https://*:5001
       - Kestrel__Endpoints__Https__Certificate__Path=/https/cert.pfx
@@ -116,7 +116,8 @@ services:
       - ROLERADAR_MONGO_DATABASE=${ROLERADAR_MONGO_DATABASE:-roleradar}
       - ROLERADAR_OIDC_AUTHORITY=https://identity:5001
       - ROLERADAR_OIDC_AUDIENCE=roleradar.api
-      - Owner__AllowedSubjects__0=${ROLERADAR_OWNER_ALLOWED_SUBJECT:-}
+      - Owner__AllowedSubjects__0=${ROLERADAR_OWNER_ALLOWED_SUBJECT:?set it}
+      - Owner__AllowedSubjects__1=${ROLERADAR_HEADLESS_ALLOWED_SUBJECT:-}
       - SSL_CERT_FILE=/https/dev-cert.crt
       - Kestrel__Endpoints__LoopbackHealth__Url=http://127.0.0.1:8080
       - Kestrel__Endpoints__Https__Url=https://*:5002

@@ -13,13 +13,18 @@ public static class PostingsEndpoints
 
     public static RouteGroupBuilder MapPostingsEndpoints(this RouteGroupBuilder group)
     {
-        group.MapGet("/postings", GetPostingsAsync)
+        var readGroup = group.MapGroup(string.Empty)
+            .RequireAuthorization(Program.ReadPolicyName);
+        var writeGroup = group.MapGroup(string.Empty)
+            .RequireAuthorization(Program.WritePolicyName);
+
+        readGroup.MapGet("/postings", GetPostingsAsync)
             .Produces<PagedResult<PostingListItemDto>>(StatusCodes.Status200OK)
             .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest);
-        group.MapGet("/postings/{id:guid}", GetPostingByIdAsync)
+        readGroup.MapGet("/postings/{id:guid}", GetPostingByIdAsync)
             .Produces<PostingDetailDto>(StatusCodes.Status200OK)
             .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
-        group.MapPost("/postings/{id:guid}/transition", TransitionPostingAsync)
+        writeGroup.MapPost("/postings/{id:guid}/transition", TransitionPostingAsync)
             .Produces<PostingDetailDto>(StatusCodes.Status200OK)
             .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest)
             .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound)

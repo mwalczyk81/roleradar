@@ -51,6 +51,7 @@ public sealed class IdpAgnosticOidcIntegrationTests(IsolatedContainerMongoFixtur
                     {
                         ["ConnectionStrings:IdentityConnection"] = $"Data Source={dbPath}",
                         ["Clients:Web:Secret"] = ClientSecret,
+                        ["Clients:Headless:Secret"] = "IdpAgnosticHeadlessSecret!2026",
                         ["Clients:Web:RedirectUri"] = "https://localhost:5003/signin-oidc"
                     });
                     builder.Services.PostConfigure<Duende.IdentityServer.Configuration.IdentityServerOptions>(o =>

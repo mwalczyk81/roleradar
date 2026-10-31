@@ -14,17 +14,22 @@ public static class ApplicationsEndpoints
 
     public static RouteGroupBuilder MapApplicationsEndpoints(this RouteGroupBuilder group)
     {
-        group.MapGet("/applications", ListApplicationsAsync)
+        var readGroup = group.MapGroup(string.Empty)
+            .RequireAuthorization(Program.ReadPolicyName);
+        var writeGroup = group.MapGroup(string.Empty)
+            .RequireAuthorization(Program.WritePolicyName);
+
+        readGroup.MapGet("/applications", ListApplicationsAsync)
             .Produces<PagedResult<ApplicationDetailDto>>(StatusCodes.Status200OK)
             .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest);
-        group.MapGet("/applications/{id:guid}", GetApplicationByIdAsync)
+        readGroup.MapGet("/applications/{id:guid}", GetApplicationByIdAsync)
             .Produces<ApplicationDetailDto>(StatusCodes.Status200OK)
             .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
-        group.MapPost("/applications", CreateApplicationAsync)
+        writeGroup.MapPost("/applications", CreateApplicationAsync)
             .Produces<ApplicationDetailDto>(StatusCodes.Status201Created)
             .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest)
             .Produces<ErrorEnvelope>(StatusCodes.Status409Conflict);
-        group.MapPost("/applications/{id:guid}/events", AppendApplicationEventAsync)
+        writeGroup.MapPost("/applications/{id:guid}/events", AppendApplicationEventAsync)
             .Produces<ApplicationDetailDto>(StatusCodes.Status200OK)
             .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest)
             .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);

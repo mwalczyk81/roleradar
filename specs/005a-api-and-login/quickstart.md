@@ -63,12 +63,23 @@ dotnet run --project src/RoleRadar.Cli -- identity create-owner
 
 ---
 
-## 4. Step 3: Launch Services via Docker Compose
+## 4. Step 3: Generate Required Secrets and Launch Services via Docker Compose
 
-Start MongoDB, the Duende Identity host, and the REST API:
+`deploy/docker-compose.apps.yml` fails closed when client secrets or the owner subject are unset (`${ROLERADAR_WEB_CLIENT_SECRET:?set it}`, `${ROLERADAR_HEADLESS_CLIENT_SECRET:?set it}`, `${ROLERADAR_OWNER_ALLOWED_SUBJECT:?set it}`). Generate cryptographically random secrets and export the required environment variables before starting the stack:
 
 ```powershell
-docker compose -f deploy/docker-compose.apps.yml up -d
+# Generate 32-byte URL-safe random secrets for the web and headless OIDC clients
+$env:ROLERADAR_WEB_CLIENT_SECRET = [Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+$env:ROLERADAR_HEADLESS_CLIENT_SECRET = [Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+
+# Set the interactive owner's provisioned UserId (GUID from Step 2) as Owner__AllowedSubjects__0
+$env:ROLERADAR_OWNER_ALLOWED_SUBJECT = "<provisioned-owner-user-guid>"
+
+# (Optional) Enable the read-only headless client subject as Owner__AllowedSubjects__1 (defaults to "roleradar-headless" in Identity)
+$env:ROLERADAR_HEADLESS_ALLOWED_SUBJECT = "roleradar-headless"
+
+# Start MongoDB, the Duende Identity host, and the REST API
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.apps.yml --profile apps up -d
 ```
 
 Verify service health:

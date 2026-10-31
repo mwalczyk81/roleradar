@@ -35,20 +35,29 @@ public static class IdentityServerConfig
     {
         var webSecret = configuration["Clients:Web:Secret"]
             ?? Environment.GetEnvironmentVariable("ROLERADAR_WEB_CLIENT_SECRET");
-        if (string.IsNullOrWhiteSpace(webSecret))
-        {
-            webSecret = "insecure-fallback-web-secret-for-dev";
-        }
-
         var headlessSecret = configuration["Clients:Headless:Secret"]
             ?? Environment.GetEnvironmentVariable("ROLERADAR_HEADLESS_CLIENT_SECRET");
+
+        var missingSecrets = new List<string>();
+        if (string.IsNullOrWhiteSpace(webSecret))
+        {
+            missingSecrets.Add("Clients:Web:Secret (or ROLERADAR_WEB_CLIENT_SECRET)");
+        }
+
         if (string.IsNullOrWhiteSpace(headlessSecret))
         {
-            headlessSecret = "insecure-fallback-headless-secret-for-dev";
+            missingSecrets.Add("Clients:Headless:Secret (or ROLERADAR_HEADLESS_CLIENT_SECRET)");
+        }
+
+        if (missingSecrets.Count > 0)
+        {
+            var errorMessage = $"[FATAL] RoleRadar.Identity refused to start: required OIDC client secret configuration is missing or empty ({string.Join(", ", missingSecrets)}).";
+            Console.Error.WriteLine(errorMessage);
+            throw new InvalidOperationException(errorMessage);
         }
 
         var headlessSubject = configuration["Clients:Headless:Subject"]
-            ?? Environment.GetEnvironmentVariable("ROLERADAR_OWNER_ALLOWED_SUBJECT");
+            ?? Environment.GetEnvironmentVariable("ROLERADAR_HEADLESS_ALLOWED_SUBJECT");
         if (string.IsNullOrWhiteSpace(headlessSubject))
         {
             headlessSubject = "roleradar-headless";
@@ -66,7 +75,7 @@ public static class IdentityServerConfig
                 AllowedGrantTypes = GrantTypes.Code,
                 RequirePkce = true,
                 RequireClientSecret = true,
-                ClientSecrets = { new Secret(webSecret.Sha256()) },
+                ClientSecrets = { new Secret(webSecret!.Trim().Sha256()) },
                 RedirectUris = { webRedirectUri },
                 PostLogoutRedirectUris = { webPostLogoutUri },
                 AllowOfflineAccess = true,
@@ -86,7 +95,7 @@ public static class IdentityServerConfig
                 ClientId = "roleradar-headless",
                 ClientName = "Headless Automation Client",
                 AllowedGrantTypes = GrantTypes.ClientCredentials,
-                ClientSecrets = { new Secret(headlessSecret.Sha256()) },
+                ClientSecrets = { new Secret(headlessSecret!.Trim().Sha256()) },
                 AllowedScopes = { "roleradar.api.read" },
                 AccessTokenLifetime = 300,             // 5 minutes
                 ClientClaimsPrefix = string.Empty,

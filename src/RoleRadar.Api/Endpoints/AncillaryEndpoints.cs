@@ -11,16 +11,19 @@ public static class AncillaryEndpoints
 {
     public static RouteGroupBuilder MapAncillaryEndpoints(this RouteGroupBuilder group)
     {
-        group.MapGet("/criteria", GetCriteriaAsync)
+        var readGroup = group.MapGroup(string.Empty)
+            .RequireAuthorization(Program.ReadPolicyName);
+
+        readGroup.MapGet("/criteria", GetCriteriaAsync)
             .Produces<IReadOnlyList<CriterionDto>>(StatusCodes.Status200OK)
             .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest);
-        group.MapGet("/notes/{id:guid}", GetNoteByIdAsync)
+        readGroup.MapGet("/notes/{id:guid}", GetNoteByIdAsync)
             .Produces<NoteDto>(StatusCodes.Status200OK)
             .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
-        group.MapGet("/notes", SearchNotesAsync)
+        readGroup.MapGet("/notes", SearchNotesAsync)
             .Produces<PagedResult<NoteDto>>(StatusCodes.Status200OK)
             .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest);
-        group.MapGet("/search-runs", ListSearchRunsAsync)
+        readGroup.MapGet("/search-runs", ListSearchRunsAsync)
             .Produces<PagedResult<SearchRunDto>>(StatusCodes.Status200OK)
             .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest);
         return group;

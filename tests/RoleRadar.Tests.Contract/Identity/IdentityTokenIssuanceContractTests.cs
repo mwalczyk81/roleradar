@@ -59,6 +59,73 @@ public sealed class IdentityTokenIssuanceContractTests
 
         Assert.Single(headlessClient.AllowedScopes);
         Assert.Contains("roleradar.api.read", headlessClient.AllowedScopes);
+        Assert.Equal(string.Empty, headlessClient.ClientClaimsPrefix);
+        Assert.Contains(headlessClient.Claims, c => c.Type == "sub" && c.Value == "roleradar-headless");
+    }
+
+    [Fact]
+    public void HeadlessClient_UsesConfiguredSubjectClaim_WhenProvided()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Clients:Web:Secret"] = "web-client-test-secret-123456789012345",
+                ["Clients:Headless:Secret"] = "headless-test-secret-123456789012345",
+                ["Clients:Headless:Subject"] = "custom-headless-automation-bot"
+            })
+            .Build();
+
+        var headlessClient = IdentityServerConfig.GetClients(config).Single(c => c.ClientId == "roleradar-headless");
+        Assert.Contains(headlessClient.Claims, c => c.Type == "sub" && c.Value == "custom-headless-automation-bot");
+    }
+
+    [Theory]
+    [InlineData(null, "valid-headless-secret-1234567890")]
+    [InlineData("   ", "valid-headless-secret-1234567890")]
+    [InlineData("valid-web-secret-1234567890", null)]
+    [InlineData("valid-web-secret-1234567890", "")]
+    public void GetClients_WhenSecretsMissingOrEmpty_FailsClosedAndWritesStderrWithoutLeakingSecrets(
+        string? webSecret,
+        string? headlessSecret)
+    {
+        var prevWebEnv = Environment.GetEnvironmentVariable("ROLERADAR_WEB_CLIENT_SECRET");
+        var prevHeadlessEnv = Environment.GetEnvironmentVariable("ROLERADAR_HEADLESS_CLIENT_SECRET");
+        var prevErr = Console.Error;
+        using var errWriter = new StringWriter();
+        try
+        {
+            Environment.SetEnvironmentVariable("ROLERADAR_WEB_CLIENT_SECRET", null);
+            Environment.SetEnvironmentVariable("ROLERADAR_HEADLESS_CLIENT_SECRET", null);
+            Console.SetError(errWriter);
+
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Clients:Web:Secret"] = webSecret,
+                    ["Clients:Headless:Secret"] = headlessSecret
+                })
+                .Build();
+
+            var ex = Assert.Throws<InvalidOperationException>(() => IdentityServerConfig.GetClients(config).ToArray());
+            var stderr = errWriter.ToString();
+
+            Assert.Contains("RoleRadar.Identity refused to start", ex.Message, StringComparison.Ordinal);
+            Assert.Contains("RoleRadar.Identity refused to start", stderr, StringComparison.Ordinal);
+            if (!string.IsNullOrWhiteSpace(webSecret))
+            {
+                Assert.DoesNotContain(webSecret, stderr, StringComparison.Ordinal);
+            }
+            if (!string.IsNullOrWhiteSpace(headlessSecret))
+            {
+                Assert.DoesNotContain(headlessSecret, stderr, StringComparison.Ordinal);
+            }
+        }
+        finally
+        {
+            Console.SetError(prevErr);
+            Environment.SetEnvironmentVariable("ROLERADAR_WEB_CLIENT_SECRET", prevWebEnv);
+            Environment.SetEnvironmentVariable("ROLERADAR_HEADLESS_CLIENT_SECRET", prevHeadlessEnv);
+        }
     }
 
     [Fact]

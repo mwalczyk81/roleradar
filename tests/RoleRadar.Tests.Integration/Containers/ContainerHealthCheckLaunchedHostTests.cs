@@ -38,7 +38,7 @@ public sealed class ContainerHealthCheckLaunchedHostTests
             // in the image is owned by 1654:1654 so the named volume inherits ownership for SQLite,
             // Data Protection keys, and Duende KeyManagement keys.
             var extraArgs = serviceName == "identity"
-                ? $"-v {identityVolumeName}:/data/identity:rw -e ROLERADAR_IDENTITY_DB=\"Data Source=/data/identity/identity.db\" "
+                ? $"-v {identityVolumeName}:/data/identity:rw -e ROLERADAR_IDENTITY_DB=\"Data Source=/data/identity/identity.db\" -e ROLERADAR_WEB_CLIENT_SECRET=\"ContainerHcWebSecret!2026\" -e ROLERADAR_HEADLESS_CLIENT_SECRET=\"ContainerHcHeadlessSecret!2026\" "
                 : "-e ROLERADAR_MONGO_CONNECTION_STRING=\"mongodb://127.0.0.1:27099/?directConnection=true\" -e ROLERADAR_MONGO_DATABASE=\"rrtest_hc\" ";
 
             var runResult = await RunProcessAsync(

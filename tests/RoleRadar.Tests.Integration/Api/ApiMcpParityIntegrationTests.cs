@@ -113,7 +113,11 @@ public sealed class ApiMcpParityIntegrationTests(IsolatedContainerMongoFixture m
         {
             Issuer = ValidIssuer,
             Audience = ValidAudience,
-            Subject = new ClaimsIdentity([new Claim("sub", AllowedSubject)]),
+            Subject = new ClaimsIdentity(
+            [
+                new Claim("sub", AllowedSubject),
+                new Claim("scope", "roleradar.api")
+            ]),
             NotBefore = DateTime.UtcNow.AddMinutes(-1),
             Expires = DateTime.UtcNow.AddMinutes(10),
             SigningCredentials = creds
