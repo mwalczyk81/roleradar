@@ -31,6 +31,7 @@ $gateResults = [ordered]@{
     Restore = "FAIL"
     Format = "FAIL"
     Build = "FAIL"
+    Typecheck = "FAIL"
     Tests = "FAIL"
     Coverage = "FAIL"
     Images = "FAIL"
@@ -95,7 +96,19 @@ try {
     $null = & dotnet build RoleRadar.sln -c Release --no-restore -warnaserror 2>&1
     if ($LASTEXITCODE -eq 0) { $gateResults.Build = "PASS" } else { throw "dotnet build (-warnaserror) failed." }
 
-    # 5. Run test suite with coverage via scripts/test-all.ps1
+    # 5. Web typecheck
+    if (Test-Path (Join-Path $repoRoot "web/package.json")) {
+        $typecheckOutput = & pnpm --dir (Join-Path $repoRoot "web") run typecheck 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $gateResults.Typecheck = "PASS"
+        } else {
+            throw "Web typecheck failed: $typecheckOutput"
+        }
+    } else {
+        $gateResults.Typecheck = "SKIP"
+    }
+
+    # 6. Run test suite with coverage via scripts/test-all.ps1
     $null = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "verify-devstack-canary.ps1") -Action Record 2>&1
     $testOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-all.ps1 -NoBuild --collect:"XPlat Code Coverage" --results-directory ./TestResults 2>&1
     if ($LASTEXITCODE -eq 0) {
@@ -174,7 +187,7 @@ finally {
     }
 }
 
-$allPassed = @($gateResults.Values | Where-Object { $_ -ne "PASS" }).Count -eq 0
+$allPassed = @($gateResults.Values | Where-Object { $_ -ne "PASS" -and $_ -ne "SKIP" }).Count -eq 0
 $totalTests = $testCounts.Unit + $testCounts.Arch + $testCounts.Contract + $testCounts.Integration
 
 # Exactly concise summary (<= 15 lines)
@@ -182,9 +195,10 @@ Write-Output "=== RoleRadar Review Gate Summary: $Branch ==="
 Write-Output "1. Locked Restore: $($gateResults.Restore)"
 Write-Output "2. Code Format:   $($gateResults.Format)"
 Write-Output "3. WarningsBuild: $($gateResults.Build)"
-Write-Output "4. Tests:         $($gateResults.Tests) (Unit: $($testCounts.Unit), Arch: $($testCounts.Arch), Contract: $($testCounts.Contract), Integration: $($testCounts.Integration) | Total: $totalTests)"
-Write-Output "5. Domain+App Cov: $coveragePct% (Gate: >= 85%) -> $($gateResults.Coverage)"
-Write-Output "6. Image Builds:  $($gateResults.Images) (CLI: $cliSizeMb, MCP: $mcpSizeMb, Identity: $identitySizeMb, API: $apiSizeMb)"
+Write-Output "4. Typecheck:     $($gateResults.Typecheck)"
+Write-Output "5. Tests:         $($gateResults.Tests) (Unit: $($testCounts.Unit), Arch: $($testCounts.Arch), Contract: $($testCounts.Contract), Integration: $($testCounts.Integration) | Total: $totalTests)"
+Write-Output "6. Domain+App Cov: $coveragePct% (Gate: >= 85%) -> $($gateResults.Coverage)"
+Write-Output "7. Image Builds:  $($gateResults.Images) (CLI: $cliSizeMb, MCP: $mcpSizeMb, Identity: $identitySizeMb, API: $apiSizeMb)"
 Write-Output "Verdict: $(if ($allPassed) { 'ALL GATES PASSED' } else { 'GATE FAILURE' })"
 Write-Output "================================================="
 

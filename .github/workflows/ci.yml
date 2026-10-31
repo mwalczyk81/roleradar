@@ -396,8 +396,8 @@ jobs:
       - name: Run E2E tests
         run: pnpm run test:e2e
 
-      - name: Run Nx affected (lint, build, test)
-        run: pnpm exec nx affected -t lint build test
+      - name: Run Nx affected (typecheck, lint, build, test)
+        run: pnpm exec nx affected -t typecheck lint build test
 
   ci-gate:
     name: Ubuntu (Build, Testcontainers, >=85% Coverage & Pre-Commit)
