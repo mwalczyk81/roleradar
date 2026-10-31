@@ -20,7 +20,7 @@ RoleRadar is a single-owner, local-first job-search tracker. A stdio MCP server 
 
 ## Rules
 
-- Commit your work in small commits; never push.
+- Never commit or push. Leave changes in the working tree for review.
 - Never touch `bin/`, `obj/`, `dist/`.
 - Expected failures return `Result<T>`; never throw them.
 - Every `ICommandHandler` is wrapped by `TransactionAndAuditCommandDecorator`.

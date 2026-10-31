@@ -11,6 +11,8 @@
     <ProjectReference Include="..\..\src\RoleRadar.Infrastructure\RoleRadar.Infrastructure.csproj" />
     <ProjectReference Include="..\..\src\RoleRadar.Mcp.Stdio\RoleRadar.Mcp.Stdio.csproj" />
     <ProjectReference Include="..\..\src\RoleRadar.Cli\RoleRadar.Cli.csproj" />
+    <ProjectReference Include="..\..\src\RoleRadar.Identity\RoleRadar.Identity.csproj" />
+    <ProjectReference Include="..\..\src\RoleRadar.Api\RoleRadar.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>

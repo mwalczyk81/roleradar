@@ -39,10 +39,10 @@ public sealed class IsolatedContainerMongoFixture : IAsyncLifetime
         // 2. Create dedicated volume
         await RunProcessAsync("docker", $"volume create --label com.docker.compose.project={ProjectName} {VolumeName}", 30);
 
-        // 3. Launch isolated container
+        // 3. Launch isolated container (GLIBC_TUNABLES works around MongoDB SERVER-121912 on Linux kernels 6.19+ / 7.0.0-7.0.13)
         await RunProcessAsync(
             "docker",
-            $"run -d --name {ContainerName} --network {NetworkName} --network-alias host.docker.internal --network-alias mongo --label com.docker.compose.project={ProjectName} -p 127.0.0.1:{HostPort}:27018 -v {VolumeName}:/data/db mongo:8.0.34 mongod --replSet rs0 --port 27018 --bind_ip 127.0.0.1,host.docker.internal,mongo",
+            $"run -d --name {ContainerName} --network {NetworkName} --network-alias host.docker.internal --network-alias mongo --label com.docker.compose.project={ProjectName} -e GLIBC_TUNABLES=glibc.pthread.rseq=1 -p 127.0.0.1:{HostPort}:27018 -v {VolumeName}:/data/db mongo:8.0.34 mongod --replSet rs0 --port 27018 --bind_ip 127.0.0.1,host.docker.internal,mongo",
             60);
 
         // 4. Wait for mongo to respond and initiate single-node replica set

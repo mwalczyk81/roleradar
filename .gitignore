@@ -153,6 +153,8 @@ vite.config.ts.timestamp-*
 import-review/
 /private/
 /db/
+deploy/certs/
+*.pfx
 job-search-export*
 *.dump
 *.sql.gz

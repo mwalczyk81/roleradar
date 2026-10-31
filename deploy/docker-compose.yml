@@ -3,6 +3,9 @@ services:
     image: mongo:8.0.34
     container_name: roleradar-mongo
     restart: unless-stopped
+    environment:
+      # Work around MongoDB SERVER-121912 rseq/TCMalloc startup abort on Linux kernels 6.19+ and 7.0.0-7.0.13.
+      - GLIBC_TUNABLES=glibc.pthread.rseq=1
     command: ["mongod", "--replSet", "rs0", "--bind_ip", "127.0.0.1,mongo"]
     ports:
       - "127.0.0.1:27017:27017"
