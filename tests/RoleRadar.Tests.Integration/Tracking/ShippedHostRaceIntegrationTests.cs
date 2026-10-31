@@ -37,6 +37,8 @@ public sealed class ShippedHostRaceIntegrationTests
                 clients[i] = await McpProcessClient.StartAsync(mcpDllPath, env);
             }
 
+            await WarmUpAllAsync(clients);
+
             // Release all 8 processes simultaneously to record company with same name (varied casing)
             var barrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var tasks = clients.Select((client, idx) => Task.Run(async () =>
@@ -110,6 +112,8 @@ public sealed class ShippedHostRaceIntegrationTests
             {
                 clients[i] = await McpProcessClient.StartAsync(mcpDllPath, env);
             }
+
+            await WarmUpAllAsync(clients);
 
             // Create target company first
             var setupClient = clients[0];
@@ -275,6 +279,8 @@ public sealed class ShippedHostRaceIntegrationTests
                 clients.Add(await McpProcessClient.StartAsync(mcpDllPath, env));
             }
 
+            await WarmUpAllAsync(clients);
+
             // 1. Initial criterion creation
             var initialResp = await clients[0].CallToolAsync("tracker_log", new
             {
@@ -369,6 +375,8 @@ public sealed class ShippedHostRaceIntegrationTests
             {
                 clients.Add(await McpProcessClient.StartAsync(mcpDllPath, env));
             }
+
+            await WarmUpAllAsync(clients);
 
             // 1. Create company and posting
             var companyResp = await clients[0].CallToolAsync("company_record", new
@@ -468,6 +476,8 @@ public sealed class ShippedHostRaceIntegrationTests
                 clients.Add(await McpProcessClient.StartAsync(mcpDllPath, env));
             }
 
+            await WarmUpAllAsync(clients);
+
             var startedAt = "2026-10-18T16:00:00Z";
             var barrier = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var tasks = clients.Select((c, idx) => Task.Run(async () =>
@@ -520,4 +530,8 @@ public sealed class ShippedHostRaceIntegrationTests
             await _sharedMongo.DropDatabaseAsync(uniqueDb);
         }
     }
+
+    // Warms every host before the barrier so cold-start latency is not misreported as DatastoreOffline.
+    private static Task WarmUpAllAsync(IEnumerable<McpProcessClient> clients) =>
+        Task.WhenAll(clients.Select(c => c.WarmUpAsync()));
 }

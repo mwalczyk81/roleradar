@@ -232,6 +232,38 @@ internal sealed class McpProcessClient : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Performs a read-only round trip so the host's JIT, Mongo driver connection pool and
+    /// readiness probe are warm before a race barrier is released. Without this, N cold .NET
+    /// processes starting concurrently on a small CI runner can exceed the product's 3 s
+    /// readiness budget and report a false <c>DatastoreOffline</c>, which has nothing to do
+    /// with the dedup logic the race tests verify. Retries only on <c>DatastoreOffline</c>.
+    /// </summary>
+    public async Task WarmUpAsync(TimeSpan? timeout = null)
+    {
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(60));
+        string lastResponse = string.Empty;
+
+        while (DateTime.UtcNow < deadline)
+        {
+            var response = await CallToolAsync("note_search", new { query = "warmup", limit = 1 });
+            if (response.TryGetProperty("ok", out var ok) && ok.GetBoolean())
+            {
+                return;
+            }
+
+            lastResponse = response.ToString();
+            if (!lastResponse.Contains("DatastoreOffline", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"Warm-up failed unexpectedly: {lastResponse}");
+            }
+
+            await Task.Delay(500);
+        }
+
+        throw new TimeoutException($"MCP host did not become ready within the warm-up window. Last response: {lastResponse}");
+    }
+
     public async ValueTask DisposeAsync()
     {
         try
