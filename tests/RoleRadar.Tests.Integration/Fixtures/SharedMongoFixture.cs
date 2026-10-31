@@ -10,7 +10,9 @@ namespace RoleRadar.Tests.Integration.Fixtures;
 
 public sealed class SharedMongoFixture : IAsyncLifetime
 {
+    // Work around MongoDB SERVER-121912 rseq/TCMalloc startup abort on Linux kernels 6.19+ and 7.0.0-7.0.13.
     private readonly MongoDbContainer _mongoContainer = new MongoDbBuilder("mongo:8.0.34")
+        .WithEnvironment("GLIBC_TUNABLES", "glibc.pthread.rseq=1")
         .WithReplicaSet("rs0")
         .WithTmpfsMount("/data/db")
         .WithTmpfsMount("/data/configdb")
