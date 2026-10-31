@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import React from "react";
 import { render } from "@testing-library/react";
+import { createRoutesStub } from "react-router";
 import crypto from "node:crypto";
 import NotAuthorized, { loader as notAuthorizedLoader } from "../../app/routes/not-authorized.js";
 import ServiceUnavailable from "../../app/routes/service-unavailable.js";
@@ -12,22 +13,24 @@ import {
   type UserSession,
 } from "../../app/lib/session.server.js";
 
-vi.mock("react-router", async () => {
-  const actual = await vi.importActual("react-router");
-  return {
-    ...actual,
-    useLoaderData: () => ({ csrfToken: "test-csrf-token" }),
-  };
-});
-
 describe("error views", () => {
   describe("NotAuthorized view (/not-authorized)", () => {
-    it("renders clear explanation of 403 Forbidden without looping or redirect controls", () => {
-      const { getByText, queryByRole } = render(React.createElement(NotAuthorized));
+    const NotAuthorizedStub = createRoutesStub([
+      {
+        path: "/not-authorized",
+        Component: NotAuthorized,
+        loader: () => ({ csrfToken: "test-csrf-token" }),
+      },
+    ]);
 
-      expect(getByText(/Not Authorized|Forbidden|Access Denied/i)).toBeDefined();
+    it("renders clear explanation of 403 Forbidden without looping or redirect controls", async () => {
+      const { findByText, queryByRole } = render(
+        React.createElement(NotAuthorizedStub, { initialEntries: ["/not-authorized"] })
+      );
+
+      expect(await findByText(/Not Authorized|Forbidden|Access Denied/i)).toBeDefined();
       expect(
-        getByText(/You do not have permission to access this resource/i)
+        await findByText(/You do not have permission to access this resource/i)
       ).toBeDefined();
 
       // Ensure no automatic redirect link loops back to the forbidden resource
@@ -35,7 +38,10 @@ describe("error views", () => {
     });
 
     it("has zero accessibility violations", async () => {
-      const { container } = render(React.createElement(NotAuthorized));
+      const { container, findByText } = render(
+        React.createElement(NotAuthorizedStub, { initialEntries: ["/not-authorized"] })
+      );
+      await findByText(/Not Authorized/i);
       await expect(container).toHaveNoViolations();
     });
   });

@@ -1,8 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import React from "react";
 import { render, fireEvent, screen } from "@testing-library/react";
-import { DataTable } from "../../app/ds/components/src/data/DataTable.jsx";
-import { Toolbar } from "../../app/ds/components/src/data/Toolbar.jsx";
+import { DataTable, Toolbar } from "../../app/ui.js";
 
 describe("Postings DataTable & Toolbar (T029)", () => {
   const samplePostings = [
@@ -11,7 +10,7 @@ describe("Postings DataTable & Toolbar (T029)", () => {
       companyName: "Beta LLC",
       title: "Senior Backend Engineer",
       location: "Remote",
-      disposition: "screened_in",
+      disposition: "scored",
       score: 92,
       createdAt: "2026-10-15T10:00:00Z",
     },
@@ -73,7 +72,7 @@ describe("Postings DataTable & Toolbar (T029)", () => {
           {
             id: "disp",
             label: "Disposition",
-            value: "Screened In",
+            value: "Scored",
             onRemove: onRemoveFilter,
           },
         ],
@@ -81,7 +80,7 @@ describe("Postings DataTable & Toolbar (T029)", () => {
     );
 
     expect(screen.getByPlaceholderText("Search postings...")).toBeDefined();
-    expect(screen.getByText(/Screened In/)).toBeDefined();
+    expect(screen.getByText(/Scored/)).toBeDefined();
 
     const removeBtn = screen.getByRole("button", { name: /Remove filter/i });
     fireEvent.click(removeBtn);

@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { parseSessionCookie, getSession } from "../lib/session.server.js";
-import { EmptyState } from "../ds/components/src/feedback/EmptyState.jsx";
+import { EmptyState } from "../ui.js";
 import { ShieldAlert } from "lucide-react";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -16,15 +16,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export default function NotAuthorized() {
-  let csrfToken = "";
-  try {
-    const data = useLoaderData<typeof loader>();
-    if (data?.csrfToken) {
-      csrfToken = data.csrfToken;
-    }
-  } catch {
-    // Standalone render outside data router
-  }
+  const data = useLoaderData<typeof loader>();
+  const csrfToken = data?.csrfToken ?? "";
 
   return (
     <main

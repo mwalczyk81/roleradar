@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import crypto from "node:crypto";
+import * as client from "openid-client";
 import { loader as postingDetailLoader } from "../../app/routes/postings.$id.js";
 import * as apiClientModule from "../../app/lib/api-client.server.js";
+import { setOidcConfigForTesting } from "../../app/lib/oidc.server.js";
 import {
   saveSession,
   setSessionEncryptionKeyForTesting,
@@ -12,9 +14,20 @@ import {
 describe("GET /postings/:id loader (T031)", () => {
   const dummyKey = crypto.randomBytes(32);
   const mockApiGet = vi.fn();
+  const mockOidcConfig = new client.Configuration(
+    {
+      issuer: "https://identity:5001",
+      authorization_endpoint: "https://identity:5001/connect/authorize",
+      token_endpoint: "https://identity:5001/connect/token",
+      end_session_endpoint: "https://identity:5001/connect/endsession",
+    },
+    "roleradar-web",
+    "test-secret"
+  );
 
   beforeEach(() => {
     setSessionEncryptionKeyForTesting(dummyKey);
+    setOidcConfigForTesting(mockOidcConfig);
     vi.restoreAllMocks();
     vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
       GET: mockApiGet,
@@ -51,7 +64,7 @@ describe("GET /postings/:id loader (T031)", () => {
       requisitionId: "REQ-7788",
       location: "San Francisco, CA / Remote",
       disposition: "lead",
-      resurfacePolicy: "auto_resurface",
+      resurfacePolicy: "never",
       score: 91.5,
       versionToken: crypto.randomUUID(),
       createdAt: "2026-10-20T12:00:00Z",
@@ -65,13 +78,13 @@ describe("GET /postings/:id loader (T031)", () => {
         {
           signalType: "tech_stack",
           evidence: "TypeScript, .NET 10, Docker, Linux",
+          detectedAt: "2026-10-20T12:00:00Z",
         },
       ],
       assessmentNote: {
         id: crypto.randomUUID(),
-        authorName: "Matcher Engine",
         summary: "Excellent tech stack alignment and compensation match.",
-        createdAt: "2026-10-20T12:05:00Z",
+        updatedAt: "2026-10-20T12:05:00Z",
       },
     };
 
@@ -121,7 +134,7 @@ describe("GET /postings/:id loader (T031)", () => {
     expect(result.criteria).toEqual(mockCriteria);
     expect(result.csrfToken).toBe("mock-csrf-token-444");
 
-    // Invariant: Never leak session tokens to browser
+    // Invariant: Never return tokens to browser
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("mock-access-token-111");
     expect(serialized).not.toContain("mock-refresh-token-222");
@@ -130,13 +143,20 @@ describe("GET /postings/:id loader (T031)", () => {
 
   it("handles 404 Not Found by throwing a 404 Response", async () => {
     const { sessionId } = createTestSession();
-    mockApiGet.mockResolvedValueOnce({
-      data: undefined,
-      error: { ok: false, errorCode: "NOT_FOUND", message: "Posting not found" },
-      response: { status: 404 } as Response,
+    const postingId = crypto.randomUUID();
+
+    mockApiGet.mockImplementation((endpoint: string) => {
+      if (endpoint === "/api/v1/postings/{id}") {
+        return Promise.resolve({
+          data: undefined,
+          error: { ok: false, errorCode: "NOT_FOUND", message: "Not found" },
+          response: { status: 404 } as Response,
+        });
+      }
+      return Promise.resolve({ data: [], response: { status: 200 } as Response });
     });
 
-    const request = new Request("https://localhost:5003/postings/non-existent-id", {
+    const request = new Request(`https://localhost:5003/postings/${postingId}`, {
       headers: {
         Cookie: `${SECURE_COOKIE_NAME}=${sessionId}`,
       },
@@ -146,7 +166,7 @@ describe("GET /postings/:id loader (T031)", () => {
     try {
       await postingDetailLoader({
         request,
-        params: { id: "non-existent-id" },
+        params: { id: postingId },
         context: {},
       } as any);
     } catch (err: any) {
@@ -155,5 +175,44 @@ describe("GET /postings/:id loader (T031)", () => {
 
     expect(thrown).not.toBeNull();
     expect(thrown?.status).toBe(404);
+  });
+
+  it("handles 401 Unauthorized from API by destroying session and redirecting to login with returnTo", async () => {
+    const { sessionId } = createTestSession();
+    const postingId = crypto.randomUUID();
+
+    mockApiGet.mockImplementation((endpoint: string) => {
+      if (endpoint === "/api/v1/postings/{id}") {
+        return Promise.resolve({
+          data: undefined,
+          error: { ok: false, errorCode: "UNAUTHORIZED", message: "Token expired" },
+          response: { status: 401 } as Response,
+        });
+      }
+      return Promise.resolve({ data: [], response: { status: 200 } as Response });
+    });
+
+    const request = new Request(`https://localhost:5003/postings/${postingId}`, {
+      headers: {
+        Cookie: `${SECURE_COOKIE_NAME}=${sessionId}`,
+      },
+    });
+
+    let thrown: Response | null = null;
+    try {
+      await postingDetailLoader({
+        request,
+        params: { id: postingId },
+        context: {},
+      } as any);
+    } catch (err: any) {
+      if (err instanceof Response) thrown = err;
+    }
+
+    expect(thrown).not.toBeNull();
+    expect(thrown?.status).toBe(302);
+    const location = thrown?.headers.get("Location");
+    expect(location).toContain("/auth");
+    expect(thrown?.headers.get("Set-Cookie")).toBeDefined();
   });
 });

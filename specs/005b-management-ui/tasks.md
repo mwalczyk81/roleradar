@@ -83,7 +83,7 @@ description: "Task list for Feature 005b Management UI implementation"
 
 **Goal**: Deliver paged postings table with search and filter chips strictly constrained to 005a API query parameters (`disposition`, `companyId`, `resurfacePolicy`, `minScore`, `q`, `limit`, `offset`), page-local column sorting, posting detail view with exact `PostingDetailDto` fields, and strict plain-text escaping for all untrusted text.
 
-**Independent Test**: Seed postings in MongoDB; log in; filter postings table via query params (`disposition=screened_in`, `minScore=80`, `q=engineer`); verify pagination counts match API; sort a column and verify page-local sorting badge; open a posting containing `<script>alert('xss')</script>` in its title or compensation text and confirm it renders as plain text.
+**Independent Test**: Seed postings in MongoDB; log in; filter postings table via query params (`disposition=scored`, `minScore=80`, `q=engineer`); verify pagination counts match API; sort a column and verify page-local sorting badge; open a posting containing `<script>alert('xss')</script>` in its title or compensation text and confirm it renders as plain text.
 
 ### Tests for User Story 2 (MANDATORY - Test-First per Principle II) ⚠️
 > **NOTE: Write these tests FIRST and verify they FAIL before implementation.**
@@ -107,7 +107,7 @@ description: "Task list for Feature 005b Management UI implementation"
 
 **Goal**: Deliver disposition transition dialog on postings (excluding `applied`), submission of required `reason`, nullable `criterionId`, optional `resurfacePolicy`, `overrideReason`, mapping 400 `InvalidTransition` matrix rejections, and handling 409 Concurrency Conflicts with a reload prompt.
 
-**Independent Test**: Open a posting on `/postings/:id`; submit a transition to `screened_in` with a reason; verify `POST /api/v1/postings/{id}/transition` succeeds; verify target `applied` is not selectable; trigger a transition from an invalid state and confirm 400 matrix rejection maps inline; inject an outdated `versionToken` and verify 409 Conflict Toast appears with reload action.
+**Independent Test**: Open a posting on `/postings/:id`; submit a transition to `scored` with a reason; verify `POST /api/v1/postings/{id}/transition` succeeds; verify target `applied` is not selectable; trigger a transition from an invalid state and confirm 400 matrix rejection maps inline; inject an outdated `versionToken` and verify 409 Conflict Toast appears with reload action.
 
 ### Tests for User Story 3 (MANDATORY - Test-First per Principle II) ⚠️
 > **NOTE: Write these tests FIRST and verify they FAIL before implementation.**
@@ -117,7 +117,7 @@ description: "Task list for Feature 005b Management UI implementation"
 
 ### Implementation for User Story 3
 
-- [x] T037 [US3] Implement disposition transition dialog in `web/app/components/TransitionPostingDialog.tsx` using `web/app/ds/components/src/overlay/Menu.jsx`, presenting general non-applied target options (`screened_in`, `screened_out`, `interviewing`, `offer`, `rejected`, `withdrawn`, `archived`), inputs for required `reason`, nullable `criterionId` (UUID string), optional `resurfacePolicy`, optional `overrideReason`, and hidden `_csrf` and `versionToken`
+- [x] T037 [US3] Implement disposition transition dialog in `web/app/components/TransitionPostingDialog.tsx` presenting valid target options per the disposition matrix (target `applied` is never offered), inputs for required `reason`, nullable `criterionId` (UUID string), optional `resurfacePolicy` (`never`, `if_reopened`), optional `overrideReason`, and hidden `_csrf` and `versionToken`
 - [x] T038 [US3] Implement transition server action in `web/app/routes/postings.$id.tsx` issuing `POST /api/v1/postings/{id}/transition` with `TransitionPostingRequestDto`, capturing 400 `InvalidTransition` errors into form validation state, and capturing 409 Conflict responses
 - [x] T039 [US3] Integrate 409 Concurrency Conflict notification and reload handler in `web/app/routes/postings.$id.tsx` and `web/app/routes/postings._index.tsx` using `web/app/ds/components/src/feedback/Toast.jsx` and `web/app/ds/components/src/feedback/ToastRegion.jsx` to alert the user when an entity was modified elsewhere and offer a single-click reload action
 

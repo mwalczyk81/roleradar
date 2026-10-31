@@ -37,11 +37,21 @@ describe("POST /postings/:id action (T035)", () => {
     return { sessionId, session };
   }
 
+  function unwrapActionResult(result: any): { status: number; data: any } {
+    if (result && result.type === "DataWithResponseInit") {
+      return { status: result.init?.status ?? 200, data: result.data };
+    }
+    if (result instanceof Response) {
+      return { status: result.status, data: result };
+    }
+    return { status: 200, data: result };
+  }
+
   it("enforces CSRF validation and rejects request with invalid _csrf with 403", async () => {
     const { sessionId } = createTestSession();
     const formData = new FormData();
     formData.set("_csrf", "invalid-csrf");
-    formData.set("toDisposition", "screened_in");
+    formData.set("toDisposition", "scored");
     formData.set("reason", "Good role");
     formData.set("versionToken", crypto.randomUUID());
 
@@ -53,13 +63,17 @@ describe("POST /postings/:id action (T035)", () => {
       body: formData,
     });
 
-    const response = await postingDetailAction({
+    const result = await postingDetailAction({
       request,
       params: { id: "post-1" },
       context: {},
     } as any);
 
-    expect(response.status).toBe(403);
+    const { status, data } = unwrapActionResult(result);
+    expect(status).toBe(403);
+    expect(data.ok).toBe(false);
+    expect(data.errorCode).toBe("CSRF_INVALID");
+    expect(data.message).toContain("CSRF");
   });
 
   it("rejects transition to 'applied' disposition with 400 validation error", async () => {
@@ -78,16 +92,16 @@ describe("POST /postings/:id action (T035)", () => {
       body: formData,
     });
 
-    const response = await postingDetailAction({
+    const result = await postingDetailAction({
       request,
       params: { id: "post-1" },
       context: {},
     } as any);
 
-    expect(response.status).toBe(400);
-    const body = await response.json();
-    expect(body.ok).toBe(false);
-    expect(body.error).toContain("applied");
+    const { status, data } = unwrapActionResult(result);
+    expect(status).toBe(400);
+    expect(data.ok).toBe(false);
+    expect(data.message).toContain("applied");
   });
 
   it("maps valid transition form submission to POST /api/v1/postings/{id}/transition", async () => {
@@ -99,8 +113,21 @@ describe("POST /postings/:id action (T035)", () => {
     mockApiPost.mockResolvedValueOnce({
       data: {
         id: postingId,
-        disposition: "screened_in",
+        companyId: crypto.randomUUID(),
+        companyName: "Acme Corp",
+        title: "Principal Engineer",
+        requisitionId: "REQ-101",
+        location: "Remote",
+        disposition: "scored",
+        resurfacePolicy: "if_reopened",
+        score: 90,
         versionToken: crypto.randomUUID(),
+        createdAt: "2026-10-31T10:00:00Z",
+        updatedAt: "2026-10-31T11:00:00Z",
+        url: null,
+        compensation: { currency: "USD", rawText: null, hasSalary: false },
+        signals: [],
+        assessmentNote: null,
       },
       error: undefined,
       response: { status: 200 } as Response,
@@ -108,11 +135,11 @@ describe("POST /postings/:id action (T035)", () => {
 
     const formData = new FormData();
     formData.set("_csrf", session.csrfToken);
-    formData.set("toDisposition", "screened_in");
+    formData.set("toDisposition", "scored");
     formData.set("reason", "Strong alignment with experience");
     formData.set("criterionId", criterionId);
     formData.set("versionToken", versionToken);
-    formData.set("resurfacePolicy", "manual_only");
+    formData.set("resurfacePolicy", "if_reopened");
     formData.set("overrideReason", "Recruiter confirmed eligibility");
 
     const request = new Request(`https://localhost:5003/postings/${postingId}`, {
@@ -123,31 +150,31 @@ describe("POST /postings/:id action (T035)", () => {
       body: formData,
     });
 
-    const response = await postingDetailAction({
+    const result = await postingDetailAction({
       request,
       params: { id: postingId },
       context: {},
     } as any);
 
-    expect(response.status).toBe(200);
-    const body = await response.json();
-    expect(body.ok).toBe(true);
+    const { status, data } = unwrapActionResult(result);
+    expect(status).toBe(200);
+    expect(data.ok).toBe(true);
 
     expect(mockApiPost).toHaveBeenCalledTimes(1);
     const [endpoint, options] = mockApiPost.mock.calls[0];
     expect(endpoint).toBe("/api/v1/postings/{id}/transition");
     expect(options.params.path.id).toBe(postingId);
     expect(options.body).toEqual({
-      toDisposition: "screened_in",
+      toDisposition: "scored",
       reason: "Strong alignment with experience",
       criterionId,
       versionToken,
-      resurfacePolicy: "manual_only",
+      resurfacePolicy: "if_reopened",
       overrideReason: "Recruiter confirmed eligibility",
     });
 
     // Invariant: Tokens never leak in action return data
-    const serialized = JSON.stringify(body);
+    const serialized = JSON.stringify(data);
     expect(serialized).not.toContain("mock-access-token-action");
     expect(serialized).not.toContain("mock-refresh-token-action");
   });
@@ -161,14 +188,14 @@ describe("POST /postings/:id action (T035)", () => {
       error: {
         ok: false,
         errorCode: "INVALID_TRANSITION",
-        message: "Cannot transition from 'archived' to 'screened_in'.",
+        message: "Cannot transition from 'closed' to 'scored'.",
       },
       response: { status: 400 } as Response,
     });
 
     const formData = new FormData();
     formData.set("_csrf", session.csrfToken);
-    formData.set("toDisposition", "screened_in");
+    formData.set("toDisposition", "scored");
     formData.set("reason", "Attempting reopen");
     formData.set("versionToken", crypto.randomUUID());
 
@@ -180,17 +207,17 @@ describe("POST /postings/:id action (T035)", () => {
       body: formData,
     });
 
-    const response = await postingDetailAction({
+    const result = await postingDetailAction({
       request,
       params: { id: postingId },
       context: {},
     } as any);
 
-    expect(response.status).toBe(400);
-    const body = await response.json();
-    expect(body.ok).toBe(false);
-    expect(body.errorCode).toBe("INVALID_TRANSITION");
-    expect(body.error).toContain("Cannot transition");
+    const { status, data } = unwrapActionResult(result);
+    expect(status).toBe(400);
+    expect(data.ok).toBe(false);
+    expect(data.errorCode).toBe("INVALID_TRANSITION");
+    expect(data.message).toContain("Cannot transition");
   });
 
   it("maps 409 Concurrency Conflict from API into conflict alert state", async () => {
@@ -209,7 +236,7 @@ describe("POST /postings/:id action (T035)", () => {
 
     const formData = new FormData();
     formData.set("_csrf", session.csrfToken);
-    formData.set("toDisposition", "screened_in");
+    formData.set("toDisposition", "scored");
     formData.set("reason", "Updating stale posting");
     formData.set("versionToken", crypto.randomUUID());
 
@@ -221,16 +248,16 @@ describe("POST /postings/:id action (T035)", () => {
       body: formData,
     });
 
-    const response = await postingDetailAction({
+    const result = await postingDetailAction({
       request,
       params: { id: postingId },
       context: {},
     } as any);
 
-    expect(response.status).toBe(409);
-    const body = await response.json();
-    expect(body.ok).toBe(false);
-    expect(body.isConflict).toBe(true);
-    expect(body.error).toContain("modified by another process");
+    const { status, data } = unwrapActionResult(result);
+    expect(status).toBe(409);
+    expect(data.ok).toBe(false);
+    expect(data.isConflict).toBe(true);
+    expect(data.message).toContain("modified by another process");
   });
 });

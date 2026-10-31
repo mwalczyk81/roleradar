@@ -1,18 +1,25 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData, useNavigate, useSearchParams, Link } from "react-router";
+import { useLoaderData, useNavigate, useSearchParams, Link, redirect } from "react-router";
+import React from "react";
+import { requireUserSession, initiateLoginRedirect } from "../lib/auth-guard.server.js";
+import { createApiClient } from "../lib/api-client.server.js";
+import { AppShell, Toolbar, DataTable, Badge, Select, Input, Button, type DataTableColumn } from "../ui.js";
+import { formatDate } from "../lib/format-date.js";
+import {
+  DISPOSITION_VALUES,
+  DISPOSITION_METADATA,
+  RESURFACE_POLICY_VALUES,
+  RESURFACE_POLICY_LABELS,
+  type PostingDisposition,
+  type ResurfacePolicy,
+} from "../lib/dispositions.js";
+import type { components } from "../../../contracts/client/api-types.js";
+
+type PostingListItemDto = components["schemas"]["PostingListItemDto"];
 
 export const meta: MetaFunction = () => [
   { title: "Job Postings - RoleRadar" },
 ];
-import { requireUserSession } from "../lib/auth-guard.server.js";
-import { createApiClient } from "../lib/api-client.server.js";
-import { AppShell } from "../ds/components/src/layout/AppShell.jsx";
-import { Toolbar } from "../ds/components/src/data/Toolbar.jsx";
-import { DataTable, type DataTableColumn } from "../ds/components/src/data/DataTable.jsx";
-import { Badge } from "../ds/components/src/feedback/Badge.jsx";
-import type { components } from "../../../contracts/client/api-types.js";
-
-type PostingListItemDto = components["schemas"]["PostingListItemDto"];
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const session = await requireUserSession(request);
@@ -22,13 +29,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const disposition = url.searchParams.get("disposition") || undefined;
   const companyId = url.searchParams.get("companyId") || undefined;
   const resurfacePolicy = url.searchParams.get("resurfacePolicy") || undefined;
+
   const minScoreRaw = url.searchParams.get("minScore");
-  const minScore = minScoreRaw ? Number(minScoreRaw) : undefined;
+  let minScore: number | undefined;
+  if (minScoreRaw !== null && minScoreRaw.trim() !== "") {
+    const parsed = Number(minScoreRaw);
+    if (!Number.isNaN(parsed)) {
+      minScore = parsed;
+    }
+  }
+
   const q = url.searchParams.get("q") || undefined;
+
   const limitRaw = url.searchParams.get("limit");
-  const limit = limitRaw ? Number(limitRaw) : 25;
+  let limit = limitRaw ? Number(limitRaw) : 25;
+  if (Number.isNaN(limit) || limit < 1) limit = 25;
+  else if (limit > 100) limit = 100;
+
   const offsetRaw = url.searchParams.get("offset");
-  const offset = offsetRaw ? Number(offsetRaw) : 0;
+  let offset = offsetRaw ? Number(offsetRaw) : 0;
+  if (Number.isNaN(offset) || offset < 0) offset = 0;
 
   // Sorting is page-local only; do NOT pass sort parameters to the API
   const queryParams: {
@@ -47,7 +67,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (disposition) queryParams.disposition = disposition;
   if (companyId) queryParams.companyId = companyId;
   if (resurfacePolicy) queryParams.resurfacePolicy = resurfacePolicy;
-  if (minScore !== undefined && !Number.isNaN(minScore)) queryParams.minScore = minScore;
+  if (minScore !== undefined) queryParams.minScore = minScore;
   if (q) queryParams.q = q;
 
   const client = createApiClient(session.accessToken);
@@ -57,11 +77,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
+  if (response.status === 401) {
+    await initiateLoginRedirect(request, session.sessionId);
+  }
+
   if (response.status === 403) {
-    throw new Response(null, {
-      status: 302,
-      headers: { Location: "/not-authorized" },
-    });
+    throw redirect("/not-authorized");
   }
 
   if (error || !data) {
@@ -86,18 +107,45 @@ export default function PostingsIndex() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
+  // Theme toggle wired to roleradar_theme cookie and documentElement data-theme
+  const [theme, setTheme] = React.useState<"light" | "dark">(() => {
+    if (typeof document !== "undefined") {
+      return (document.documentElement.getAttribute("data-theme") as "light" | "dark") || "light";
+    }
+    return "light";
+  });
+
+  const toggleTheme = React.useCallback(() => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", nextTheme);
+      const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+      const secureAttr = isHttps ? "; Secure" : "";
+      document.cookie = `roleradar_theme=${nextTheme}; Path=/; SameSite=Lax; Max-Age=31536000${secureAttr}`;
+    }
+  }, [theme]);
+
   const currentSearch = searchParams.get("q") || "";
   const currentDisposition = searchParams.get("disposition") || "";
   const currentMinScore = searchParams.get("minScore") || "";
   const currentPolicy = searchParams.get("resurfacePolicy") || "";
 
+  // Controlled min score input state
+  const [minScoreInput, setMinScoreInput] = React.useState(currentMinScore);
+
+  React.useEffect(() => {
+    setMinScoreInput(currentMinScore);
+  }, [currentMinScore]);
+
   // Build active filters list for Toolbar chips
   const activeFilters = [];
   if (currentDisposition) {
+    const dispLabel = DISPOSITION_METADATA[currentDisposition as PostingDisposition]?.label ?? currentDisposition;
     activeFilters.push({
       id: "disposition",
       label: "Disposition",
-      value: currentDisposition,
+      value: dispLabel,
       onRemove: () => {
         const next = new URLSearchParams(searchParams);
         next.delete("disposition");
@@ -120,10 +168,11 @@ export default function PostingsIndex() {
     });
   }
   if (currentPolicy) {
+    const policyLabel = RESURFACE_POLICY_LABELS[currentPolicy as ResurfacePolicy] ?? currentPolicy;
     activeFilters.push({
       id: "resurfacePolicy",
       label: "Policy",
-      value: currentPolicy,
+      value: policyLabel,
       onRemove: () => {
         const next = new URLSearchParams(searchParams);
         next.delete("resurfacePolicy");
@@ -168,15 +217,15 @@ export default function PostingsIndex() {
       header: "Disposition",
       sortable: true,
       render: (row) => {
-        const variant =
-          row.disposition === "screened_in" || row.disposition === "offer"
-            ? "success"
-            : row.disposition === "rejected" || row.disposition === "screened_out"
-            ? "danger"
-            : row.disposition === "interviewing"
-            ? "warning"
-            : "neutral";
-        return <Badge variant={variant}>{row.disposition}</Badge>;
+        const dispMeta = DISPOSITION_METADATA[row.disposition as PostingDisposition] ?? {
+          label: row.disposition,
+          tone: "neutral",
+        };
+        return (
+          <Badge tone={dispMeta.tone} data-tone={dispMeta.tone} data-testid="disposition-badge">
+            {dispMeta.label}
+          </Badge>
+        );
       },
     },
     {
@@ -190,13 +239,7 @@ export default function PostingsIndex() {
       key: "createdAt",
       header: "Added",
       sortable: true,
-      render: (row) => {
-        try {
-          return <span>{new Date(row.createdAt).toLocaleDateString()}</span>;
-        } catch {
-          return <span>{row.createdAt}</span>;
-        }
-      },
+      render: (row) => <span>{formatDate(row.createdAt)}</span>,
     },
   ];
 
@@ -206,41 +249,39 @@ export default function PostingsIndex() {
     { label: "Applications", href: "/applications", active: false },
   ];
 
+  const signOutForm = (
+    <form method="post" action="/auth/logout">
+      <input type="hidden" name="_csrf" value={data.csrfToken} />
+      <Button
+        type="submit"
+        variant="ghost"
+        size="sm"
+      >
+        Sign Out
+      </Button>
+    </form>
+  );
+
   return (
     <AppShell
       brand="RoleRadar"
       title="Job Postings"
       userLabel={data.userLabel}
+      signOut={signOutForm}
       navItems={navItems}
-      signOut={
-        <form method="post" action="/auth/logout">
-          <input type="hidden" name="_csrf" value={data.csrfToken} />
-          <button
-            type="submit"
-            style={{
-              padding: "var(--ds-space-1) var(--ds-space-3)",
-              backgroundColor: "transparent",
-              color: "var(--ds-text-secondary)",
-              border: "thin solid var(--ds-border)",
-              borderRadius: "var(--ds-radius-md)",
-              cursor: "pointer",
-              fontSize: "var(--ds-text-xs)",
-            }}
-          >
-            Sign Out
-          </button>
-        </form>
-      }
+      linkComponent={Link}
+      theme={theme}
+      onThemeToggle={toggleTheme}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-4)" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
         <Toolbar
-          searchPlaceholder="Search postings by role, keyword..."
-          searchLabel="Search postings"
+          searchPlaceholder="Search postings..."
+          searchLabel="Search job postings"
           searchValue={currentSearch}
-          onSearchChange={(qVal) => {
+          onSearchChange={(value: string) => {
             const next = new URLSearchParams(searchParams);
-            if (qVal && qVal.trim().length > 0) {
-              next.set("q", qVal.trim());
+            if (value.trim()) {
+              next.set("q", value.trim());
             } else {
               next.delete("q");
             }
@@ -256,7 +297,74 @@ export default function PostingsIndex() {
             next.set("offset", "0");
             setSearchParams(next);
           }}
-        />
+        >
+          <div style={{ display: "flex", gap: "var(--ds-space-2)", alignItems: "center" }}>
+            <Select
+              aria-label="Filter by Disposition"
+              value={currentDisposition}
+              onChange={(e) => {
+                const next = new URLSearchParams(searchParams);
+                if (e.target.value) {
+                  next.set("disposition", e.target.value);
+                } else {
+                  next.delete("disposition");
+                }
+                next.set("offset", "0");
+                setSearchParams(next);
+              }}
+            >
+              <option value="">All Dispositions</option>
+              {DISPOSITION_VALUES.map((d) => (
+                <option key={d} value={d}>
+                  {DISPOSITION_METADATA[d].label} ({d})
+                </option>
+              ))}
+            </Select>
+
+            <Select
+              aria-label="Filter by Resurface Policy"
+              value={currentPolicy}
+              onChange={(e) => {
+                const next = new URLSearchParams(searchParams);
+                if (e.target.value) {
+                  next.set("resurfacePolicy", e.target.value);
+                } else {
+                  next.delete("resurfacePolicy");
+                }
+                next.set("offset", "0");
+                setSearchParams(next);
+              }}
+            >
+              <option value="">All Policies</option>
+              {RESURFACE_POLICY_VALUES.map((pol) => (
+                <option key={pol} value={pol}>
+                  {RESURFACE_POLICY_LABELS[pol]} ({pol})
+                </option>
+              ))}
+            </Select>
+
+            <Input
+              type="number"
+              aria-label="Filter by Minimum Score"
+              placeholder="Min Score"
+              value={minScoreInput}
+              style={{ width: "7rem" }}
+              onChange={(e) => {
+                const raw = e.target.value;
+                setMinScoreInput(raw);
+                const next = new URLSearchParams(searchParams);
+                const val = raw.trim();
+                if (val !== "" && !Number.isNaN(Number(val))) {
+                  next.set("minScore", val);
+                } else {
+                  next.delete("minScore");
+                }
+                next.set("offset", "0");
+                setSearchParams(next);
+              }}
+            />
+          </div>
+        </Toolbar>
 
         <DataTable
           caption="Job Postings"

@@ -1,0 +1,101 @@
+{
+  "dispositions": [
+    "lead",
+    "scored",
+    "applied",
+    "rejected",
+    "screened_out",
+    "closed",
+    "unscored"
+  ],
+  "resurfacePolicies": [
+    "never",
+    "if_reopened"
+  ],
+  "transitions": [
+    {
+      "from": "lead",
+      "to": "scored",
+      "requiredPolicy": null,
+      "requiresReason": false
+    },
+    {
+      "from": "lead",
+      "to": "screened_out",
+      "requiredPolicy": null,
+      "requiresReason": false
+    },
+    {
+      "from": "lead",
+      "to": "closed",
+      "requiredPolicy": null,
+      "requiresReason": false
+    },
+    {
+      "from": "lead",
+      "to": "unscored",
+      "requiredPolicy": null,
+      "requiresReason": false
+    },
+    {
+      "from": "scored",
+      "to": "screened_out",
+      "requiredPolicy": null,
+      "requiresReason": false
+    },
+    {
+      "from": "scored",
+      "to": "closed",
+      "requiredPolicy": null,
+      "requiresReason": false
+    },
+    {
+      "from": "applied",
+      "to": "rejected",
+      "requiredPolicy": null,
+      "requiresReason": false
+    },
+    {
+      "from": "applied",
+      "to": "closed",
+      "requiredPolicy": null,
+      "requiresReason": false
+    },
+    {
+      "from": "rejected",
+      "to": "lead",
+      "requiredPolicy": null,
+      "requiresReason": true
+    },
+    {
+      "from": "screened_out",
+      "to": "lead",
+      "requiredPolicy": "if_reopened",
+      "requiresReason": false
+    },
+    {
+      "from": "closed",
+      "to": "lead",
+      "requiredPolicy": "if_reopened",
+      "requiresReason": false
+    },
+    {
+      "from": "unscored",
+      "to": "scored",
+      "requiredPolicy": null,
+      "requiresReason": false
+    },
+    {
+      "from": "unscored",
+      "to": "screened_out",
+      "requiredPolicy": null,
+      "requiresReason": false
+    },
+    {
+      "from": "unscored",
+      "to": "closed",
+      "requiredPolicy": null,
+      "requiresReason": false
+    }
+  ]
+}

@@ -132,7 +132,7 @@ Follow this manual checklist to verify all P1 user stories:
 
 ### Step 5: Disposition Transition & Optimistic Concurrency
 1. On the posting detail page, click "Update Disposition".
-2. Select target disposition `screened_in` (notice `applied` is not offered).
+2. Select target disposition `scored` (notice `applied` is not offered).
 3. Enter a transition reason: `"Strong alignment with screening criteria"`.
 4. Submit the transition.
 5. **Expected Outcome**: Toast confirms successful transition; posting detail shows updated disposition.

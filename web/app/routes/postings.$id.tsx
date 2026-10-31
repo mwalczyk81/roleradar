@@ -1,28 +1,49 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData, useActionData, useNavigation, Link } from "react-router";
-
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
-  const postingTitle = data?.posting?.title;
-  return [
-    { title: postingTitle ? `${postingTitle} - RoleRadar` : "Job Posting - RoleRadar" },
-  ];
-};
+import { useLoaderData, useFetcher, useRevalidator, Link, data, redirect } from "react-router";
 import React from "react";
-import { requireUserSession } from "../lib/auth-guard.server.js";
-import { createApiClient } from "../lib/api-client.server.js";
+import { requireUserSession, initiateLoginRedirect } from "../lib/auth-guard.server.js";
+import { createApiClient, mapApiError } from "../lib/api-client.server.js";
 import { validateCsrfToken } from "../lib/csrf.server.js";
-import { AppShell } from "../ds/components/src/layout/AppShell.jsx";
-import { Badge } from "../ds/components/src/feedback/Badge.jsx";
-import { Card } from "../ds/components/src/feedback/Card.jsx";
-import { Button } from "../ds/components/src/forms/Button.jsx";
-import { Toast } from "../ds/components/src/feedback/Toast.jsx";
-import { ToastRegion } from "../ds/components/src/feedback/ToastRegion.jsx";
+import { AppShell, Badge, Card, Button, Toast, ToastRegion } from "../ui.js";
 import { TransitionPostingDialog } from "../components/TransitionPostingDialog.jsx";
 import { ArrowLeft } from "lucide-react";
+import { formatDate } from "../lib/format-date.js";
+import {
+  DISPOSITION_METADATA,
+  RESURFACE_POLICY_VALUES,
+  RESURFACE_POLICY_LABELS,
+  type PostingDisposition,
+  type ResurfacePolicy,
+} from "../lib/dispositions.js";
 import type { components } from "../../../contracts/client/api-types.js";
 
 export type PostingDetailDto = components["schemas"]["PostingDetailDto"];
 export type CriterionDto = components["schemas"]["CriterionDto"];
+export type PostingSignalDto = components["schemas"]["PostingSignalDto"];
+export type AssessmentNoteSummaryDto = components["schemas"]["AssessmentNoteSummaryDto"];
+
+export interface TransitionActionSuccess {
+  ok: true;
+  posting: PostingDetailDto;
+}
+
+export interface TransitionActionError {
+  ok: false;
+  isConflict?: boolean;
+  isForbidden?: boolean;
+  errorCode?: string;
+  message?: string;
+  fieldErrors?: Record<string, string>;
+}
+
+export type TransitionActionData = TransitionActionSuccess | TransitionActionError;
+
+export const meta: MetaFunction<typeof loader> = ({ data: loaderPayload }) => {
+  const postingTitle = loaderPayload?.posting?.title;
+  return [
+    { title: postingTitle ? `${postingTitle} - RoleRadar` : "Job Posting - RoleRadar" },
+  ];
+};
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const session = await requireUserSession(request);
@@ -41,11 +62,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     client.GET("/api/v1/criteria", {}),
   ]);
 
+  if (postingRes.response.status === 401 || criteriaRes.response.status === 401) {
+    await initiateLoginRedirect(request, session.sessionId);
+  }
+
   if (postingRes.response.status === 403 || criteriaRes.response.status === 403) {
-    throw new Response(null, {
-      status: 302,
-      headers: { Location: "/not-authorized" },
-    });
+    throw redirect("/not-authorized");
   }
 
   if (postingRes.response.status === 404) {
@@ -72,55 +94,89 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const postingId = params.id;
 
   if (!postingId) {
-    return new Response(JSON.stringify({ ok: false, error: "Posting ID is required" }), {
-      status: 400,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  const formData = await request.formData();
-  const csrfToken = formData.get("_csrf") as string | null;
-
-  if (!validateCsrfToken(csrfToken, session.csrfToken)) {
-    return new Response(JSON.stringify({ ok: false, error: "Invalid CSRF token" }), {
-      status: 403,
-      headers: { "Content-Type": "application/json" },
-    });
-  }
-
-  const toDisposition = formData.get("toDisposition") as string | null;
-  const reason = formData.get("reason") as string | null;
-  const criterionId = (formData.get("criterionId") as string | null) || null;
-  const versionToken = formData.get("versionToken") as string | null;
-  const resurfacePolicy = (formData.get("resurfacePolicy") as string | null) || null;
-  const overrideReason = (formData.get("overrideReason") as string | null) || null;
-
-  // Invariant: Transition dialog never offers or permits 'applied'
-  if (toDisposition === "applied") {
-    return new Response(
-      JSON.stringify({
-        ok: false,
-        error: "Transition to 'applied' is not permitted via this interface.",
-      }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
+    return data<TransitionActionError>(
+      { ok: false, errorCode: "MISSING_ID", message: "Posting ID is required." },
+      { status: 400 }
     );
   }
 
-  if (!toDisposition || !reason || !versionToken) {
-    return new Response(
-      JSON.stringify({
+  const formData = await request.formData();
+  const csrfRaw = formData.get("_csrf");
+  const csrfToken = typeof csrfRaw === "string" ? csrfRaw : null;
+
+  if (!validateCsrfToken(csrfToken, session.csrfToken)) {
+    return data<TransitionActionError>(
+      {
         ok: false,
-        error: "Missing required fields (toDisposition, reason, versionToken)",
-      }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
+        errorCode: "CSRF_INVALID",
+        message: "Invalid or missing CSRF token. Please refresh the page and try again.",
+      },
+      { status: 403 }
+    );
+  }
+
+  const toDisposition = String(formData.get("toDisposition") || "");
+  const reason = String(formData.get("reason") || "");
+  const versionToken = String(formData.get("versionToken") || "");
+
+  const criterionIdRaw = formData.get("criterionId");
+  const criterionId: string | null =
+    typeof criterionIdRaw === "string" && criterionIdRaw.trim().length > 0
+      ? criterionIdRaw.trim()
+      : null;
+
+  const resurfacePolicyRaw = formData.get("resurfacePolicy");
+  let resurfacePolicy: ResurfacePolicy | undefined = undefined;
+  if (typeof resurfacePolicyRaw === "string" && resurfacePolicyRaw.trim().length > 0) {
+    const trimmed = resurfacePolicyRaw.trim();
+    if (!RESURFACE_POLICY_VALUES.includes(trimmed as ResurfacePolicy)) {
+      return data<TransitionActionError>(
+        {
+          ok: false,
+          errorCode: "INVALID_RESURFACE_POLICY",
+          message: `Invalid resurface policy '${trimmed}'.`,
+          fieldErrors: { resurfacePolicy: `Invalid resurface policy '${trimmed}'.` },
+        },
+        { status: 400 }
+      );
+    }
+    resurfacePolicy = trimmed as ResurfacePolicy;
+  }
+
+  const overrideReasonRaw = formData.get("overrideReason");
+  const overrideReason: string | undefined =
+    typeof overrideReasonRaw === "string" && overrideReasonRaw.trim().length > 0
+      ? overrideReasonRaw.trim()
+      : undefined;
+
+  // Invariant: Target applied is NEVER reachable through disposition matrix
+  if (toDisposition.toLowerCase() === "applied") {
+    return data<TransitionActionError>(
+      {
+        ok: false,
+        errorCode: "INVALID_TRANSITION",
+        message: "Target disposition 'applied' is forbidden.",
+        fieldErrors: { toDisposition: "Target disposition 'applied' is forbidden." },
+      },
+      { status: 400 }
+    );
+  }
+
+  if (!reason.trim()) {
+    return data<TransitionActionError>(
+      {
+        ok: false,
+        errorCode: "VALIDATION_FAILED",
+        message: "Reason is required.",
+        fieldErrors: { reason: "Reason is required." },
+      },
+      { status: 400 }
     );
   }
 
   const client = createApiClient(session.accessToken);
-  const { data, error, response } = await client.POST("/api/v1/postings/{id}/transition", {
-    params: {
-      path: { id: postingId },
-    },
+  const transitionRes = await client.POST("/api/v1/postings/{id}/transition", {
+    params: { path: { id: postingId } },
     body: {
       toDisposition,
       reason,
@@ -131,68 +187,97 @@ export async function action({ request, params }: ActionFunctionArgs) {
     },
   });
 
-  if (response.status === 403) {
-    throw new Response(null, {
-      status: 302,
-      headers: { Location: "/not-authorized" },
-    });
+  if (transitionRes.response.status === 401) {
+    await initiateLoginRedirect(request, session.sessionId);
   }
 
-  if (response.status === 409) {
-    return new Response(
-      JSON.stringify({
+  if (transitionRes.response.status === 403) {
+    throw redirect("/not-authorized");
+  }
+
+  if (transitionRes.response.status === 409) {
+    return data<TransitionActionError>(
+      {
         ok: false,
         isConflict: true,
-        error: error?.message ?? "The posting was modified by another process. Please reload.",
-      }),
-      { status: 409, headers: { "Content-Type": "application/json" } }
+        errorCode: "CONCURRENCY_CONFLICT",
+        message: "This posting was modified by another process. Please reload to see the latest version.",
+      },
+      { status: 409 }
     );
   }
 
-  if (response.status === 400 || error) {
-    return new Response(
-      JSON.stringify({
+  if (transitionRes.response.status === 400) {
+    const errorMap = mapApiError(transitionRes.error, 400);
+    return data<TransitionActionError>(
+      {
         ok: false,
-        errorCode: error?.errorCode ?? "BAD_REQUEST",
-        error: error?.message ?? "Invalid transition requested.",
-      }),
-      { status: response.status || 400, headers: { "Content-Type": "application/json" } }
+        errorCode: errorMap.errorCode,
+        message: errorMap.message,
+        fieldErrors: errorMap.fieldErrors,
+      },
+      { status: 400 }
     );
   }
 
-  // Success
-  return new Response(JSON.stringify({ ok: true, posting: data }), {
-    status: 200,
-    headers: { "Content-Type": "application/json" },
-  });
+  if (transitionRes.error || !transitionRes.data) {
+    const errorMap = mapApiError(transitionRes.error, transitionRes.response.status);
+    return data<TransitionActionError>(
+      {
+        ok: false,
+        errorCode: errorMap.errorCode,
+        message: errorMap.message,
+        fieldErrors: errorMap.fieldErrors,
+      },
+      { status: transitionRes.response.status || 500 }
+    );
+  }
+
+  return data<TransitionActionSuccess>(
+    {
+      ok: true,
+      posting: transitionRes.data,
+    },
+    { status: 200 }
+  );
 }
 
 export default function PostingDetail() {
-  const data = useLoaderData<typeof loader>();
-  let actionData: any = null;
-  try {
-    actionData = useActionData<any>();
-  } catch {
-    // Standalone render outside data router
-  }
-
-  let navigationState = "idle";
-  try {
-    const navigation = useNavigation();
-    if (navigation?.state) navigationState = navigation.state;
-  } catch {
-    // Standalone render outside data router
-  }
+  const loaderData = useLoaderData<typeof loader>();
+  const fetcher = useFetcher<TransitionActionData>();
+  const revalidator = useRevalidator();
 
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [conflictToastDismissed, setConflictToastDismissed] = React.useState(false);
 
-  const posting = actionData?.ok && actionData?.posting ? actionData.posting : data.posting;
-  const isConflict = actionData?.isConflict && !conflictToastDismissed;
+  // Theme state wired to roleradar_theme cookie and documentElement data-theme
+  const [theme, setTheme] = React.useState<"light" | "dark">(() => {
+    if (typeof document !== "undefined") {
+      return (document.documentElement.getAttribute("data-theme") as "light" | "dark") || "light";
+    }
+    return "light";
+  });
 
-  if (!posting) {
-    return <div>Posting not found.</div>;
-  }
+  const toggleTheme = React.useCallback(() => {
+    const nextTheme = theme === "dark" ? "light" : "dark";
+    setTheme(nextTheme);
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", nextTheme);
+      const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+      const secureAttr = isHttps ? "; Secure" : "";
+      document.cookie = `roleradar_theme=${nextTheme}; Path=/; SameSite=Lax; Max-Age=31536000${secureAttr}`;
+    }
+  }, [theme]);
+
+  const posting = fetcher.data?.ok ? fetcher.data.posting : loaderData.posting;
+  const isConflict = Boolean(
+    fetcher.data?.ok === false && fetcher.data?.isConflict && !conflictToastDismissed
+  );
+
+  const dispMeta = DISPOSITION_METADATA[posting.disposition as PostingDisposition] ?? {
+    label: posting.disposition,
+    tone: "neutral",
+  };
 
   const navItems = [
     { label: "Postings", href: "/postings", active: true },
@@ -200,17 +285,33 @@ export default function PostingDetail() {
     { label: "Applications", href: "/applications", active: false },
   ];
 
+  const signOutForm = (
+    <form method="post" action="/auth/logout">
+      <input type="hidden" name="_csrf" value={loaderData.csrfToken} />
+      <Button
+        type="submit"
+        variant="ghost"
+        size="sm"
+      >
+        Sign Out
+      </Button>
+    </form>
+  );
+
   return (
     <AppShell
       brand="RoleRadar"
       title={posting.title}
-      userLabel={data.userLabel}
+      userLabel={loaderData.userLabel}
+      signOut={signOutForm}
       navItems={navItems}
-      headerActions={
-        <div style={{ display: "flex", alignItems: "center", gap: "var(--ds-space-3)" }}>
-          <Button variant="primary" size="sm" onClick={() => setIsDialogOpen(true)}>
-            Change Disposition
-          </Button>
+      linkComponent={Link}
+      theme={theme}
+      onThemeToggle={toggleTheme}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+        {/* Breadcrumb back to postings list */}
+        <div>
           <Link
             to="/postings"
             style={{
@@ -222,70 +323,94 @@ export default function PostingDetail() {
               fontSize: "var(--ds-text-sm)",
             }}
           >
-            <ArrowLeft size={16} /> Back to Postings
+            <ArrowLeft size={16} />
+            <span>Back to Job Postings</span>
           </Link>
         </div>
-      }
-      signOut={
-        <form method="post" action="/auth/logout">
-          <input type="hidden" name="_csrf" value={data.csrfToken} />
-          <button
-            type="submit"
+
+        {/* Top Summary Card */}
+        <Card style={{ padding: "var(--ds-space-5)" }}>
+          <div
             style={{
-              padding: "var(--ds-space-1) var(--ds-space-3)",
-              backgroundColor: "transparent",
-              color: "var(--ds-text-secondary)",
-              border: "thin solid var(--ds-border)",
-              borderRadius: "var(--ds-radius-md)",
-              cursor: "pointer",
-              fontSize: "var(--ds-text-xs)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              flexWrap: "wrap",
+              gap: "var(--ds-space-4)",
             }}
           >
-            Sign Out
-          </button>
-        </form>
-      }
-    >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
-        {/* Header overview card */}
-        <Card style={{ padding: "var(--ds-space-6)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "var(--ds-space-4)" }}>
             <div>
-              <h2 style={{ margin: "0 0 var(--ds-space-2) 0", fontSize: "var(--ds-text-xl)" }}>
+              <h2 style={{ margin: "0 0 var(--ds-space-1) 0", fontSize: "var(--ds-text-xl)" }}>
                 {posting.title}
               </h2>
-              <div style={{ display: "flex", gap: "var(--ds-space-3)", alignItems: "center", color: "var(--ds-text-secondary)", flexWrap: "wrap" }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "var(--ds-space-3)",
+                  alignItems: "center",
+                  color: "var(--ds-text-secondary)",
+                  fontSize: "var(--ds-text-sm)",
+                }}
+              >
                 <span>{posting.companyName}</span>
                 {posting.location ? <span>• {posting.location}</span> : null}
                 {posting.requisitionId ? <span>• Req: {posting.requisitionId}</span> : null}
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "var(--ds-space-3)", alignItems: "center" }}>
-              <Badge variant="primary">{posting.disposition}</Badge>
-              {posting.score !== null ? (
+            <div style={{ display: "flex", gap: "var(--ds-space-2)", alignItems: "center" }}>
+              <Badge tone={dispMeta.tone} data-tone={dispMeta.tone} data-testid="disposition-badge">
+                {dispMeta.label}
+              </Badge>
+              {posting.score !== null && posting.score !== undefined ? (
                 <span
                   style={{
                     fontFamily: "var(--ds-font-mono)",
-                    fontWeight: "var(--ds-weight-semibold)",
-                    fontSize: "var(--ds-text-lg)",
+                    fontSize: "var(--ds-text-sm)",
+                    fontWeight: "var(--ds-weight-bold)",
                   }}
                 >
                   Score: {posting.score}
                 </span>
               ) : null}
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => {
+                  setConflictToastDismissed(false);
+                  setIsDialogOpen(true);
+                }}
+              >
+                Change Disposition
+              </Button>
             </div>
           </div>
         </Card>
 
-        {/* Details grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))", gap: "var(--ds-space-6)" }}>
+        {/* Details Grid */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))",
+            gap: "var(--ds-space-6)",
+          }}
+        >
           {/* Metadata Card */}
           <Card style={{ padding: "var(--ds-space-5)" }}>
             <h3 style={{ margin: "0 0 var(--ds-space-3) 0", fontSize: "var(--ds-text-base)" }}>Details</h3>
-            <dl style={{ display: "grid", gridTemplateColumns: "max-content 1fr", gap: "var(--ds-space-2)", margin: 0, fontSize: "var(--ds-text-sm)" }}>
+            <dl
+              style={{
+                display: "grid",
+                gridTemplateColumns: "max-content 1fr",
+                gap: "var(--ds-space-2)",
+                margin: 0,
+                fontSize: "var(--ds-text-sm)",
+              }}
+            >
               <dt style={{ color: "var(--ds-text-secondary)" }}>Resurface Policy:</dt>
-              <dd style={{ margin: 0 }}>{posting.resurfacePolicy}</dd>
+              <dd style={{ margin: 0 }}>
+                {RESURFACE_POLICY_LABELS[posting.resurfacePolicy as ResurfacePolicy] ?? posting.resurfacePolicy}
+              </dd>
 
               <dt style={{ color: "var(--ds-text-secondary)" }}>Compensation:</dt>
               <dd style={{ margin: 0 }}>
@@ -295,7 +420,12 @@ export default function PostingDetail() {
               <dt style={{ color: "var(--ds-text-secondary)" }}>Posting URL:</dt>
               <dd style={{ margin: 0 }}>
                 {posting.url ? (
-                  <a href={posting.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--ds-primary)", wordBreak: "break-all" }}>
+                  <a
+                    href={posting.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: "var(--ds-primary)", wordBreak: "break-all" }}
+                  >
                     {posting.url}
                   </a>
                 ) : (
@@ -304,13 +434,10 @@ export default function PostingDetail() {
               </dd>
 
               <dt style={{ color: "var(--ds-text-secondary)" }}>Created:</dt>
-              <dd style={{ margin: 0 }}>{new Date(posting.createdAt).toLocaleString()}</dd>
+              <dd style={{ margin: 0 }}>{formatDate(posting.createdAt)}</dd>
 
-              <dt style={{ color: "var(--ds-text-secondary)" }}>Last Updated:</dt>
-              <dd style={{ margin: 0 }}>{new Date(posting.updatedAt).toLocaleString()}</dd>
-
-              <dt style={{ color: "var(--ds-text-secondary)" }}>Version Token:</dt>
-              <dd style={{ margin: 0, fontFamily: "var(--ds-font-mono)", fontSize: "var(--ds-text-xs)" }}>{posting.versionToken}</dd>
+              <dt style={{ color: "var(--ds-text-secondary)" }}>Updated:</dt>
+              <dd style={{ margin: 0 }}>{formatDate(posting.updatedAt)}</dd>
             </dl>
           </Card>
 
@@ -318,58 +445,88 @@ export default function PostingDetail() {
           <Card style={{ padding: "var(--ds-space-5)" }}>
             <h3 style={{ margin: "0 0 var(--ds-space-3) 0", fontSize: "var(--ds-text-base)" }}>Assessment Note</h3>
             {posting.assessmentNote ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-2)", fontSize: "var(--ds-text-sm)" }}>
-                <div style={{ color: "var(--ds-text-secondary)", fontSize: "var(--ds-text-xs)" }}>
-                  Author: {posting.assessmentNote.authorName} • {new Date(posting.assessmentNote.createdAt).toLocaleDateString()}
-                </div>
-                <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.5 }}>
+              <div style={{ fontSize: "var(--ds-text-sm)" }}>
+                <p style={{ margin: "0 0 var(--ds-space-2) 0", whiteSpace: "pre-wrap" }}>
                   {posting.assessmentNote.summary}
+                </p>
+                <div style={{ color: "var(--ds-text-secondary)", fontSize: "var(--ds-text-xs)" }}>
+                  Updated: {formatDate(posting.assessmentNote.updatedAt)}
                 </div>
               </div>
             ) : (
-              <p style={{ color: "var(--ds-text-secondary)", margin: 0, fontSize: "var(--ds-text-sm)" }}>No assessment note available.</p>
+              <div style={{ color: "var(--ds-text-secondary)", fontSize: "var(--ds-text-sm)" }}>
+                No assessment note recorded for this opportunity.
+              </div>
             )}
           </Card>
         </div>
 
-        {/* Signals */}
-        {posting.signals && posting.signals.length > 0 ? (
-          <Card style={{ padding: "var(--ds-space-5)" }}>
-            <h3 style={{ margin: "0 0 var(--ds-space-3) 0", fontSize: "var(--ds-text-base)" }}>Extracted Signals</h3>
-            <ul style={{ margin: 0, paddingLeft: "var(--ds-space-4)", display: "flex", flexDirection: "column", gap: "var(--ds-space-2)" }}>
-              {posting.signals.map((sig, idx) => (
-                <li key={idx} style={{ fontSize: "var(--ds-text-sm)" }}>
-                  <strong>{sig.signalType}:</strong> <span>{sig.evidence}</span>
-                </li>
+        {/* Signals Card */}
+        <Card style={{ padding: "var(--ds-space-5)" }}>
+          <h3 style={{ margin: "0 0 var(--ds-space-3) 0", fontSize: "var(--ds-text-base)" }}>Opportunity Signals</h3>
+          {posting.signals && posting.signals.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-2)" }}>
+              {posting.signals.map((sig, index) => (
+                <div
+                  key={`${sig.signalType}-${index}`}
+                  style={{
+                    padding: "var(--ds-space-3)",
+                    backgroundColor: "var(--ds-surface-hover)",
+                    borderRadius: "var(--ds-radius-md)",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    gap: "var(--ds-space-2)",
+                  }}
+                >
+                  <div style={{ fontSize: "var(--ds-text-sm)" }}>
+                    <strong>{sig.signalType}</strong>
+                    {sig.evidence ? (
+                      <span style={{ color: "var(--ds-text-secondary)", marginLeft: "var(--ds-space-2)" }}>
+                        — {sig.evidence}
+                      </span>
+                    ) : null}
+                  </div>
+                  {sig.detectedAt ? (
+                    <span style={{ fontSize: "var(--ds-text-xs)", color: "var(--ds-text-secondary)" }}>
+                      {formatDate(sig.detectedAt)}
+                    </span>
+                  ) : null}
+                </div>
               ))}
-            </ul>
-          </Card>
-        ) : null}
+            </div>
+          ) : (
+            <div style={{ color: "var(--ds-text-secondary)", fontSize: "var(--ds-text-sm)" }}>
+              No opportunity signals detected.
+            </div>
+          )}
+        </Card>
 
-        {/* Transition dialog modal */}
+        {/* Transition Dialog */}
         <TransitionPostingDialog
           open={isDialogOpen}
           onClose={() => setIsDialogOpen(false)}
           postingId={posting.id}
           currentDisposition={posting.disposition}
+          currentResurfacePolicy={posting.resurfacePolicy}
           versionToken={posting.versionToken}
-          csrfToken={data.csrfToken}
-          criteria={data.criteria}
-          error={actionData?.error}
-          isSubmitting={navigationState === "submitting"}
+          csrfToken={loaderData.csrfToken}
+          criteria={loaderData.criteria}
+          fetcher={fetcher}
         />
 
-        {/* 409 Conflict Toast */}
+        {/* 409 Conflict Toast Notification */}
         {isConflict ? (
-          <ToastRegion label="Notifications">
+          <ToastRegion>
             <Toast
               title="Concurrency Conflict"
-              message={actionData?.error ?? "This posting was modified elsewhere. Please reload to see the latest version."}
               variant="warning"
+              message="This posting was updated by another process. Please reload to see the latest version."
               action={{
-                label: "Reload Posting",
+                label: "Reload",
                 onClick: () => {
-                  window.location.reload();
+                  setConflictToastDismissed(true);
+                  revalidator.revalidate();
                 },
               }}
               onDismiss={() => setConflictToastDismissed(true)}

@@ -102,6 +102,12 @@ export default tseslint.config(
     },
   },
   {
+    files: ["app/**/*.{ts,tsx}"],
+    rules: {
+      "@typescript-eslint/no-explicit-any": "error",
+    },
+  },
+  {
     ignores: [
       "dist/**",
       "build/**",

@@ -1,7 +1,10 @@
+import { redirect } from "react-router";
 import { parse as parseCookie } from "cookie";
 import {
   parseSessionCookie,
   getValidSession,
+  destroySession,
+  destroySessionCookie,
   isSecureCookieRequired,
   type UserSession,
 } from "./session.server.js";
@@ -67,6 +70,39 @@ export function sanitizeReturnTo(raw: string | null | undefined): string {
   return trimmed;
 }
 
+export async function initiateLoginRedirect(
+  request: Request,
+  clearSessionId?: string
+): Promise<never> {
+  if (clearSessionId) {
+    destroySession(clearSessionId);
+  }
+
+  const url = new URL(request.url);
+  const returnTo = sanitizeReturnTo(url.pathname + url.search);
+  const { authUrl, codeVerifier, state } = await generateAuthorizationUrl();
+
+  const statePayload = JSON.stringify({ state, returnTo });
+  const encodedState = Buffer.from(statePayload, "utf8").toString("base64url");
+
+  const secure = isSecureCookieRequired();
+  const secureAttr = secure ? "; Secure" : "";
+
+  const stateCookie = `${getAuthStateCookieName()}=${encodedState}; Path=/; HttpOnly${secureAttr}; SameSite=Lax; Max-Age=300`;
+  const verifierCookie = `${getCodeVerifierCookieName()}=${codeVerifier}; Path=/; HttpOnly${secureAttr}; SameSite=Lax; Max-Age=300`;
+
+  const headers = new Headers();
+  headers.set("Location", authUrl.toString());
+  headers.append("Set-Cookie", stateCookie);
+  headers.append("Set-Cookie", verifierCookie);
+
+  if (clearSessionId) {
+    headers.append("Set-Cookie", destroySessionCookie(secure).header);
+  }
+
+  throw redirect(authUrl.toString(), { headers });
+}
+
 export async function requireUserSession(request: Request): Promise<UserSession> {
   const cookieHeader = request.headers.get("Cookie");
   const sessionId = parseSessionCookie(cookieHeader);
@@ -93,26 +129,5 @@ export async function requireUserSession(request: Request): Promise<UserSession>
   }
 
   // Unauthenticated: capture requested return-to path and initiate PKCE authorization flow
-  const url = new URL(request.url);
-  const returnTo = sanitizeReturnTo(url.pathname + url.search);
-  const { authUrl, codeVerifier, state } = await generateAuthorizationUrl();
-
-  const statePayload = JSON.stringify({ state, returnTo });
-  const encodedState = Buffer.from(statePayload, "utf8").toString("base64url");
-
-  const secure = isSecureCookieRequired();
-  const secureAttr = secure ? "; Secure" : "";
-
-  const stateCookie = `${getAuthStateCookieName()}=${encodedState}; Path=/; HttpOnly${secureAttr}; SameSite=Lax; Max-Age=300`;
-  const verifierCookie = `${getCodeVerifierCookieName()}=${codeVerifier}; Path=/; HttpOnly${secureAttr}; SameSite=Lax; Max-Age=300`;
-
-  const headers = new Headers();
-  headers.set("Location", authUrl.toString());
-  headers.append("Set-Cookie", stateCookie);
-  headers.append("Set-Cookie", verifierCookie);
-
-  throw new Response(null, {
-    status: 302,
-    headers,
-  });
+  return await initiateLoginRedirect(request);
 }

@@ -1,6 +1,10 @@
 import * as client from "openid-client";
 
-let oidcConfigPromise: Promise<client.Configuration> | null = null;
+interface RoleRadarOidcGlobal {
+  __ROLERADAR_OIDC_CONFIG_PROMISE__?: Promise<client.Configuration> | null;
+}
+
+const oidcGlobal = globalThis as unknown as RoleRadarOidcGlobal;
 
 export function getOidcIssuerUri(): string {
   return process.env.ROLERADAR_IDENTITY_ISSUER_URI ?? "https://localhost:5001";
@@ -39,20 +43,20 @@ export function getPostLogoutRedirectUri(): string {
 }
 
 export async function getOidcConfig(): Promise<client.Configuration> {
-  if (!oidcConfigPromise) {
+  if (!oidcGlobal.__ROLERADAR_OIDC_CONFIG_PROMISE__) {
     const issuer = new URL(getOidcIssuerUri());
     const clientId = getWebClientId();
     const clientSecret = getWebClientSecret();
 
-    oidcConfigPromise = client.discovery(issuer, clientId, clientSecret);
+    oidcGlobal.__ROLERADAR_OIDC_CONFIG_PROMISE__ = client.discovery(issuer, clientId, clientSecret);
   }
-  return await oidcConfigPromise;
+  return await oidcGlobal.__ROLERADAR_OIDC_CONFIG_PROMISE__;
 }
 
 export function setOidcConfigForTesting(
   config: client.Configuration | null
 ): void {
-  oidcConfigPromise = config ? Promise.resolve(config) : null;
+  oidcGlobal.__ROLERADAR_OIDC_CONFIG_PROMISE__ = config ? Promise.resolve(config) : null;
 }
 
 export interface AuthorizationUrlParams {

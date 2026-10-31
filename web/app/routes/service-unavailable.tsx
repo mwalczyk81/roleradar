@@ -1,4 +1,4 @@
-import { EmptyState } from "../ds/components/src/feedback/EmptyState.jsx";
+import { EmptyState } from "../ui.js";
 import { ServerOff } from "lucide-react";
 
 export default function ServiceUnavailable() {

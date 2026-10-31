@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import crypto from "node:crypto";
+import * as client from "openid-client";
 import { loader as postingsLoader } from "../../app/routes/postings._index.js";
 import * as apiClientModule from "../../app/lib/api-client.server.js";
+import { setOidcConfigForTesting } from "../../app/lib/oidc.server.js";
 import {
   saveSession,
   setSessionEncryptionKeyForTesting,
@@ -12,9 +14,20 @@ import {
 describe("GET /postings loader (T028)", () => {
   const dummyKey = crypto.randomBytes(32);
   const mockApiGet = vi.fn();
+  const mockOidcConfig = new client.Configuration(
+    {
+      issuer: "https://identity:5001",
+      authorization_endpoint: "https://identity:5001/connect/authorize",
+      token_endpoint: "https://identity:5001/connect/token",
+      end_session_endpoint: "https://identity:5001/connect/endsession",
+    },
+    "roleradar-web",
+    "test-secret"
+  );
 
   beforeEach(() => {
     setSessionEncryptionKeyForTesting(dummyKey);
+    setOidcConfigForTesting(mockOidcConfig);
     vi.restoreAllMocks();
     vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
       GET: mockApiGet,
@@ -50,8 +63,8 @@ describe("GET /postings loader (T028)", () => {
             title: "Staff Engineer",
             requisitionId: "REQ-101",
             location: "Remote, US",
-            disposition: "screened_in",
-            resurfacePolicy: "manual_only",
+            disposition: "scored",
+            resurfacePolicy: "if_reopened",
             score: 85,
             versionToken: crypto.randomUUID(),
             createdAt: new Date().toISOString(),
@@ -66,7 +79,7 @@ describe("GET /postings loader (T028)", () => {
       response: { status: 200 } as Response,
     });
 
-    const url = "https://localhost:5003/postings?disposition=screened_in&companyId=comp-1&resurfacePolicy=manual_only&minScore=80&q=engineer&limit=25&offset=0&sort=score&direction=desc";
+    const url = "https://localhost:5003/postings?disposition=scored&companyId=comp-1&resurfacePolicy=if_reopened&minScore=80&q=engineer&limit=25&offset=0&sort=score&direction=desc";
     const request = new Request(url, {
       headers: {
         Cookie: `${SECURE_COOKIE_NAME}=${sessionId}`,
@@ -81,9 +94,9 @@ describe("GET /postings loader (T028)", () => {
 
     // Exact query parameters sent to API
     expect(options.params.query).toEqual({
-      disposition: "screened_in",
+      disposition: "scored",
       companyId: "comp-1",
-      resurfacePolicy: "manual_only",
+      resurfacePolicy: "if_reopened",
       minScore: 80,
       q: "engineer",
       limit: 25,
@@ -105,6 +118,30 @@ describe("GET /postings loader (T028)", () => {
     expect(serialized).not.toContain("mock-access-token-999");
     expect(serialized).not.toContain("mock-refresh-token-888");
     expect(serialized).not.toContain("mock-id-token-777");
+  });
+
+  it("clamps limit to 1..100, offset to >= 0, and ignores NaN minScore", async () => {
+    const { sessionId } = createTestSession();
+
+    mockApiGet.mockResolvedValueOnce({
+      data: { items: [], totalCount: 0, limit: 100, offset: 0 },
+      error: undefined,
+      response: { status: 200 } as Response,
+    });
+
+    const url = "https://localhost:5003/postings?limit=200&offset=-10&minScore=invalid-number";
+    const request = new Request(url, {
+      headers: {
+        Cookie: `${SECURE_COOKIE_NAME}=${sessionId}`,
+      },
+    });
+
+    await postingsLoader({ request, params: {}, context: {} } as any);
+
+    const [, options] = mockApiGet.mock.calls[0];
+    expect(options.params.query.limit).toBe(100); // clamped from 200
+    expect(options.params.query.offset).toBe(0); // clamped from -10
+    expect(options.params.query.minScore).toBeUndefined(); // NaN ignored
   });
 
   it("handles 403 Forbidden from API by throwing a redirect to /not-authorized without looping", async () => {
@@ -132,5 +169,36 @@ describe("GET /postings loader (T028)", () => {
     expect(thrown).not.toBeNull();
     expect(thrown?.status).toBe(302);
     expect(thrown?.headers.get("Location")).toBe("/not-authorized");
+  });
+
+  it("handles 401 Unauthorized from API by destroying session and redirecting to login with returnTo", async () => {
+    const { sessionId } = createTestSession();
+
+    mockApiGet.mockResolvedValueOnce({
+      data: undefined,
+      error: { ok: false, errorCode: "UNAUTHORIZED", message: "Token expired" },
+      response: { status: 401 } as Response,
+    });
+
+    const request = new Request("https://localhost:5003/postings?q=test", {
+      headers: {
+        Cookie: `${SECURE_COOKIE_NAME}=${sessionId}`,
+      },
+    });
+
+    let thrown: Response | null = null;
+    try {
+      await postingsLoader({ request, params: {}, context: {} } as any);
+    } catch (err: any) {
+      if (err instanceof Response) thrown = err;
+    }
+
+    expect(thrown).not.toBeNull();
+    expect(thrown?.status).toBe(302);
+    const location = thrown?.headers.get("Location");
+    expect(location).toContain("/auth");
+    // Verify session cookie was cleared in response header
+    const setCookie = thrown?.headers.get("Set-Cookie");
+    expect(setCookie).toBeDefined();
   });
 });

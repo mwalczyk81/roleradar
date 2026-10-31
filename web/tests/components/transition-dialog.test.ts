@@ -2,8 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import React from "react";
 import { render, screen } from "@testing-library/react";
 import { TransitionPostingDialog } from "../../app/components/TransitionPostingDialog.jsx";
-import { Toast } from "../../app/ds/components/src/feedback/Toast.jsx";
-import { ToastRegion } from "../../app/ds/components/src/feedback/ToastRegion.jsx";
+import { Toast, ToastRegion } from "../../app/ui.js";
 
 describe("Transition Posting Dialog & Conflict Toasts (T036)", () => {
   const criteria = [
@@ -18,19 +17,23 @@ describe("Transition Posting Dialog & Conflict Toasts (T036)", () => {
         onClose: vi.fn(),
         postingId: "post-123",
         currentDisposition: "lead",
+        currentResurfacePolicy: "never",
         versionToken: "token-abc-123",
         csrfToken: "csrf-xyz-789",
         criteria,
       })
     );
 
-    // Target options present
-    expect(screen.getByText(/Screen In|screened_in/i)).toBeDefined();
-    expect(screen.getByText(/Screen Out|screened_out/i)).toBeDefined();
+    // Valid target options for 'lead'
+    expect(screen.getAllByText(/Scored/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Screened Out/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Closed/i).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Unscored/i).length).toBeGreaterThan(0);
 
     // Critical invariant: 'applied' is NEVER offered as a transition option
     const options = Array.from(container.querySelectorAll("option")).map((o) => o.value);
     expect(options).not.toContain("applied");
+    expect(options).toEqual(expect.arrayContaining(["scored", "screened_out", "closed", "unscored"]));
 
     // Hidden inputs
     const csrfInput = container.querySelector("input[name='_csrf']") as HTMLInputElement;
@@ -46,7 +49,19 @@ describe("Transition Posting Dialog & Conflict Toasts (T036)", () => {
     expect(screen.getByText("High Compensation")).toBeDefined();
   });
 
-  it("renders inline field error messages when validation fails", () => {
+  it("renders inline error messages from fetcher action data when validation fails", () => {
+    const mockFetcher = {
+      Form: "form" as any,
+      state: "idle" as const,
+      data: {
+        ok: false as const,
+        message: "Invalid state transition from 'closed' to 'scored'.",
+        fieldErrors: {
+          reason: "Reason is required for this transition.",
+        },
+      },
+    };
+
     render(
       React.createElement(TransitionPostingDialog, {
         open: true,
@@ -55,14 +70,11 @@ describe("Transition Posting Dialog & Conflict Toasts (T036)", () => {
         currentDisposition: "lead",
         versionToken: "token-1",
         csrfToken: "csrf-1",
-        error: "Cannot transition from archived to lead.",
-        fieldErrors: {
-          reason: "Reason is required for this transition.",
-        },
+        fetcher: mockFetcher as any,
       })
     );
 
-    expect(screen.getByText("Cannot transition from archived to lead.")).toBeDefined();
+    expect(screen.getByText("Invalid state transition from 'closed' to 'scored'.")).toBeDefined();
     expect(screen.getByText("Reason is required for this transition.")).toBeDefined();
   });
 
@@ -71,11 +83,11 @@ describe("Transition Posting Dialog & Conflict Toasts (T036)", () => {
     render(
       React.createElement(
         ToastRegion,
-        { label: "Notifications" },
+        null,
         React.createElement(Toast, {
           title: "Conflict Detected",
-          message: "This posting was updated elsewhere. Please reload to see the latest changes.",
           variant: "warning",
+          message: "This posting was updated elsewhere. Please reload to see the latest changes.",
           action: {
             label: "Reload Posting",
             onClick: onReload,
@@ -98,6 +110,7 @@ describe("Transition Posting Dialog & Conflict Toasts (T036)", () => {
           onClose: vi.fn(),
           postingId: "post-1",
           currentDisposition: "lead",
+          currentResurfacePolicy: "never",
           versionToken: "tok-1",
           csrfToken: "csrf-1",
           criteria,
@@ -114,6 +127,7 @@ describe("Transition Posting Dialog & Conflict Toasts (T036)", () => {
           onClose: vi.fn(),
           postingId: "post-1",
           currentDisposition: "lead",
+          currentResurfacePolicy: "never",
           versionToken: "tok-1",
           csrfToken: "csrf-1",
           criteria,

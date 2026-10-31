@@ -53,22 +53,29 @@ export function getSessionCookieName(): string {
   return isSecureCookieRequired() ? SECURE_COOKIE_NAME : INSECURE_COOKIE_NAME;
 }
 
+interface RoleRadarSessionGlobal {
+  __ROLERADAR_SESSION_STORE__?: Map<string, EncryptedSessionRecord>;
+  __ROLERADAR_INFLIGHT_REFRESHES__?: Map<string, Promise<UserSession | null>>;
+  __ROLERADAR_CACHED_KEY__?: Buffer;
+}
+
+const sessionGlobal = globalThis as unknown as RoleRadarSessionGlobal;
 let cachedKey: Buffer | null = null;
 const sessionStore: Map<string, EncryptedSessionRecord> =
-  ((globalThis as any).__ROLERADAR_SESSION_STORE__ ??= new Map<
+  (sessionGlobal.__ROLERADAR_SESSION_STORE__ ??= new Map<
     string,
     EncryptedSessionRecord
   >());
 const inFlightRefreshes: Map<string, Promise<UserSession | null>> =
-  ((globalThis as any).__ROLERADAR_INFLIGHT_REFRESHES__ ??= new Map<
+  (sessionGlobal.__ROLERADAR_INFLIGHT_REFRESHES__ ??= new Map<
     string,
     Promise<UserSession | null>
   >());
 
 export function getSessionEncryptionKey(): Buffer {
   if (cachedKey) return cachedKey;
-  if ((globalThis as any).__ROLERADAR_CACHED_KEY__) {
-    return (globalThis as any).__ROLERADAR_CACHED_KEY__;
+  if (sessionGlobal.__ROLERADAR_CACHED_KEY__) {
+    return sessionGlobal.__ROLERADAR_CACHED_KEY__;
   }
 
   const raw = process.env.SESSION_ENCRYPTION_KEY;

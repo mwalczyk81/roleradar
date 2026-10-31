@@ -9,6 +9,8 @@ import selfsigned from "selfsigned";
 import axe from "axe-core";
 import { createWebServer } from "../../server.js";
 import { saveSession } from "../../app/lib/session.server.js";
+import * as client from "openid-client";
+import { setOidcConfigForTesting } from "../../app/lib/oidc.server.js";
 
 let server: https.Server | http.Server;
 let apiServer: http.Server;
@@ -16,7 +18,24 @@ let baseUrl: string;
 let tempTlsDir: string;
 const E2E_SESSION_ID = "e2e-auth-session-id-playwright";
 
+let currentPostingDisposition = "lead";
+let currentPostingVersionToken = "ver-1";
+let currentPostingTitle = "Principal Engineer";
+let nextTransitionResponseStatus: number | null = null;
+let nextTransitionResponseBody: unknown = null;
+
 test.beforeAll(async () => {
+  const mockOidcConfig = new client.Configuration(
+    {
+      issuer: "https://identity:5001",
+      authorization_endpoint: "https://identity:5001/connect/authorize",
+      token_endpoint: "https://identity:5001/connect/token",
+      end_session_endpoint: "https://identity:5001/connect/endsession",
+    },
+    "roleradar-web",
+    "playwright-test-client-secret"
+  );
+  setOidcConfigForTesting(mockOidcConfig);
   // Generate throwaway self-signed certificate and key in temporary directory (zero dependency on gitignored files)
   tempTlsDir = fs.mkdtempSync(path.join(os.tmpdir(), "roleradar-e2e-tls-"));
   const certPath = path.join(tempTlsDir, "throwaway-cert.crt");
@@ -24,7 +43,7 @@ test.beforeAll(async () => {
 
   const pems = await selfsigned.generate(
     [{ name: "commonName", value: "127.0.0.1" }],
-    { days: 1 }
+    { notAfterDate: new Date(Date.now() + 86400_000) }
   );
   fs.writeFileSync(certPath, pems.cert, "utf8");
   fs.writeFileSync(keyPath, pems.private, "utf8");
@@ -49,13 +68,13 @@ test.beforeAll(async () => {
               id: "post-e2e-1",
               companyId: "comp-1",
               companyName: "Acme Corp",
-              title: "Principal Engineer",
+              title: currentPostingTitle,
               requisitionId: "REQ-101",
               location: "Remote",
-              disposition: "screened_in",
-              resurfacePolicy: "resurface_on_change",
+              disposition: currentPostingDisposition,
+              resurfacePolicy: "never",
               score: 92.5,
-              versionToken: "ver-1",
+              versionToken: currentPostingVersionToken,
               createdAt: "2026-10-31T10:00:00Z",
               updatedAt: "2026-10-31T11:00:00Z",
             },
@@ -75,13 +94,13 @@ test.beforeAll(async () => {
           id: "post-e2e-1",
           companyId: "comp-1",
           companyName: "Acme Corp",
-          title: "Principal Engineer",
+          title: currentPostingTitle,
           requisitionId: "REQ-101",
           location: "Remote",
-          disposition: "screened_in",
-          resurfacePolicy: "resurface_on_change",
+          disposition: currentPostingDisposition,
+          resurfacePolicy: "never",
           score: 92.5,
-          versionToken: "ver-1",
+          versionToken: currentPostingVersionToken,
           createdAt: "2026-10-31T10:00:00Z",
           updatedAt: "2026-10-31T11:00:00Z",
           url: "https://example.com/jobs/101",
@@ -92,14 +111,69 @@ test.beforeAll(async () => {
           },
           signals: [
             {
-              name: "Remote Work",
               signalType: "positive",
-              detail: "100% remote flexibility",
+              evidence: "100% remote flexibility",
+              detectedAt: "2026-10-31T10:00:00Z",
             },
           ],
           assessmentNote: null,
         })
       );
+      return;
+    }
+
+    if (url.pathname === "/api/v1/postings/post-e2e-1/transition" && req.method === "POST") {
+      let bodyStr = "";
+      req.on("data", (chunk) => {
+        bodyStr += chunk;
+      });
+      req.on("end", () => {
+        if (nextTransitionResponseStatus !== null) {
+          const status = nextTransitionResponseStatus;
+          const body = nextTransitionResponseBody;
+          nextTransitionResponseStatus = null;
+          nextTransitionResponseBody = null;
+          res.writeHead(status);
+          res.end(JSON.stringify(body));
+          return;
+        }
+
+        const payload = JSON.parse(bodyStr || "{}");
+        currentPostingDisposition = payload.toDisposition || "scored";
+        currentPostingVersionToken = "ver-2";
+
+        res.writeHead(200);
+        res.end(
+          JSON.stringify({
+            id: "post-e2e-1",
+            companyId: "comp-1",
+            companyName: "Acme Corp",
+            title: currentPostingTitle,
+            requisitionId: "REQ-101",
+            location: "Remote",
+            disposition: currentPostingDisposition,
+            resurfacePolicy: payload.resurfacePolicy || "never",
+            score: 92.5,
+            versionToken: currentPostingVersionToken,
+            createdAt: "2026-10-31T10:00:00Z",
+            updatedAt: "2026-10-31T12:00:00Z",
+            url: "https://example.com/jobs/101",
+            compensation: {
+              currency: "USD",
+              rawText: "$180,000 - $220,000",
+              hasSalary: true,
+            },
+            signals: [
+              {
+                signalType: "positive",
+                evidence: "100% remote flexibility",
+                detectedAt: "2026-10-31T10:00:00Z",
+              },
+            ],
+            assessmentNote: null,
+          })
+        );
+      });
       return;
     }
 
@@ -156,6 +230,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
+  setOidcConfigForTesting(null);
   if (server) {
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
@@ -327,6 +402,7 @@ test.describe("CSP and SSR Style Attribute Invariant (Real Chromium)", () => {
     await setupSessionCookie(context);
 
     const cspViolations: string[] = [];
+    const hydrationWarnings: string[] = [];
     page.on("console", (msg) => {
       const text = msg.text();
       if (
@@ -335,6 +411,13 @@ test.describe("CSP and SSR Style Attribute Invariant (Real Chromium)", () => {
         (msg.type() === "error" && text.includes("CSP"))
       ) {
         cspViolations.push(text);
+      }
+      if (
+        text.toLowerCase().includes("hydration") ||
+        text.toLowerCase().includes("did not match") ||
+        text.toLowerCase().includes("extra attributes from the server")
+      ) {
+        hydrationWarnings.push(text);
       }
     });
 
@@ -359,7 +442,8 @@ test.describe("CSP and SSR Style Attribute Invariant (Real Chromium)", () => {
     const darkViolations = await runAxeChecks(page);
     expect(darkViolations).toEqual([]);
 
-    // Assert zero CSP violations
+    // Assert zero hydration warnings and zero CSP violations
+    expect(hydrationWarnings).toEqual([]);
     expect(cspViolations).toEqual([]);
   });
 
@@ -370,6 +454,7 @@ test.describe("CSP and SSR Style Attribute Invariant (Real Chromium)", () => {
     await setupSessionCookie(context);
 
     const cspViolations: string[] = [];
+    const hydrationWarnings: string[] = [];
     page.on("console", (msg) => {
       const text = msg.text();
       if (
@@ -378,6 +463,13 @@ test.describe("CSP and SSR Style Attribute Invariant (Real Chromium)", () => {
         (msg.type() === "error" && text.includes("CSP"))
       ) {
         cspViolations.push(text);
+      }
+      if (
+        text.toLowerCase().includes("hydration") ||
+        text.toLowerCase().includes("did not match") ||
+        text.toLowerCase().includes("extra attributes from the server")
+      ) {
+        hydrationWarnings.push(text);
       }
     });
 
@@ -403,7 +495,239 @@ test.describe("CSP and SSR Style Attribute Invariant (Real Chromium)", () => {
     const darkViolations = await runAxeChecks(page);
     expect(darkViolations).toEqual([]);
 
-    // Assert zero CSP violations
+    // Assert zero hydration warnings and zero CSP violations
+    expect(hydrationWarnings).toEqual([]);
     expect(cspViolations).toEqual([]);
+  });
+});
+
+test.describe("Posting Detail Real Transitions (Real Chromium)", () => {
+  test.beforeEach(async () => {
+    // Reset state before each test
+    currentPostingDisposition = "lead";
+    currentPostingVersionToken = "ver-1";
+    currentPostingTitle = "Principal Engineer";
+    nextTransitionResponseStatus = null;
+    nextTransitionResponseBody = null;
+  });
+
+  test("submits successful transition: page updates, URL remains clean, dialog closes, badge tones differ", async ({
+    page,
+    context,
+  }) => {
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/postings/post-e2e-1`, { waitUntil: "networkidle" });
+
+    // Initial badge: Lead with primary tone
+    const badge = page.getByTestId("disposition-badge");
+    await expect(badge).toHaveText("Lead");
+    expect(await badge.getAttribute("data-tone")).toBe("primary");
+    const initialBgColor = await badge.evaluate((el) => window.getComputedStyle(el).backgroundColor);
+
+    // Open change disposition dialog
+    await page.getByRole("button", { name: "Change Disposition" }).click();
+    const modal = page.getByRole("dialog");
+    await expect(modal).toBeVisible();
+
+    // Fill valid transition (lead -> scored is first target)
+    await page.getByLabel("Reason *").fill("Candidate matches required qualifications");
+    await page.getByRole("button", { name: "Apply Transition" }).click();
+
+    // Dialog closes
+    await expect(modal).not.toBeVisible();
+
+    // URL remains clean (no raw JSON page)
+    expect(page.url()).toBe(`${baseUrl}/postings/post-e2e-1`);
+
+    // Page updates: Badge is now Scored with warning tone
+    await expect(badge).toHaveText("Scored");
+    expect(await badge.getAttribute("data-tone")).toBe("warning");
+    const updatedBgColor = await badge.evaluate((el) => window.getComputedStyle(el).backgroundColor);
+
+    // Assert the badge tone classes/colours differ between dispositions
+    expect(updatedBgColor).not.toBe(initialBgColor);
+  });
+
+  test("submits transition with 400 InvalidTransition: shows inline error in dialog without closing or raw JSON", async ({
+    page,
+    context,
+  }) => {
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/postings/post-e2e-1`, { waitUntil: "networkidle" });
+
+    // Configure mock API to return 400 InvalidTransition
+    nextTransitionResponseStatus = 400;
+    nextTransitionResponseBody = {
+      errorCode: "INVALID_TRANSITION",
+      message: "Transition to this disposition is not allowed by policy.",
+      details: [{ field: "toDisposition", message: "Transition not allowed." }],
+    };
+
+    // Open change disposition dialog
+    await page.getByRole("button", { name: "Change Disposition" }).click();
+    const modal = page.getByRole("dialog");
+    await expect(modal).toBeVisible();
+
+    await page.getByLabel("Reason *").fill("Attempting invalid transition");
+    await page.getByRole("button", { name: "Apply Transition" }).click();
+
+    // Dialog remains open
+    await expect(modal).toBeVisible();
+
+    // Inline error message is displayed
+    const alert = modal.getByRole("alert");
+    await expect(alert).toBeVisible();
+    await expect(alert).toContainText("Transition to this disposition is not allowed by policy.");
+
+    // URL remains clean
+    expect(page.url()).toBe(`${baseUrl}/postings/post-e2e-1`);
+  });
+
+  test("submits transition with 409 Conflict: shows Toast with Reload action which refetches without full page reload", async ({
+    page,
+    context,
+  }) => {
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/postings/post-e2e-1`, { waitUntil: "networkidle" });
+
+    // Configure mock API to return 409 Concurrency Conflict
+    nextTransitionResponseStatus = 409;
+    nextTransitionResponseBody = {
+      errorCode: "CONCURRENCY_CONFLICT",
+      message: "This posting was modified by another process.",
+    };
+
+    // Open change disposition dialog
+    await page.getByRole("button", { name: "Change Disposition" }).click();
+    const modal = page.getByRole("dialog");
+    await expect(modal).toBeVisible();
+
+    await page.getByLabel("Reason *").fill("Attempting transition that conflicts");
+    await page.getByRole("button", { name: "Apply Transition" }).click();
+
+    // Toast appears with Reload button
+    const toast = page.locator('[role="alert"], [role="status"]').filter({ hasText: "Concurrency Conflict" });
+    await expect(toast).toBeVisible();
+    await expect(toast).toContainText("This posting was updated by another process.");
+
+    // Simultaneously simulate server state change for reload verification
+    currentPostingTitle = "Principal Engineer (Concurrently Updated)";
+
+    // Track whether window.location.reload was called (it should NOT be called)
+    await page.evaluate(() => {
+      (window as any).__reloadedViaWindow = false;
+      const origReload = window.location.reload.bind(window.location);
+      window.location.reload = () => {
+        (window as any).__reloadedViaWindow = true;
+        origReload();
+      };
+    });
+
+    // Click Reload action in Toast
+    const reloadButton = toast.getByRole("button", { name: "Reload" });
+    await reloadButton.click();
+
+    // Verify page revalidated and fetched updated title
+    await expect(page.getByRole("heading", { name: "Principal Engineer (Concurrently Updated)", level: 1 })).toBeVisible();
+
+    const reloadedViaWindow = await page.evaluate(() => (window as any).__reloadedViaWindow);
+    expect(reloadedViaWindow).toBe(false);
+  });
+
+  test("submits transition with bad CSRF: shows inline error without raw response", async ({
+    page,
+    context,
+  }) => {
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/postings/post-e2e-1`, { waitUntil: "networkidle" });
+
+    // Open change disposition dialog
+    await page.getByRole("button", { name: "Change Disposition" }).click();
+    const modal = page.getByRole("dialog");
+    await expect(modal).toBeVisible();
+
+    await page.getByLabel("Reason *").fill("Attempt with bad CSRF");
+
+    // Tamper the CSRF token in the dialog form right before submitting
+    await page.evaluate(() => {
+      const modalEl = document.querySelector('[role="dialog"]');
+      const input = modalEl?.querySelector('input[name="_csrf"]') as HTMLInputElement;
+      if (input) {
+        input.value = "tampered-invalid-csrf-token";
+      }
+    });
+
+    await page.getByRole("button", { name: "Apply Transition" }).click();
+
+    // Dialog remains open
+    await expect(modal).toBeVisible();
+
+    // Inline CSRF error is displayed
+    const alert = modal.getByRole("alert");
+    await expect(alert).toBeVisible();
+    await expect(alert).toContainText("Invalid or missing CSRF token");
+
+    // URL remains clean (no raw error page)
+    expect(page.url()).toBe(`${baseUrl}/postings/post-e2e-1`);
+  });
+
+  test("submits transition with API 401: redirects into authorization flow, avoids loop, and clears session cookie", async ({
+    page,
+    context,
+  }) => {
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/postings/post-e2e-1`, { waitUntil: "networkidle" });
+
+    // Verify session cookie is present initially
+    let cookies = await context.cookies();
+    expect(cookies.some((c) => c.name === "__Host-roleradar_session")).toBe(true);
+
+    // Configure mock API to return 401 on transition attempt
+    nextTransitionResponseStatus = 401;
+    nextTransitionResponseBody = {
+      errorCode: "UNAUTHORIZED",
+      message: "API access token is expired or unauthorized.",
+    };
+
+    let authRedirectCount = 0;
+    const authRedirectPromise = page.waitForRequest((req) => {
+      const u = req.url();
+      if (u.includes("identity:5001") || u.includes("/connect/authorize") || u.includes("/auth")) {
+        authRedirectCount++;
+        return true;
+      }
+      return false;
+    });
+
+    // Intercept outbound request to Identity to assert the request/redirect without depending on IdP page
+    await page.route("**/connect/authorize*", (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<html><body>Mock Identity Provider Login Page</body></html>",
+      });
+    });
+
+    // Open change disposition dialog
+    await page.getByRole("button", { name: "Change Disposition" }).click();
+    const modal = page.getByRole("dialog");
+    await expect(modal).toBeVisible();
+
+    await page.getByLabel("Reason *").fill("Attempt transition with 401 response");
+    await page.getByRole("button", { name: "Apply Transition" }).click();
+
+    // Assert that redirect into authorization flow was requested
+    const authRequest = await authRedirectPromise;
+    expect(authRequest.url()).toContain("connect/authorize");
+    expect(authRequest.url()).toContain("client_id=roleradar-web");
+
+    // Wait briefly to verify no redirect loop occurs
+    await page.waitForTimeout(500);
+    expect(authRedirectCount).toBe(1);
+
+    // Assert session cookie is cleared
+    cookies = await context.cookies();
+    const sessionCookie = cookies.find((c) => c.name === "__Host-roleradar_session");
+    expect(!sessionCookie || sessionCookie.value === "").toBe(true);
   });
 });

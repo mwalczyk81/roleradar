@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import crypto from "node:crypto";
 import React from "react";
 import { render } from "@testing-library/react";
+import { createRoutesStub } from "react-router";
 import http from "node:http";
 import * as oidc from "../../app/lib/oidc.server.js";
 import {
@@ -113,7 +114,7 @@ describe("Security Invariants", () => {
               requisitionId: null,
               location: "Remote",
               disposition: "lead",
-              resurfacePolicy: "manual_only",
+              resurfacePolicy: "never",
               score: null,
               versionToken: crypto.randomUUID(),
               createdAt: new Date().toISOString(),
@@ -331,10 +332,19 @@ describe("Security Invariants", () => {
   });
 
   // Invariant 7: a 403 shows Not Authorized page and never redirects in a loop
-  it("Invariant 7: 403 displays Not Authorized view and contains zero automatic retry redirects", () => {
-    const { getByRole, queryByRole } = render(React.createElement(NotAuthorized));
+  it("Invariant 7: 403 displays Not Authorized view and contains zero automatic retry redirects", async () => {
+    const Stub = createRoutesStub([
+      {
+        path: "/not-authorized",
+        Component: NotAuthorized,
+        loader: () => ({ csrfToken: "csrf-test" }),
+      },
+    ]);
+    const { findByRole, queryByRole } = render(
+      React.createElement(Stub, { initialEntries: ["/not-authorized"] })
+    );
 
-    expect(getByRole("heading", { name: /Not Authorized/i })).toBeDefined();
+    expect(await findByRole("heading", { name: /Not Authorized/i })).toBeDefined();
     expect(queryByRole("link", { name: /retry/i })).toBeNull();
   });
 

@@ -91,15 +91,13 @@ export interface PostingDetail {
 }
 
 export type PostingDisposition =
-  | 'identified'
-  | 'screened_in'
-  | 'screened_out'
+  | 'lead'
+  | 'scored'
   | 'applied'
-  | 'interviewing'
-  | 'offer'
   | 'rejected'
-  | 'withdrawn'
-  | 'archived';
+  | 'screened_out'
+  | 'closed'
+  | 'unscored';
 
 export interface CompensationInfo {
   currency: string;
@@ -229,7 +227,7 @@ export interface SearchRun {
   ```
 - **Domain Matrix Rules (`DispositionMatrix`)**:
   - Target `applied` is **forbidden** via transition. Reaching `applied` occurs strictly by creating an application via `POST /api/v1/applications`.
-  - The UI presents all non-applied dispositions (`screened_in`, `screened_out`, `interviewing`, `offer`, `rejected`, `withdrawn`, `archived`).
+  - The UI presents only valid non-applied target dispositions according to the disposition matrix (`lead`, `scored`, `screened_out`, `closed`, `unscored`, `rejected`).
   - If a transition is disallowed from the posting's current state, the API returns HTTP 400 (`InvalidTransition`), which is mapped to an inline alert.
   - If `versionToken` does not match the stored version, the API returns HTTP 409 Conflict (`concurrency_conflict`), triggering a reload prompt.
 

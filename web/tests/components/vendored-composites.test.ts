@@ -2,15 +2,17 @@ import { describe, it, expect, vi } from "vitest";
 import React from "react";
 import { render, screen } from "@testing-library/react";
 
-import { DataTable } from "../../app/ds/components/src/data/DataTable.jsx";
-import { Toolbar } from "../../app/ds/components/src/data/Toolbar.jsx";
-import { AppShell } from "../../app/ds/components/src/layout/AppShell.jsx";
-import { EmptyState } from "../../app/ds/components/src/feedback/EmptyState.jsx";
-import { Skeleton } from "../../app/ds/components/src/feedback/Skeleton.jsx";
-import { Toast } from "../../app/ds/components/src/feedback/Toast.jsx";
-import { ToastRegion } from "../../app/ds/components/src/feedback/ToastRegion.jsx";
-import { Menu } from "../../app/ds/components/src/overlay/Menu.jsx";
-import { Tooltip } from "../../app/ds/components/src/overlay/Tooltip.jsx";
+import {
+  DataTable,
+  Toolbar,
+  AppShell,
+  EmptyState,
+  Skeleton,
+  Toast,
+  ToastRegion,
+  Menu,
+  Tooltip,
+} from "../../app/ui.js";
 
 describe("Vendored Part C Design System Composites (T032)", () => {
   it("renders AppShell with full navigation, title, theme, userLabel, and signOut form", () => {
@@ -117,13 +119,13 @@ describe("Vendored Part C Design System Composites (T032)", () => {
         null,
         React.createElement(Toast, {
           title: "Update Saved",
-          message: "Posting disposition changed to screened_in.",
+          message: "Posting disposition changed to scored.",
           variant: "success",
         })
       )
     );
     expect(screen.getByText("Update Saved")).toBeDefined();
-    expect(screen.getByText(/screened_in/)).toBeDefined();
+    expect(screen.getByText(/scored/)).toBeDefined();
   });
 
   it("renders Menu and Tooltip overlays", () => {
@@ -134,14 +136,11 @@ describe("Vendored Part C Design System Composites (T032)", () => {
           trigger: "Actions",
           items: [{ label: "Edit" }, { label: "Delete", danger: true }],
         }),
-        React.createElement(
-          Tooltip,
-          {
-            key: "tt",
-            content: "Information tip",
-          },
-          React.createElement("span", null, "Hover target")
-        ),
+        React.createElement(Tooltip, {
+          key: "tt",
+          content: "Information tip",
+          children: React.createElement("span", null, "Hover target"),
+        }),
       ])
     );
     expect(screen.getByText("Actions")).toBeDefined();
