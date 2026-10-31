@@ -12,6 +12,7 @@
 !src/**/packages.lock.json
 !src/**/*.csproj
 !src/**/*.cs
+!src/**/*.cshtml
 
 # Explicitly exclude sensitive directories
 import-review/
