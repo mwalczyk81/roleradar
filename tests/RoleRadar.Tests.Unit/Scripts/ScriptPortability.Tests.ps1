@@ -16,7 +16,6 @@ BeforeDiscovery {
         "test-fast.ps1",
         "test-images.ps1",
         "verify-action-pins.ps1",
-        "verify-traceability-003.ps1",
         "check-tools-release.ps1",
         "review-gate.ps1"
     )

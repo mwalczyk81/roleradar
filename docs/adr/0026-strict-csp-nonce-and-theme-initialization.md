@@ -38,7 +38,7 @@ const nonce = crypto.randomBytes(16).toString('base64');
 The server sets the response header:
 
 ```http
-Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{NONCE}'; style-src 'self' 'nonce-{NONCE}'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://identity:5001; frame-ancestors 'none';
+Content-Security-Policy: default-src 'self'; script-src 'self' 'nonce-{NONCE}'; style-src 'self' 'nonce-{NONCE}'; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self' https://identity:5001; frame-ancestors 'none';
 ```
 
 Additional security headers:
@@ -46,6 +46,16 @@ Additional security headers:
 - `X-Content-Type-Options: nosniff`
 - `X-Frame-Options: DENY`
 - `Referrer-Policy: strict-origin-when-cross-origin`
+
+### 1.1 Element-Level Style Attribute Policy (`style-src-attr 'unsafe-inline'`)
+
+The vendored design system components (`web/app/ds`) render dynamic element-level inline style attributes (`style="..."`) during server-side rendering for layout alignments, CSS custom property injections, and component dimensions.
+
+In CSP Level 3, style directives distinguish between element stylesheets and style attributes:
+
+- `style-src-elem` (governed by `style-src 'self' 'nonce-{NONCE}'`): Injected `<style>` blocks or external stylesheet links remain strictly blocked unless signed with the per-response cryptographic nonce.
+- `style-src-attr 'unsafe-inline'`: Permits element-level `style="..."` attributes on DOM elements without weakening stylesheet protection or script execution policies.
+- Script execution remains strictly bound to `script-src 'self' 'nonce-{NONCE}'` with zero `'unsafe-inline'`.
 
 ### 2. Zero-FOUC Theme Initialization Script
 

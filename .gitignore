@@ -78,6 +78,13 @@ web_modules/
 .next
 out
 
+# React Router / Vite build output
+web/build/
+web/.react-router/
+web/test-results/
+web/playwright-report/
+.nx/
+
 # Nuxt.js build / generate output
 .nuxt
 dist

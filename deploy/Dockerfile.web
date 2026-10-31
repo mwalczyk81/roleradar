@@ -1,0 +1,40 @@
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS build
+
+WORKDIR /app
+
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml nx.json .node-version ./
+COPY web/package.json ./web/
+COPY web/project.json ./web/
+
+RUN pnpm install --frozen-lockfile
+
+COPY contracts/ ./contracts/
+COPY web/ ./web/
+
+RUN pnpm --filter web run build
+RUN pnpm --filter web run build:server
+RUN pnpm --filter web deploy --legacy --prod /prod/web
+
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS runtime
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=5003
+
+USER node
+
+COPY --chown=node:node --from=build /prod/web /app
+COPY --chown=node:node --from=build /app/web/build /app/build
+COPY --chown=node:node --from=build /app/contracts /app/contracts
+
+EXPOSE 5003
+
+HEALTHCHECK --interval=5s --timeout=3s --start-period=4s --retries=3 \
+  CMD node -e "process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'; fetch('https://127.0.0.1:5003/health').catch(() => fetch('http://127.0.0.1:5003/health')).then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"
+
+CMD ["node", "build/server-dist/server.js"]

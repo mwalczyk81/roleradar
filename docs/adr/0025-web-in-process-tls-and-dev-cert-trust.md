@@ -128,6 +128,16 @@ Base image: `node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42
       start_period: 4s
 ```
 
+### 6. Local DNS / Hosts Resolution for Identity Discovery (`https://identity:5001`)
+
+The Identity host discovers and validates tokens against its canonical issuer URI `https://identity:5001` (matching the Subject Alternative Name on `dev-cert.crt`). For interactive local development and browser redirects to succeed without issuer mismatch errors, the developer's workstation requires:
+
+```text
+127.0.0.1 identity api
+```
+
+in the local hosts file. In automated end-to-end browser suites (Playwright), Chromium instances configure `--host-resolver-rules="MAP identity 127.0.0.1, MAP api 127.0.0.1"`, allowing fully automated execution in CI and local test runs without host changes.
+
 ## Consequences
 
 ### Positive

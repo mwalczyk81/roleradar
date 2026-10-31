@@ -17,13 +17,23 @@ Ensure the following tools are installed on the local system:
 - **Docker & Docker Compose**: running Docker daemon
 - **Development Certificates**: generated in `deploy/certs/` (`dev-cert.pfx`, `dev-cert.crt`, `dev-cert.key`)
 
+### Host File Configuration
+
+The Identity discovery URL and canonical issuer are `https://identity:5001` (matching the dev certificate SAN and Docker Compose internal network authority). Because modern browser OIDC redirects validate the exact issuer URI in the browser address bar, developers must add the following entry to their local hosts file (`C:\Windows\System32\drivers\etc\hosts` on Windows, `/etc/hosts` on Linux/macOS):
+
+```text
+127.0.0.1 identity api
+```
+
+*(Note: Playwright end-to-end tests configure `--host-resolver-rules="MAP identity 127.0.0.1, MAP api 127.0.0.1"` automatically, so automated suites require no system hosts file modification).*
+
 ### Environment Configuration
 
 Create or verify `web/.env.local`:
 ```bash
 NODE_ENV=development
 PORT=5003
-ROLERADAR_IDENTITY_ISSUER_URI=https://localhost:5001
+ROLERADAR_IDENTITY_ISSUER_URI=https://identity:5001
 ROLERADAR_API_BASE_URL=https://localhost:5002
 ROLERADAR_WEB_CLIENT_SECRET=<the same value exported for the compose stack; never a shared default>
 SESSION_ENCRYPTION_KEY=<32 random bytes, base64; generate your own as shown below>

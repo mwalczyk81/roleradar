@@ -48,6 +48,25 @@ public sealed class IdentityTokenIssuanceContractTests
     }
 
     [Fact]
+    public void WebClient_DefaultRedirectUris_TargetPort5003CallbackAndLogout()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Clients:Web:Secret"] = "web-client-test-secret-123456789012345",
+                ["Clients:Headless:Secret"] = "headless-test-secret-123456789012345"
+            })
+            .Build();
+
+        var clients = IdentityServerConfig.GetClients(config).ToArray();
+        var webClient = clients.FirstOrDefault(c => c.ClientId == "roleradar-web");
+
+        Assert.NotNull(webClient);
+        Assert.Contains("https://localhost:5003/auth/callback", webClient.RedirectUris);
+        Assert.Contains("https://localhost:5003/auth/logout", webClient.PostLogoutRedirectUris);
+    }
+
+    [Fact]
     public void HeadlessClient_Has5MinuteLifetimeAndNarrowScopes()
     {
         var clients = IdentityServerConfig.GetClients(_configuration).ToArray();

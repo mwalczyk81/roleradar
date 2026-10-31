@@ -390,6 +390,12 @@ jobs:
           dotnet restore RoleRadar.sln --locked-mode
           pnpm install --frozen-lockfile
 
+      - name: Install Playwright Chromium with dependencies
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        run: pnpm run test:e2e
+
       - name: Run Nx affected (lint, build, test)
         run: pnpm exec nx affected -t lint build test
 

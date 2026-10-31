@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "targetDefaults": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"]
+    },
+    "lint": {
+      "cache": true
+    },
+    "test": [
+      {
+        "cache": true
+      },
+      {
+        "filter": {
+          "projects": [
+            "RoleRadar.Tests.Contract",
+            "RoleRadar.Tests.Integration"
+          ]
+        },
+        "cache": false
+      }
+    ]
+  },
+  "plugins": [
+    {
+      "plugin": "@nx/dotnet",
+      "options": {
+        "solutionFile": "RoleRadar.sln",
+        "inferProjects": true
+      }
+    }
+  ]
+}

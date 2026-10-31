@@ -1,0 +1,17 @@
+{
+  "name": "roleradar",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.4.0",
+  "scripts": {
+    "build": "nx run-many -t build",
+    "test": "nx run-many -t test",
+    "test:e2e": "pnpm --filter web run test:e2e",
+    "lint": "nx run-many -t lint"
+  },
+  "devDependencies": {
+    "@nx/dotnet": "24.0.3",
+    "@nx/js": "24.0.3",
+    "nx": "24.0.3"
+  }
+}
