@@ -9,6 +9,34 @@ namespace RoleRadar.Cli.Commands.Identity;
 
 public static class CreateOwnerCommand
 {
+    /// <summary>
+    /// Label printed immediately before the owner's <c>sub</c> value. Public so tests (and docs) can rely on one spelling.
+    /// </summary>
+    public const string OwnerSubjectLabel = "Owner subject (sub):";
+
+    /// <summary>
+    /// Writes the provisioning summary: username, TOTP enrolment details, and the exact <c>sub</c> value
+    /// the owner's access tokens will carry (lowercase "D" GUID format, as emitted by Identity).
+    /// Extracted from the command action so the printed output can be verified against a real issued token.
+    /// </summary>
+    public static void WriteOwnerSummary(TextWriter writer, OwnerProvisioningResult result)
+    {
+        ArgumentNullException.ThrowIfNull(writer);
+        ArgumentNullException.ThrowIfNull(result);
+
+        writer.WriteLine("\n" + new string('=', 70));
+        writer.WriteLine("TOTP TWO-FACTOR AUTHENTICATION SETUP");
+        writer.WriteLine(new string('=', 70));
+        writer.WriteLine($"Username:       {result.Username}");
+        writer.WriteLine($"Base32 Secret:  {result.AuthenticatorKey}");
+        writer.WriteLine($"OtpAuth URI:    {result.OtpAuthUri}");
+        writer.WriteLine(new string('=', 70));
+        writer.WriteLine("Enter the Base32 secret into your authenticator app (e.g. Google Authenticator).");
+        writer.WriteLine("This secret is displayed ONCE and is NOT saved in any log or configuration file.\n");
+        writer.WriteLine($"{OwnerSubjectLabel} {result.Subject}");
+        writer.WriteLine("Paste this value verbatim (case-sensitive) into ROLERADAR_OWNER_ALLOWED_SUBJECT so the API accepts this owner's tokens.\n");
+    }
+
     public static Command Create(IServiceProvider services)
     {
         var command = new Command("create-owner", "Interactively provision the single system owner account with password and TOTP 2FA.");
@@ -63,15 +91,7 @@ public static class CreateOwnerCommand
             Console.WriteLine("\nProvisioning owner account in identity operational store...");
             var result = await provisioningService.ProvisionOwnerAsync(username.Trim(), password, cancellationToken);
 
-            Console.WriteLine("\n" + new string('=', 70));
-            Console.WriteLine("TOTP TWO-FACTOR AUTHENTICATION SETUP");
-            Console.WriteLine(new string('=', 70));
-            Console.WriteLine($"Username:       {result.Username}");
-            Console.WriteLine($"Base32 Secret:  {result.AuthenticatorKey}");
-            Console.WriteLine($"OtpAuth URI:    {result.OtpAuthUri}");
-            Console.WriteLine(new string('=', 70));
-            Console.WriteLine("Enter the Base32 secret into your authenticator app (e.g. Google Authenticator).");
-            Console.WriteLine("This secret is displayed ONCE and is NOT saved in any log or configuration file.\n");
+            WriteOwnerSummary(Console.Out, result);
 
             Console.Write("Enter the 6-digit verification code from your authenticator: ");
             var verificationCode = Console.ReadLine()?.Trim();
@@ -90,6 +110,8 @@ public static class CreateOwnerCommand
             }
 
             Console.WriteLine("\nSuccess: Single owner account provisioned and 2FA verified successfully!");
+            Console.WriteLine("To let the API accept this owner's tokens, set (value verbatim, case-sensitive):");
+            Console.WriteLine($"  ROLERADAR_OWNER_ALLOWED_SUBJECT={result.Subject}");
             return 0;
         });
 

@@ -10,7 +10,14 @@ public sealed record OwnerProvisioningResult(
     Guid UserId,
     string Username,
     string AuthenticatorKey,
-    string OtpAuthUri);
+    string OtpAuthUri)
+{
+    /// <summary>
+    /// The exact <c>sub</c> claim value Identity emits for this user: the user id in lowercase "D" format.
+    /// The API compares it with <c>Owner:AllowedSubjects</c> using strict ordinal equality, so it must be pasted verbatim.
+    /// </summary>
+    public string Subject => UserId.ToString("D", System.Globalization.CultureInfo.InvariantCulture);
+}
 
 public class OwnerProvisioningService(IdentityAppDbContext dbContext)
 {
