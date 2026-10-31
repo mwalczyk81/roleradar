@@ -61,7 +61,7 @@ RUN set -eux; \
     dpkg-query -s libgssapi-krb5-2 libkrb5-3 libk5crypto3 libkrb5support0 libkeyutils1 libcom-err2 > /out/var/lib/dpkg/status
 
 # Stage 3: MCP Runtime (roleradar-mcp)
-FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled@sha256:7ac579eeb88591c261c85576d7094e8f65949ff9e9502cdaab1de2457e506505 AS mcp
+FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled@sha256:3eb54ac708855f74b032de48e02437d15fb083b2aa593d49fdd512bb17f3e944 AS mcp
 WORKDIR /app
 COPY --from=build --chown=1654:1654 /app/mcp /app
 USER 1654:1654
