@@ -1,6 +1,6 @@
 import * as React from "react";
 
-export interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
+export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectElement>, "size"> {
   /** Control height. @default "md" */
   size?: "sm" | "md" | "lg";
   /** Render in an error state (red border). @default false */

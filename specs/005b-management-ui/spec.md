@@ -139,7 +139,7 @@ The owner can inspect read-only views for active and inactive screening criteria
 - **Direct Browser API Attempts**: Because the REST API does not enable CORS and is bound to internal network/loopback interfaces, any direct browser `fetch` or script invocation fails immediately. All calls are routed through server loaders/actions.
 - **Hostile Script Tags in Postings and Notes**: If an imported posting, note, or signal contains content such as `<script>alert('pwn')</script>` or markdown images, the text is sanitized and rendered strictly as text nodes in the DOM.
 - **Concurrent Single-Flight Token Refresh**: When 10 concurrent requests arrive for an expired access token, exactly 1 token exchange call is made to Identity. The other 9 requests await the result and use the refreshed token without rotating tokens multiple times.
-- **Identity Host Offline**: If the Identity host or API is unreachable, the web application renders a clear "Service Temporarily Unavailable" screen conforming to Design System EmptyState primitives, detailing connectivity remediation without exposing internal stack traces.
+- **Identity Host Offline**: If the Identity host or API is unreachable, the web application renders a clear "Service Temporarily Unavailable" screen conforming to Design System EmptyState components (`web/app/ds/components/src/feedback/EmptyState.jsx`), detailing connectivity remediation without exposing internal stack traces.
 
 ---
 
@@ -166,7 +166,7 @@ The owner can inspect read-only views for active and inactive screening criteria
 - **FR-017**: The UI MUST support creating applications from eligible postings (transitioning the posting to `applied`) and appending chronological timeline events to existing applications. Because the API has no batch lookup endpoint, the web server MUST resolve posting and company names with one GET per distinct posting and company on the page, bounded by the page size, deduplicated, executed concurrently, and cached for the request.
 - **FR-018**: The UI MUST provide read-only views for screening criteria (`/criteria` showing `name`, `weight`, `ruleText`, `effectiveFrom`, `effectiveTo`, `isActive`), narrative notes search and read (`/notes` supporting text search `q` only), and search run history (`/search-runs` showing `runDate`, `companiesSearched`, `postingsFound`, `newPostings`, `errorsCount`, `summary`).
 - **FR-019**: Contacts, manual note creation/editing, criteria creation/editing, import processing, and search run triggering MUST NOT be exposed in the UI (these remain CLI/MCP only).
-- **FR-020**: All UI components MUST be constructed using Matt's Design System tokens and primitives, documented in `web/app/ds` with an up-to-date `SYNC.md`.
+- **FR-020**: All UI components MUST be constructed using Matt's Design System tokens and components, documented in `web/app/ds` with an up-to-date `SYNC.md`.
 - **FR-021**: The UI MUST use semantic `--ds-*` design tokens exclusively. No hardcoded hex colors or raw pixel sizes are allowed outside `web/app/ds`.
 - **FR-022**: The UI MUST support both light and dark themes with zero theme flicker (FOUC) on page load, using system preferences with manual toggle.
 - **FR-023**: Every interactive element MUST display visible focus indicators, satisfy WCAG AA contrast ratios, support complete keyboard navigation, and respect `prefers-reduced-motion`.

@@ -28,11 +28,12 @@ web/app/ds/
     │   ├── <Name>.d.ts        # TypeScript interface definitions
     │   └── README.md          # Component usage documentation
     └── src/                   # Component sources (React JSX) grouped by category
-        ├── feedback/          # Alert.jsx, Avatar.jsx, Badge.jsx, Card.jsx, Toast.jsx, Skeleton.jsx
+        ├── data/              # DataTable.jsx, Toolbar.jsx
+        ├── feedback/          # Alert.jsx, Avatar.jsx, Badge.jsx, Card.jsx, EmptyState.jsx, Skeleton.jsx, Toast.jsx, ToastRegion.jsx
         ├── forms/             # Button.jsx, Checkbox.jsx, Input.jsx, Radio.jsx, Select.jsx, Switch.jsx, Textarea.jsx
-        ├── navigation/        # Tabs.jsx, AppShell.jsx, Toolbar.jsx, Menu.jsx
-        ├── data/              # DataTable.jsx
-        └── overlay/           # Modal.jsx, Tooltip.jsx, EmptyState.jsx
+        ├── layout/            # AppShell.jsx
+        ├── navigation/        # Tabs.jsx
+        └── overlay/           # Menu.jsx, Modal.jsx, Tooltip.jsx
 ```
 
 ### TypeScript & Linter Configuration Rules
@@ -70,7 +71,7 @@ Composites are published in the kit as `.jsx` with `.d.ts` types and arrive via 
   - Rows have visible keyboard focus indicators (`:focus-visible`) and hover highlighting.
 
 ### 2. `Toolbar`
-- **Source**: `web/app/ds/components/src/navigation/Toolbar.jsx` (types: `Toolbar.d.ts`)
+- **Source**: `web/app/ds/components/src/data/Toolbar.jsx` (types: `Toolbar.d.ts`)
 - **Props**:
   - `searchQuery?: string`
   - `onSearchChange?: (q: string) => void`
@@ -83,23 +84,27 @@ Composites are published in the kit as `.jsx` with `.d.ts` types and arrive via 
   - Zero icon library imports; search and clear icons arrive via props or child slots.
 
 ### 3. `AppShell`
-- **Source**: `web/app/ds/components/src/navigation/AppShell.jsx` (types: `AppShell.d.ts`)
+- **Source**: `web/app/ds/components/src/layout/AppShell.jsx` (types: `AppShell.d.ts`)
 - **Props**:
-  - `userSub: string`
-  - `theme: 'light' | 'dark'`
-  - `onThemeToggle: () => void`
-  - `navItems: Array<{ label: string; href: string; icon?: React.ReactNode; active?: boolean }>`
-  - `linkComponent?: React.ComponentType<{ href: string; className?: string; children: React.ReactNode }>`
-  - `children: React.ReactNode`
+  - `brand?: React.ReactNode`
+  - `title?: React.ReactNode`
+  - `userLabel?: string`
+  - `signOut?: React.ReactNode`
+  - `theme?: 'light' | 'dark'`
+  - `onThemeToggle?: () => void`
+  - `headerActions?: React.ReactNode`
+  - `navItems?: Array<{ label: string; href: string; icon?: React.ReactNode; active?: boolean; badge?: React.ReactNode }>`
+  - `linkComponent?: React.ElementType`
+  - `children?: React.ReactNode`
 - **Invariants**:
   - Does not hardcode route paths; navigation links are supplied via the `navItems` array.
   - Defaults `linkComponent` to a plain anchor (`<a>`), but accepts React Router's `<NavLink>` or `<Link>` from the consuming application.
+  - Displays `title` as page `<h1>`, `userLabel` as user badge, `signOut` slot, and `headerActions` in top bar.
   - Responsive sidebar with collapse toggle.
-  - Header displays page title, theme toggle, owner badge, and sign-out action slot.
   - Skip-to-main-content link for keyboard accessibility (WCAG 2.4.1).
 
 ### 4. `EmptyState`
-- **Source**: `web/app/ds/components/src/overlay/EmptyState.jsx` (types: `EmptyState.d.ts`)
+- **Source**: `web/app/ds/components/src/feedback/EmptyState.jsx` (types: `EmptyState.d.ts`)
 - **Props**:
   - `icon?: React.ReactNode`
   - `title: string`
@@ -119,8 +124,8 @@ Composites are published in the kit as `.jsx` with `.d.ts` types and arrive via 
   - Respects `prefers-reduced-motion` (disables shimmer animation if requested).
   - Maintains semantic layout dimensions to prevent cumulative layout shift (CLS).
 
-### 6. `Toast`
-- **Source**: `web/app/ds/components/src/feedback/Toast.jsx` (types: `Toast.d.ts`)
+### 6. `Toast` & `ToastRegion`
+- **Source**: `web/app/ds/components/src/feedback/Toast.jsx` and `ToastRegion.jsx` (types: `Toast.d.ts`, `ToastRegion.d.ts`)
 - **Props**:
   - `variant: 'success' | 'warning' | 'danger' | 'info'`
   - `title: string`
@@ -133,7 +138,7 @@ Composites are published in the kit as `.jsx` with `.d.ts` types and arrive via 
   - Includes `role="alert"` for danger/warning and `role="status"` for success/info.
 
 ### 7. `Menu` (Dropdown)
-- **Source**: `web/app/ds/components/src/navigation/Menu.jsx` (types: `Menu.d.ts`)
+- **Source**: `web/app/ds/components/src/overlay/Menu.jsx` (types: `Menu.d.ts`)
 - **Props**:
   - `trigger: React.ReactNode`
   - `items: Array<{ label: string; onClick?: () => void; href?: string; icon?: React.ReactNode; danger?: boolean; disabled?: boolean }>`

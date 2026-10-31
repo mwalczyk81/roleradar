@@ -44,3 +44,273 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* =========================================================================
+   Part C composites. These rules cover what inline styles cannot express:
+   hover and focus states, the sticky/responsive AppShell layout, animation.
+   ========================================================================= */
+
+:root {
+  --ds-sidebar-width: 16rem;
+}
+
+/* Visible to assistive technology only. */
+.ds-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Buttons that carry only an icon or a short text action. */
+.ds-icon-btn:hover {
+  background: var(--ds-surface-hover) !important;
+}
+
+/* DataTable */
+.ds-datatable-row:hover {
+  background: var(--ds-surface-hover);
+}
+.ds-datatable-row[data-clickable] {
+  cursor: pointer;
+}
+.ds-datatable-row:focus-visible {
+  outline-offset: -2px;
+}
+.ds-datatable tbody tr:last-child td {
+  border-bottom: 0;
+}
+.ds-datatable tbody td {
+  border-bottom: var(--ds-border-thin) solid var(--ds-border);
+}
+.ds-datatable-sort:hover {
+  color: var(--ds-text) !important;
+}
+.ds-datatable-scroll:focus-visible {
+  outline-offset: -2px;
+}
+.ds-pager-btn:hover:not(:disabled) {
+  background: var(--ds-surface-hover) !important;
+}
+.ds-pager-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+}
+
+/* Toolbar chips */
+.ds-chip:hover {
+  filter: brightness(0.96);
+}
+
+/* Skeleton: a gentle opacity pulse, no gradient. */
+.ds-skeleton-block {
+  background: var(--ds-surface-hover);
+  animation: ds-pulse 1.6s var(--ds-ease-standard) infinite;
+}
+@keyframes ds-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Menu */
+.ds-menu-item:hover:not([aria-disabled="true"]),
+.ds-menu-item:focus:not([aria-disabled="true"]) {
+  background: var(--ds-surface-hover) !important;
+}
+.ds-menu-item[data-danger]:hover:not([aria-disabled="true"]),
+.ds-menu-item[data-danger]:focus:not([aria-disabled="true"]) {
+  background: var(--ds-danger-subtle) !important;
+}
+.ds-menu-item:focus-visible {
+  outline-offset: -2px;
+}
+.ds-menu-trigger:hover {
+  background: var(--ds-surface-hover) !important;
+}
+
+/* Skip link: off-screen until focused. */
+.ds-skip-link {
+  position: absolute;
+  left: var(--ds-space-4);
+  top: var(--ds-space-4);
+  z-index: var(--ds-z-modal);
+  padding: var(--ds-space-2) var(--ds-space-4);
+  background: var(--ds-surface);
+  color: var(--ds-text);
+  border: var(--ds-border-thin) solid var(--ds-border-control);
+  border-radius: var(--ds-radius-md);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+  text-decoration: none;
+  transform: translateY(-300%);
+}
+.ds-skip-link:focus {
+  transform: none;
+}
+
+/* AppShell: sidebar + top bar + main. Below 48rem the sidebar folds behind the menu button. */
+.ds-appshell {
+  display: grid;
+  grid-template-columns: var(--ds-sidebar-width) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "sidebar topbar"
+    "sidebar main";
+  min-height: 100vh;
+  background: var(--ds-bg);
+  color: var(--ds-text);
+  font-family: var(--ds-font-sans);
+}
+.ds-appshell-sidebar {
+  grid-area: sidebar;
+  position: sticky;
+  top: 0;
+  align-self: start;
+  height: 100vh;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: var(--ds-space-4);
+  background: var(--ds-bg-subtle);
+  border-right: var(--ds-border-thin) solid var(--ds-border);
+}
+.ds-appshell-brand {
+  padding: var(--ds-space-2) var(--ds-space-3) var(--ds-space-4);
+  font-size: var(--ds-text-lg);
+  font-weight: var(--ds-weight-semibold);
+  color: var(--ds-text);
+}
+.ds-appshell-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ds-appshell-link {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-radius: var(--ds-radius-md);
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+  text-decoration: none;
+}
+.ds-appshell-link:hover {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+}
+.ds-appshell-link[aria-current="page"] {
+  background: var(--ds-primary-subtle);
+  color: var(--ds-primary-subtle-text);
+}
+.ds-appshell-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.ds-appshell-label {
+  flex: 1;
+  min-width: 0;
+}
+.ds-appshell-badge {
+  padding: 0 var(--ds-space-2);
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-surface-hover);
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-xs);
+}
+.ds-appshell-topbar {
+  grid-area: topbar;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+  min-width: 0;
+  padding: var(--ds-space-3) var(--ds-space-6);
+  background: var(--ds-bg);
+  border-bottom: var(--ds-border-thin) solid var(--ds-border);
+}
+.ds-appshell-menu {
+  display: none;
+  padding: var(--ds-space-2);
+  background: none;
+  border: none;
+  border-radius: var(--ds-radius-md);
+  color: var(--ds-text);
+  cursor: pointer;
+}
+.ds-appshell-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ds-text-xl);
+  font-weight: var(--ds-weight-semibold);
+  line-height: var(--ds-leading-tight);
+}
+.ds-appshell-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-3);
+}
+.ds-appshell-user {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-surface-hover);
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-weight-medium);
+}
+.ds-appshell-main {
+  grid-area: main;
+  min-width: 0;
+  padding: var(--ds-space-6);
+}
+.ds-appshell-main:focus {
+  outline: none;
+}
+@media (max-width: 48rem) {
+  .ds-appshell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    grid-template-areas:
+      "topbar"
+      "sidebar"
+      "main";
+  }
+  .ds-appshell-sidebar {
+    display: none;
+    position: static;
+    height: auto;
+    border-right: 0;
+    border-bottom: var(--ds-border-thin) solid var(--ds-border);
+  }
+  .ds-appshell[data-nav-open="true"] .ds-appshell-sidebar {
+    display: block;
+  }
+  .ds-appshell-menu {
+    display: inline-flex;
+  }
+  .ds-appshell-topbar {
+    padding: var(--ds-space-3) var(--ds-space-4);
+  }
+  .ds-appshell-main {
+    padding: var(--ds-space-4);
+  }
+  .ds-appshell-user {
+    display: none;
+  }
+}

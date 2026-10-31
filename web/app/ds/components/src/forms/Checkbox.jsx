@@ -2,7 +2,7 @@ import React from "react";
 
 /**
  * Checkbox — boolean toggle with a label. Controlled via `checked`/`onChange`.
- * The native input is visually hidden; base.css rings the drawn box on keyboard
+ * The native input is visually hidden; bundle.css rings the drawn box on keyboard
  * focus via the data-ds-focus-target attribute.
  */
 export function Checkbox({ checked, defaultChecked, disabled = false, label, onChange, style = {}, ...rest }) {

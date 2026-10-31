@@ -26,6 +26,7 @@ export function Badge({ tone = "primary", dot = false, style = {}, children, ...
         fontSize: "var(--ds-text-xs)",
         fontWeight: "var(--ds-weight-medium)",
         lineHeight: 1.4,
+        whiteSpace: "nowrap",
         ...tones[tone],
         ...style,
       }}

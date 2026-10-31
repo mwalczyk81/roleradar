@@ -190,9 +190,19 @@ locks page scroll; Tabs supports Left/Right/Home/End.
 **Components** (sources in `components/src/<group>/` — React, compiled into
 `components/bundle.js`, exposed on `window.MattSDesignSystem_522a7a`)
 - `forms/` — **Button, Input, Textarea, Select, Checkbox, Radio, Switch**
-- `feedback/` — **Card, Badge, Alert, Avatar**
+- `feedback/` — **Card, Badge, Alert, Avatar, EmptyState, Skeleton, Toast, ToastRegion**
 - `navigation/` — **Tabs**
-- `overlay/` — **Modal**
+- `overlay/` — **Modal, Menu, Tooltip**
+- `data/` — **DataTable, Toolbar**
+- `layout/` — **AppShell**
+
+**Composites** (added 2026-10-31 for the RoleRadar management UI) are built from the same
+tokens and follow the same rules: handlers you pass compose with the built-in ones, nothing
+imports an icon package or a router (icons arrive as nodes; `AppShell` and `Menu` take a
+`linkComponent`), and every colour pair was checked against WCAG AA in both themes. Their
+layout, hover and animation rules live in `components/bundle.css`, so link it after
+`tokens.css` as always. `DataTable` sorts only the page of rows it is given and says so;
+numbers go in `numeric` columns (monospace, right-aligned).
 
 Each component ships `components/src/<group>/<Name>.jsx` + `components/<Name>/<Name>.d.ts`
 (props; all of them in `components/index.d.ts`) + `components/<Name>/README.md`

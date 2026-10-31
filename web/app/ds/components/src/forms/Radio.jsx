@@ -2,7 +2,7 @@ import React from "react";
 
 /**
  * Radio — single choice within a group (share the same `name`).
- * The native input is visually hidden; base.css rings the drawn circle on
+ * The native input is visually hidden; bundle.css rings the drawn circle on
  * keyboard focus via the data-ds-focus-target attribute.
  */
 export function Radio({ checked, defaultChecked, disabled = false, label, name, value, onChange, style = {}, ...rest }) {

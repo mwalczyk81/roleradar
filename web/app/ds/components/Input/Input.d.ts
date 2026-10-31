@@ -1,6 +1,6 @@
 import * as React from "react";
 
-export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> {
   /** Control height. @default "md" */
   size?: "sm" | "md" | "lg";
   /** Render in an error state (red border). @default false */

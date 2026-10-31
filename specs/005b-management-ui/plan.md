@@ -177,11 +177,12 @@ roleradar/
         │       ├── index.d.ts  # Exported component prop types
         │       ├── <Name>/     # Component types and READMEs (e.g. Button.d.ts, DataTable.d.ts)
         │       └── src/        # Primitives & Composites together (.jsx)
-        │           ├── feedback/   # Alert.jsx, Avatar.jsx, Badge.jsx, Card.jsx, Toast.jsx, Skeleton.jsx
+        │           ├── data/       # DataTable.jsx, Toolbar.jsx
+        │           ├── feedback/   # Alert.jsx, Avatar.jsx, Badge.jsx, Card.jsx, EmptyState.jsx, Skeleton.jsx, Toast.jsx, ToastRegion.jsx
         │           ├── forms/      # Button.jsx, Checkbox.jsx, Input.jsx, Radio.jsx, Select.jsx, Switch.jsx, Textarea.jsx
-        │           ├── navigation/ # Tabs.jsx, AppShell.jsx, Toolbar.jsx, Menu.jsx
-        │           ├── data/       # DataTable.jsx
-        │           └── overlay/    # Modal.jsx, Tooltip.jsx, EmptyState.jsx
+        │           ├── layout/     # AppShell.jsx
+        │           ├── navigation/ # Tabs.jsx
+        │           └── overlay/    # Menu.jsx, Modal.jsx, Tooltip.jsx
         ├── lib/                # Core web application server utilities
         │   ├── oidc.server.ts  # openid-client discovery, PKCE, token refresh
         │   ├── session.server.ts # Encrypted in-memory session store & AES-256-GCM
@@ -210,7 +211,7 @@ roleradar/
 1. **Exact Design System Mirroring**: `web/app/ds` mirrors the kit structure verbatim. There is no `base.css` (global focus ring and reduced motion rules reside in `components/bundle.css`), and there are no artificial `primitives/` or `composites/` directories. Primitives and Part C composites live side-by-side in `components/src/<group>/*.jsx`.
 2. **Copy-Only Vendoring Invariant**: As defined in `SYNC.md`, `web/app/ds` is strictly copy-only and never modified locally. All improvements and additions originate in the upstream kit and arrive via clean re-export.
 3. **TypeScript & Linter Boundary**: In `web/tsconfig.json`, `allowJs: true` and `checkJs: false` allow the application to import `.jsx` components seamlessly through their `.d.ts` declarations. All application code under `web/app/**` outside `web/app/ds/**` is authored in strictly typed TypeScript. Stylelint/ESLint rules prohibiting hex colors and raw pixel sizes exclude `web/app/ds/**`.
-4. **Composite Decoupling**: Composites do not import `lucide-react` (icons arrive as props/children). `AppShell` accepts `navItems` and `linkComponent` props rather than hardcoding routes. Interactive composites (`Toast`, `Menu`) compose caller handlers before internal handlers.
+4. **Composite Decoupling**: Composites do not import `lucide-react` (icons arrive as props/children). `AppShell` accepts `navItems`, `linkComponent`, `title`, `theme`, `onThemeToggle`, `userLabel`, `signOut`, and `headerActions` props (no `userSub`) rather than hardcoding routes. Interactive composites (`Toast`, `Menu`) compose caller handlers before internal handlers.
 5. **Monorepo Orchestration**: Nx 24 with `@nx/dotnet` coordinates all build, lint, and test targets from the repository root. Caching is explicitly disabled for `RoleRadar.Tests.Contract` and `RoleRadar.Tests.Integration` to ensure Testcontainers and Docker state remain fresh.
 
 ---

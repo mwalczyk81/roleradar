@@ -2,7 +2,7 @@ import React from "react";
 
 /**
  * Switch — instant on/off toggle (applies immediately, no Save needed).
- * The native input is visually hidden; base.css rings the drawn track on
+ * The native input is visually hidden; bundle.css rings the drawn track on
  * keyboard focus via the data-ds-focus-target attribute.
  */
 export function Switch({ checked, defaultChecked, disabled = false, label, onChange, style = {}, ...rest }) {
