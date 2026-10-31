@@ -117,7 +117,7 @@ services:
       - ROLERADAR_OIDC_AUTHORITY=https://identity:5001
       - ROLERADAR_OIDC_AUDIENCE=roleradar.api
       - Owner__AllowedSubjects__0=${ROLERADAR_OWNER_ALLOWED_SUBJECT:?set it}
-      - Owner__AllowedSubjects__1=${ROLERADAR_HEADLESS_ALLOWED_SUBJECT:-}
+      - Owner__AllowedSubjects__1=${ROLERADAR_HEADLESS_ALLOWED_SUBJECT:-roleradar-headless}
       - SSL_CERT_FILE=/https/dev-cert.crt
       - Kestrel__Endpoints__LoopbackHealth__Url=http://127.0.0.1:8080
       - Kestrel__Endpoints__Https__Url=https://*:5002
