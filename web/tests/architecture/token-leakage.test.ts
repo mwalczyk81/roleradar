@@ -255,6 +255,9 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
       fs.writeFileSync(keyPath, pems.private, "utf8");
 
       process.env.SESSION_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString("base64");
+      // The first describe cached a different key in this module. The built server reads the env key, so
+      // reset the cached key to match; otherwise the server cannot decrypt the session saved below.
+      setSessionEncryptionKeyForTesting(Buffer.alloc(32, 9));
       process.env.ROLERADAR_WEB_CLIENT_SECRET = "canary-client-secret";
       process.env.HTTPS_CERT_PATH = certPath;
       process.env.HTTPS_CERT_KEY_PATH = keyPath;
@@ -442,14 +445,13 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
         ignoreHTTPSErrors: true,
       });
 
-      // Set session cookie in browser context
-      const urlObj = new URL(baseUrl);
+      // Set session cookie in browser context. A __Host- cookie must be host-only (no Domain attribute):
+      // Linux Chromium rejects it when a domain is passed, so address it by url like the e2e spec does.
       await context.addCookies([
         {
           name: SECURE_COOKIE_NAME,
           value: CANARY_SESSION_ID,
-          domain: urlObj.hostname,
-          path: "/",
+          url: baseUrl,
           httpOnly: true,
           secure: true,
           sameSite: "Lax",
