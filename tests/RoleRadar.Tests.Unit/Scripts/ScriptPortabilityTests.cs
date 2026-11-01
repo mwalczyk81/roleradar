@@ -145,4 +145,29 @@ public sealed class ScriptPortabilityTests
         var scriptPath = Path.Combine(repoRoot, "scripts", "check-tools-release.ps1");
         Assert.True(File.Exists(scriptPath), $"check-tools-release.ps1 not found at: {scriptPath}");
     }
+
+    [Fact]
+    public void ReviewGate_RequiresWebSmoke_PassedAtLeastOne_AndSkippedZero()
+    {
+        var repoRoot = FindRepoRoot();
+        var scriptPath = Path.Combine(repoRoot, "scripts", "review-gate.ps1");
+        var content = File.ReadAllText(scriptPath);
+
+        // Review gate must parse test summary counts and forbid false-pass on test skips
+        Assert.Contains("smokePassed -ge 1", content);
+        Assert.Contains("smokeSkipped -eq 0", content);
+        Assert.Contains("$gateResults.WebSmoke = \"FAIL\"", content);
+    }
+
+    [Fact]
+    public void WebContainerSmokeTests_FailsInCi_WhenDockerUnavailable()
+    {
+        var repoRoot = FindRepoRoot();
+        var testFilePath = Path.Combine(repoRoot, "tests", "RoleRadar.Tests.Integration", "Containers", "WebContainerSmokeTests.cs");
+        var content = File.ReadAllText(testFilePath);
+
+        // When in CI, unavailable Docker must fail the test, not skip it
+        Assert.Contains("Environment.GetEnvironmentVariable(\"CI\")", content);
+        Assert.Contains("Assert.Fail", content);
+    }
 }

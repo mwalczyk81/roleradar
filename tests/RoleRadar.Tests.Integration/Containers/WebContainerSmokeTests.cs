@@ -29,6 +29,11 @@ public sealed class WebContainerSmokeTests
     {
         if (!await IsDockerAvailableAsync())
         {
+            if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("CI")))
+            {
+                Assert.Fail("Docker CLI/daemon is unavailable in CI environment.");
+            }
+
             Assert.Skip("Docker CLI/daemon is unavailable.");
         }
 

@@ -67,6 +67,7 @@ jobs:
               - 'web/**'
               - 'package.json'
               - 'pnpm-lock.yaml'
+              - 'tests/RoleRadar.Tests.Integration/Containers/**'
             contracts:
               - 'contracts/**'
 
@@ -255,7 +256,7 @@ jobs:
 
       - name: Run full test suite (Unit, Architecture, Contract, Integration) with Coverage
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
-        run: dotnet test RoleRadar.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults
+        run: dotnet test RoleRadar.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults --filter "FullyQualifiedName!~WebContainer"
 
       - name: Verify dev stack safety canary remains untouched
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
@@ -350,7 +351,7 @@ jobs:
       - name: Run launched-host test suites against container images
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.images == 'true'
         shell: pwsh
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-images.ps1
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-images.ps1 -CliImage roleradar-cli:local -McpImage roleradar-mcp:local -IdentityImage roleradar-identity:local -WebImage roleradar-web:local -NoBuild
 
   web:
     name: Web (Build, Lint & Test)

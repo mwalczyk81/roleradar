@@ -183,10 +183,21 @@ try {
 
     # 8. Web container smoke test
     $smokeOutput = & dotnet test tests/RoleRadar.Tests.Integration -c Release --no-build --filter "FullyQualifiedName~WebContainer" 2>&1
-    if ($LASTEXITCODE -eq 0) {
+    $smokePassed = 0
+    $smokeSkipped = -1
+    $smokeFailed = -1
+    foreach ($line in $smokeOutput) {
+        if ($line -match 'Failed:\s+(\d+),\s+Passed:\s+(\d+),\s+Skipped:\s+(\d+)') {
+            $smokeFailed = [int]$Matches[1]
+            $smokePassed = [int]$Matches[2]
+            $smokeSkipped = [int]$Matches[3]
+        }
+    }
+    if ($LASTEXITCODE -eq 0 -and $smokeFailed -eq 0 -and $smokePassed -ge 1 -and $smokeSkipped -eq 0) {
         $gateResults.WebSmoke = "PASS"
     } else {
-        Write-Warning "Web container smoke test failed: $smokeOutput"
+        $gateResults.WebSmoke = "FAIL"
+        Write-Warning "Web container smoke test failed or skipped (passed=$smokePassed, skipped=$smokeSkipped, exit=$LASTEXITCODE): $($smokeOutput -join "`n")"
     }
 
     # Cleanup review images
