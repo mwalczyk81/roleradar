@@ -6,35 +6,31 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
     groups:
       nuget-minor-patch:
         update-types:
           - "minor"
           - "patch"
 
+  # Digest bumps are not minor/patch updates, so a minor/patch group never matches them.
+  # Group everything per ecosystem and let CI (image build + smoke test) judge the result.
+  # One entry for both directories so the same base image is a single PR, not one per directory.
   - package-ecosystem: "docker"
-    directory: "/"
+    directories:
+      - "/"
+      - "/deploy"
     schedule:
       interval: "weekly"
     cooldown:
       default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
     groups:
-      docker-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
-
-  - package-ecosystem: "docker"
-    directory: "/deploy"
-    schedule:
-      interval: "weekly"
-    cooldown:
-      default-days: 7
-    groups:
-      docker-minor-patch:
-        update-types:
-          - "minor"
-          - "patch"
+      docker:
+        patterns:
+          - "*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -42,20 +38,47 @@ updates:
       interval: "weekly"
     cooldown:
       default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
     groups:
       actions-minor-patch:
         update-types:
           - "minor"
           - "patch"
 
+  # The pre-commit repo tags changed shape (v0.23.3 to 0.24.0), which defeats update-type matching.
   - package-ecosystem: "pre-commit"
     directory: "/"
     schedule:
       interval: "weekly"
     cooldown:
       default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
     groups:
-      pre-commit-minor-patch:
+      pre-commit:
+        patterns:
+          - "*"
+
+  # pnpm workspace: root (Nx, scripts) and web/. Dependabot reads pnpm-lock.yaml through the npm ecosystem.
+  - package-ecosystem: "npm"
+    directories:
+      - "/"
+      - "/web"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      npm-minor-patch:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # 005b stays on React Router v7 (spec FR-001) although 8.x exists; revisit with its own spec.
+      - dependency-name: "react-router"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@react-router/*"
+        update-types: ["version-update:semver-major"]
