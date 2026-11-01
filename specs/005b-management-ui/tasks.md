@@ -157,17 +157,17 @@ description: "Task list for Feature 005b Management UI implementation"
 ### Tests for User Story 5 (MANDATORY - Test-First per Principle II) ⚠️
 > **NOTE: Write these tests FIRST and verify they FAIL before implementation.**
 
-- [ ] T046 [P] [US5] Route loader test for `GET /applications` in `web/tests/routes/applications.loader.test.ts` asserting deduplicated concurrent lookups for distinct posting and company IDs bounded by page size with request caching (expected to fail before implementation)
-- [ ] T047 [P] [US5] Route action tests for `POST /applications` (`CreateApplicationRequestDto`: `postingId`, `appliedDate`, `tailoredResumeVariant`, `targetCompensation`) and `POST /applications/:id/events` (`AppendApplicationEventRequestDto`: `eventType`, `eventDate`, `notes`) in `web/tests/routes/applications.action.test.ts` (expected to fail before implementation)
-- [ ] T048 [P] [US5] Axe accessibility check for applications list, detail, and timeline in `web/tests/routes/applications.a11y.test.ts` in both light and dark themes (expected to fail before implementation)
+- [x] T046 [P] [US5] Route loader test for `GET /applications` in `web/tests/routes/applications.loader.test.ts` asserting deduplicated concurrent lookups for distinct posting and company IDs bounded by page size with request caching (expected to fail before implementation)
+- [x] T047 [P] [US5] Route action tests for `POST /applications` (`RecordApplicationRequestDto`: `postingId`, `submittedDate`, `resumeVariant`, `desiredSalaryMin`, `desiredSalaryMax`, `desiredSalaryCurrency`, `targetStartDate`, `resumePointer`, `confirmationCode`, `overrideDecided`, `overrideReason`) and `POST /applications/:id/events` (`AppendApplicationEventRequestDto`: `eventType`, `eventDate`, `notes`, `eventSource`) in `web/tests/routes/applications.action.test.ts` (expected to fail before implementation)
+- [x] T048 [P] [US5] Axe accessibility check for applications list, detail, and timeline in `web/tests/routes/applications.a11y.test.ts` in both light and dark themes (expected to fail before implementation)
 
 ### Implementation for User Story 5
 
-- [ ] T049 [US5] Implement bounded deduplicated concurrent name resolution helper in `web/app/lib/application-context.server.ts` extracting unique `postingId`s and `companyId`s from current page slice, executing parallel `Promise.all` GET requests, and caching results for the request
-- [ ] T050 [US5] Implement applications list route loader and page in `web/app/routes/applications._index.tsx` calling `GET /api/v1/applications`, resolving names via `resolveApplicationContext`, and rendering `web/app/ds/components/src/layout/AppShell.jsx` and `web/app/ds/components/src/data/DataTable.jsx`
-- [ ] T051 [US5] Implement create application dialog component in `web/app/components/CreateApplicationDialog.tsx` prompting for `appliedDate` (ISO UTC), optional `tailoredResumeVariant`, and optional `targetCompensation`, with hidden `_csrf` and `postingId`
-- [ ] T052 [US5] Implement application creation server action in `web/app/routes/applications.new.tsx` or `web/app/routes/postings.$id.tsx` issuing `POST /api/v1/applications` and redirecting to the created application detail
-- [ ] T053 [US5] Implement application detail route loader, timeline view, and append event action in `web/app/routes/applications.$id.tsx` rendering `ApplicationDetailDto` events in `web/app/ds/components/src/layout/AppShell.jsx` and handling `POST /api/v1/applications/{id}/events`
+- [x] T049 [US5] Implement bounded deduplicated concurrent name resolution helper in `web/app/lib/application-context.server.ts` extracting unique `postingId`s and `companyId`s from current page slice, executing parallel `Promise.all` GET requests, and caching results for the request
+- [x] T050 [US5] Implement applications list route loader and page in `web/app/routes/applications._index.tsx` calling `GET /api/v1/applications`, resolving names via `resolveApplicationContext`, and rendering `web/app/ds/components/src/layout/AppShell.jsx` and `web/app/ds/components/src/data/DataTable.jsx`
+- [x] T051 [US5] Implement create application dialog component in `web/app/components/CreateApplicationDialog.tsx` prompting for `submittedDate` (YYYY-MM-DD), `resumeVariant` (`tailored`, `as_is`, `ic_framed`), optional `desiredSalaryMin`, `desiredSalaryMax`, `desiredSalaryCurrency`, optional `targetStartDate`, `resumePointer`, `confirmationCode`, showing `overrideDecided` and `overrideReason` when the posting requires an override (`screened_out`, `closed`), with hidden `_csrf` and `postingId`
+- [x] T052 [US5] Implement application creation server action in `web/app/routes/postings.$id.tsx` issuing `POST /api/v1/applications` and revalidating the posting to applied
+- [x] T053 [US5] Implement application detail route loader, timeline view, and append event action in `web/app/routes/applications.$id.tsx` rendering `ApplicationDetailDto` events in `web/app/ds/components/src/layout/AppShell.jsx` and handling `POST /api/v1/applications/{id}/events`
 
 **Checkpoint**: User Story 5 is functional and testable independently.
 

@@ -45,6 +45,14 @@ let nextCompanyResponseStatus: number | null = null;
 let nextCompanyResponseBody: unknown = null;
 let lastCompaniesQueryReceived: Record<string, string> = {};
 
+let currentApplicationStatus = "applied";
+let currentApplicationEvents: Array<{ eventType: string; eventDate: string; notes: string | null }> = [
+  { eventType: "applied", eventDate: "2026-10-31", notes: "Initial application submitted" },
+];
+let nextApplicationResponseStatus: number | null = null;
+let nextApplicationResponseBody: unknown = null;
+let lastApplicationsQueryReceived: Record<string, string> = {};
+
 test.beforeAll(async () => {
   const mockOidcConfig = new client.Configuration(
     {
@@ -298,6 +306,133 @@ test.beforeAll(async () => {
             categoryTags: currentCompanyCategoryTags,
             careerSources: currentCompanyCareerSources,
             versionToken: currentCompanyVersionToken,
+          })
+        );
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/v1/applications" && req.method === "GET") {
+      lastApplicationsQueryReceived = Object.fromEntries(url.searchParams.entries());
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
+          items: [
+            {
+              id: "app-e2e-1",
+              postingId: "post-e2e-1",
+              companyId: "comp-e2e-1",
+              status: currentApplicationStatus,
+              appliedAt: "2026-10-31",
+              events: currentApplicationEvents,
+            },
+          ],
+          totalCount: 1,
+          limit: 25,
+          offset: 0,
+        })
+      );
+      return;
+    }
+
+    if (url.pathname === "/api/v1/applications/app-e2e-1" && req.method === "GET") {
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
+          id: "app-e2e-1",
+          postingId: "post-e2e-1",
+          companyId: "comp-e2e-1",
+          status: currentApplicationStatus,
+          appliedAt: "2026-10-31",
+          events: currentApplicationEvents,
+        })
+      );
+      return;
+    }
+
+    if (url.pathname === "/api/v1/applications" && req.method === "POST") {
+      let bodyStr = "";
+      req.on("data", (chunk) => {
+        bodyStr += chunk;
+      });
+      req.on("end", () => {
+        if (nextApplicationResponseStatus !== null) {
+          const status = nextApplicationResponseStatus;
+          const body = nextApplicationResponseBody;
+          nextApplicationResponseStatus = null;
+          nextApplicationResponseBody = null;
+          res.writeHead(status);
+          res.end(JSON.stringify(body));
+          return;
+        }
+
+        const payload = JSON.parse(bodyStr || "{}");
+        currentPostingDisposition = "applied";
+        currentApplicationStatus = "applied";
+        currentApplicationEvents = [
+          {
+            eventType: "applied",
+            eventDate: payload.submittedDate || "2026-10-31",
+            notes: "Application submitted",
+          },
+        ];
+
+        res.writeHead(201);
+        res.end(
+          JSON.stringify({
+            id: "app-e2e-1",
+            postingId: payload.postingId || "post-e2e-1",
+            companyId: "comp-e2e-1",
+            status: "applied",
+            appliedAt: payload.submittedDate || "2026-10-31",
+            events: currentApplicationEvents,
+          })
+        );
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/v1/applications/app-e2e-1/events" && req.method === "POST") {
+      let bodyStr = "";
+      req.on("data", (chunk) => {
+        bodyStr += chunk;
+      });
+      req.on("end", () => {
+        if (nextApplicationResponseStatus !== null) {
+          const status = nextApplicationResponseStatus;
+          const body = nextApplicationResponseBody;
+          nextApplicationResponseStatus = null;
+          nextApplicationResponseBody = null;
+          res.writeHead(status);
+          res.end(JSON.stringify(body));
+          return;
+        }
+
+        const payload = JSON.parse(bodyStr || "{}");
+        const eventType = payload.eventType || "follow_up";
+        currentApplicationEvents.push({
+          eventType,
+          eventDate: payload.eventDate || "2026-11-01",
+          notes: payload.notes || null,
+        });
+
+        if (eventType === "offer_accepted" || eventType === "offer_declined" || eventType === "withdrawn") {
+          currentApplicationStatus = "closed";
+          currentPostingDisposition = "closed";
+        } else if (eventType === "rejected") {
+          currentApplicationStatus = "rejected";
+          currentPostingDisposition = "rejected";
+        }
+
+        res.writeHead(200);
+        res.end(
+          JSON.stringify({
+            id: "app-e2e-1",
+            postingId: "post-e2e-1",
+            companyId: "comp-e2e-1",
+            status: currentApplicationStatus,
+            appliedAt: "2026-10-31",
+            events: currentApplicationEvents,
           })
         );
       });
@@ -1317,5 +1452,380 @@ test.describe("Company Management (Real Chromium)", () => {
     expect(await page.locator("script:has-text('hostile-xss')").count()).toBe(0);
     expect(await page.locator("iframe").count()).toBe(0);
     expect(await page.locator("a[href*='javascript:']").count()).toBe(0);
+  });
+
+  test.describe("Application Management (Real Chromium)", () => {
+    test.beforeEach(() => {
+      currentPostingDisposition = "lead";
+      currentApplicationStatus = "applied";
+      currentApplicationEvents = [
+        { eventType: "applied", eventDate: "2026-10-31", notes: "Initial application submitted" },
+      ];
+      nextApplicationResponseStatus = null;
+      nextApplicationResponseBody = null;
+    });
+
+    test("loads /applications list with API stubbed, asserting only status, limit, offset are sent, zero CSP violations and axe zero serious/critical in light and dark", async ({
+      page,
+      context,
+    }) => {
+      const cspViolations: string[] = [];
+      page.on("console", (msg) => {
+        if (msg.text().includes("Content Security Policy") || msg.text().includes("violates")) {
+          cspViolations.push(msg.text());
+        }
+      });
+
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/applications?status=applied&limit=25&offset=0&bad=param&sort=foo`, { waitUntil: "networkidle" });
+
+      await expect(page.getByRole("heading", { name: "Applications", level: 1 })).toBeVisible();
+      await expect(page.getByText("Principal Engineer")).toBeVisible();
+      await expect(page.getByText("Acme Cloud Services").first()).toBeVisible();
+
+      // Verify only status, limit, offset were sent
+      expect(lastApplicationsQueryReceived.status).toBe("applied");
+      expect(lastApplicationsQueryReceived.limit).toBe("25");
+      expect(lastApplicationsQueryReceived.offset).toBe("0");
+      expect(lastApplicationsQueryReceived.bad).toBeUndefined();
+      expect(lastApplicationsQueryReceived.sort).toBeUndefined();
+
+      await checkAxeInThemes(page);
+      expect(cspViolations).toEqual([]);
+    });
+
+    test("loads /applications/:id detail with API stubbed, asserting zero CSP violations and axe zero serious/critical in light and dark", async ({
+      page,
+      context,
+    }) => {
+      const cspViolations: string[] = [];
+      page.on("console", (msg) => {
+        if (msg.text().includes("Content Security Policy") || msg.text().includes("violates")) {
+          cspViolations.push(msg.text());
+        }
+      });
+
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/applications/app-e2e-1`, { waitUntil: "networkidle" });
+
+      await expect(page.getByRole("heading", { name: /Application: Principal Engineer/i, level: 1 })).toBeVisible();
+      await expect(page.getByText("Initial application submitted")).toBeVisible();
+
+      await checkAxeInThemes(page);
+      expect(cspViolations).toEqual([]);
+    });
+
+    test("submits create application dialog on /postings/:id: page updates posting badge to applied, create button disappears, dialog closes, URL remains clean", async ({
+      page,
+      context,
+    }) => {
+      currentPostingDisposition = "scored";
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/postings/post-e2e-1`, { waitUntil: "networkidle" });
+
+      // Create Application button is visible for 'scored' disposition
+      const createBtn = page.getByRole("button", { name: "Create Application" });
+      await expect(createBtn).toBeVisible();
+      await createBtn.click();
+
+      // Dialog opens
+      const modal = page.getByRole("dialog");
+      await expect(modal).toBeVisible();
+      await expect(page.getByText("Create Job Application")).toBeVisible();
+
+      // Fill and submit
+      await page.getByLabel("Submission Date *").fill("2026-10-31");
+      await page.getByLabel("Desired Min").fill("190000");
+      await page.getByLabel("Desired Max").fill("220000");
+      await page.getByRole("button", { name: "Record Application" }).click();
+
+      // URL remains clean
+      expect(page.url()).toBe(`${baseUrl}/postings/post-e2e-1`);
+
+      // Dialog closed
+      await expect(modal).not.toBeVisible();
+
+      // Posting badge updated to Applied (tone: success)
+      const badge = page.getByTestId("disposition-badge");
+      await expect(badge).toHaveText("Applied");
+      expect(await badge.getAttribute("data-tone")).toBe("success");
+
+      // Create Application button is no longer shown for applied postings
+      await expect(page.getByRole("button", { name: "Create Application" })).not.toBeVisible();
+    });
+
+    test("submits create application with 400 validation error: shows inline error in dialog without closing or raw JSON", async ({
+      page,
+      context,
+    }) => {
+      currentPostingDisposition = "scored";
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/postings/post-e2e-1`, { waitUntil: "networkidle" });
+
+      nextApplicationResponseStatus = 400;
+      nextApplicationResponseBody = {
+        errorCode: "VALIDATION_FAILED",
+        message: "Validation failed.",
+        details: [{ field: "submittedDate", message: "Invalid submission date format." }],
+      };
+
+      await page.getByRole("button", { name: "Create Application" }).click();
+      const modal = page.getByRole("dialog");
+      await expect(modal).toBeVisible();
+      await expect(page.getByText("Create Job Application")).toBeVisible();
+
+      await page.getByRole("button", { name: "Record Application" }).click();
+
+      // Inline field error is visible
+      await expect(page.getByText("Invalid submission date format.")).toBeVisible();
+      // Dialog remains open
+      await expect(modal).toBeVisible();
+      expect(page.url()).toBe(`${baseUrl}/postings/post-e2e-1`);
+    });
+
+    test("submits create application with 409 conflict: shows Toast with Reload action which refetches", async ({
+      page,
+      context,
+    }) => {
+      currentPostingDisposition = "scored";
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/postings/post-e2e-1`, { waitUntil: "networkidle" });
+
+      nextApplicationResponseStatus = 409;
+      nextApplicationResponseBody = {
+        errorCode: "CONCURRENCY_CONFLICT",
+        message: "An application already exists for this posting or state transition conflict occurred.",
+      };
+
+      await page.getByRole("button", { name: "Create Application" }).click();
+      const modal = page.getByRole("dialog");
+      await expect(modal).toBeVisible();
+
+      await page.getByRole("button", { name: "Record Application" }).click();
+
+      // Conflict toast displayed
+      await expect(page.getByText("Concurrency Conflict")).toBeVisible();
+      const reloadBtn = page.getByRole("button", { name: "Reload" });
+      await expect(reloadBtn).toBeVisible();
+
+      await reloadBtn.click();
+      await expect(page.getByText("Concurrency Conflict")).not.toBeVisible();
+    });
+
+    test("submits create application with bad CSRF: shows inline error without raw response", async ({
+      page,
+      context,
+    }) => {
+      currentPostingDisposition = "scored";
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/postings/post-e2e-1`, { waitUntil: "networkidle" });
+
+      await page.getByRole("button", { name: "Create Application" }).click();
+      const modal = page.getByRole("dialog");
+      await expect(modal).toBeVisible();
+
+      await page.evaluate(() => {
+        const modalEl = document.querySelector('[role="dialog"]');
+        const input = modalEl?.querySelector('input[name="_csrf"]') as HTMLInputElement;
+        if (input) {
+          input.value = "tampered-bad-csrf";
+        }
+      });
+
+      await page.getByRole("button", { name: "Record Application" }).click();
+
+      const alert = modal.getByRole("alert");
+      await expect(alert).toBeVisible();
+      await expect(alert).toContainText("Invalid or missing CSRF token");
+      expect(page.url()).toBe(`${baseUrl}/postings/post-e2e-1`);
+    });
+
+    test("submits create application with API 401: redirects into authorization flow, avoids loop, and clears session cookie", async ({
+      page,
+      context,
+    }) => {
+      currentPostingDisposition = "scored";
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/postings/post-e2e-1`, { waitUntil: "networkidle" });
+
+      nextApplicationResponseStatus = 401;
+      nextApplicationResponseBody = {
+        errorCode: "UNAUTHORIZED",
+        message: "Access token expired",
+      };
+
+      await page.getByRole("button", { name: "Create Application" }).click();
+      const modal = page.getByRole("dialog");
+      await expect(modal).toBeVisible();
+
+      await page.getByRole("button", { name: "Record Application" }).click();
+
+      await page.waitForURL(/identity:5001|connect\/authorize/);
+      expect(page.url()).toContain("identity:5001");
+
+      const cookies = await context.cookies();
+      const sessionCookie = cookies.find((c) => c.name === "__Host-roleradar_session");
+      expect(!sessionCookie || sessionCookie.value === "").toBe(true);
+    });
+
+    test("submits append event dialog on /applications/:id: updates timeline, updates status badge if terminal event, dialog closes, URL remains clean", async ({
+      page,
+      context,
+    }) => {
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/applications/app-e2e-1`, { waitUntil: "networkidle" });
+
+      await page.getByRole("button", { name: "Append Event" }).first().click();
+      const modal = page.getByRole("dialog");
+      await expect(modal).toBeVisible();
+      await expect(page.getByText("Append Timeline Event")).toBeVisible();
+
+      await page.getByLabel("Event Type *").selectOption("rejected");
+      await page.getByLabel("Event Date *").fill("2026-11-01");
+      await page.getByLabel("Notes & Details").fill("Received standard rejection email after phone screen.");
+      await modal.getByRole("button", { name: "Append Event" }).click();
+
+      // Dialog closes
+      await expect(modal).not.toBeVisible();
+      expect(page.url()).toBe(`${baseUrl}/applications/app-e2e-1`);
+
+      // Timeline contains the new event
+      await expect(page.getByText("Received standard rejection email after phone screen.")).toBeVisible();
+
+      // Terminal event updated status badge to Rejected
+      const badge = page.getByTestId("application-status-badge");
+      await expect(badge).toHaveText("Rejected");
+    });
+
+    test("submits append event with 400 validation error: shows inline error in modal without closing", async ({
+      page,
+      context,
+    }) => {
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/applications/app-e2e-1`, { waitUntil: "networkidle" });
+
+      nextApplicationResponseStatus = 400;
+      nextApplicationResponseBody = {
+        errorCode: "VALIDATION_FAILED",
+        message: "Invalid event date.",
+        details: [{ field: "eventDate", message: "Event date must be formatted as YYYY-MM-DD." }],
+      };
+
+      await page.getByRole("button", { name: "Append Event" }).first().click();
+      const modal = page.getByRole("dialog");
+      await expect(modal).toBeVisible();
+
+      await modal.getByRole("button", { name: "Append Event" }).click();
+
+      await expect(page.getByText("Event date must be formatted as YYYY-MM-DD.")).toBeVisible();
+      await expect(modal).toBeVisible();
+    });
+
+    test("submits append event with 409 conflict: shows conflict Toast with Reload action", async ({
+      page,
+      context,
+    }) => {
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/applications/app-e2e-1`, { waitUntil: "networkidle" });
+
+      nextApplicationResponseStatus = 409;
+      nextApplicationResponseBody = {
+        errorCode: "CONCURRENCY_CONFLICT",
+        message: "This application was updated concurrently.",
+      };
+
+      await page.getByRole("button", { name: "Append Event" }).first().click();
+      const modal = page.getByRole("dialog");
+      await expect(modal).toBeVisible();
+
+      await modal.getByRole("button", { name: "Append Event" }).click();
+
+      await expect(page.getByText("Concurrency Conflict")).toBeVisible();
+      const reloadBtn = page.getByRole("button", { name: "Reload" });
+      await expect(reloadBtn).toBeVisible();
+      await reloadBtn.click();
+      await expect(page.getByText("Concurrency Conflict")).not.toBeVisible();
+    });
+
+    test("submits append event with bad CSRF: shows error alert without raw response", async ({
+      page,
+      context,
+    }) => {
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/applications/app-e2e-1`, { waitUntil: "networkidle" });
+
+      await page.getByRole("button", { name: "Append Event" }).first().click();
+      const modal = page.getByRole("dialog");
+      await expect(modal).toBeVisible();
+
+      await page.evaluate(() => {
+        const modalEl = document.querySelector('[role="dialog"]');
+        const input = modalEl?.querySelector('input[name="_csrf"]') as HTMLInputElement;
+        if (input) {
+          input.value = "tampered-bad-csrf";
+        }
+      });
+
+      await modal.getByRole("button", { name: "Append Event" }).click();
+
+      const alert = modal.getByRole("alert");
+      await expect(alert).toBeVisible();
+      await expect(alert).toContainText("Invalid or missing CSRF token");
+    });
+
+    test("submits append event with API 401: redirects into authorization flow, avoids loop, and clears session cookie", async ({
+      page,
+      context,
+    }) => {
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/applications/app-e2e-1`, { waitUntil: "networkidle" });
+
+      nextApplicationResponseStatus = 401;
+      nextApplicationResponseBody = {
+        errorCode: "UNAUTHORIZED",
+        message: "Session token expired",
+      };
+
+      await page.getByRole("button", { name: "Append Event" }).first().click();
+      const modal = page.getByRole("dialog");
+      await expect(modal).toBeVisible();
+
+      await modal.getByRole("button", { name: "Append Event" }).click();
+
+      await page.waitForURL(/identity:5001|connect\/authorize/);
+      expect(page.url()).toContain("identity:5001");
+
+      const cookies = await context.cookies();
+      const sessionCookie = cookies.find((c) => c.name === "__Host-roleradar_session");
+      expect(!sessionCookie || sessionCookie.value === "").toBe(true);
+    });
+
+    test("hostile application data with <script> and HTML renders safely as plain text without script execution", async ({
+      page,
+      context,
+    }) => {
+      let alertTriggered = false;
+      page.on("dialog", async (dialog) => {
+        alertTriggered = true;
+        await dialog.dismiss();
+      });
+
+      currentPostingTitle = "<script>alert('hostile-posting-title')</script>";
+      currentApplicationEvents = [
+        {
+          eventType: "applied",
+          eventDate: "2026-10-31",
+          notes: "<iframe src='evil.com'></iframe><script>alert('hostile-app-notes')</script>",
+        },
+      ];
+
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/applications/app-e2e-1`, { waitUntil: "networkidle" });
+
+      expect(alertTriggered).toBe(false);
+      expect(await page.locator("script:has-text('hostile-posting-title')").count()).toBe(0);
+      expect(await page.locator("script:has-text('hostile-app-notes')").count()).toBe(0);
+      expect(await page.locator("iframe").count()).toBe(0);
+    });
   });
 });

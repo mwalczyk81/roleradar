@@ -1,0 +1,79 @@
+using System.Text.Json;
+using RoleRadar.Domain.Tracking;
+using Xunit;
+
+namespace RoleRadar.Tests.Contract;
+
+public sealed class ApplicationEnumsContractSnapshotTests
+{
+    private static readonly JsonSerializerOptions IndentedJsonOptions = new()
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+    };
+
+    private sealed record ApplicationEnumsSnapshot(
+        IReadOnlyList<string> Outcomes,
+        IReadOnlyList<string> EventTypes,
+        IReadOnlyList<string> ResumeVariants);
+
+    [Fact]
+    public async Task ApplicationEnums_MatchesCommittedContractSnapshot()
+    {
+        var repoRoot = FindRepoRoot();
+        var snapshotPath = Path.Combine(repoRoot, "contracts", "application-enums.json");
+
+        var outcomes = Enum.GetValues<ApplicationOutcome>()
+            .Select(o => o.ToSnakeCase())
+            .ToArray();
+
+        var eventTypes = Enum.GetValues<ApplicationEventType>()
+            .Select(e => e.ToSnakeCase())
+            .ToArray();
+
+        var resumeVariants = Enum.GetValues<ResumeVariant>()
+            .Select(r => r.ToSnakeCase())
+            .ToArray();
+
+        var snapshotObj = new ApplicationEnumsSnapshot(
+            Outcomes: outcomes,
+            EventTypes: eventTypes,
+            ResumeVariants: resumeVariants);
+
+        var generatedJson = JsonSerializer.Serialize(snapshotObj, IndentedJsonOptions) + Environment.NewLine;
+
+        if (!File.Exists(snapshotPath))
+        {
+            await File.WriteAllTextAsync(snapshotPath, generatedJson);
+            Assert.Fail($"Committed snapshot did not exist at '{snapshotPath}'. Created it now; commit it to source control.");
+        }
+
+        var committedJson = await File.ReadAllTextAsync(snapshotPath);
+
+        var normalizedCommitted = committedJson.Replace("\r\n", "\n").Trim();
+        var normalizedGenerated = generatedJson.Replace("\r\n", "\n").Trim();
+
+        if (normalizedCommitted != normalizedGenerated)
+        {
+            await File.WriteAllTextAsync(snapshotPath, generatedJson);
+            Assert.Fail(
+                $"Committed application enums snapshot at '{snapshotPath}' differs from Domain ApplicationOutcome/ApplicationEventType/ResumeVariant enums. " +
+                "The file has been updated with generated content; review and commit it.");
+        }
+    }
+
+    private static string FindRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "RoleRadar.sln")))
+            {
+                return dir.FullName;
+            }
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate RoleRadar.sln from test base directory.");
+    }
+}

@@ -7,12 +7,14 @@ import { createApiClient, mapApiError } from "../lib/api-client.server.js";
 import { validateCsrfToken } from "../lib/csrf.server.js";
 import { AppShell, Badge, Card, Button, Toast, ToastRegion } from "../ui.js";
 import { TransitionPostingDialog } from "../components/TransitionPostingDialog.jsx";
+import { CreateApplicationDialog } from "../components/CreateApplicationDialog.jsx";
 import { ArrowLeft } from "lucide-react";
 import { formatDate } from "../lib/format-date.js";
 import {
   DISPOSITION_METADATA,
   RESURFACE_POLICY_VALUES,
   RESURFACE_POLICY_LABELS,
+  canCreateApplication,
   type PostingDisposition,
   type ResurfacePolicy,
 } from "../lib/dispositions.js";
@@ -22,10 +24,13 @@ export type PostingDetailDto = components["schemas"]["PostingDetailDto"];
 export type CriterionDto = components["schemas"]["CriterionDto"];
 export type PostingSignalDto = components["schemas"]["PostingSignalDto"];
 export type AssessmentNoteSummaryDto = components["schemas"]["AssessmentNoteSummaryDto"];
+export type ApplicationDetailDto = components["schemas"]["ApplicationDetailDto"];
 
 export interface TransitionActionSuccess {
   ok: true;
+  intent?: string;
   posting: PostingDetailDto;
+  application?: ApplicationDetailDto;
 }
 
 export interface TransitionActionError {
@@ -107,6 +112,119 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
 
+  const intent = String(formData.get("intent") || "");
+  const client = createApiClient(session.accessToken);
+
+  if (intent === "create_application") {
+    const submittedDate = String(formData.get("submittedDate") || "").trim();
+    const resumeVariant = String(formData.get("resumeVariant") || "tailored").trim();
+    const currentDisposition = String(formData.get("currentDisposition") || "").trim();
+    const requiresOverride = canCreateApplication(currentDisposition).requiresOverride;
+    const overrideDecided = formData.get("overrideDecided") === "on" || formData.get("overrideDecided") === "true";
+    const overrideReasonRaw = formData.get("overrideReason");
+    const overrideReason = typeof overrideReasonRaw === "string" && overrideReasonRaw.trim().length > 0 ? overrideReasonRaw.trim() : null;
+
+    if (requiresOverride && !overrideReason) {
+      return data<TransitionActionError>(
+        {
+          ok: false,
+          errorCode: "VALIDATION_FAILED",
+          message: "Reopen-and-apply override requires an explicit non-empty overrideReason.",
+          fieldErrors: { overrideReason: "Override reason is required for decided postings." },
+        },
+        { status: 400 }
+      );
+    }
+
+    const desiredSalaryMinRaw = formData.get("desiredSalaryMin");
+    const desiredSalaryMin = desiredSalaryMinRaw && !isNaN(Number(desiredSalaryMinRaw)) ? Number(desiredSalaryMinRaw) : null;
+    const desiredSalaryMaxRaw = formData.get("desiredSalaryMax");
+    const desiredSalaryMax = desiredSalaryMaxRaw && !isNaN(Number(desiredSalaryMaxRaw)) ? Number(desiredSalaryMaxRaw) : null;
+    const desiredSalaryCurrency = String(formData.get("desiredSalaryCurrency") || "USD").trim() || "USD";
+    const targetStartDate = String(formData.get("targetStartDate") || "").trim() || null;
+    const resumePointer = String(formData.get("resumePointer") || "").trim() || null;
+    const confirmationCode = String(formData.get("confirmationCode") || "").trim() || null;
+
+    const appRes = await client.POST("/api/v1/applications", {
+      body: {
+        postingId,
+        submittedDate,
+        resumeVariant,
+        desiredSalaryMin,
+        desiredSalaryMax,
+        desiredSalaryCurrency,
+        targetStartDate,
+        resumePointer,
+        confirmationCode,
+        overrideDecided,
+        overrideReason,
+      },
+    });
+
+    await assertApiOk(appRes.response, request, session.sessionId);
+
+    if (appRes.response.status === 409) {
+      return data<TransitionActionError>(
+        {
+          ok: false,
+          isConflict: true,
+          errorCode: "CONCURRENCY_CONFLICT",
+          message: "An application already exists for this posting or conflict occurred.",
+        },
+        { status: 409 }
+      );
+    }
+
+    if (appRes.response.status === 400) {
+      const errorMap = mapApiError(appRes.error, 400);
+      return data<TransitionActionError>(
+        {
+          ok: false,
+          errorCode: errorMap.errorCode,
+          message: errorMap.message,
+          fieldErrors: errorMap.fieldErrors,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (appRes.error || !appRes.data) {
+      const errorMap = mapApiError(appRes.error, appRes.response.status);
+      return data<TransitionActionError>(
+        {
+          ok: false,
+          errorCode: errorMap.errorCode,
+          message: errorMap.message,
+          fieldErrors: errorMap.fieldErrors,
+        },
+        { status: appRes.response.status || 500 }
+      );
+    }
+
+    // Refetch the updated posting to reflect the "applied" disposition transition
+    const updatedPostingRes = await client.GET("/api/v1/postings/{id}", {
+      params: { path: { id: postingId } },
+    });
+
+    await assertApiOk(updatedPostingRes.response, request, session.sessionId);
+
+    if (updatedPostingRes.error || !updatedPostingRes.data) {
+      throw new Response("Failed to fetch updated posting", {
+        status: updatedPostingRes.response.status || 500,
+      });
+    }
+
+    return data<TransitionActionSuccess>(
+      {
+        ok: true,
+        intent: "create_application",
+        posting: updatedPostingRes.data,
+        application: appRes.data,
+      },
+      { status: 200 }
+    );
+  }
+
   const toDisposition = String(formData.get("toDisposition") || "");
   const reason = String(formData.get("reason") || "");
   const versionToken = String(formData.get("versionToken") || "");
@@ -166,7 +284,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
 
-  const client = createApiClient(session.accessToken);
   const transitionRes = await client.POST("/api/v1/postings/{id}/transition", {
     params: { path: { id: postingId } },
     body: {
@@ -234,6 +351,7 @@ export default function PostingDetail() {
   const revalidator = useRevalidator();
 
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
+  const [isAppDialogOpen, setIsAppDialogOpen] = React.useState(false);
   const [conflictToastDismissed, setConflictToastDismissed] = React.useState(false);
 
   const { theme, toggleTheme } = useTheme();
@@ -341,6 +459,18 @@ export default function PostingDetail() {
                 >
                   Score: {posting.score}
                 </span>
+              ) : null}
+              {canCreateApplication(posting.disposition).allowed ? (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setConflictToastDismissed(false);
+                    setIsAppDialogOpen(true);
+                  }}
+                >
+                  Create Application
+                </Button>
               ) : null}
               <Button
                 variant="primary"
@@ -481,6 +611,17 @@ export default function PostingDetail() {
           versionToken={posting.versionToken}
           csrfToken={loaderData.csrfToken}
           criteria={loaderData.criteria}
+          fetcher={fetcher}
+        />
+
+        {/* Create Application Dialog */}
+        <CreateApplicationDialog
+          open={isAppDialogOpen}
+          onClose={() => setIsAppDialogOpen(false)}
+          postingId={posting.id}
+          postingTitle={posting.title}
+          currentDisposition={posting.disposition}
+          csrfToken={loaderData.csrfToken}
           fetcher={fetcher}
         />
 

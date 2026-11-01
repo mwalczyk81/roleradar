@@ -10,4 +10,6 @@ export default [
   route("postings/:id", "routes/postings.$id.tsx"),
   route("companies", "routes/companies._index.tsx"),
   route("companies/:id", "routes/companies.$id.tsx"),
+  route("applications", "routes/applications._index.tsx"),
+  route("applications/:id", "routes/applications.$id.tsx"),
 ] satisfies RouteConfig;

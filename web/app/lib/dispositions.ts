@@ -97,3 +97,23 @@ export function getValidTransitionTargets(
     return true;
   });
 }
+
+/**
+ * Determines whether an application can be created for a posting given its current disposition.
+ * 'applied': already applied, forbidden.
+ * 'rejected': must be reopened to lead first via disposition transition, forbidden.
+ * 'screened_out' | 'closed': decided, allowed ONLY with overrideDecided=true and overrideReason.
+ * 'lead' | 'scored' | 'unscored': actively in flight, allowed without override.
+ */
+export function canCreateApplication(
+  disposition: PostingDisposition | string
+): { allowed: boolean; requiresOverride: boolean } {
+  const normalized = String(disposition).toLowerCase();
+  if (normalized === "applied" || normalized === "rejected") {
+    return { allowed: false, requiresOverride: false };
+  }
+  if (normalized === "screened_out" || normalized === "closed") {
+    return { allowed: true, requiresOverride: true };
+  }
+  return { allowed: true, requiresOverride: false };
+}

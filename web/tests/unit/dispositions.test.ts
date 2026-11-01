@@ -6,6 +6,7 @@ import {
   RESURFACE_POLICY_VALUES,
   TRANSITIONS,
   getValidTransitionTargets,
+  canCreateApplication,
   DISPOSITION_METADATA,
 } from "../../app/lib/dispositions.js";
 
@@ -80,5 +81,22 @@ describe("dispositions.ts contract drift guard", () => {
     expect(DISPOSITION_METADATA.screened_out.tone).toBe("neutral");
     expect(DISPOSITION_METADATA.closed.tone).toBe("neutral");
     expect(DISPOSITION_METADATA.unscored.tone).toBe("neutral");
+  });
+
+  it("evaluates canCreateApplication correctly based on API semantic invariants", () => {
+    // Applied: cannot apply again
+    expect(canCreateApplication("applied")).toEqual({ allowed: false, requiresOverride: false });
+
+    // Rejected: cannot apply without explicit reopen first
+    expect(canCreateApplication("rejected")).toEqual({ allowed: false, requiresOverride: false });
+
+    // Decided dispositions (screened_out, closed): allowed ONLY with override
+    expect(canCreateApplication("screened_out")).toEqual({ allowed: true, requiresOverride: true });
+    expect(canCreateApplication("closed")).toEqual({ allowed: true, requiresOverride: true });
+
+    // Active dispositions (lead, scored, unscored): allowed without override
+    expect(canCreateApplication("lead")).toEqual({ allowed: true, requiresOverride: false });
+    expect(canCreateApplication("scored")).toEqual({ allowed: true, requiresOverride: false });
+    expect(canCreateApplication("unscored")).toEqual({ allowed: true, requiresOverride: false });
   });
 });
