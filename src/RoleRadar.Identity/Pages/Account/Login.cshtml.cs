@@ -131,6 +131,7 @@ public class LoginModel(
         if (result.RequiresTwoFactor)
         {
             RequiresTwoFactor = true;
+            ModelState.Clear();
             return Page();
         }
 

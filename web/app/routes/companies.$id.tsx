@@ -1,0 +1,898 @@
+import * as React from "react";
+import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
+import { useLoaderData, useFetcher, useRevalidator, Link, data } from "react-router";
+import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
+import { validateCsrfToken } from "../lib/csrf.server.js";
+import { createApiClient } from "../lib/api-client.server.js";
+import { useTheme } from "../lib/use-theme.js";
+import { getNavItems } from "../lib/nav.js";
+import {
+  COMPANY_STATUS_OPTIONS,
+  OWNERSHIP_TYPE_OPTIONS,
+  COMPANY_STATUS_METADATA,
+  isCompanyStatus,
+} from "../lib/company-enums.js";
+import {
+  AppShell,
+  Card,
+  Input,
+  Select,
+  Textarea,
+  Button,
+  Badge,
+  Alert,
+  Toast,
+  ToastRegion,
+} from "../ui.js";
+import type { components } from "../../../contracts/client/api-types.js";
+
+type CompanyDetailDto = components["schemas"]["CompanyDetailDto"];
+type CareerSourceDto = components["schemas"]["CareerSourceDto"];
+type UpdateCareerSourceRequestDto = components["schemas"]["UpdateCareerSourceRequestDto"];
+type UpdateCompanyRequestDto = components["schemas"]["UpdateCompanyRequestDto"];
+
+export interface CompanyActionData {
+  ok: boolean;
+  company?: CompanyDetailDto;
+  conflict?: boolean;
+  error?: string;
+  fieldErrors?: Record<string, string>;
+}
+
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  const session = await requireUserSession(request);
+  const companyId = params.id;
+
+  if (!companyId) {
+    throw new Response("Missing company ID", { status: 400 });
+  }
+
+  const client = createApiClient(session.accessToken);
+  const { data: company, response, error } = await client.GET("/api/v1/companies/{id}", {
+    params: {
+      path: { id: companyId },
+    },
+  });
+
+  await assertApiOk(response, request, session.sessionId, { notFoundMessage: "Company not found" });
+
+  if (error || !company) {
+    throw new Response(error?.message || "Failed to load company", {
+      status: response.status || 500,
+    });
+  }
+
+  return {
+    company,
+    csrfToken: session.csrfToken,
+    userLabel: session.ownerUsername || "Signed in",
+  };
+}
+
+export async function action({ request, params }: ActionFunctionArgs) {
+  const session = await requireUserSession(request);
+  const companyId = params.id;
+
+  if (!companyId) {
+    return data<CompanyActionData>(
+      { ok: false, error: "Missing company ID" },
+      { status: 400 }
+    );
+  }
+
+  const formData = await request.formData();
+  const csrfToken = formData.get("_csrf");
+
+  if (!validateCsrfToken(csrfToken?.toString(), session.csrfToken)) {
+    return data<CompanyActionData>(
+      { ok: false, error: "Invalid CSRF token: operation not authorized." },
+      { status: 403 }
+    );
+  }
+
+  const name = formData.get("name")?.toString()?.trim() || "";
+  const status = formData.get("status")?.toString()?.trim() || null;
+  const ownershipType = formData.get("ownershipType")?.toString()?.trim() || null;
+  const description = formData.get("description")?.toString()?.trim() || null;
+  const headquarters = formData.get("headquarters")?.toString()?.trim() || null;
+  const versionToken = formData.get("versionToken")?.toString()?.trim() || null;
+
+  let categoryTags: string[] | null = null;
+  const rawTags = formData.get("categoryTags");
+  if (typeof rawTags === "string" && rawTags.trim()) {
+    try {
+      const parsed = JSON.parse(rawTags);
+      if (Array.isArray(parsed)) {
+        categoryTags = parsed.filter((t): t is string => typeof t === "string");
+      }
+    } catch {
+      categoryTags = null;
+    }
+  }
+
+  let careerSources: UpdateCareerSourceRequestDto[] | null = null;
+  const rawSources = formData.get("careerSources");
+  if (typeof rawSources === "string" && rawSources.trim()) {
+    try {
+      const parsed = JSON.parse(rawSources);
+      if (Array.isArray(parsed)) {
+        careerSources = parsed as UpdateCareerSourceRequestDto[];
+      }
+    } catch {
+      careerSources = null;
+    }
+  }
+
+  const updateBody: UpdateCompanyRequestDto = {
+    name,
+    status,
+    ownershipType,
+    description,
+    headquarters,
+    categoryTags,
+    careerSources,
+    versionToken,
+  };
+
+  const client = createApiClient(session.accessToken);
+  const { data: updatedCompany, response, error } = await client.PATCH("/api/v1/companies/{id}", {
+    params: {
+      path: { id: companyId },
+    },
+    body: updateBody,
+  });
+
+  await assertApiOk(response, request, session.sessionId);
+
+  if (response.status === 409) {
+    return data<CompanyActionData>(
+      {
+        ok: false,
+        conflict: true,
+        error: error?.message || "This company was modified by another operation. Please reload to see latest data.",
+      },
+      { status: 409 }
+    );
+  }
+
+  if (response.status === 400 || error) {
+    const fieldErrors: Record<string, string> = {};
+    if (error && "details" in error && Array.isArray(error.details)) {
+      for (const item of error.details) {
+        if (item && item.field) {
+          fieldErrors[item.field] = item.issue;
+        }
+      }
+    }
+    return data<CompanyActionData>(
+      {
+        ok: false,
+        error: error?.message || "Validation failed.",
+        fieldErrors,
+      },
+      { status: 400 }
+    );
+  }
+
+  return data<CompanyActionData>(
+    {
+      ok: true,
+      company: updatedCompany,
+    },
+    { status: 200 }
+  );
+}
+
+function isValidHttpUrl(urlString: string): boolean {
+  try {
+    const u = new URL(urlString);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+export default function CompanyDetail() {
+  const loaderData = useLoaderData<typeof loader>();
+  const fetcher = useFetcher<CompanyActionData>();
+  const revalidator = useRevalidator();
+  const { theme, toggleTheme } = useTheme();
+
+  const [conflictToastDismissed, setConflictToastDismissed] = React.useState(false);
+  const [successToastDismissed, setSuccessToastDismissed] = React.useState(false);
+
+  // Form local state initialized from current company data
+  const company = fetcher.data?.ok && fetcher.data.company ? fetcher.data.company : loaderData.company;
+
+  const [name, setName] = React.useState(company.name);
+  const [status, setStatus] = React.useState(company.status);
+  const [ownershipType, setOwnershipType] = React.useState(company.ownershipType);
+  const [description, setDescription] = React.useState(company.description || "");
+  const [headquarters, setHeadquarters] = React.useState(company.headquarters || "");
+  const [categoryTags, setCategoryTags] = React.useState<string[]>(company.categoryTags || []);
+  const [newTagInput, setNewTagInput] = React.useState("");
+
+  const [careerSources, setCareerSources] = React.useState<UpdateCareerSourceRequestDto[]>(
+    (company.careerSources || []).map((cs: CareerSourceDto) => ({
+      sourceType: cs.sourceType,
+      atsProvider: cs.atsProvider,
+      atsTenant: cs.atsTenant,
+      sourceUrl: cs.sourceUrl,
+      fetchMethod: cs.fetchMethod,
+      active: cs.active,
+    }))
+  );
+
+  // New career source input state
+  const [newSourceUrl, setNewSourceUrl] = React.useState("");
+  const [newAtsProvider, setNewAtsProvider] = React.useState("custom");
+  const [newAtsTenant, setNewAtsTenant] = React.useState("");
+  const [newFetchMethod, setNewFetchMethod] = React.useState("api");
+
+  // Keep form in sync when company is reloaded or refreshed
+  React.useEffect(() => {
+    setName(company.name);
+    setStatus(company.status);
+    setOwnershipType(company.ownershipType);
+    setDescription(company.description || "");
+    setHeadquarters(company.headquarters || "");
+    setCategoryTags(company.categoryTags || []);
+    setCareerSources(
+      (company.careerSources || []).map((cs: CareerSourceDto) => ({
+        sourceType: cs.sourceType,
+        atsProvider: cs.atsProvider,
+        atsTenant: cs.atsTenant,
+        sourceUrl: cs.sourceUrl,
+        fetchMethod: cs.fetchMethod,
+        active: cs.active,
+      }))
+    );
+  }, [company]);
+
+  const navItems = getNavItems("/companies");
+
+  const signOutForm = (
+    <form method="post" action="/auth/logout">
+      <input type="hidden" name="_csrf" value={loaderData.csrfToken} />
+      <Button type="submit" variant="ghost" size="sm">
+        Sign Out
+      </Button>
+    </form>
+  );
+
+  const isConflict = Boolean(
+    fetcher.data?.ok === false && fetcher.data?.conflict && !conflictToastDismissed
+  );
+  const isSuccess = Boolean(
+    fetcher.data?.ok === true && !successToastDismissed
+  );
+
+  const fieldErrors = fetcher.data?.fieldErrors || {};
+
+  const handleAddTag = () => {
+    const trimmed = newTagInput.trim();
+    if (trimmed && !categoryTags.includes(trimmed)) {
+      setCategoryTags([...categoryTags, trimmed]);
+      setNewTagInput("");
+    }
+  };
+
+  const handleRemoveTag = (tagToRemove: string) => {
+    setCategoryTags(categoryTags.filter((t) => t !== tagToRemove));
+  };
+
+  const handleAddCareerSource = () => {
+    const trimmedUrl = newSourceUrl.trim();
+    if (!trimmedUrl) return;
+
+    const newSource: UpdateCareerSourceRequestDto = {
+      sourceType: "ats",
+      atsProvider: newAtsProvider.trim() || "custom",
+      atsTenant: newAtsTenant.trim() || null,
+      sourceUrl: trimmedUrl,
+      fetchMethod: newFetchMethod,
+      active: true,
+    };
+
+    setCareerSources([...careerSources, newSource]);
+    setNewSourceUrl("");
+    setNewAtsTenant("");
+  };
+
+  const handleRemoveCareerSource = (indexToRemove: number) => {
+    setCareerSources(careerSources.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const statusMeta = isCompanyStatus(status)
+    ? COMPANY_STATUS_METADATA[status]
+    : {
+        label: String(status ?? "—"),
+        tone: "neutral" as const,
+      };
+
+  return (
+    <AppShell
+      brand="RoleRadar"
+      title={company.name}
+      userLabel={loaderData.userLabel}
+      signOut={signOutForm}
+      navItems={navItems}
+      linkComponent={Link}
+      theme={theme}
+      onThemeToggle={toggleTheme}
+    >
+      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+        {/* Breadcrumb Navigation */}
+        <div>
+          <Link
+            to="/companies"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "var(--ds-space-1)",
+              color: "var(--ds-text-secondary)",
+              textDecoration: "none",
+              fontSize: "var(--ds-text-sm)",
+            }}
+          >
+            <ArrowLeft size={16} />
+            <span>Back to Companies</span>
+          </Link>
+        </div>
+
+        {/* Company Header Card */}
+        <Card style={{ padding: "var(--ds-space-5)" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: "var(--ds-space-4)",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <h2 style={{ margin: 0, fontSize: "var(--ds-text-2xl)", fontWeight: 700 }}>
+                {company.name}
+              </h2>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "var(--ds-space-2)",
+                  marginTop: "var(--ds-space-2)",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                }}
+              >
+                <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>
+                {company.headquarters ? (
+                  <span style={{ color: "var(--ds-text-secondary)", fontSize: "var(--ds-text-sm)" }}>
+                    {company.headquarters}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* General Action Error Banner */}
+        {fetcher.data?.ok === false && fetcher.data?.error && !fetcher.data?.conflict ? (
+          <Alert variant="danger" title="Error Saving Changes">
+            {fetcher.data.error}
+          </Alert>
+        ) : null}
+
+        {/* Edit Company Form */}
+        <Card style={{ padding: "var(--ds-space-6)" }}>
+          <fetcher.Form
+            method="post"
+            style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-5)" }}
+          >
+            <input type="hidden" name="_csrf" value={loaderData.csrfToken} />
+            <input type="hidden" name="versionToken" value={company.versionToken} />
+            <input type="hidden" name="categoryTags" value={JSON.stringify(categoryTags)} />
+            <input type="hidden" name="careerSources" value={JSON.stringify(careerSources)} />
+
+            <h2 style={{ margin: 0, fontSize: "var(--ds-text-lg)", fontWeight: 600 }}>
+              Edit Company Profile
+            </h2>
+
+            {/* Name Field */}
+            <div>
+              <label
+                htmlFor="company-name-input"
+                style={{
+                  display: "block",
+                  fontSize: "var(--ds-text-sm)",
+                  fontWeight: 600,
+                  marginBottom: "var(--ds-space-1)",
+                }}
+              >
+                Company Name *
+              </label>
+              <Input
+                id="company-name-input"
+                name="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                aria-invalid={Boolean(fieldErrors.name)}
+                aria-describedby={fieldErrors.name ? "company-name-error" : undefined}
+              />
+              {fieldErrors.name ? (
+                <div
+                  id="company-name-error"
+                  style={{
+                    color: "var(--ds-danger-text)",
+                    fontSize: "var(--ds-text-xs)",
+                    marginTop: "var(--ds-space-1)",
+                  }}
+                >
+                  {fieldErrors.name}
+                </div>
+              ) : null}
+            </div>
+
+            {/* Status and Ownership Type Grid */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))",
+                gap: "var(--ds-space-4)",
+              }}
+            >
+              <div>
+                <label
+                  htmlFor="company-status-select"
+                  style={{
+                    display: "block",
+                    fontSize: "var(--ds-text-sm)",
+                    fontWeight: 600,
+                    marginBottom: "var(--ds-space-1)",
+                  }}
+                >
+                  Status *
+                </label>
+                <Select
+                  id="company-status-select"
+                  name="status"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  aria-invalid={Boolean(fieldErrors.status)}
+                  aria-describedby={fieldErrors.status ? "company-status-error" : undefined}
+                >
+                  {COMPANY_STATUS_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Select>
+                {fieldErrors.status ? (
+                  <div
+                    id="company-status-error"
+                    style={{
+                      color: "var(--ds-danger-text)",
+                      fontSize: "var(--ds-text-xs)",
+                      marginTop: "var(--ds-space-1)",
+                    }}
+                  >
+                    {fieldErrors.status}
+                  </div>
+                ) : null}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="company-ownership-select"
+                  style={{
+                    display: "block",
+                    fontSize: "var(--ds-text-sm)",
+                    fontWeight: 600,
+                    marginBottom: "var(--ds-space-1)",
+                  }}
+                >
+                  Ownership Type
+                </label>
+                <Select
+                  id="company-ownership-select"
+                  name="ownershipType"
+                  value={ownershipType}
+                  onChange={(e) => setOwnershipType(e.target.value)}
+                  aria-invalid={Boolean(fieldErrors.ownershipType)}
+                  aria-describedby={fieldErrors.ownershipType ? "company-ownership-error" : undefined}
+                >
+                  {OWNERSHIP_TYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Select>
+                {fieldErrors.ownershipType ? (
+                  <div
+                    id="company-ownership-error"
+                    style={{
+                      color: "var(--ds-danger-text)",
+                      fontSize: "var(--ds-text-xs)",
+                      marginTop: "var(--ds-space-1)",
+                    }}
+                  >
+                    {fieldErrors.ownershipType}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {/* Headquarters Field */}
+            <div>
+              <label
+                htmlFor="company-hq-input"
+                style={{
+                  display: "block",
+                  fontSize: "var(--ds-text-sm)",
+                  fontWeight: 600,
+                  marginBottom: "var(--ds-space-1)",
+                }}
+              >
+                Headquarters
+              </label>
+              <Input
+                id="company-hq-input"
+                name="headquarters"
+                value={headquarters}
+                onChange={(e) => setHeadquarters(e.target.value)}
+                placeholder="e.g. San Francisco, CA"
+              />
+            </div>
+
+            {/* Description Field */}
+            <div>
+              <label
+                htmlFor="company-desc-input"
+                style={{
+                  display: "block",
+                  fontSize: "var(--ds-text-sm)",
+                  fontWeight: 600,
+                  marginBottom: "var(--ds-space-1)",
+                }}
+              >
+                Description
+              </label>
+              <Textarea
+                id="company-desc-input"
+                name="description"
+                rows={3}
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Overview of company, tech focus, domain, etc."
+              />
+            </div>
+
+            {/* Category Tags List Editor */}
+            <div>
+              <label
+                htmlFor="category-tag-input"
+                style={{
+                  display: "block",
+                  fontSize: "var(--ds-text-sm)",
+                  fontWeight: 600,
+                  marginBottom: "var(--ds-space-1)",
+                }}
+              >
+                Category Tags
+              </label>
+              <div
+                style={{
+                  display: "flex",
+                  gap: "var(--ds-space-2)",
+                  flexWrap: "wrap",
+                  alignItems: "center",
+                  marginBottom: "var(--ds-space-2)",
+                }}
+              >
+                {categoryTags.map((tag) => (
+                  <span
+                    key={tag}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "var(--ds-space-1)",
+                      backgroundColor: "var(--ds-surface-hover)",
+                      padding: "var(--ds-space-1) var(--ds-space-2)",
+                      borderRadius: "var(--ds-radius-sm)",
+                      fontSize: "var(--ds-text-xs)",
+                    }}
+                  >
+                    <span>{tag}</span>
+                    <button
+                      type="button"
+                      aria-label={`Remove category tag ${tag}`}
+                      onClick={() => handleRemoveTag(tag)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "var(--ds-text-secondary)",
+                        cursor: "pointer",
+                        padding: 0,
+                        fontSize: "var(--ds-text-xs)",
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: "var(--ds-space-2)", maxWidth: "24rem" }}>
+                <Input
+                  id="category-tag-input"
+                  placeholder="New tag..."
+                  value={newTagInput}
+                  onChange={(e) => setNewTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddTag();
+                    }
+                  }}
+                />
+                <Button type="button" variant="secondary" onClick={handleAddTag}>
+                  <Plus size={16} />
+                  <span>Add Tag</span>
+                </Button>
+              </div>
+            </div>
+
+            {/* Career Sources List Editor */}
+            <div>
+              <div
+                style={{
+                  fontSize: "var(--ds-text-sm)",
+                  fontWeight: 600,
+                  marginBottom: "var(--ds-space-2)",
+                }}
+              >
+                Career Sources
+              </div>
+
+              {careerSources.length === 0 ? (
+                <div
+                  style={{
+                    color: "var(--ds-text-secondary)",
+                    fontSize: "var(--ds-text-sm)",
+                    marginBottom: "var(--ds-space-3)",
+                  }}
+                >
+                  No career sources registered.
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "var(--ds-space-2)",
+                    marginBottom: "var(--ds-space-4)",
+                  }}
+                >
+                  {careerSources.map((source, idx) => {
+                    const isHttp = isValidHttpUrl(source.sourceUrl || "");
+                    return (
+                      <div
+                        key={idx}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "var(--ds-space-3)",
+                          borderRadius: "var(--ds-radius-md)",
+                          border: "var(--ds-border-thin) solid var(--ds-border)",
+                          gap: "var(--ds-space-3)",
+                        }}
+                      >
+                        <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-1)" }}>
+                          <div style={{ fontWeight: 600, fontSize: "var(--ds-text-sm)" }}>
+                            {isHttp ? (
+                              <a
+                                href={source.sourceUrl || "#"}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  color: "var(--ds-primary)",
+                                  textDecoration: "underline",
+                                }}
+                              >
+                                {source.sourceUrl}
+                              </a>
+                            ) : (
+                              <span>{source.sourceUrl}</span>
+                            )}
+                          </div>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: "var(--ds-space-2)",
+                              fontSize: "var(--ds-text-xs)",
+                              color: "var(--ds-text-secondary)",
+                            }}
+                          >
+                            <span>Provider: {source.atsProvider || "custom"}</span>
+                            {source.atsTenant ? <span>Tenant: {source.atsTenant}</span> : null}
+                            <span>Method: {source.fetchMethod}</span>
+                          </div>
+                        </div>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`Remove career source ${source.sourceUrl}`}
+                          onClick={() => handleRemoveCareerSource(idx)}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Add Career Source subform */}
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--ds-space-3)",
+                  padding: "var(--ds-space-4)",
+                  backgroundColor: "var(--ds-surface)",
+                  borderRadius: "var(--ds-radius-md)",
+                  border: "var(--ds-border-thin) solid var(--ds-border)",
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: "var(--ds-text-xs)", textTransform: "uppercase" }}>
+                  Add Career Source
+                </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
+                    gap: "var(--ds-space-3)",
+                  }}
+                >
+                  <div>
+                    <label
+                      htmlFor="new-source-url"
+                      style={{
+                        display: "block",
+                        fontSize: "var(--ds-text-xs)",
+                        marginBottom: "var(--ds-space-1)",
+                      }}
+                    >
+                      Career Page / ATS URL *
+                    </label>
+                    <Input
+                      id="new-source-url"
+                      placeholder="https://jobs.example.com"
+                      value={newSourceUrl}
+                      onChange={(e) => setNewSourceUrl(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="new-ats-provider"
+                      style={{
+                        display: "block",
+                        fontSize: "var(--ds-text-xs)",
+                        marginBottom: "var(--ds-space-1)",
+                      }}
+                    >
+                      ATS Provider
+                    </label>
+                    <Input
+                      id="new-ats-provider"
+                      placeholder="e.g. greenhouse, lever, custom"
+                      value={newAtsProvider}
+                      onChange={(e) => setNewAtsProvider(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="new-ats-tenant"
+                      style={{
+                        display: "block",
+                        fontSize: "var(--ds-text-xs)",
+                        marginBottom: "var(--ds-space-1)",
+                      }}
+                    >
+                      Tenant / Org Slug
+                    </label>
+                    <Input
+                      id="new-ats-tenant"
+                      placeholder="Optional tenant slug"
+                      value={newAtsTenant}
+                      onChange={(e) => setNewAtsTenant(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="new-fetch-method"
+                      style={{
+                        display: "block",
+                        fontSize: "var(--ds-text-xs)",
+                        marginBottom: "var(--ds-space-1)",
+                      }}
+                    >
+                      Fetch Method
+                    </label>
+                    <Select
+                      id="new-fetch-method"
+                      value={newFetchMethod}
+                      onChange={(e) => setNewFetchMethod(e.target.value)}
+                    >
+                      <option value="api">API</option>
+                      <option value="browser">Browser</option>
+                      <option value="blocked">Blocked</option>
+                    </Select>
+                  </div>
+                </div>
+
+                <div>
+                  <Button type="button" variant="secondary" onClick={handleAddCareerSource}>
+                    <Plus size={16} />
+                    <span>Add Source</span>
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            {/* Submit Action Controls */}
+            <div style={{ display: "flex", gap: "var(--ds-space-3)", marginTop: "var(--ds-space-2)" }}>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={fetcher.state !== "idle"}
+              >
+                {fetcher.state !== "idle" ? "Saving..." : "Save Changes"}
+              </Button>
+            </div>
+          </fetcher.Form>
+        </Card>
+
+        {/* 409 Concurrency Conflict Toast Notification */}
+        {isConflict ? (
+          <ToastRegion>
+            <Toast
+              title="Concurrency Conflict"
+              variant="warning"
+              message={
+                fetcher.data?.error ||
+                "This company was modified by another operation. Please reload to see the latest changes."
+              }
+              action={{
+                label: "Reload",
+                onClick: () => {
+                  setConflictToastDismissed(true);
+                  revalidator.revalidate();
+                },
+              }}
+              onDismiss={() => setConflictToastDismissed(true)}
+            />
+          </ToastRegion>
+        ) : null}
+
+        {/* Success Toast Notification */}
+        {isSuccess ? (
+          <ToastRegion>
+            <Toast
+              title="Changes Saved"
+              variant="success"
+              message="Company profile has been updated successfully."
+              onDismiss={() => setSuccessToastDismissed(true)}
+            />
+          </ToastRegion>
+        ) : null}
+      </div>
+    </AppShell>
+  );
+}

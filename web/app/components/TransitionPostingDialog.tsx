@@ -1,0 +1,286 @@
+import React from "react";
+import type { FetcherWithComponents } from "react-router";
+import { Modal, Select, Input, Button } from "../ui.js";
+import type { TransitionActionData } from "../routes/postings.$id.js";
+import {
+  type PostingDisposition,
+  type ResurfacePolicy,
+  DISPOSITION_METADATA,
+  RESURFACE_POLICY_VALUES,
+  RESURFACE_POLICY_LABELS,
+  getValidTransitionTargets,
+} from "../lib/dispositions.js";
+
+export interface TransitionPostingDialogProps {
+  open: boolean;
+  onClose: () => void;
+  postingId: string;
+  currentDisposition: string;
+  currentResurfacePolicy?: string;
+  versionToken: string;
+  csrfToken: string;
+  criteria?: Array<{ id: string; name: string }>;
+  fetcher?: FetcherWithComponents<TransitionActionData>;
+}
+
+export function TransitionPostingDialog({
+  open,
+  onClose,
+  postingId,
+  currentDisposition,
+  currentResurfacePolicy = "never",
+  versionToken,
+  csrfToken,
+  criteria = [],
+  fetcher,
+}: TransitionPostingDialogProps) {
+  const validRules = getValidTransitionTargets(
+    currentDisposition as PostingDisposition,
+    currentResurfacePolicy as ResurfacePolicy
+  );
+
+  const initialTarget = validRules.length > 0 ? validRules[0].to : "";
+  const [selectedDisposition, setSelectedDisposition] = React.useState(initialTarget);
+  const [reason, setReason] = React.useState("");
+  const [criterionId, setCriterionId] = React.useState("");
+  const [resurfacePolicy, setResurfacePolicy] = React.useState("");
+  const [overrideReason, setOverrideReason] = React.useState("");
+
+  // Update selected target when current disposition or open state changes
+  React.useEffect(() => {
+    if (open) {
+      const targets = getValidTransitionTargets(
+        currentDisposition as PostingDisposition,
+        currentResurfacePolicy as ResurfacePolicy
+      );
+      if (targets.length > 0) {
+        setSelectedDisposition(targets[0].to);
+      } else {
+        setSelectedDisposition("");
+      }
+      setReason("");
+      setCriterionId("");
+      setResurfacePolicy("");
+      setOverrideReason("");
+    }
+  }, [open, currentDisposition, currentResurfacePolicy]);
+
+  // When transition succeeds, automatically close the dialog
+  React.useEffect(() => {
+    if (open && fetcher?.data?.ok === true && fetcher.state === "idle") {
+      onClose();
+    }
+  }, [open, fetcher?.data, fetcher?.state, onClose]);
+
+  if (!open) return null;
+
+  const isSubmitting = fetcher?.state === "submitting" || fetcher?.state === "loading";
+  const actionData = fetcher?.data;
+  const generalError = actionData?.ok === false ? actionData.message : null;
+  const fieldErrors = actionData?.ok === false ? actionData.fieldErrors : undefined;
+
+  const FormComponent = fetcher?.Form || "form";
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Change Posting Disposition"
+      ariaLabel="Change Posting Disposition"
+      width={520}
+    >
+      <FormComponent
+        method="post"
+        action={`/postings/${postingId}`}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--ds-space-4)",
+          fontFamily: "var(--ds-font-sans)",
+        }}
+      >
+        <input type="hidden" name="_csrf" value={csrfToken} />
+        <input type="hidden" name="versionToken" value={versionToken} />
+
+        {generalError ? (
+          <div
+            role="alert"
+            style={{
+              padding: "var(--ds-space-3)",
+              backgroundColor: "var(--ds-danger-subtle)",
+              color: "var(--ds-danger-text)",
+              borderRadius: "var(--ds-radius-md)",
+              fontSize: "var(--ds-text-sm)",
+              fontWeight: "var(--ds-weight-medium)",
+            }}
+          >
+            {generalError}
+          </div>
+        ) : null}
+
+        <div style={{ fontSize: "var(--ds-text-sm)", color: "var(--ds-text-secondary)" }}>
+          Current disposition:{" "}
+          <strong>
+            {DISPOSITION_METADATA[currentDisposition as PostingDisposition]?.label ?? currentDisposition}
+          </strong>
+        </div>
+
+        {validRules.length === 0 ? (
+          <div
+            style={{
+              padding: "var(--ds-space-3)",
+              backgroundColor: "var(--ds-surface-hover)",
+              color: "var(--ds-text-secondary)",
+              borderRadius: "var(--ds-radius-md)",
+              fontSize: "var(--ds-text-sm)",
+            }}
+          >
+            No disposition transitions are permitted from current disposition &apos;{currentDisposition}&apos; with policy &apos;{currentResurfacePolicy}&apos;.
+          </div>
+        ) : (
+          <>
+            {/* Target disposition */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-1)" }}>
+              <label
+                htmlFor="toDisposition"
+                style={{ fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-medium)" }}
+              >
+                Target Disposition *
+              </label>
+              <Select
+                id="toDisposition"
+                name="toDisposition"
+                value={selectedDisposition}
+                onChange={(e) => setSelectedDisposition(e.target.value)}
+                required
+                invalid={Boolean(fieldErrors?.toDisposition)}
+              >
+                {validRules.map((rule) => {
+                  const meta = DISPOSITION_METADATA[rule.to];
+                  return (
+                    <option key={rule.to} value={rule.to}>
+                      {meta?.label ?? rule.to} ({rule.to})
+                    </option>
+                  );
+                })}
+              </Select>
+              {fieldErrors?.toDisposition ? (
+                <span style={{ color: "var(--ds-danger-text)", fontSize: "var(--ds-text-xs)" }}>
+                  {fieldErrors.toDisposition}
+                </span>
+              ) : null}
+            </div>
+
+            {/* Reason */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-1)" }}>
+              <label
+                htmlFor="reason"
+                style={{ fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-medium)" }}
+              >
+                Reason *
+              </label>
+              <Input
+                id="reason"
+                name="reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Reason for changing disposition..."
+                required
+                invalid={Boolean(fieldErrors?.reason)}
+              />
+              {fieldErrors?.reason ? (
+                <span style={{ color: "var(--ds-danger-text)", fontSize: "var(--ds-text-xs)" }}>
+                  {fieldErrors.reason}
+                </span>
+              ) : null}
+            </div>
+
+            {/* Criterion */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-1)" }}>
+              <label
+                htmlFor="criterionId"
+                style={{ fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-medium)" }}
+              >
+                Associated Criterion (Optional)
+              </label>
+              <Select
+                id="criterionId"
+                name="criterionId"
+                value={criterionId}
+                onChange={(e) => setCriterionId(e.target.value)}
+              >
+                <option value="">None</option>
+                {criteria.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            {/* Resurface Policy */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-1)" }}>
+              <label
+                htmlFor="resurfacePolicy"
+                style={{ fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-medium)" }}
+              >
+                Resurface Policy (Optional)
+              </label>
+              <Select
+                id="resurfacePolicy"
+                name="resurfacePolicy"
+                value={resurfacePolicy}
+                onChange={(e) => setResurfacePolicy(e.target.value)}
+              >
+                <option value="">Keep current policy</option>
+                {RESURFACE_POLICY_VALUES.map((pol) => (
+                  <option key={pol} value={pol}>
+                    {RESURFACE_POLICY_LABELS[pol]} ({pol})
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            {/* Override Reason */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-1)" }}>
+              <label
+                htmlFor="overrideReason"
+                style={{ fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-medium)" }}
+              >
+                Override Reason (Optional)
+              </label>
+              <Input
+                id="overrideReason"
+                name="overrideReason"
+                value={overrideReason}
+                onChange={(e) => setOverrideReason(e.target.value)}
+                placeholder="Optional override justification..."
+              />
+            </div>
+          </>
+        )}
+
+        {/* Actions */}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "var(--ds-space-3)",
+            marginTop: "var(--ds-space-3)",
+          }}
+        >
+          <Button variant="secondary" onClick={onClose} type="button">
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            type="submit"
+            disabled={isSubmitting || validRules.length === 0}
+          >
+            {isSubmitting ? "Submitting..." : "Apply Transition"}
+          </Button>
+        </div>
+      </FormComponent>
+    </Modal>
+  );
+}

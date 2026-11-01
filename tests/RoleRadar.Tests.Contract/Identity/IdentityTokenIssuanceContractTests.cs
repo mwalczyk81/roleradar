@@ -1,4 +1,7 @@
+using System.Text;
+using System.Text.Json;
 using Duende.IdentityServer.Models;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
 using RoleRadar.Identity.Configuration;
 using Xunit;
@@ -32,6 +35,7 @@ public sealed class IdentityTokenIssuanceContractTests
         Assert.True(webClient.RequirePkce, "Web client must require PKCE (RFC 7636).");
         Assert.True(webClient.RequireClientSecret, "Confidential web client must require secret.");
         Assert.Contains(GrantType.AuthorizationCode, webClient.AllowedGrantTypes);
+        Assert.True(webClient.AlwaysIncludeUserClaimsInIdToken, "roleradar-web must include user claims directly in the ID token.");
 
         // Strict lifetimes per ADR-0017
         Assert.Equal(600, webClient.AccessTokenLifetime);             // 10 minutes
@@ -45,6 +49,25 @@ public sealed class IdentityTokenIssuanceContractTests
         Assert.Contains("profile", webClient.AllowedScopes);
         Assert.Contains("roleradar.api", webClient.AllowedScopes);
         Assert.Contains("offline_access", webClient.AllowedScopes);
+    }
+
+    [Fact]
+    public void WebClient_DefaultRedirectUris_TargetPort5003CallbackAndLogout()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Clients:Web:Secret"] = "web-client-test-secret-123456789012345",
+                ["Clients:Headless:Secret"] = "headless-test-secret-123456789012345"
+            })
+            .Build();
+
+        var clients = IdentityServerConfig.GetClients(config).ToArray();
+        var webClient = clients.FirstOrDefault(c => c.ClientId == "roleradar-web");
+
+        Assert.NotNull(webClient);
+        Assert.Contains("https://localhost:5003/auth/callback", webClient.RedirectUris);
+        Assert.Contains("https://localhost:5003/auth/logout", webClient.PostLogoutRedirectUris);
     }
 
     [Fact]
@@ -135,5 +158,32 @@ public sealed class IdentityTokenIssuanceContractTests
 
         Assert.Contains(scopes, s => s.Name == "roleradar.api");
         Assert.Contains(scopes, s => s.Name == "roleradar.api.read");
+    }
+
+    [Fact]
+    public async Task CodeFlow_IssuedIdToken_ContainsPreferredUsernameClaim()
+    {
+        var (app, client, _, dbDir) = await IdentityContractTestServer.StartHostAsync();
+        try
+        {
+            var idToken = await IdentityContractTestServer.LoginAndGetIdTokenAsync(client, app.Services);
+            var parts = idToken.Split('.');
+            Assert.True(parts.Length >= 2, "Expected valid JWT format for ID token");
+
+            var payloadBytes = Base64UrlTextEncoder.Decode(parts[1]);
+            var payloadJson = Encoding.UTF8.GetString(payloadBytes);
+            using var doc = JsonDocument.Parse(payloadJson);
+
+            Assert.True(
+                doc.RootElement.TryGetProperty("preferred_username", out var preferredUsernameEl),
+                "ID token must include 'preferred_username' claim when AlwaysIncludeUserClaimsInIdToken is enabled");
+            Assert.Equal("testowner", preferredUsernameEl.GetString());
+        }
+        finally
+        {
+            await app.StopAsync();
+            await app.DisposeAsync();
+            try { Directory.Delete(dbDir, true); } catch { }
+        }
     }
 }

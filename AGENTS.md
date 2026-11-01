@@ -14,9 +14,25 @@ RoleRadar is a single-owner, local-first job-search tracker. A stdio MCP server 
 
 - Build quietly: `dotnet build RoleRadar.sln -c Release -v q --nologo -warnaserror`
 - Fast tests (Architecture + Unit + Contract): `pwsh ./scripts/test-fast.ps1`
+- Web typecheck: `pnpm --filter web run typecheck`
 - One project or test: `dotnet test tests/RoleRadar.Tests.Unit -c Release --filter "FullyQualifiedName~Name"`
 - Use the fast loop while working. Run `pwsh ./scripts/review-gate.ps1` (includes Integration) once at the end of a feature phase or when asked, and report numbers from its output, never remembered ones.
 - Never run anything against the developer's running Mongo, `docker compose down -v`, `wipe`, or `restore --force-overwrite`.
+
+## Web app (`web/`, React Router v7 SSR, Node 22)
+
+Standing rules for every web phase. A phase prompt only adds scope and contract facts.
+
+- Contract first. Field names and request shapes come from `contracts/client/api-types.ts`. Where the schema types a value as a plain string (dispositions, company status, ownership type, application statuses and event types), read the Domain enum, add a snapshot in `contracts/*.json` with a .NET drift test and a web equality test, and take the values from that module. Never invent values, DTO names or endpoints; if tasks.md disagrees with the contract, the contract wins and tasks.md gets fixed.
+- Vendored design system is copy-only (`web/app/ds`). Import components only through `web/app/ui.ts`. Do not edit `web/app/ds`.
+- No `any`, no casts to silence types; use type guards. `pnpm --filter web run typecheck` must exit 0 and runs in CI.
+- Every action: call `validateCsrfToken(...)` (timing-safe), use `data()` with typed action data, never hand-built JSON responses. Use `assertApiOk` for 401 (one re-login, no loop), 403 (`/not-authorized`) and 404. Forms use `<Form>`/`useFetcher`: 400 shows inline field errors, 409 shows the Toast with Reload (revalidate), success revalidates.
+- Treat all posting, company and application text as untrusted: React text nodes only, links only for http/https with `rel="noopener noreferrer"`.
+- Shared helpers: `formatDate` (UTC dates, no locale formatting), `useTheme`, `nav.ts` for nav items, `dispositions.ts` and `company-enums.ts` for enums. Do not copy their logic into routes.
+- Only send query parameters the API supports (postings: no sort; companies: limit and offset only). Clamp `limit` to 1..100 and `offset` to >= 0.
+- Tests first and shown failing before the implementation. Axe checks use the shared reduced-motion helper in `web/tests/e2e` so results are deterministic. Mutations get real-Chromium e2e tests (success, 400, 409, bad CSRF, 401). Fictional data only.
+- Verify with: `pnpm --filter web run typecheck`, `lint`, `test`, `build`, `test:e2e`, then `pwsh ./scripts/test-fast.ps1`, `pre-commit run --all-files`, and `pwsh ./scripts/review-gate.ps1` at the end of a phase. Report numbers from command output only, say what you could not run, and stop at the phase boundary.
+- Never read or print secrets (`web/.env.local`, `deploy/.env`). Never run anything against the developer's running stack.
 
 ## Rules
 

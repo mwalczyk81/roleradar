@@ -1,0 +1,167 @@
+/* Matt's Design System — generated from tokens.json */
+:root, [data-theme="light"] {
+  --ds-neutral-0: #ffffff;
+  --ds-neutral-50: #f8fafc;
+  --ds-neutral-100: #f1f5f9;
+  --ds-neutral-200: #e2e8f0;
+  --ds-neutral-300: #cbd5e1;
+  --ds-neutral-400: #94a3b8;
+  --ds-neutral-500: #64748b;
+  --ds-neutral-600: #475569;
+  --ds-neutral-700: #334155;
+  --ds-neutral-800: #1e293b;
+  --ds-neutral-900: #0f172a;
+  --ds-neutral-950: #020617;
+  --ds-neutral-450: #8190a6;
+  --ds-neutral-550: #58687d;
+  --ds-blue-50: #eff6ff;
+  --ds-blue-100: #dbeafe;
+  --ds-blue-200: #bfdbfe;
+  --ds-blue-300: #93c5fd;
+  --ds-blue-400: #60a5fa;
+  --ds-blue-500: #3b82f6;
+  --ds-blue-600: #2563eb;
+  --ds-blue-700: #1d4ed8;
+  --ds-blue-800: #1e40af;
+  --ds-blue-900: #1e3a8a;
+  --ds-green-50: #f0fdf4;
+  --ds-green-100: #dcfce7;
+  --ds-green-500: #22c55e;
+  --ds-green-600: #16a34a;
+  --ds-green-700: #15803d;
+  --ds-amber-50: #fffbeb;
+  --ds-amber-100: #fef3c7;
+  --ds-amber-500: #f59e0b;
+  --ds-amber-600: #d97706;
+  --ds-amber-700: #b45309;
+  --ds-red-50: #fef2f2;
+  --ds-red-100: #fee2e2;
+  --ds-red-500: #ef4444;
+  --ds-red-600: #dc2626;
+  --ds-red-700: #b91c1c;
+  --ds-bg: var(--ds-neutral-0);
+  --ds-bg-subtle: var(--ds-neutral-50);
+  --ds-surface: var(--ds-neutral-0);
+  --ds-surface-hover: var(--ds-neutral-100);
+  --ds-border: var(--ds-neutral-200);
+  --ds-border-strong: var(--ds-neutral-300);
+  --ds-text: var(--ds-neutral-900);
+  --ds-text-muted: var(--ds-neutral-500);
+  --ds-text-on-accent: var(--ds-neutral-0);
+  --ds-primary: var(--ds-blue-600);
+  --ds-primary-hover: var(--ds-blue-700);
+  --ds-primary-subtle: var(--ds-blue-50);
+  --ds-success: var(--ds-green-600);
+  --ds-success-subtle: var(--ds-green-50);
+  --ds-warning: var(--ds-amber-600);
+  --ds-warning-subtle: var(--ds-amber-50);
+  --ds-danger: var(--ds-red-600);
+  --ds-danger-subtle: var(--ds-red-50);
+  --ds-focus-ring: var(--ds-blue-500);
+  --ds-text-secondary: var(--ds-neutral-600);
+  --ds-border-control: var(--ds-neutral-450);
+  --ds-primary-solid: var(--ds-blue-600);
+  --ds-primary-solid-hover: var(--ds-blue-700);
+  --ds-primary-subtle-text: var(--ds-blue-700);
+  --ds-success-text: var(--ds-green-700);
+  --ds-warning-text: var(--ds-amber-700);
+  --ds-danger-text: var(--ds-red-700);
+  --ds-danger-solid: var(--ds-red-600);
+  --ds-shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --ds-shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+  --ds-shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -4px rgba(15, 23, 42, 0.05);
+  --ds-shadow-xl: 0 20px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.06);
+}
+[data-theme="dark"] {
+  --ds-bg: var(--ds-neutral-950);
+  --ds-bg-subtle: var(--ds-neutral-900);
+  --ds-surface: var(--ds-neutral-900);
+  --ds-surface-hover: var(--ds-neutral-800);
+  --ds-border: var(--ds-neutral-800);
+  --ds-border-strong: var(--ds-neutral-700);
+  --ds-text: var(--ds-neutral-50);
+  --ds-text-muted: var(--ds-neutral-400);
+  --ds-text-on-accent: var(--ds-neutral-0);
+  --ds-primary: var(--ds-blue-500);
+  --ds-primary-hover: var(--ds-blue-400);
+  --ds-primary-subtle: var(--ds-blue-900);
+  --ds-success: var(--ds-green-500);
+  --ds-success-subtle: #0c2a17;
+  --ds-warning: var(--ds-amber-500);
+  --ds-warning-subtle: #2e2206;
+  --ds-danger: var(--ds-red-500);
+  --ds-danger-subtle: #2c0f0f;
+  --ds-focus-ring: var(--ds-blue-400);
+  --ds-text-secondary: var(--ds-neutral-300);
+  --ds-border-control: var(--ds-neutral-550);
+  --ds-primary-solid: var(--ds-blue-600);
+  --ds-primary-solid-hover: var(--ds-blue-700);
+  --ds-primary-subtle-text: var(--ds-blue-300);
+  --ds-success-text: var(--ds-green-500);
+  --ds-warning-text: var(--ds-amber-500);
+  --ds-danger-text: var(--ds-red-500);
+  --ds-danger-solid: var(--ds-red-600);
+}
+:root {
+  --ds-space-0: 0;
+  --ds-space-1: 0.25rem;
+  --ds-space-2: 0.5rem;
+  --ds-space-3: 0.75rem;
+  --ds-space-4: 1rem;
+  --ds-space-5: 1.25rem;
+  --ds-space-6: 1.5rem;
+  --ds-space-8: 2rem;
+  --ds-space-10: 2.5rem;
+  --ds-space-12: 3rem;
+  --ds-space-16: 4rem;
+  --ds-space-20: 5rem;
+  --ds-space-24: 6rem;
+  --ds-radius-none: 0;
+  --ds-radius-sm: 0.25rem;
+  --ds-radius-md: 0.5rem;
+  --ds-radius-lg: 0.75rem;
+  --ds-radius-xl: 1rem;
+  --ds-radius-full: 9999px;
+  --ds-container-sm: 640px;
+  --ds-container-md: 768px;
+  --ds-container-lg: 1024px;
+  --ds-container-xl: 1280px;
+  --ds-control-sm: 2rem;
+  --ds-control-md: 2.5rem;
+  --ds-control-lg: 3rem;
+  --ds-border-thin: 1px;
+  --ds-border-thick: 2px;
+  --ds-text-xs: 0.75rem;
+  --ds-text-sm: 0.875rem;
+  --ds-text-base: 1rem;
+  --ds-text-lg: 1.125rem;
+  --ds-text-xl: 1.25rem;
+  --ds-text-2xl: 1.5rem;
+  --ds-text-3xl: 1.875rem;
+  --ds-text-4xl: 2.25rem;
+  --ds-weight-normal: 400;
+  --ds-weight-medium: 500;
+  --ds-weight-semibold: 600;
+  --ds-weight-bold: 700;
+  --ds-leading-tight: 1.25;
+  --ds-leading-normal: 1.5;
+  --ds-leading-relaxed: 1.7;
+  --ds-z-base: 0;
+  --ds-z-dropdown: 1000;
+  --ds-z-sticky: 1100;
+  --ds-z-overlay: 1200;
+  --ds-z-modal: 1300;
+  --ds-z-toast: 1400;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "Cascadia Code", "Fira Code", Consolas, monospace;
+}
+.ds-hero { font-family: var(--font-sans); font-size: 2.25rem; line-height: 1.1; font-weight: 700; }
+.ds-page-title { font-family: var(--font-sans); font-size: 1.875rem; line-height: 1.25; font-weight: 600; }
+.ds-section { font-family: var(--font-sans); font-size: 1.25rem; line-height: 1.25; font-weight: 600; }
+.ds-card-title { font-family: var(--font-sans); font-size: 1.125rem; line-height: 1.25; font-weight: 600; }
+.ds-body { font-family: var(--font-sans); font-size: 1rem; line-height: 1.5; font-weight: 400; }
+.ds-ui { font-family: var(--font-sans); font-size: 0.875rem; line-height: 1.5; font-weight: 400; }
+.ds-caption { font-family: var(--font-sans); font-size: 0.75rem; line-height: 1.5; font-weight: 500; letter-spacing: 0.04em; }
+.ds-code { font-family: var(--font-mono); font-size: 0.875rem; line-height: 1.5; font-weight: 400; }
+@font-face { font-family: "Inter"; src: url("fonts/inter-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 100 800; font-style: normal; font-display: swap; }

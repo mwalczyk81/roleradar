@@ -63,8 +63,8 @@ public static class IdentityServerConfig
             headlessSubject = "roleradar-headless";
         }
 
-        var webRedirectUri = configuration["Clients:Web:RedirectUri"] ?? "https://localhost:5002/signin-oidc";
-        var webPostLogoutUri = configuration["Clients:Web:PostLogoutRedirectUri"] ?? "https://localhost:5002/signout-callback-oidc";
+        var webRedirectUri = configuration["Clients:Web:RedirectUri"] ?? "https://localhost:5003/auth/callback";
+        var webPostLogoutUri = configuration["Clients:Web:PostLogoutRedirectUri"] ?? "https://localhost:5003/auth/logout";
 
         return
         [
@@ -80,6 +80,7 @@ public static class IdentityServerConfig
                 PostLogoutRedirectUris = { webPostLogoutUri },
                 AllowOfflineAccess = true,
                 AllowedScopes = { "openid", "profile", "roleradar.api", "offline_access" },
+                AlwaysIncludeUserClaimsInIdToken = true,
 
                 // Strict token and code lifetimes per ADR-0017
                 AccessTokenLifetime = 600,             // 10 minutes

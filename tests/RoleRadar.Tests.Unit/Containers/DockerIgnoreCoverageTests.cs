@@ -69,6 +69,51 @@ public sealed class DockerIgnoreCoverageTests
         Assert.True(IsIncluded(rules, "src/RoleRadar.Identity/Program.cs"));
     }
 
+    private static readonly string[] WebBuildInputExtensions = [".ts", ".tsx", ".jsx", ".json", ".css", ".woff2"];
+
+    [Fact]
+    public void DockerIgnore_AllowsEveryWebBuildInputUnderWeb()
+    {
+        var repoRoot = FindRepoRoot();
+        var rules = ParseRules(File.ReadAllLines(Path.Combine(repoRoot, ".dockerignore")));
+        var webRoot = Path.Combine(repoRoot, "web");
+
+        if (!Directory.Exists(webRoot))
+        {
+            return;
+        }
+
+        var excluded = Directory
+            .EnumerateFiles(webRoot, "*.*", SearchOption.AllDirectories)
+            .Select(path => Path.GetRelativePath(repoRoot, path).Replace('\\', '/'))
+            .Where(rel => !rel.Contains("/node_modules/", StringComparison.Ordinal)
+                       && !rel.Contains("/build/", StringComparison.Ordinal)
+                       && !rel.Contains("/dist/", StringComparison.Ordinal)
+                       && !rel.Contains("/.react-router/", StringComparison.Ordinal)
+                       && !rel.Contains("/coverage/", StringComparison.Ordinal)
+                       && !rel.Contains("/tests/", StringComparison.Ordinal))
+            .Where(rel => WebBuildInputExtensions.Contains(Path.GetExtension(rel), StringComparer.OrdinalIgnoreCase))
+            .Where(rel => !IsIncluded(rules, rel))
+            .ToList();
+
+        Assert.True(
+            excluded.Count == 0,
+            $".dockerignore excludes web build inputs from the Docker context: {string.Join(", ", excluded)}");
+    }
+
+    [Fact]
+    public void DockerIgnore_AllowsRootMonorepoManifests()
+    {
+        var repoRoot = FindRepoRoot();
+        var rules = ParseRules(File.ReadAllLines(Path.Combine(repoRoot, ".dockerignore")));
+
+        string[] requiredFiles = ["package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml", "nx.json", ".node-version"];
+        foreach (var file in requiredFiles)
+        {
+            Assert.True(IsIncluded(rules, file), $".dockerignore must allow '{file}'.");
+        }
+    }
+
     private sealed record Rule(bool Negated, Regex Pattern);
 
     private static List<Rule> ParseRules(IEnumerable<string> lines)

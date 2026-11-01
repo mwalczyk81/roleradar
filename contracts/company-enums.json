@@ -1,0 +1,19 @@
+{
+  "statuses": [
+    "target",
+    "watch",
+    "avoid",
+    "neutral"
+  ],
+  "ownershipTypes": [
+    "public",
+    "private",
+    "pe_backed",
+    "vc_backed",
+    "mutual",
+    "subsidiary",
+    "nonprofit",
+    "government",
+    "unknown"
+  ]
+}

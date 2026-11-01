@@ -13,6 +13,13 @@
 !src/**/*.csproj
 !src/**/*.cs
 !src/**/*.cshtml
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!nx.json
+!.node-version
+!contracts/**
+!web/**
 
 # Explicitly exclude sensitive directories
 import-review/
@@ -27,3 +34,8 @@ TestResults/
 bin/
 obj/
 dist/
+web/node_modules/
+web/build/
+web/dist/
+web/.react-router/
+web/coverage/

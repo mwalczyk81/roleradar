@@ -1,0 +1,12 @@
+{
+  "criterionCategories": [
+    "hard_skip",
+    "weight",
+    "preference"
+  ],
+  "supportedEntityRoutes": [
+    "posting",
+    "company",
+    "application"
+  ]
+}

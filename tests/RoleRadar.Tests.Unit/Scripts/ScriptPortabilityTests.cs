@@ -86,10 +86,19 @@ public sealed class ScriptPortabilityTests
 
         var yaml = File.ReadAllText(dependabotPath);
 
-        // Must cover package-ecosystem: "docker" for "/" and "/deploy"
-        Assert.Contains("package-ecosystem: \"docker\"", yaml);
-        Assert.Contains("directory: \"/\"", yaml);
-        Assert.Contains("directory: \"/deploy\"", yaml);
+        // Must cover package-ecosystem: "docker" for "/" and "/deploy" within that specific block
+        var dockerBlockMatch = Regex.Match(
+            yaml,
+            @"(?ms)^\s*-\s*package-ecosystem:\s*""docker"".*?(?=^\s*-\s*package-ecosystem:|\z)");
+        Assert.True(dockerBlockMatch.Success, "dependabot.yml must define a package-ecosystem: \"docker\" block");
+
+        var dockerBlock = dockerBlockMatch.Value;
+        Assert.True(
+            dockerBlock.Contains("directory: \"/\"") || dockerBlock.Contains("- \"/\""),
+            "The docker ecosystem block in dependabot.yml must contain '/'");
+        Assert.True(
+            dockerBlock.Contains("directory: \"/deploy\"") || dockerBlock.Contains("- \"/deploy\""),
+            "The docker ecosystem block in dependabot.yml must contain '/deploy'");
     }
 
     [Fact]
@@ -144,5 +153,30 @@ public sealed class ScriptPortabilityTests
         var repoRoot = FindRepoRoot();
         var scriptPath = Path.Combine(repoRoot, "scripts", "check-tools-release.ps1");
         Assert.True(File.Exists(scriptPath), $"check-tools-release.ps1 not found at: {scriptPath}");
+    }
+
+    [Fact]
+    public void ReviewGate_RequiresWebSmoke_PassedAtLeastOne_AndSkippedZero()
+    {
+        var repoRoot = FindRepoRoot();
+        var scriptPath = Path.Combine(repoRoot, "scripts", "review-gate.ps1");
+        var content = File.ReadAllText(scriptPath);
+
+        // Review gate must parse test summary counts and forbid false-pass on test skips
+        Assert.Contains("smokePassed -ge 1", content);
+        Assert.Contains("smokeSkipped -eq 0", content);
+        Assert.Contains("$gateResults.WebSmoke = \"FAIL\"", content);
+    }
+
+    [Fact]
+    public void WebContainerSmokeTests_FailsInCi_WhenDockerUnavailable()
+    {
+        var repoRoot = FindRepoRoot();
+        var testFilePath = Path.Combine(repoRoot, "tests", "RoleRadar.Tests.Integration", "Containers", "WebContainerSmokeTests.cs");
+        var content = File.ReadAllText(testFilePath);
+
+        // When in CI, unavailable Docker must fail the test, not skip it
+        Assert.Contains("Environment.GetEnvironmentVariable(\"CI\")", content);
+        Assert.Contains("Assert.Fail", content);
     }
 }

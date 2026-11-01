@@ -11,7 +11,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Branch
+    [string]$Branch,
+    [switch]$IncludeE2E
 )
 
 Set-StrictMode -Version Latest
@@ -31,9 +32,11 @@ $gateResults = [ordered]@{
     Restore = "FAIL"
     Format = "FAIL"
     Build = "FAIL"
+    Typecheck = "FAIL"
     Tests = "FAIL"
     Coverage = "FAIL"
     Images = "FAIL"
+    WebSmoke = "FAIL"
 }
 
 $testCounts = [ordered]@{
@@ -47,6 +50,7 @@ $coveragePct = 0.0
 $cliSizeMb = "N/A"
 $mcpSizeMb = "N/A"
 $identitySizeMb = "N/A"
+$webSizeMb = "N/A"
 $apiSizeMb = "N/A"
 
 try {
@@ -95,7 +99,19 @@ try {
     $null = & dotnet build RoleRadar.sln -c Release --no-restore -warnaserror 2>&1
     if ($LASTEXITCODE -eq 0) { $gateResults.Build = "PASS" } else { throw "dotnet build (-warnaserror) failed." }
 
-    # 5. Run test suite with coverage via scripts/test-all.ps1
+    # 5. Web typecheck
+    if (Test-Path (Join-Path $repoRoot "web/package.json")) {
+        $typecheckOutput = & pnpm --dir (Join-Path $repoRoot "web") run typecheck 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            $gateResults.Typecheck = "PASS"
+        } else {
+            throw "Web typecheck failed: $typecheckOutput"
+        }
+    } else {
+        $gateResults.Typecheck = "SKIP"
+    }
+
+    # 6. Run test suite with coverage via scripts/test-all.ps1
     $null = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "verify-devstack-canary.ps1") -Action Record 2>&1
     $testOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-all.ps1 -NoBuild --collect:"XPlat Code Coverage" --results-directory ./TestResults 2>&1
     if ($LASTEXITCODE -eq 0) {
@@ -142,29 +158,80 @@ try {
         }
     }
 
-    # 7. Build all four container images (CLI, MCP, Identity, API)
+    # 7. Build all container images (CLI, MCP, Identity, Web, API)
+    if ($IncludeE2E) {
+        $gateResults['RealStackE2E'] = "FAIL"
+    }
+
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     $null = & docker build --target cli -t "roleradar-cli:review-$cloneGuid" . 2>&1
     $null = & docker build --target mcp -t "roleradar-mcp:review-$cloneGuid" . 2>&1
     $null = & docker build -f deploy/Dockerfile.identity -t "roleradar-identity:review-$cloneGuid" . 2>&1
+    $null = & docker build -f deploy/Dockerfile.web -t "roleradar-web:review-$cloneGuid" . 2>&1
     $null = & docker build -f deploy/Dockerfile.api -t "roleradar-api:review-$cloneGuid" . 2>&1
 
     $cliBytes = & docker image inspect "roleradar-cli:review-$cloneGuid" --format '{{.Size}}' 2>$null
     $mcpBytes = & docker image inspect "roleradar-mcp:review-$cloneGuid" --format '{{.Size}}' 2>$null
     $identityBytes = & docker image inspect "roleradar-identity:review-$cloneGuid" --format '{{.Size}}' 2>$null
+    $webBytes = & docker image inspect "roleradar-web:review-$cloneGuid" --format '{{.Size}}' 2>$null
     $apiBytes = & docker image inspect "roleradar-api:review-$cloneGuid" --format '{{.Size}}' 2>$null
 
-    if ($cliBytes -and $mcpBytes -and $identityBytes -and $apiBytes) {
+    if ($cliBytes -and $mcpBytes -and $identityBytes -and $webBytes -and $apiBytes) {
         $gateResults.Images = "PASS"
         $cliSizeMb = "$([math]::Round([int64]$cliBytes / 1MB, 1)) MB"
         $mcpSizeMb = "$([math]::Round([int64]$mcpBytes / 1MB, 1)) MB"
         $identitySizeMb = "$([math]::Round([int64]$identityBytes / 1MB, 1)) MB"
+        $webSizeMb = "$([math]::Round([int64]$webBytes / 1MB, 1)) MB"
         $apiSizeMb = "$([math]::Round([int64]$apiBytes / 1MB, 1)) MB"
     }
 
+    # 8. Web container smoke test
+    $smokeOutput = & dotnet test tests/RoleRadar.Tests.Integration -c Release --no-build --filter "FullyQualifiedName~WebContainer" 2>&1
+    $smokePassed = 0
+    $smokeSkipped = -1
+    $smokeFailed = -1
+    foreach ($line in $smokeOutput) {
+        if ($line -match 'Failed:\s+(\d+),\s+Passed:\s+(\d+),\s+Skipped:\s+(\d+)') {
+            $smokeFailed = [int]$Matches[1]
+            $smokePassed = [int]$Matches[2]
+            $smokeSkipped = [int]$Matches[3]
+        }
+    }
+    if ($LASTEXITCODE -eq 0 -and $smokeFailed -eq 0 -and $smokePassed -ge 1 -and $smokeSkipped -eq 0) {
+        $gateResults.WebSmoke = "PASS"
+    } else {
+        $gateResults.WebSmoke = "FAIL"
+        Write-Warning "Web container smoke test failed or skipped (passed=$smokePassed, skipped=$smokeSkipped, exit=$LASTEXITCODE): $($smokeOutput -join "`n")"
+    }
+
+    # 9. Optional Real-Stack Playwright E2E test
+    if ($IncludeE2E) {
+        Write-Output "==> [review-gate] Executing real-stack Playwright E2E suite (-IncludeE2E)..."
+        $origIdentityImg = $env:ROLERADAR_IDENTITY_IMAGE
+        $origApiImg = $env:ROLERADAR_API_IMAGE
+        $origWebImg = $env:ROLERADAR_WEB_IMAGE
+        try {
+            $env:ROLERADAR_IDENTITY_IMAGE = "roleradar-identity:review-$cloneGuid"
+            $env:ROLERADAR_API_IMAGE = "roleradar-api:review-$cloneGuid"
+            $env:ROLERADAR_WEB_IMAGE = "roleradar-web:review-$cloneGuid"
+            $e2eOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "test-e2e-real.ps1") -Configuration Release -NoBuild 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $gateResults['RealStackE2E'] = "PASS"
+            } else {
+                $gateResults['RealStackE2E'] = "FAIL"
+                Write-Warning "Real-stack E2E failed: $($e2eOutput -join "`n")"
+            }
+        }
+        finally {
+            $env:ROLERADAR_IDENTITY_IMAGE = $origIdentityImg
+            $env:ROLERADAR_API_IMAGE = $origApiImg
+            $env:ROLERADAR_WEB_IMAGE = $origWebImg
+        }
+    }
+
     # Cleanup review images
-    $null = & docker rmi -f "roleradar-cli:review-$cloneGuid" "roleradar-mcp:review-$cloneGuid" "roleradar-identity:review-$cloneGuid" "roleradar-api:review-$cloneGuid" 2>&1
+    $null = & docker rmi -f "roleradar-cli:review-$cloneGuid" "roleradar-mcp:review-$cloneGuid" "roleradar-identity:review-$cloneGuid" "roleradar-web:review-$cloneGuid" "roleradar-api:review-$cloneGuid" 2>&1
     $ErrorActionPreference = $prevEap
 }
 finally {
@@ -174,7 +241,7 @@ finally {
     }
 }
 
-$allPassed = @($gateResults.Values | Where-Object { $_ -ne "PASS" }).Count -eq 0
+$allPassed = @($gateResults.Values | Where-Object { $_ -ne "PASS" -and $_ -ne "SKIP" }).Count -eq 0
 $totalTests = $testCounts.Unit + $testCounts.Arch + $testCounts.Contract + $testCounts.Integration
 
 # Exactly concise summary (<= 15 lines)
@@ -182,9 +249,14 @@ Write-Output "=== RoleRadar Review Gate Summary: $Branch ==="
 Write-Output "1. Locked Restore: $($gateResults.Restore)"
 Write-Output "2. Code Format:   $($gateResults.Format)"
 Write-Output "3. WarningsBuild: $($gateResults.Build)"
-Write-Output "4. Tests:         $($gateResults.Tests) (Unit: $($testCounts.Unit), Arch: $($testCounts.Arch), Contract: $($testCounts.Contract), Integration: $($testCounts.Integration) | Total: $totalTests)"
-Write-Output "5. Domain+App Cov: $coveragePct% (Gate: >= 85%) -> $($gateResults.Coverage)"
-Write-Output "6. Image Builds:  $($gateResults.Images) (CLI: $cliSizeMb, MCP: $mcpSizeMb, Identity: $identitySizeMb, API: $apiSizeMb)"
+Write-Output "4. Typecheck:     $($gateResults.Typecheck)"
+Write-Output "5. Tests:         $($gateResults.Tests) (Unit: $($testCounts.Unit), Arch: $($testCounts.Arch), Contract: $($testCounts.Contract), Integration: $($testCounts.Integration) | Total: $totalTests)"
+Write-Output "6. Domain+App Cov: $coveragePct% (Gate: >= 85%) -> $($gateResults.Coverage)"
+Write-Output "7. Image Builds:  $($gateResults.Images) (CLI: $cliSizeMb, MCP: $mcpSizeMb, Identity: $identitySizeMb, Web: $webSizeMb, API: $apiSizeMb)"
+Write-Output "8. Web image + smoke: $($gateResults.WebSmoke)"
+if ($IncludeE2E) {
+    Write-Output "9. Real-stack E2E:    $($gateResults.RealStackE2E)"
+}
 Write-Output "Verdict: $(if ($allPassed) { 'ALL GATES PASSED' } else { 'GATE FAILURE' })"
 Write-Output "================================================="
 

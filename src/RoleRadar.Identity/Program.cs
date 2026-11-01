@@ -77,7 +77,8 @@ public partial class Program
             options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
         })
         .AddEntityFrameworkStores<IdentityAppDbContext>()
-        .AddDefaultTokenProviders();
+        .AddDefaultTokenProviders()
+        .AddClaimsPrincipalFactory<RoleRadar.Identity.Services.RoleRadarUserClaimsPrincipalFactory>();
 
         var issuerUri = builder.Configuration["Identity:IssuerUri"]
             ?? Environment.GetEnvironmentVariable("ROLERADAR_IDENTITY_ISSUER_URI");
@@ -98,6 +99,7 @@ public partial class Program
             options.KeyManagement.KeyPath = signingKeysDir;
         })
         .AddAspNetIdentity<IdentityUser<Guid>>()
+        .AddProfileService<RoleRadar.Identity.Services.RoleRadarProfileService>()
         .AddOperationalStore<IdentityAppDbContext>(options =>
         {
             options.EnableTokenCleanup = true;
