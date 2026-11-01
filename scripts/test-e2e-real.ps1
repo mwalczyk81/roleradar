@@ -21,7 +21,7 @@ Push-Location $repoRoot
 
 try {
     Write-Output "==> [test-e2e-real] Checking Docker availability..."
-    $dockerCheck = & docker version 2>&1
+    $null = & docker version 2>&1
     if ($LASTEXITCODE -ne 0) {
         throw "Docker CLI or daemon is not accessible. Exit code: $LASTEXITCODE"
     }

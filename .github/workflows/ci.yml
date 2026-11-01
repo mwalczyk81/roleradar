@@ -130,7 +130,7 @@ jobs:
           $results = Invoke-ScriptAnalyzer -Path ./scripts -Recurse -Severity Warning,Error
           if ($results) {
               $results | Format-Table -AutoSize | Out-String | Write-Output
-              throw "PSScriptAnalyzer reported $($results.Count) issue(s)."
+              throw "PSScriptAnalyzer reported $(@($results).Count) issue(s)."
           }
           Write-Output "PSScriptAnalyzer passed with 0 issues."
 
@@ -389,7 +389,7 @@ jobs:
           pnpm install --frozen-lockfile
 
       - name: Install Playwright Chromium with dependencies
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm --filter web exec playwright install --with-deps chromium
 
       - name: Run E2E tests
         run: pnpm run test:e2e
@@ -433,7 +433,7 @@ jobs:
           pnpm install --frozen-lockfile
 
       - name: Install Playwright Chromium with dependencies
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm --filter web exec playwright install --with-deps chromium
 
       - name: Build local container images
         run: |
