@@ -155,4 +155,14 @@ public sealed class IdentityTokenIssuanceContractTests
         Assert.Contains(scopes, s => s.Name == "roleradar.api");
         Assert.Contains(scopes, s => s.Name == "roleradar.api.read");
     }
+
+    [Fact]
+    public void IdentityResources_Profile_IncludesPreferredUsernameClaim()
+    {
+        var identityResources = IdentityServerConfig.GetIdentityResources().ToArray();
+        var profile = identityResources.FirstOrDefault(r => r.Name == "profile");
+
+        Assert.NotNull(profile);
+        Assert.Contains("preferred_username", profile.UserClaims);
+    }
 }
