@@ -4,6 +4,7 @@ import { parse as parseCookie } from "cookie";
 export interface UserSession {
   sessionId: string;
   ownerSub: string;
+  ownerUsername?: string;
   accessToken: string;
   refreshToken: string;
   idToken?: string;

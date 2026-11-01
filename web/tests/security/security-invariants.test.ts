@@ -59,11 +59,11 @@ describe("Security Invariants", () => {
       }
     );
 
-    const response = await callbackLoader({
+    const response = (await callbackLoader({
       request,
       params: {},
       context: {},
-    } as any);
+    } as any)) as Response;
 
     const setCookie = response.headers.get("Set-Cookie") ?? "";
     const bodyText = await response.text();
@@ -209,11 +209,11 @@ describe("Security Invariants", () => {
       }
     );
 
-    const response = await callbackLoader({
+    const response = (await callbackLoader({
       request,
       params: {},
       context: {},
-    } as any);
+    } as any)) as Response;
 
     const setCookie = response.headers.get("Set-Cookie") ?? "";
     const match = setCookie.match(new RegExp(`${SECURE_COOKIE_NAME}=([^;]+)`));

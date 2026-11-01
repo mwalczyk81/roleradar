@@ -90,9 +90,17 @@ export async function getRequestListener(): Promise<
   ReturnType<typeof createRequestListener>
 > {
   if (!requestListener) {
-    const buildPath = path.resolve(process.cwd(), "build/server/index.js");
-    const altBuildPath = path.resolve(process.cwd(), "web/build/server/index.js");
-    const target = fs.existsSync(buildPath) ? buildPath : altBuildPath;
+    const candidates = [
+      path.resolve(process.cwd(), "build/server/index.js"),
+      path.resolve(process.cwd(), "web/build/server/index.js"),
+      ...(import.meta.dirname
+        ? [
+            path.resolve(import.meta.dirname, "build/server/index.js"),
+            path.resolve(import.meta.dirname, "../build/server/index.js"),
+          ]
+        : []),
+    ];
+    const target = candidates.find((c) => fs.existsSync(c)) ?? candidates[0];
     const build = await import(pathToFileURL(target).href);
     requestListener = createRequestListener({
       build,
@@ -112,6 +120,12 @@ function serveStaticFile(reqUrl: string, res: http.ServerResponse): boolean {
   const clientDirs = [
     path.resolve(process.cwd(), "build/client"),
     path.resolve(process.cwd(), "web/build/client"),
+    ...(import.meta.dirname
+      ? [
+          path.resolve(import.meta.dirname, "build/client"),
+          path.resolve(import.meta.dirname, "../build/client"),
+        ]
+      : []),
   ];
 
   for (const clientDir of clientDirs) {
@@ -156,6 +170,12 @@ export function createRequestHandler() {
     }
 
     if (req.url && serveStaticFile(req.url, res)) {
+      return;
+    }
+
+    if (req.url === "/favicon.ico") {
+      res.writeHead(204);
+      res.end();
       return;
     }
 

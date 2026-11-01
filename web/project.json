@@ -12,6 +12,13 @@
         "cwd": "web"
       }
     },
+    "dev": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "node dev.js",
+        "cwd": "web"
+      }
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {
@@ -21,6 +28,7 @@
     },
     "test": {
       "executor": "nx:run-commands",
+      "dependsOn": ["build"],
       "options": {
         "command": "vitest run && playwright test",
         "cwd": "web"
@@ -28,6 +36,7 @@
     },
     "test:e2e": {
       "executor": "nx:run-commands",
+      "dependsOn": ["build"],
       "options": {
         "command": "playwright test",
         "cwd": "web"

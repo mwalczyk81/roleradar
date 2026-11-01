@@ -3,7 +3,9 @@
   "targetDefaults": {
     "build": {
       "cache": true,
-      "dependsOn": ["^build"]
+      "dependsOn": [
+        "^build"
+      ]
     },
     "lint": {
       "cache": true
@@ -31,5 +33,6 @@
         "inferProjects": true
       }
     }
-  ]
+  ],
+  "analytics": false
 }

@@ -6,7 +6,7 @@
   "scripts": {
     "build": "react-router build",
     "build:server": "tsc server.ts --target es2022 --module node16 --moduleResolution node16 --outDir build/server-dist --skipLibCheck",
-    "dev": "react-router dev",
+    "dev": "node dev.js",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",

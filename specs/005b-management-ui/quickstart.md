@@ -13,7 +13,7 @@ This guide provides step-by-step instructions for running the RoleRadar Manageme
 Ensure the following tools are installed on the local system:
 - **Node.js**: v22 LTS (pinned in `.node-version`)
 - **pnpm**: v10.4.0+ (pinned in `package.json`)
-- **.NET SDK**: v10.0+
+- **.NET SDK**: v10.0+ (`10.0.402` pinned in `global.json`)
 - **Docker & Docker Compose**: running Docker daemon
 - **Development Certificates**: generated in `deploy/certs/` (`dev-cert.pfx`, `dev-cert.crt`, `dev-cert.key`)
 
@@ -25,41 +25,78 @@ The Identity discovery URL and canonical issuer are `https://identity:5001` (mat
 127.0.0.1 identity api
 ```
 
-*(Note: Playwright end-to-end tests configure `--host-resolver-rules="MAP identity 127.0.0.1, MAP api 127.0.0.1"` automatically, so automated suites require no system hosts file modification).*
+> [!IMPORTANT]
+> On Windows, modifying `C:\Windows\System32\drivers\etc\hosts` requires an elevated PowerShell session (Run as Administrator).
+> - **Local Dev Path (`web:dev`)**: The web dev server runs in Node on the host and performs server-to-server OIDC discovery and token exchange against `https://identity:5001`. The host OS **must** resolve `identity` to `127.0.0.1`.
+> - **Container Path (`web` in Compose)**: Docker internal networking resolves `identity` and `api` between containers automatically; however, the developer's desktop browser still navigates to `https://identity:5001/Account/Login` during the interactive redirect, requiring the host DNS entry.
+> - **Automated E2E Tests**: Playwright browser tests configure `--host-resolver-rules="MAP identity 127.0.0.1, MAP api 127.0.0.1"` at launch, so automated test suites run without modifying the system hosts file.
 
 ### Environment Configuration
 
-Create or verify `web/.env.local`:
+Create or verify `web/.env.local` (a committed template is available at `web/.env.example`):
+
 ```bash
 NODE_ENV=development
 PORT=5003
 ROLERADAR_IDENTITY_ISSUER_URI=https://identity:5001
 ROLERADAR_API_BASE_URL=https://localhost:5002
-ROLERADAR_WEB_CLIENT_SECRET=<the same value exported for the compose stack; never a shared default>
+ROLERADAR_WEB_CLIENT_SECRET=<must match the secret passed to Identity; see Step 2>
 SESSION_ENCRYPTION_KEY=<32 random bytes, base64; generate your own as shown below>
 NODE_EXTRA_CA_CERTS=../deploy/certs/dev-cert.crt
 HTTPS_CERT_PATH=../deploy/certs/dev-cert.crt
 HTTPS_CERT_KEY_PATH=../deploy/certs/dev-cert.key
 ```
 
-Generate the session key once per machine (never commit it, never reuse a value copied from documentation):
+> [!WARNING]
+> **Secret Alignment Requirement**: `ROLERADAR_WEB_CLIENT_SECRET` in `web/.env.local` MUST exactly match the `$env:ROLERADAR_WEB_CLIENT_SECRET` exported when starting the Identity container. Identity registers the `roleradar-web` confidential client using the SHA-256 hash of this secret. If the web client presents a mismatched secret during the authorization code grant exchange (`/auth/callback`), Identity rejects the request with HTTP 400 `invalid_client`.
+
+Generate the session key and client secret once per machine using Node.js (cross-platform, works reliably in Windows PowerShell 5.1 and PowerShell Core):
 
 ```powershell
-[Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32))
+# Generate session encryption key or web client secret (32 random bytes base64)
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
 ```
+
+### Compose Environment File (`deploy/.env`)
+
+When running Docker Compose commands from the repository root or inside `deploy/`, Docker Compose automatically reads variable definitions from `deploy/.env` (if present). You can either export variables into your PowerShell session or place them in `deploy/.env` (names only; never commit this file):
+- `ROLERADAR_HTTPS_CERT_PASSWORD`: Password for the development PFX certificate (`dev-cert.pfx`) shared by Identity, API, and Web containers.
+- `ROLERADAR_WEB_CLIENT_SECRET`: Client secret for the `roleradar-web` confidential client, matching `web/.env.local`.
+- `ROLERADAR_HEADLESS_CLIENT_SECRET`: Client secret for headless automation clients (`roleradar-headless`).
+- `ROLERADAR_OWNER_ALLOWED_SUBJECT`: Lowercase GUID sub of the single owner account provisioned in Identity.
+- `SESSION_ENCRYPTION_KEY`: 32-byte base64 encryption key for web sessions (used when running the containerized web service).
 
 ---
 
 ## 2. Running Supporting Services (Identity & API)
 
-Before starting the web application, start the backend datastore, Identity host, and REST API:
+Before starting the web application, start the backend datastore (MongoDB), Identity host, and REST API:
 
 ```powershell
 # 1. Start MongoDB and infrastructure services
 pwsh ./scripts/start-services.ps1
 
-# 2. Build and start Identity and API services in Compose
-docker compose -f deploy/docker-compose.apps.yml up -d identity api
+# 2. Ensure hosts file contains the required entry (requires Administrator):
+#    127.0.0.1 identity api
+# (See Section 1 "Host File Configuration" above)
+
+# 3. Export required environment variables (or place in deploy/.env)
+$env:ROLERADAR_HTTPS_CERT_PASSWORD = "DevCertPassword123!"
+$env:ROLERADAR_WEB_CLIENT_SECRET = "<your-web-client-secret-matching-web/.env.local>"
+$env:ROLERADAR_HEADLESS_CLIENT_SECRET = (node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")
+
+# 4. If the single owner account has not been provisioned in roleradar-identity-data, provision it now:
+#    (Note: If an owner account already exists, do not run create-owner; reuse the existing owner sub GUID)
+# docker run --rm -it --user 1654:1654 `
+#     -v roleradar-identity-data:/data/identity `
+#     -e ROLERADAR_IDENTITY_DB="Data Source=/data/identity/identity.db" `
+#     roleradar-cli:local identity create-owner --username matt
+
+# 5. Export the owner's verbatim sub GUID (from create-owner output)
+$env:ROLERADAR_OWNER_ALLOWED_SUBJECT = "<verbatim-owner-sub-guid>"
+
+# 6. Build and start Identity and API services in Compose
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.apps.yml --profile apps up -d identity api
 ```
 
 Verify services are healthy:
@@ -68,7 +105,9 @@ Verify services are healthy:
 
 ---
 
-## 3. Running the Web Application Locally
+## 3. Running the Web Application Locally (Dev Server)
+
+The local dev server runs with React Router v7 and Vite with **in-process TLS** on `https://localhost:5003`.
 
 ```powershell
 # 1. Install monorepo dependencies
@@ -81,22 +120,32 @@ pnpm exec nx run web:typecheck
 pnpm exec nx run web:dev
 ```
 
-The application will listen on **`https://localhost:5003`**.
+`web/vite.config.ts` automatically loads `web/.env.local` into `process.env` with Vite's `loadEnv` before server modules run, and configures `server.https` from `HTTPS_CERT_PATH` and `HTTPS_CERT_KEY_PATH`.
+
+The application will listen on **`https://localhost:5003`** (HTTPS).
 
 ---
 
-## 4. Running the Web Application via Docker Compose
+## 4. Running the Web Application via Docker Compose (Containerized)
 
-To test the containerized web service with its read-only filesystem, tmpfs, and unprivileged user:
+To run the containerized web service with its read-only rootfs, tmpfs, in-process TLS, and unprivileged user (`node:node` UID 1000):
 
 ```powershell
-# Build and run the entire stack including the web service
-docker compose -f deploy/docker-compose.apps.yml up -d --build web
+# 1. Ensure SESSION_ENCRYPTION_KEY and ROLERADAR_WEB_CLIENT_SECRET are set in the environment
+$env:SESSION_ENCRYPTION_KEY = "<your-32-byte-base64-key>"
+$env:ROLERADAR_WEB_CLIENT_SECRET = "<your-web-client-secret>"
 
-# Check container health and logs
-docker compose -f deploy/docker-compose.apps.yml ps web
-docker compose -f deploy/docker-compose.apps.yml logs -f web
+# 2. Build and launch the containerized web service alongside the stack
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.apps.yml --profile apps up -d --build web
+
+# 3. Check container health and logs
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.apps.yml --profile apps ps web
+docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.apps.yml --profile apps logs -f web
 ```
+
+Inside the container:
+- In-process TLS terminates on port 5003 (`https://*:5003`) using `HTTPS_CERT_PATH=/https/cert.crt` and `HTTPS_CERT_KEY_PATH=/https/cert.key`.
+- Container talks to API via `ROLERADAR_API_BASE_URL=https://api:5002` and Identity via `ROLERADAR_IDENTITY_ISSUER_URI=https://identity:5001`.
 
 ---
 
@@ -106,7 +155,7 @@ Follow this manual checklist to verify all P1 user stories:
 
 ### Step 1: Unauthenticated Visit & Redirect
 1. Open an incognito browser window and navigate to `https://localhost:5003/postings`.
-2. **Expected Outcome**: The browser is immediately redirected to `https://localhost:5001/Account/Login` with valid `client_id=roleradar-web`, `response_type=code`, `code_challenge`, and `state`.
+2. **Expected Outcome**: The browser is immediately redirected to `https://identity:5001/Account/Login` with valid `client_id=roleradar-web`, `response_type=code`, `code_challenge`, and `state`.
 
 ### Step 2: Sign-In with Owner Credentials & TOTP
 1. Enter the configured owner credentials (username and password).
@@ -142,7 +191,7 @@ Follow this manual checklist to verify all P1 user stories:
 ### Step 6: Sign Out
 1. Click the user menu in the top right corner of the `AppShell`.
 2. Click "Sign Out".
-3. **Expected Outcome**: The server evicts the session, expires the session cookie, redirects to Identity's end-session endpoint, and completes RP-Initiated Logout. Attempting to return to `https://localhost:5003/postings` prompts for login.
+3. **Expected Outcome**: The server evicts the session, expires the session cookie, redirects to Identity's end-session endpoint, and completes RP-Initiated Logout (clearing Identity and 2FA cookies before redirecting to the post-logout URI). Attempting to return to `https://localhost:5003/postings` redirects to Identity and must require both password and TOTP (confirming Identity's session cookie was fully cleared and does not silently sign the user back in).
 
 ---
 

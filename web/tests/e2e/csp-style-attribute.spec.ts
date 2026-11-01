@@ -247,6 +247,15 @@ test.afterAll(async () => {
 });
 
 async function setupSessionCookie(context: BrowserContext) {
+  saveSession({
+    sessionId: E2E_SESSION_ID,
+    ownerSub: "playwright-test-user",
+    accessToken: "stubbed-access-token",
+    refreshToken: "stubbed-refresh-token",
+    expiresAt: Date.now() + 3600_000,
+    createdAt: Date.now(),
+    csrfToken: "playwright-csrf-token",
+  });
   await context.addCookies([
     {
       name: "__Host-roleradar_session",
@@ -726,6 +735,230 @@ test.describe("Posting Detail Real Transitions (Real Chromium)", () => {
     expect(authRedirectCount).toBe(1);
 
     // Assert session cookie is cleared
+    cookies = await context.cookies();
+    const sessionCookie = cookies.find((c) => c.name === "__Host-roleradar_session");
+    expect(!sessionCookie || sessionCookie.value === "").toBe(true);
+  });
+});
+
+test.describe("Theme and Page Reset", () => {
+  test("first visit dark: follows prefers-color-scheme, resets html/body margin, matches shell bg, no scrollbars at 1280x800", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      colorScheme: "dark",
+      viewport: { width: 1280, height: 800 },
+      ignoreHTTPSErrors: true,
+    });
+    await setupSessionCookie(context);
+    const page = await context.newPage();
+
+    await page.goto(`${baseUrl}/postings`, { waitUntil: "networkidle" });
+
+    const theme = await page.locator("html").getAttribute("data-theme");
+    expect(theme).toBe("dark");
+
+    const layout = await page.evaluate(() => {
+      const bodyStyle = window.getComputedStyle(document.body);
+      const shellEl = document.querySelector(".ds-appshell") as HTMLElement;
+      const shellStyle = shellEl ? window.getComputedStyle(shellEl) : null;
+      return {
+        bodyMargin: bodyStyle.margin,
+        bodyBg: bodyStyle.backgroundColor,
+        shellBg: shellStyle?.backgroundColor,
+        scrollWidth: document.documentElement.scrollWidth,
+        scrollHeight: document.documentElement.scrollHeight,
+        clientWidth: document.documentElement.clientWidth,
+        clientHeight: document.documentElement.clientHeight,
+      };
+    });
+
+    // Body margin 0
+    expect(layout.bodyMargin).toBe("0px");
+    // Body background equals shell background and matches dark token
+    expect(layout.bodyBg).toBe("rgb(2, 6, 23)");
+    expect(layout.shellBg).toBe("rgb(2, 6, 23)");
+    expect(layout.bodyBg).toBe(layout.shellBg);
+    // No page scrollbars at 1280x800
+    expect(layout.scrollHeight).toBeLessThanOrEqual(800);
+    expect(layout.scrollWidth).toBeLessThanOrEqual(1280);
+  });
+
+  test("first visit light: follows prefers-color-scheme, resets html/body margin, matches shell bg, no scrollbars at 1280x800", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      colorScheme: "light",
+      viewport: { width: 1280, height: 800 },
+      ignoreHTTPSErrors: true,
+    });
+    await setupSessionCookie(context);
+    const page = await context.newPage();
+
+    await page.goto(`${baseUrl}/postings`, { waitUntil: "networkidle" });
+
+    const theme = await page.locator("html").getAttribute("data-theme");
+    expect(theme).toBe("light");
+
+    const layout = await page.evaluate(() => {
+      const bodyStyle = window.getComputedStyle(document.body);
+      const shellEl = document.querySelector(".ds-appshell") as HTMLElement;
+      const shellStyle = shellEl ? window.getComputedStyle(shellEl) : null;
+      return {
+        bodyMargin: bodyStyle.margin,
+        bodyBg: bodyStyle.backgroundColor,
+        shellBg: shellStyle?.backgroundColor,
+        scrollWidth: document.documentElement.scrollWidth,
+        scrollHeight: document.documentElement.scrollHeight,
+        clientWidth: document.documentElement.clientWidth,
+        clientHeight: document.documentElement.clientHeight,
+      };
+    });
+
+    expect(layout.bodyMargin).toBe("0px");
+    expect(layout.bodyBg).toBe("rgb(255, 255, 255)");
+    expect(layout.shellBg).toBe("rgb(255, 255, 255)");
+    expect(layout.bodyBg).toBe(layout.shellBg);
+    expect(layout.scrollHeight).toBeLessThanOrEqual(800);
+    expect(layout.scrollWidth).toBeLessThanOrEqual(1280);
+  });
+
+  test("explicit cookie overrides system theme and toggle sets 1-year Lax Secure cookie", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      colorScheme: "light",
+      ignoreHTTPSErrors: true,
+    });
+    await setupSessionCookie(context);
+    // Set explicit dark cookie in a light system
+    await context.addCookies([
+      {
+        name: "roleradar_theme",
+        value: "dark",
+        url: baseUrl,
+        sameSite: "Lax",
+        secure: true,
+      },
+    ]);
+
+    const page = await context.newPage();
+    await page.goto(`${baseUrl}/postings`, { waitUntil: "networkidle" });
+
+    // Explicit cookie overrides OS light preference
+    const theme = await page.locator("html").getAttribute("data-theme");
+    expect(theme).toBe("dark");
+
+    const shellBg = await page.locator(".ds-appshell").evaluate((el) => {
+      return window.getComputedStyle(el).backgroundColor;
+    });
+    expect(shellBg).toBe("rgb(2, 6, 23)");
+
+    // Click theme toggle button in AppShell
+    const toggleButton = page.getByRole("button", { name: /switch to light theme/i });
+    await expect(toggleButton).toBeVisible();
+    await toggleButton.click();
+
+    // Theme should now be light
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+
+    // Cookie must be updated
+    const cookies = await context.cookies();
+    const themeCookie = cookies.find((c) => c.name === "roleradar_theme");
+    expect(themeCookie).toBeDefined();
+    expect(themeCookie?.value).toBe("light");
+    expect(themeCookie?.sameSite).toBe("Lax");
+    expect(themeCookie?.secure).toBe(true);
+    // Expiration ~1 year (31536000 seconds)
+    const nowSec = Date.now() / 1000;
+    expect(themeCookie?.expires).toBeGreaterThan(nowSec + 30_000_000);
+  });
+
+  test("live change: follows OS setting changes when no cookie is set", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({
+      colorScheme: "dark",
+      ignoreHTTPSErrors: true,
+    });
+    await setupSessionCookie(context);
+    const page = await context.newPage();
+
+    await page.goto(`${baseUrl}/postings`, { waitUntil: "networkidle" });
+    expect(await page.locator("html").getAttribute("data-theme")).toBe("dark");
+
+    // Emulate OS switching to light
+    await page.emulateMedia({ colorScheme: "light" });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+
+    const lightBg = await page.locator(".ds-appshell").evaluate((el) => {
+      return window.getComputedStyle(el).backgroundColor;
+    });
+    expect(lightBg).toBe("rgb(255, 255, 255)");
+
+    // Emulate OS switching back to dark
+    await page.emulateMedia({ colorScheme: "dark" });
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+
+    const darkBg = await page.locator(".ds-appshell").evaluate((el) => {
+      return window.getComputedStyle(el).backgroundColor;
+    });
+    expect(darkBg).toBe("rgb(2, 6, 23)");
+  });
+
+  test("header label shows preferred username or Owner, never raw sub GUID", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true });
+    await setupSessionCookie(context);
+    const page = await context.newPage();
+
+    await page.goto(`${baseUrl}/postings`, { waitUntil: "networkidle" });
+
+    // The test user has ownerSub = "playwright-test-user" without ownerUsername
+    // Header must fall back to "Owner", never "playwright-test-user"
+    const userLabelEl = page.locator(".ds-appshell-user");
+    await expect(userLabelEl).toHaveText("Owner");
+    await expect(userLabelEl).not.toHaveText("playwright-test-user");
+  });
+
+  test("favicon is served cleanly without 404 or unhandled errors", async ({
+    request,
+  }) => {
+    const res = await request.get(`${baseUrl}/favicon.ico`);
+    expect([200, 204]).toContain(res.status());
+  });
+
+  test("clicking Sign Out submits POST /auth/logout, redirects to end-session URL, and clears session cookie", async ({
+    page,
+    context,
+  }) => {
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/postings`, { waitUntil: "networkidle" });
+
+    // Verify session cookie is present initially
+    let cookies = await context.cookies();
+    expect(cookies.some((c) => c.name === "__Host-roleradar_session")).toBe(true);
+
+    const endSessionPromise = page.waitForRequest((req) => req.url().includes("connect/endsession"));
+
+    await page.route(/\/connect\/endsession/, (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<html><body>Mock Identity Provider End Session</body></html>",
+      });
+    });
+
+    const signOutButton = page.getByRole("button", { name: "Sign Out" });
+    await expect(signOutButton).toBeVisible();
+    await signOutButton.click();
+
+    const endSessionRequest = await endSessionPromise;
+    expect(endSessionRequest.url()).toContain("connect/endsession");
+    expect(endSessionRequest.url()).toContain("post_logout_redirect_uri");
+
+    // Verify session cookie was cleared
     cookies = await context.cookies();
     const sessionCookie = cookies.find((c) => c.name === "__Host-roleradar_session");
     expect(!sessionCookie || sessionCookie.value === "").toBe(true);

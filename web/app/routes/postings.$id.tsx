@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "react
 import { useLoaderData, useFetcher, useRevalidator, Link, data, redirect } from "react-router";
 import React from "react";
 import { requireUserSession, initiateLoginRedirect } from "../lib/auth-guard.server.js";
+import { useTheme } from "../lib/use-theme.js";
 import { createApiClient, mapApiError } from "../lib/api-client.server.js";
 import { validateCsrfToken } from "../lib/csrf.server.js";
 import { AppShell, Badge, Card, Button, Toast, ToastRegion } from "../ui.js";
@@ -85,7 +86,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     posting: postingRes.data,
     criteria: criteriaRes.data ?? [],
     csrfToken: session.csrfToken,
-    userLabel: session.ownerSub,
+    userLabel: session.ownerUsername || "Owner",
   };
 }
 
@@ -250,24 +251,7 @@ export default function PostingDetail() {
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [conflictToastDismissed, setConflictToastDismissed] = React.useState(false);
 
-  // Theme state wired to roleradar_theme cookie and documentElement data-theme
-  const [theme, setTheme] = React.useState<"light" | "dark">(() => {
-    if (typeof document !== "undefined") {
-      return (document.documentElement.getAttribute("data-theme") as "light" | "dark") || "light";
-    }
-    return "light";
-  });
-
-  const toggleTheme = React.useCallback(() => {
-    const nextTheme = theme === "dark" ? "light" : "dark";
-    setTheme(nextTheme);
-    if (typeof document !== "undefined") {
-      document.documentElement.setAttribute("data-theme", nextTheme);
-      const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-      const secureAttr = isHttps ? "; Secure" : "";
-      document.cookie = `roleradar_theme=${nextTheme}; Path=/; SameSite=Lax; Max-Age=31536000${secureAttr}`;
-    }
-  }, [theme]);
+  const { theme, toggleTheme } = useTheme();
 
   const posting = fetcher.data?.ok ? fetcher.data.posting : loaderData.posting;
   const isConflict = Boolean(

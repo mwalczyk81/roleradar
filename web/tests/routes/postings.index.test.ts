@@ -201,4 +201,64 @@ describe("GET /postings loader (T028)", () => {
     const setCookie = thrown?.headers.get("Set-Cookie");
     expect(setCookie).toBeDefined();
   });
+
+  it("sets userLabel to preferred_username when available in session", async () => {
+    const sessionId = crypto.randomUUID();
+    const session: UserSession = {
+      sessionId,
+      ownerSub: "018d9633-9111-7395-88a2-f81d113426e2",
+      ownerUsername: "matt",
+      accessToken: "mock-access-token",
+      refreshToken: "mock-refresh-token",
+      expiresAt: Date.now() + 600_000,
+      createdAt: Date.now(),
+      csrfToken: "mock-csrf-token",
+    };
+    saveSession(session);
+
+    mockApiGet.mockResolvedValueOnce({
+      data: { items: [], totalCount: 0, limit: 25, offset: 0 },
+      response: { status: 200 } as Response,
+    });
+
+    const request = new Request("https://localhost:5003/postings", {
+      headers: {
+        Cookie: `${SECURE_COOKIE_NAME}=${sessionId}`,
+      },
+    });
+
+    const result = (await postingsLoader({ request, params: {}, context: {} } as any)) as any;
+    expect(result.userLabel).toBe("matt");
+    expect(result.userLabel).not.toBe(session.ownerSub);
+  });
+
+  it("falls back to text 'Owner' and never reveals sub GUID when preferred_username is absent", async () => {
+    const sessionId = crypto.randomUUID();
+    const session: UserSession = {
+      sessionId,
+      ownerSub: "018d9633-9111-7395-88a2-f81d113426e2",
+      // ownerUsername undefined
+      accessToken: "mock-access-token",
+      refreshToken: "mock-refresh-token",
+      expiresAt: Date.now() + 600_000,
+      createdAt: Date.now(),
+      csrfToken: "mock-csrf-token",
+    };
+    saveSession(session);
+
+    mockApiGet.mockResolvedValueOnce({
+      data: { items: [], totalCount: 0, limit: 25, offset: 0 },
+      response: { status: 200 } as Response,
+    });
+
+    const request = new Request("https://localhost:5003/postings", {
+      headers: {
+        Cookie: `${SECURE_COOKIE_NAME}=${sessionId}`,
+      },
+    });
+
+    const result = (await postingsLoader({ request, params: {}, context: {} } as any)) as any;
+    expect(result.userLabel).toBe("Owner");
+    expect(result.userLabel).not.toBe(session.ownerSub);
+  });
 });

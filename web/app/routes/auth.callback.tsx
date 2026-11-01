@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
+import { useLoaderData } from "react-router";
 import crypto from "node:crypto";
 import { exchangeCodeForTokens } from "../lib/oidc.server.js";
 import {
@@ -47,9 +48,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   if (!expectedState || !codeVerifier || expectedState !== state) {
-    return new Response("Invalid or expired authentication state", {
-      status: 400,
-    });
+    console.warn("[WARN] OIDC callback replay or expired authorization state; prompting user to sign in again.");
+    return { replay: true };
   }
 
   try {
@@ -67,6 +67,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const helper = tokenSet as { claims?: () => Record<string, unknown> };
     const claims = typeof helper.claims === "function" ? helper.claims() : undefined;
     const ownerSub = typeof claims?.sub === "string" ? claims.sub : undefined;
+    const ownerUsername = typeof claims?.preferred_username === "string" ? claims.preferred_username : undefined;
 
     if (!ownerSub) {
       return new Response("Identity token missing valid subject claim", {
@@ -77,6 +78,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const session: UserSession = {
       sessionId,
       ownerSub,
+      ownerUsername,
       accessToken: tokenSet.access_token,
       refreshToken: tokenSet.refresh_token ?? "",
       idToken: tokenSet.id_token,
@@ -113,11 +115,80 @@ export async function loader({ request }: LoaderFunctionArgs) {
       headers,
     });
   } catch (err) {
-    console.error("[ERROR] Failed to exchange code for tokens:", err);
-    return new Response("Authentication exchange failed", { status: 500 });
+    console.warn(
+      `[WARN] OIDC callback token exchange failed (code replay or expired): ${
+        err instanceof Error ? err.message : String(err)
+      }`
+    );
+    return { replay: true };
   }
 }
 
 export default function AuthCallback() {
+  const data = useLoaderData<typeof loader>();
+
+  if (data?.replay) {
+    return (
+      <main
+        style={{
+          display: "flex",
+          minHeight: "100vh",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "var(--ds-space-4)",
+          background: "var(--ds-bg)",
+          color: "var(--ds-text)",
+        }}
+      >
+        <div
+          style={{
+            maxWidth: "28rem",
+            width: "100%",
+            background: "var(--ds-surface)",
+            border: "var(--ds-border-thin) solid var(--ds-border)",
+            borderRadius: "var(--ds-radius-lg)",
+            padding: "var(--ds-space-6)",
+            textAlign: "center",
+            boxShadow: "var(--ds-shadow-md)",
+          }}
+        >
+          <h1
+            style={{
+              fontSize: "var(--ds-text-xl)",
+              fontWeight: "var(--ds-weight-bold)",
+              marginBottom: "var(--ds-space-3)",
+            }}
+          >
+            Sign in again
+          </h1>
+          <p
+            style={{
+              color: "var(--ds-text-muted)",
+              marginBottom: "var(--ds-space-6)",
+              fontSize: "var(--ds-text-sm)",
+            }}
+          >
+            This authorization link has already been used or has expired. Please sign in again to continue.
+          </p>
+          <a
+            href="/postings"
+            style={{
+              display: "inline-block",
+              padding: "var(--ds-space-2) var(--ds-space-4)",
+              background: "var(--ds-primary-solid)",
+              color: "var(--ds-text-on-accent)",
+              borderRadius: "var(--ds-radius-md)",
+              textDecoration: "none",
+              fontWeight: "var(--ds-weight-semibold)",
+              fontSize: "var(--ds-text-sm)",
+            }}
+          >
+            Sign in again
+          </a>
+        </div>
+      </main>
+    );
+  }
+
   return null;
 }

@@ -40,6 +40,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const endSessionUrl = await getEndSessionUrl(idTokenHint);
     redirectUrl = endSessionUrl.toString();
   } catch {
+    console.warn("[WARN] Failed to resolve end-session URL; falling back to /postings.");
     redirectUrl = "/postings";
   }
 

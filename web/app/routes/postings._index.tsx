@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useNavigate, useSearchParams, Link, redirect } from "react-router";
 import React from "react";
 import { requireUserSession, initiateLoginRedirect } from "../lib/auth-guard.server.js";
+import { useTheme } from "../lib/use-theme.js";
 import { createApiClient } from "../lib/api-client.server.js";
 import { AppShell, Toolbar, DataTable, Badge, Select, Input, Button, type DataTableColumn } from "../ui.js";
 import { formatDate } from "../lib/format-date.js";
@@ -98,7 +99,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     limit: data.limit,
     offset: data.offset,
     csrfToken: session.csrfToken,
-    userLabel: session.ownerSub,
+    userLabel: session.ownerUsername || "Owner",
   };
 }
 
@@ -107,24 +108,7 @@ export default function PostingsIndex() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  // Theme toggle wired to roleradar_theme cookie and documentElement data-theme
-  const [theme, setTheme] = React.useState<"light" | "dark">(() => {
-    if (typeof document !== "undefined") {
-      return (document.documentElement.getAttribute("data-theme") as "light" | "dark") || "light";
-    }
-    return "light";
-  });
-
-  const toggleTheme = React.useCallback(() => {
-    const nextTheme = theme === "dark" ? "light" : "dark";
-    setTheme(nextTheme);
-    if (typeof document !== "undefined") {
-      document.documentElement.setAttribute("data-theme", nextTheme);
-      const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-      const secureAttr = isHttps ? "; Secure" : "";
-      document.cookie = `roleradar_theme=${nextTheme}; Path=/; SameSite=Lax; Max-Age=31536000${secureAttr}`;
-    }
-  }, [theme]);
+  const { theme, toggleTheme } = useTheme();
 
   const currentSearch = searchParams.get("q") || "";
   const currentDisposition = searchParams.get("disposition") || "";
