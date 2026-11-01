@@ -1,3 +1,4 @@
+using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 using Duende.IdentityServer.Services;
 using Microsoft.AspNetCore.Authentication;
@@ -51,6 +52,8 @@ public class LogoutModel(
         await _signInManager.SignOutAsync();
         await HttpContext.SignOutAsync(IdentityConstants.TwoFactorRememberMeScheme);
         await HttpContext.SignOutAsync(IdentityConstants.TwoFactorUserIdScheme);
+        await HttpContext.SignOutAsync(IdentityServerConstants.DefaultCookieAuthenticationScheme);
+        await HttpContext.SignOutAsync(IdentityServerConstants.SignoutScheme);
 
         if (!string.IsNullOrWhiteSpace(logoutContext?.PostLogoutRedirectUri))
         {

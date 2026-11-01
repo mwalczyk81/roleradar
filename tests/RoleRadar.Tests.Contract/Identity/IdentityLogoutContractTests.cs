@@ -1,10 +1,55 @@
 using System.Net;
+using Duende.IdentityServer;
 using Xunit;
 
 namespace RoleRadar.Tests.Contract.Identity;
 
 public sealed class IdentityLogoutContractTests
 {
+    [Fact]
+    public async Task EndSession_SignsOutDuendeAuthenticationSchemes_AndSubsequentAuthorizeRedirectsToLogin()
+    {
+        var (app, client, cookies, dbDir) = await IdentityContractTestServer.StartHostAsync();
+        try
+        {
+            var idToken = await IdentityContractTestServer.LoginAndGetIdTokenAsync(client, app.Services);
+
+            var endSessionState = "post-logout-state-schemes";
+            var endSessionUrl = $"/connect/endsession?id_token_hint={Uri.EscapeDataString(idToken)}&post_logout_redirect_uri={Uri.EscapeDataString("https://localhost:5003/auth/logout")}&state={endSessionState}";
+
+            var endSessionResponse = await client.GetAsync(endSessionUrl);
+            IdentityContractTestServer.AssertIsRedirect(endSessionResponse);
+
+            var logoutLocation = endSessionResponse.Headers.Location!.ToString();
+            var logoutResponse = await client.GetAsync(logoutLocation);
+            Assert.Equal(HttpStatusCode.Redirect, logoutResponse.StatusCode);
+
+            // Both IdentityServer default cookie and signout cookie schemes must be signed out
+            var setCookieHeaders = logoutResponse.Headers.TryGetValues("Set-Cookie", out var sc)
+                ? string.Join(";", sc)
+                : string.Empty;
+
+            Assert.Contains(IdentityServerConstants.DefaultCookieAuthenticationScheme + "=", setCookieHeaders, StringComparison.OrdinalIgnoreCase);
+
+            // Subsequent interactive /connect/authorize must cleanly redirect to /Account/Login rather than failing
+            var rechallengeVerifier = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~0123456789";
+            var rechallengeChallenge = Microsoft.AspNetCore.WebUtilities.Base64UrlTextEncoder.Encode(
+                System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(rechallengeVerifier)));
+            var authorizeUrl = $"/connect/authorize?client_id=roleradar-web&response_type=code&scope=openid&redirect_uri={Uri.EscapeDataString("https://localhost:5003/auth/callback")}&code_challenge={rechallengeChallenge}&code_challenge_method=S256&state=check-rechallenge";
+
+            var authorizeResponse = await client.GetAsync(authorizeUrl);
+            IdentityContractTestServer.AssertIsRedirect(authorizeResponse);
+            var authorizeLocation = authorizeResponse.Headers.Location!.ToString();
+            Assert.Contains("/Account/Login", authorizeLocation, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            await app.StopAsync();
+            await app.DisposeAsync();
+            try { Directory.Delete(dbDir, true); } catch { }
+        }
+    }
+
     [Fact]
     public async Task EndSession_WithValidIdTokenHint_LogsOutAndRedirectsToRegisteredPostLogoutUri()
     {
