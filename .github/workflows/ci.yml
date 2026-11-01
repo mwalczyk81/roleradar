@@ -65,6 +65,8 @@ jobs:
               - 'deploy/**'
               - 'src/**'
               - 'web/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
             contracts:
               - 'contracts/**'
 
@@ -306,6 +308,7 @@ jobs:
           docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < Dockerfile
           docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < deploy/Dockerfile.identity
           docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < deploy/Dockerfile.api
+          docker run --rm -i hadolint/hadolint:v2.12.0 hadolint - < deploy/Dockerfile.web
 
       - name: Build local container images (never pushed/published per ADR-0016)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.images == 'true'
@@ -314,9 +317,7 @@ jobs:
           docker build --target mcp -t roleradar-mcp:local .
           docker build -f deploy/Dockerfile.identity -t roleradar-identity:local .
           docker build -f deploy/Dockerfile.api -t roleradar-api:local .
-          if [ -f deploy/Dockerfile.web ]; then
-            docker build -f deploy/Dockerfile.web -t roleradar-web:local .
-          fi
+          docker build -f deploy/Dockerfile.web -t roleradar-web:local .
 
       - name: Run Trivy vulnerability scan on container images
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.images == 'true'
@@ -325,9 +326,7 @@ jobs:
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --list-all-pkgs --severity CRITICAL --exit-code 1 --ignore-unfixed --format json --output /TestResults/trivy-report-mcp.json roleradar-mcp:local
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --list-all-pkgs --severity CRITICAL --exit-code 1 --ignore-unfixed --format json --output /TestResults/trivy-report-identity.json roleradar-identity:local
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --list-all-pkgs --severity CRITICAL --exit-code 1 --ignore-unfixed --format json --output /TestResults/trivy-report-api.json roleradar-api:local
-          if docker image inspect roleradar-web:local > /dev/null 2>&1; then
-            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --list-all-pkgs --severity CRITICAL --exit-code 1 --ignore-unfixed --format json --output /TestResults/trivy-report-web.json roleradar-web:local
-          fi
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --list-all-pkgs --severity CRITICAL --exit-code 1 --ignore-unfixed --format json --output /TestResults/trivy-report-web.json roleradar-web:local
 
       - name: Generate CycloneDX SBOMs for container images
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.images == 'true'
@@ -336,9 +335,7 @@ jobs:
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --format cyclonedx --output /TestResults/sbom-mcp.json roleradar-mcp:local
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --format cyclonedx --output /TestResults/sbom-identity.json roleradar-identity:local
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --format cyclonedx --output /TestResults/sbom-api.json roleradar-api:local
-          if docker image inspect roleradar-web:local > /dev/null 2>&1; then
-            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --format cyclonedx --output /TestResults/sbom-web.json roleradar-web:local
-          fi
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v ${{ github.workspace }}/TestResults:/TestResults aquasec/trivy:0.59.1 image --format cyclonedx --output /TestResults/sbom-web.json roleradar-web:local
 
       - name: Upload Security Reports and SBOMs
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.images == 'true'

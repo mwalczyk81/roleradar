@@ -35,6 +35,7 @@ $gateResults = [ordered]@{
     Tests = "FAIL"
     Coverage = "FAIL"
     Images = "FAIL"
+    WebSmoke = "FAIL"
 }
 
 $testCounts = [ordered]@{
@@ -48,6 +49,7 @@ $coveragePct = 0.0
 $cliSizeMb = "N/A"
 $mcpSizeMb = "N/A"
 $identitySizeMb = "N/A"
+$webSizeMb = "N/A"
 $apiSizeMb = "N/A"
 
 try {
@@ -155,29 +157,40 @@ try {
         }
     }
 
-    # 7. Build all four container images (CLI, MCP, Identity, API)
+    # 7. Build all container images (CLI, MCP, Identity, Web, API)
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     $null = & docker build --target cli -t "roleradar-cli:review-$cloneGuid" . 2>&1
     $null = & docker build --target mcp -t "roleradar-mcp:review-$cloneGuid" . 2>&1
     $null = & docker build -f deploy/Dockerfile.identity -t "roleradar-identity:review-$cloneGuid" . 2>&1
+    $null = & docker build -f deploy/Dockerfile.web -t "roleradar-web:review-$cloneGuid" . 2>&1
     $null = & docker build -f deploy/Dockerfile.api -t "roleradar-api:review-$cloneGuid" . 2>&1
 
     $cliBytes = & docker image inspect "roleradar-cli:review-$cloneGuid" --format '{{.Size}}' 2>$null
     $mcpBytes = & docker image inspect "roleradar-mcp:review-$cloneGuid" --format '{{.Size}}' 2>$null
     $identityBytes = & docker image inspect "roleradar-identity:review-$cloneGuid" --format '{{.Size}}' 2>$null
+    $webBytes = & docker image inspect "roleradar-web:review-$cloneGuid" --format '{{.Size}}' 2>$null
     $apiBytes = & docker image inspect "roleradar-api:review-$cloneGuid" --format '{{.Size}}' 2>$null
 
-    if ($cliBytes -and $mcpBytes -and $identityBytes -and $apiBytes) {
+    if ($cliBytes -and $mcpBytes -and $identityBytes -and $webBytes -and $apiBytes) {
         $gateResults.Images = "PASS"
         $cliSizeMb = "$([math]::Round([int64]$cliBytes / 1MB, 1)) MB"
         $mcpSizeMb = "$([math]::Round([int64]$mcpBytes / 1MB, 1)) MB"
         $identitySizeMb = "$([math]::Round([int64]$identityBytes / 1MB, 1)) MB"
+        $webSizeMb = "$([math]::Round([int64]$webBytes / 1MB, 1)) MB"
         $apiSizeMb = "$([math]::Round([int64]$apiBytes / 1MB, 1)) MB"
     }
 
+    # 8. Web container smoke test
+    $smokeOutput = & dotnet test tests/RoleRadar.Tests.Integration -c Release --no-build --filter "FullyQualifiedName~WebContainer" 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        $gateResults.WebSmoke = "PASS"
+    } else {
+        Write-Warning "Web container smoke test failed: $smokeOutput"
+    }
+
     # Cleanup review images
-    $null = & docker rmi -f "roleradar-cli:review-$cloneGuid" "roleradar-mcp:review-$cloneGuid" "roleradar-identity:review-$cloneGuid" "roleradar-api:review-$cloneGuid" 2>&1
+    $null = & docker rmi -f "roleradar-cli:review-$cloneGuid" "roleradar-mcp:review-$cloneGuid" "roleradar-identity:review-$cloneGuid" "roleradar-web:review-$cloneGuid" "roleradar-api:review-$cloneGuid" 2>&1
     $ErrorActionPreference = $prevEap
 }
 finally {
@@ -198,7 +211,8 @@ Write-Output "3. WarningsBuild: $($gateResults.Build)"
 Write-Output "4. Typecheck:     $($gateResults.Typecheck)"
 Write-Output "5. Tests:         $($gateResults.Tests) (Unit: $($testCounts.Unit), Arch: $($testCounts.Arch), Contract: $($testCounts.Contract), Integration: $($testCounts.Integration) | Total: $totalTests)"
 Write-Output "6. Domain+App Cov: $coveragePct% (Gate: >= 85%) -> $($gateResults.Coverage)"
-Write-Output "7. Image Builds:  $($gateResults.Images) (CLI: $cliSizeMb, MCP: $mcpSizeMb, Identity: $identitySizeMb, API: $apiSizeMb)"
+Write-Output "7. Image Builds:  $($gateResults.Images) (CLI: $cliSizeMb, MCP: $mcpSizeMb, Identity: $identitySizeMb, Web: $webSizeMb, API: $apiSizeMb)"
+Write-Output "8. Web image + smoke: $($gateResults.WebSmoke)"
 Write-Output "Verdict: $(if ($allPassed) { 'ALL GATES PASSED' } else { 'GATE FAILURE' })"
 Write-Output "================================================="
 

@@ -15,9 +15,9 @@ RUN pnpm install --frozen-lockfile
 COPY contracts/ ./contracts/
 COPY web/ ./web/
 
-RUN pnpm --filter web run build
-RUN pnpm --filter web run build:server
-RUN pnpm --filter web deploy --legacy --prod /prod/web
+RUN pnpm --filter web run build \
+ && pnpm --filter web run build:server \
+ && pnpm --filter web deploy --legacy --prod /prod/web
 
 FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS runtime
 

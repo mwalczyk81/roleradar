@@ -211,7 +211,16 @@ pwsh ./scripts/test-fast.ps1
 
 # 4. End-to-end Playwright smoke test (using throwaway containers)
 pnpm exec playwright test tests/e2e/smoke.spec.ts
+
+# 5. Container image integration & Web smoke tests (read-only rootfs & in-process TLS)
+pwsh ./scripts/test-images.ps1
 ```
+
+### Container Smoke & Image Verification Notes
+- `pwsh ./scripts/test-images.ps1` builds `roleradar-cli:test`, `roleradar-mcp:test`, `roleradar-identity:test`, and `roleradar-web:test`.
+- Executes `WebContainerSmokeTests` under production hardening conditions: read-only rootfs, `node` non-root user, tmpfs `/tmp:rw,noexec,nosuid,size=64m`, `cap_drop ALL`, and `no-new-privileges`.
+- Verifies in-process TLS on port 5003, OIDC discovery handshake against an ephemeral Identity container, CSP headers with dynamic nonces, unauthenticated redirect to Identity with HttpOnly PKCE cookies, inspect security flags, secret log hygiene (no secrets in stdout/stderr), and fail-closed termination on missing secrets or TLS certificates.
+- All Docker resources (network, volume, containers) are uniquely named per run (`rrtest-web-*`) and cleaned up immediately in `finally` without touching the developer's compose stack or data volumes.
 
 ### Playwright Verification Notes
 - The Playwright smoke test signs in via the real Identity container using throwaway credentials.

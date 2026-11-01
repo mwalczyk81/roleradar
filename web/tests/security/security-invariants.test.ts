@@ -388,19 +388,51 @@ describe("Security Invariants", () => {
 
     expect(routeFiles.length).toBeGreaterThan(0);
 
+    function extractActionBody(source: string): string | null {
+      const match = /export\s+(async\s+)?function\s+action\b/.exec(source);
+      if (!match) return null;
+
+      // Find opening parenthesis of function parameters
+      const openParenIndex = source.indexOf("(", match.index);
+      if (openParenIndex === -1) return null;
+
+      let parenCount = 1;
+      let i = openParenIndex + 1;
+      while (i < source.length && parenCount > 0) {
+        if (source[i] === "(") parenCount++;
+        else if (source[i] === ")") parenCount--;
+        i++;
+      }
+
+      // Next opening brace after parameter list is the function body
+      const openBraceIndex = source.indexOf("{", i);
+      if (openBraceIndex === -1) return null;
+
+      let braceCount = 1;
+      let j = openBraceIndex + 1;
+      while (j < source.length && braceCount > 0) {
+        if (source[j] === "{") braceCount++;
+        else if (source[j] === "}") braceCount--;
+        j++;
+      }
+
+      return source.slice(openBraceIndex, j);
+    }
+
     for (const file of routeFiles) {
       const filePath = path.join(targetDir, file);
       const content = fs.readFileSync(filePath, "utf8");
 
-      // Check if file defines an action and reads _csrf
-      const hasAction = /export\s+(async\s+)?function\s+action\b/.test(content);
-      const readsCsrf = content.includes('"_csrf"') || content.includes("'_csrf'");
-
-      if (hasAction && readsCsrf) {
-        expect(
-          content.includes("validateCsrfToken"),
-          `Route file ${file} defines an action that reads '_csrf' but does not call validateCsrfToken`
-        ).toBe(true);
+      const actionBody = extractActionBody(content);
+      if (actionBody) {
+        const readsCsrf = actionBody.includes('"_csrf"') || actionBody.includes("'_csrf'");
+        if (readsCsrf) {
+          const callsValidateCsrf = /validateCsrfToken\s*\(/.test(actionBody);
+          expect(
+            callsValidateCsrf,
+            `Route file ${file} defines an action reading '_csrf' but does not call validateCsrfToken(...) inside action body`
+          ).toBe(true);
+        }
       }
     }
   });
