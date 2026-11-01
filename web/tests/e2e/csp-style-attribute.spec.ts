@@ -64,6 +64,10 @@ let lastSearchRunsQueryReceived: Record<string, string> = {};
 let currentSearchRunsList: Array<Record<string, unknown>> = [];
 
 test.beforeAll(async () => {
+  const serverBuild = path.resolve(process.cwd(), "build", "server", "index.js");
+  if (!fs.existsSync(serverBuild)) {
+    throw new Error(`Missing ${serverBuild}. Run "pnpm --filter web run build" before the e2e suite.`);
+  }
   const mockOidcConfig = new client.Configuration(
     {
       issuer: "https://identity:5001",

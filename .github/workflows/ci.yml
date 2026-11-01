@@ -391,6 +391,9 @@ jobs:
       - name: Install Playwright Chromium with dependencies
         run: pnpm --filter web exec playwright install --with-deps chromium
 
+      - name: Build web app (the e2e server imports build/server)
+        run: pnpm --filter web run build
+
       - name: Run E2E tests
         run: pnpm run test:e2e
 
