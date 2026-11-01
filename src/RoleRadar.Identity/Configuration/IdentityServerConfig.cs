@@ -80,6 +80,7 @@ public static class IdentityServerConfig
                 PostLogoutRedirectUris = { webPostLogoutUri },
                 AllowOfflineAccess = true,
                 AllowedScopes = { "openid", "profile", "roleradar.api", "offline_access" },
+                AlwaysIncludeUserClaimsInIdToken = true,
 
                 // Strict token and code lifetimes per ADR-0017
                 AccessTokenLifetime = 600,             // 10 minutes

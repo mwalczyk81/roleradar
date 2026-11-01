@@ -232,7 +232,7 @@ describe("GET /postings loader (T028)", () => {
     expect(result.userLabel).not.toBe(session.ownerSub);
   });
 
-  it("falls back to text 'Owner' and never reveals sub GUID when preferred_username is absent", async () => {
+  it("falls back to text 'Signed in' and never reveals sub GUID when preferred_username is absent", async () => {
     const sessionId = crypto.randomUUID();
     const session: UserSession = {
       sessionId,
@@ -258,7 +258,7 @@ describe("GET /postings loader (T028)", () => {
     });
 
     const result = (await postingsLoader({ request, params: {}, context: {} } as any)) as any;
-    expect(result.userLabel).toBe("Owner");
+    expect(result.userLabel).toBe("Signed in");
     expect(result.userLabel).not.toBe(session.ownerSub);
   });
 });

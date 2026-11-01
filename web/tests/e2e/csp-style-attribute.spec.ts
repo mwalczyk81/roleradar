@@ -906,7 +906,7 @@ test.describe("Theme and Page Reset", () => {
     expect(darkBg).toBe("rgb(2, 6, 23)");
   });
 
-  test("header label shows preferred username or Owner, never raw sub GUID", async ({
+  test("header label shows preferred username or Signed in, never raw sub GUID", async ({
     browser,
   }) => {
     const context = await browser.newContext({ ignoreHTTPSErrors: true });
@@ -916,9 +916,9 @@ test.describe("Theme and Page Reset", () => {
     await page.goto(`${baseUrl}/postings`, { waitUntil: "networkidle" });
 
     // The test user has ownerSub = "playwright-test-user" without ownerUsername
-    // Header must fall back to "Owner", never "playwright-test-user"
+    // Header must fall back to "Signed in", never "playwright-test-user"
     const userLabelEl = page.locator(".ds-appshell-user");
-    await expect(userLabelEl).toHaveText("Owner");
+    await expect(userLabelEl).toHaveText("Signed in");
     await expect(userLabelEl).not.toHaveText("playwright-test-user");
   });
 

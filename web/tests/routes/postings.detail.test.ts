@@ -133,6 +133,7 @@ describe("GET /postings/:id loader (T031)", () => {
     expect(result.posting).toEqual(mockPosting);
     expect(result.criteria).toEqual(mockCriteria);
     expect(result.csrfToken).toBe("mock-csrf-token-444");
+    expect(result.userLabel).toBe("Signed in");
 
     // Invariant: Never return tokens to browser
     const serialized = JSON.stringify(result);

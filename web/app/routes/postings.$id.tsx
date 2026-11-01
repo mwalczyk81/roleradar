@@ -86,7 +86,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     posting: postingRes.data,
     criteria: criteriaRes.data ?? [],
     csrfToken: session.csrfToken,
-    userLabel: session.ownerUsername || "Owner",
+    userLabel: session.ownerUsername || "Signed in",
   };
 }
 

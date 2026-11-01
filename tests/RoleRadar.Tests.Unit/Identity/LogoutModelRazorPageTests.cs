@@ -15,19 +15,8 @@ namespace RoleRadar.Tests.Unit.Identity;
 
 public sealed class LogoutModelRazorPageTests
 {
-    [Fact]
-    public async Task OnGetAsync_WhenNoLogoutContext_SignsOutAndReturnsPageWithoutRedirect()
+    private static ServiceProvider CreateTestServiceProvider(IdentityAppDbContext dbContext)
     {
-        using var connection = new SqliteConnection("Data Source=:memory:");
-        connection.Open();
-
-        var options = new DbContextOptionsBuilder<IdentityAppDbContext>()
-            .UseSqlite(connection)
-            .Options;
-
-        await using var dbContext = new IdentityAppDbContext(options);
-        await dbContext.Database.MigrateAsync();
-
         var services = new ServiceCollection();
         services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
         services.AddLogging(b => b.AddConsole());
@@ -46,7 +35,23 @@ public sealed class LogoutModelRazorPageTests
 
         services.AddScoped(_ => dbContext);
 
-        using var provider = services.BuildServiceProvider();
+        return services.BuildServiceProvider();
+    }
+
+    [Fact]
+    public async Task OnGetAsync_WhenNoLogoutContext_DoesNotSignOutAndReturnsPageWithoutRedirect()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+
+        var options = new DbContextOptionsBuilder<IdentityAppDbContext>()
+            .UseSqlite(connection)
+            .Options;
+
+        await using var dbContext = new IdentityAppDbContext(options);
+        await dbContext.Database.MigrateAsync();
+
+        using var provider = CreateTestServiceProvider(dbContext);
         var signInManager = provider.GetRequiredService<SignInManager<IdentityUser<Guid>>>();
         var interactionService = provider.GetRequiredService<IIdentityServerInteractionService>();
 
@@ -64,6 +69,42 @@ public sealed class LogoutModelRazorPageTests
         };
 
         var result = await logoutModel.OnGetAsync(null);
+
+        Assert.IsType<PageResult>(result);
+        Assert.Null(logoutModel.LogoutId);
+    }
+
+    [Fact]
+    public async Task OnPostAsync_WhenNoLogoutContext_SignsOutAndReturnsPageWithoutRedirect()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+
+        var options = new DbContextOptionsBuilder<IdentityAppDbContext>()
+            .UseSqlite(connection)
+            .Options;
+
+        await using var dbContext = new IdentityAppDbContext(options);
+        await dbContext.Database.MigrateAsync();
+
+        using var provider = CreateTestServiceProvider(dbContext);
+        var signInManager = provider.GetRequiredService<SignInManager<IdentityUser<Guid>>>();
+        var interactionService = provider.GetRequiredService<IIdentityServerInteractionService>();
+
+        var httpContext = new DefaultHttpContext { RequestServices = provider };
+        var httpContextAccessor = provider.GetRequiredService<IHttpContextAccessor>();
+        httpContextAccessor.HttpContext = httpContext;
+        signInManager.Context = httpContext;
+
+        var logoutModel = new LogoutModel(signInManager, interactionService)
+        {
+            PageContext = new PageContext
+            {
+                HttpContext = httpContext
+            }
+        };
+
+        var result = await logoutModel.OnPostAsync(null);
 
         Assert.IsType<PageResult>(result);
         Assert.Null(logoutModel.LogoutId);

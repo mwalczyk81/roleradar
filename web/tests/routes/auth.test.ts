@@ -24,12 +24,25 @@ describe("auth routes", () => {
 
   describe("GET /auth/callback", () => {
     it("exchanges code, rotates session id, sets __Host- cookie without leaking tokens, and redirects to /postings", async () => {
+      const headerPart = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+      const idTokenClaims = {
+        iss: "https://localhost:5001",
+        sub: "test-owner-sub",
+        aud: "roleradar-web",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        iat: Math.floor(Date.now() / 1000),
+        auth_time: Math.floor(Date.now() / 1000),
+        preferred_username: "matt",
+      };
+      const payloadPart = Buffer.from(JSON.stringify(idTokenClaims)).toString("base64url");
+      const realShapedIdToken = `${headerPart}.${payloadPart}.mock-signature-bytes`;
+
       const mockTokens = {
         access_token: "mock-bearer-access-token-12345",
         refresh_token: "mock-offline-refresh-token-67890",
-        id_token: "mock-identity-token-payload",
+        id_token: realShapedIdToken,
         expires_in: 600,
-        claims: () => ({ sub: "test-owner-sub", preferred_username: "matt" }),
+        claims: () => idTokenClaims,
       };
 
       vi.spyOn(oidc, "exchangeCodeForTokens").mockResolvedValueOnce(mockTokens as any);
@@ -69,11 +82,12 @@ describe("auth routes", () => {
       // SECURITY INVARIANT: Tokens must NEVER appear in Set-Cookie header or response body
       expect(setCookie).not.toContain("mock-bearer-access-token");
       expect(setCookie).not.toContain("mock-offline-refresh-token");
-      expect(setCookie).not.toContain("mock-identity-token");
+      expect(setCookie).not.toContain(realShapedIdToken);
 
       const bodyText = await response.text();
       expect(bodyText).not.toContain("mock-bearer-access-token");
       expect(bodyText).not.toContain("mock-offline-refresh-token");
+      expect(bodyText).not.toContain(realShapedIdToken);
 
       // Verify session is saved in server memory
       const match = setCookie?.match(new RegExp(`${SECURE_COOKIE_NAME}=([^;]+)`));
@@ -83,6 +97,7 @@ describe("auth routes", () => {
       const saved = getSession(sessionId);
       expect(saved).not.toBeNull();
       expect(saved?.accessToken).toBe("mock-bearer-access-token-12345");
+      expect(saved?.idToken).toBe(realShapedIdToken);
       expect(saved?.ownerSub).toBe("test-owner-sub");
       expect(saved?.ownerUsername).toBe("matt");
     });

@@ -1,4 +1,7 @@
+using System.Text;
+using System.Text.Json;
 using Duende.IdentityServer.Models;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Extensions.Configuration;
 using RoleRadar.Identity.Configuration;
 using Xunit;
@@ -32,6 +35,7 @@ public sealed class IdentityTokenIssuanceContractTests
         Assert.True(webClient.RequirePkce, "Web client must require PKCE (RFC 7636).");
         Assert.True(webClient.RequireClientSecret, "Confidential web client must require secret.");
         Assert.Contains(GrantType.AuthorizationCode, webClient.AllowedGrantTypes);
+        Assert.True(webClient.AlwaysIncludeUserClaimsInIdToken, "roleradar-web must include user claims directly in the ID token.");
 
         // Strict lifetimes per ADR-0017
         Assert.Equal(600, webClient.AccessTokenLifetime);             // 10 minutes
@@ -157,12 +161,29 @@ public sealed class IdentityTokenIssuanceContractTests
     }
 
     [Fact]
-    public void IdentityResources_Profile_IncludesPreferredUsernameClaim()
+    public async Task CodeFlow_IssuedIdToken_ContainsPreferredUsernameClaim()
     {
-        var identityResources = IdentityServerConfig.GetIdentityResources().ToArray();
-        var profile = identityResources.FirstOrDefault(r => r.Name == "profile");
+        var (app, client, _, dbDir) = await IdentityContractTestServer.StartHostAsync();
+        try
+        {
+            var idToken = await IdentityContractTestServer.LoginAndGetIdTokenAsync(client, app.Services);
+            var parts = idToken.Split('.');
+            Assert.True(parts.Length >= 2, "Expected valid JWT format for ID token");
 
-        Assert.NotNull(profile);
-        Assert.Contains("preferred_username", profile.UserClaims);
+            var payloadBytes = Base64UrlTextEncoder.Decode(parts[1]);
+            var payloadJson = Encoding.UTF8.GetString(payloadBytes);
+            using var doc = JsonDocument.Parse(payloadJson);
+
+            Assert.True(
+                doc.RootElement.TryGetProperty("preferred_username", out var preferredUsernameEl),
+                "ID token must include 'preferred_username' claim when AlwaysIncludeUserClaimsInIdToken is enabled");
+            Assert.Equal("testowner", preferredUsernameEl.GetString());
+        }
+        finally
+        {
+            await app.StopAsync();
+            await app.DisposeAsync();
+            try { Directory.Delete(dbDir, true); } catch { }
+        }
     }
 }

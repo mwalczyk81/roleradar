@@ -1,3 +1,4 @@
+using Duende.IdentityServer.Models;
 using Duende.IdentityServer.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
@@ -21,20 +22,33 @@ public class LogoutModel(
 
     public async Task<IActionResult> OnGetAsync(string? logoutId = null)
     {
-        return await ProcessLogoutAsync(logoutId ?? LogoutId);
+        var id = logoutId ?? LogoutId;
+        var logoutContext = !string.IsNullOrWhiteSpace(id)
+            ? await _interactionService.GetLogoutContextAsync(id, HttpContext.RequestAborted)
+            : null;
+
+        // Hardening against CSRF / forced logout: only sign out when GetLogoutContextAsync returns a validated context.
+        // With no validated context, render the signed-out page without signing out.
+        if (logoutContext == null)
+        {
+            return Page();
+        }
+
+        return await ProcessLogoutAsync(logoutContext);
     }
 
     public async Task<IActionResult> OnPostAsync(string? logoutId = null)
     {
-        return await ProcessLogoutAsync(logoutId ?? LogoutId);
-    }
-
-    private async Task<IActionResult> ProcessLogoutAsync(string? logoutId)
-    {
-        var logoutContext = !string.IsNullOrWhiteSpace(logoutId)
-            ? await _interactionService.GetLogoutContextAsync(logoutId, HttpContext.RequestAborted)
+        var id = logoutId ?? LogoutId;
+        var logoutContext = !string.IsNullOrWhiteSpace(id)
+            ? await _interactionService.GetLogoutContextAsync(id, HttpContext.RequestAborted)
             : null;
 
+        return await ProcessLogoutAsync(logoutContext);
+    }
+
+    private async Task<IActionResult> ProcessLogoutAsync(LogoutRequest? logoutContext)
+    {
         await _signInManager.SignOutAsync();
         await HttpContext.SignOutAsync(IdentityConstants.TwoFactorRememberMeScheme);
         await HttpContext.SignOutAsync(IdentityConstants.TwoFactorUserIdScheme);

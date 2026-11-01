@@ -99,7 +99,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     limit: data.limit,
     offset: data.offset,
     csrfToken: session.csrfToken,
-    userLabel: session.ownerUsername || "Owner",
+    userLabel: session.ownerUsername || "Signed in",
   };
 }
 
