@@ -24,7 +24,7 @@ repos:
         args: ["--markdown-linebreak-ext=md"]
         exclude: (^|/)fixtures/
       - id: end-of-file-fixer
-        exclude: (^|/)fixtures/|^contracts/openapi/
+        exclude: (^|/)fixtures/|^contracts/openapi/|(^|/)packages\.lock\.json$
       - id: mixed-line-ending
         exclude: (^|/)fixtures/
 
