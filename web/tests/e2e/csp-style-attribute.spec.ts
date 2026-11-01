@@ -54,14 +54,14 @@ let nextApplicationResponseBody: unknown = null;
 let lastApplicationsQueryReceived: Record<string, string> = {};
 
 let lastCriteriaQueryReceived: Record<string, string> = {};
-let currentCriteriaList: Array<any> | null = null;
+let currentCriteriaList: Array<Record<string, unknown>> | null = null;
 
 let lastNotesQueryReceived: Record<string, string> = {};
-let currentNotesList: Array<any> = [];
-let currentNoteDetail: any = null;
+let currentNotesList: Array<Record<string, unknown>> = [];
+let currentNoteDetail: Record<string, unknown> | null = null;
 
 let lastSearchRunsQueryReceived: Record<string, string> = {};
-let currentSearchRunsList: Array<any> = [];
+let currentSearchRunsList: Array<Record<string, unknown>> = [];
 
 test.beforeAll(async () => {
   const mockOidcConfig = new client.Configuration(
@@ -569,7 +569,8 @@ async function setupSessionCookie(context: BrowserContext) {
 async function runAxeChecks(page: Page) {
   await page.evaluate(axe.source);
   const results = await page.evaluate(async () => {
-    return await (window as any).axe.run(document, {
+    const win = window as unknown as { axe: { run: (doc: Document, opts: unknown) => Promise<{ violations: Array<{ impact?: string }> }> } };
+    return await win.axe.run(document, {
       runOnly: {
         type: "tag",
         values: ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"],
@@ -577,7 +578,7 @@ async function runAxeChecks(page: Page) {
     });
   });
   return results.violations.filter(
-    (v: any) => v.impact === "serious" || v.impact === "critical"
+    (v: { impact?: string }) => v.impact === "serious" || v.impact === "critical"
   );
 }
 
@@ -921,10 +922,11 @@ test.describe("Posting Detail Real Transitions (Real Chromium)", () => {
 
     // Track whether window.location.reload was called (it should NOT be called)
     await page.evaluate(() => {
-      (window as any).__reloadedViaWindow = false;
+      const win = window as unknown as { __reloadedViaWindow: boolean };
+      win.__reloadedViaWindow = false;
       const origReload = window.location.reload.bind(window.location);
       window.location.reload = () => {
-        (window as any).__reloadedViaWindow = true;
+        win.__reloadedViaWindow = true;
         origReload();
       };
     });
@@ -936,7 +938,7 @@ test.describe("Posting Detail Real Transitions (Real Chromium)", () => {
     // Verify page revalidated and fetched updated title
     await expect(page.getByRole("heading", { name: "Principal Engineer (Concurrently Updated)", level: 1 })).toBeVisible();
 
-    const reloadedViaWindow = await page.evaluate(() => (window as any).__reloadedViaWindow);
+    const reloadedViaWindow = await page.evaluate(() => (window as unknown as { __reloadedViaWindow: boolean }).__reloadedViaWindow);
     expect(reloadedViaWindow).toBe(false);
   });
 
@@ -1708,6 +1710,15 @@ test.describe("Company Management (Real Chromium)", () => {
         message: "Access token expired",
       };
 
+      // Stub the Identity authorize endpoint so this test never depends on a listener on host port 5001
+      await page.route("**/connect/authorize*", (route) => {
+        route.fulfill({
+          status: 200,
+          contentType: "text/html",
+          body: "<html><body>Mock Identity Provider Login Page</body></html>",
+        });
+      });
+
       await page.getByRole("button", { name: "Create Application" }).click();
       const modal = page.getByRole("dialog");
       await expect(modal).toBeVisible();
@@ -1864,6 +1875,15 @@ test.describe("Company Management (Real Chromium)", () => {
         errorCode: "UNAUTHORIZED",
         message: "Session token expired",
       };
+
+      // Stub the Identity authorize endpoint so this test never depends on a listener on host port 5001
+      await page.route("**/connect/authorize*", (route) => {
+        route.fulfill({
+          status: 200,
+          contentType: "text/html",
+          body: "<html><body>Mock Identity Provider Login Page</body></html>",
+        });
+      });
 
       await page.getByRole("button", { name: "Append Event" }).first().click();
       const modal = page.getByRole("dialog");

@@ -3,6 +3,7 @@ import React from "react";
 import { render, screen } from "@testing-library/react";
 import { TransitionPostingDialog } from "../../app/components/TransitionPostingDialog.jsx";
 import { Toast, ToastRegion } from "../../app/ui.js";
+import { createMockFetcher } from "../test-helpers.js";
 
 describe("Transition Posting Dialog & Conflict Toasts (T036)", () => {
   const criteria = [
@@ -50,9 +51,8 @@ describe("Transition Posting Dialog & Conflict Toasts (T036)", () => {
   });
 
   it("renders inline error messages from fetcher action data when validation fails", () => {
-    const mockFetcher = {
-      Form: "form" as any,
-      state: "idle" as const,
+    const mockFetcher = createMockFetcher({
+      state: "idle",
       data: {
         ok: false as const,
         message: "Invalid state transition from 'closed' to 'scored'.",
@@ -60,7 +60,7 @@ describe("Transition Posting Dialog & Conflict Toasts (T036)", () => {
           reason: "Reason is required for this transition.",
         },
       },
-    };
+    });
 
     render(
       React.createElement(TransitionPostingDialog, {
@@ -70,7 +70,7 @@ describe("Transition Posting Dialog & Conflict Toasts (T036)", () => {
         currentDisposition: "lead",
         versionToken: "token-1",
         csrfToken: "csrf-1",
-        fetcher: mockFetcher as any,
+        fetcher: mockFetcher,
       })
     );
 

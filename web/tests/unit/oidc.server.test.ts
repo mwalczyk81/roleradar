@@ -64,10 +64,10 @@ describe("oidc.server", () => {
       refresh_token: "mock-new-refresh-token",
       id_token: "mock-new-id-token",
       expires_in: 600,
-    } as client.TokenEndpointResponse;
+    } as unknown as Awaited<ReturnType<typeof client.authorizationCodeGrant>>;
 
     vi.mocked(client.authorizationCodeGrant).mockResolvedValueOnce(
-      mockTokenResponse as any
+      mockTokenResponse
     );
 
     const callbackUrl = new URL(
@@ -95,10 +95,10 @@ describe("oidc.server", () => {
       access_token: "mock-refreshed-access-token",
       refresh_token: "mock-next-refresh-token",
       expires_in: 600,
-    } as client.TokenEndpointResponse;
+    } as unknown as Awaited<ReturnType<typeof client.refreshTokenGrant>>;
 
     vi.mocked(client.refreshTokenGrant).mockResolvedValueOnce(
-      mockTokenResponse as any
+      mockTokenResponse
     );
 
     const tokens = await refreshTokens("current-refresh-token");

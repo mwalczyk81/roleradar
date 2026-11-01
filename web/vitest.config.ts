@@ -12,6 +12,10 @@ export default defineConfig({
       reporter: ["text", "json", "html"],
       include: ["app/**"],
       exclude: ["app/ds/**"],
+      thresholds: {
+        lines: 80,
+        branches: 75,
+      },
     },
   },
 });

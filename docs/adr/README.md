@@ -30,3 +30,4 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0024](./0024-nx-and-nx-dotnet-monorepo-orchestration.md) | Monorepo Orchestration with Nx and `@nx/dotnet` | Accepted | `005b-management-ui` |
 | [ADR-0025](./0025-web-in-process-tls-and-dev-cert-trust.md) | Web Host In-Process TLS Termination, Dev Certificate Trust, and Port 5003 Migration | Accepted | `005b-management-ui` |
 | [ADR-0026](./0026-strict-csp-nonce-and-theme-initialization.md) | Strict CSP with Nonce, Zero-FOUC Theme Initialization, and Untrusted Plain-Text Rendering | Accepted | `005b-management-ui` |
+| [ADR-0027](./0027-web-test-pyramid-and-e2e-strategy.md) | Web Test Pyramid and Verification Strategy | Accepted | `005b-management-ui` |

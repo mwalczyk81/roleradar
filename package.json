@@ -6,7 +6,9 @@
   "scripts": {
     "build": "nx run-many -t build",
     "test": "nx run-many -t test",
+    "test:coverage": "pnpm --filter web run test:coverage",
     "test:e2e": "pnpm --filter web run test:e2e",
+    "test:e2e:real": "pwsh ./scripts/test-e2e-real.ps1",
     "lint": "nx run-many -t lint"
   },
   "devDependencies": {

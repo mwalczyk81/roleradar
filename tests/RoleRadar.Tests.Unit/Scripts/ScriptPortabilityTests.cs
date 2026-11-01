@@ -86,10 +86,19 @@ public sealed class ScriptPortabilityTests
 
         var yaml = File.ReadAllText(dependabotPath);
 
-        // Must cover package-ecosystem: "docker" for "/" and "/deploy"
-        Assert.Contains("package-ecosystem: \"docker\"", yaml);
-        Assert.Contains("directory: \"/\"", yaml);
-        Assert.Contains("directory: \"/deploy\"", yaml);
+        // Must cover package-ecosystem: "docker" for "/" and "/deploy" within that specific block
+        var dockerBlockMatch = Regex.Match(
+            yaml,
+            @"(?ms)^\s*-\s*package-ecosystem:\s*""docker"".*?(?=^\s*-\s*package-ecosystem:|\z)");
+        Assert.True(dockerBlockMatch.Success, "dependabot.yml must define a package-ecosystem: \"docker\" block");
+
+        var dockerBlock = dockerBlockMatch.Value;
+        Assert.True(
+            dockerBlock.Contains("directory: \"/\"") || dockerBlock.Contains("- \"/\""),
+            "The docker ecosystem block in dependabot.yml must contain '/'");
+        Assert.True(
+            dockerBlock.Contains("directory: \"/deploy\"") || dockerBlock.Contains("- \"/deploy\""),
+            "The docker ecosystem block in dependabot.yml must contain '/deploy'");
     }
 
     [Fact]

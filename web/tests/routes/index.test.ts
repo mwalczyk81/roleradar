@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import * as client from "openid-client";
 import { loader as indexLoader } from "../../app/routes/_index.js";
 import { setOidcConfigForTesting } from "../../app/lib/oidc.server.js";
+import { callLoader } from "../test-helpers.js";
 import {
   saveSession,
   setSessionEncryptionKeyForTesting,
@@ -48,11 +49,7 @@ describe("GET / (_index)", () => {
       },
     });
 
-    const response = await indexLoader({
-      request,
-      params: {},
-      context: {},
-    } as any);
+    const response = await callLoader<Response>(indexLoader, request);
 
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/postings");
@@ -63,12 +60,8 @@ describe("GET / (_index)", () => {
 
     let thrownResponse: Response | null = null;
     try {
-      await indexLoader({
-        request,
-        params: {},
-        context: {},
-      } as any);
-    } catch (err: any) {
+      await callLoader<Response>(indexLoader, request);
+    } catch (err: unknown) {
       if (err instanceof Response) {
         thrownResponse = err;
       }

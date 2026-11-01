@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import crypto from "node:crypto";
 import { action as postingDetailAction } from "../../app/routes/postings.$id.js";
 import * as apiClientModule from "../../app/lib/api-client.server.js";
+import { callAction } from "../test-helpers.js";
 import {
   saveSession,
   setSessionEncryptionKeyForTesting,
@@ -18,7 +19,7 @@ describe("POST /postings/:id action (T035)", () => {
     vi.restoreAllMocks();
     vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
       POST: mockApiPost,
-    } as any);
+    } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
   });
 
   function createTestSession(): { sessionId: string; session: UserSession } {
@@ -37,14 +38,15 @@ describe("POST /postings/:id action (T035)", () => {
     return { sessionId, session };
   }
 
-  function unwrapActionResult(result: any): { status: number; data: any } {
-    if (result && result.type === "DataWithResponseInit") {
-      return { status: result.init?.status ?? 200, data: result.data };
+  function unwrapActionResult(result: unknown): { status: number; data: Record<string, unknown> } {
+    if (result && typeof result === "object" && "type" in result && (result as { type: string }).type === "DataWithResponseInit") {
+      const dataInit = result as unknown as { init?: { status?: number }; data: Record<string, unknown> };
+      return { status: dataInit.init?.status ?? 200, data: dataInit.data };
     }
     if (result instanceof Response) {
-      return { status: result.status, data: result };
+      return { status: result.status, data: {} };
     }
-    return { status: 200, data: result };
+    return { status: 200, data: (result ?? {}) as Record<string, unknown> };
   }
 
   it("enforces CSRF validation and rejects request with invalid _csrf with 403", async () => {
@@ -63,17 +65,13 @@ describe("POST /postings/:id action (T035)", () => {
       body: formData,
     });
 
-    const result = await postingDetailAction({
-      request,
-      params: { id: "post-1" },
-      context: {},
-    } as any);
+    const result = await callAction(postingDetailAction, request, { id: "post-1" });
 
     const { status, data } = unwrapActionResult(result);
     expect(status).toBe(403);
     expect(data.ok).toBe(false);
     expect(data.errorCode).toBe("CSRF_INVALID");
-    expect(data.message).toContain("CSRF");
+    expect(String(data.message)).toContain("CSRF");
   });
 
   it("rejects transition to 'applied' disposition with 400 validation error", async () => {
@@ -92,16 +90,12 @@ describe("POST /postings/:id action (T035)", () => {
       body: formData,
     });
 
-    const result = await postingDetailAction({
-      request,
-      params: { id: "post-1" },
-      context: {},
-    } as any);
+    const result = await callAction(postingDetailAction, request, { id: "post-1" });
 
     const { status, data } = unwrapActionResult(result);
     expect(status).toBe(400);
     expect(data.ok).toBe(false);
-    expect(data.message).toContain("applied");
+    expect(String(data.message)).toContain("applied");
   });
 
   it("maps valid transition form submission to POST /api/v1/postings/{id}/transition", async () => {
@@ -150,11 +144,7 @@ describe("POST /postings/:id action (T035)", () => {
       body: formData,
     });
 
-    const result = await postingDetailAction({
-      request,
-      params: { id: postingId },
-      context: {},
-    } as any);
+    const result = await callAction(postingDetailAction, request, { id: postingId });
 
     const { status, data } = unwrapActionResult(result);
     expect(status).toBe(200);
@@ -207,17 +197,13 @@ describe("POST /postings/:id action (T035)", () => {
       body: formData,
     });
 
-    const result = await postingDetailAction({
-      request,
-      params: { id: postingId },
-      context: {},
-    } as any);
+    const result = await callAction(postingDetailAction, request, { id: postingId });
 
     const { status, data } = unwrapActionResult(result);
     expect(status).toBe(400);
     expect(data.ok).toBe(false);
     expect(data.errorCode).toBe("INVALID_TRANSITION");
-    expect(data.message).toContain("Cannot transition");
+    expect(String(data.message)).toContain("Cannot transition");
   });
 
   it("maps 409 Concurrency Conflict from API into conflict alert state", async () => {
@@ -248,16 +234,48 @@ describe("POST /postings/:id action (T035)", () => {
       body: formData,
     });
 
-    const result = await postingDetailAction({
-      request,
-      params: { id: postingId },
-      context: {},
-    } as any);
+    const result = await callAction(postingDetailAction, request, { id: postingId });
 
     const { status, data } = unwrapActionResult(result);
     expect(status).toBe(409);
     expect(data.ok).toBe(false);
     expect(data.isConflict).toBe(true);
-    expect(data.message).toContain("modified by another process");
+    expect(String(data.message)).toContain("modified by another process");
+  });
+
+  it("maps 500 unexpected API error from backend gracefully", async () => {
+    const { sessionId, session } = createTestSession();
+    const postingId = crypto.randomUUID();
+
+    mockApiPost.mockResolvedValueOnce({
+      data: undefined,
+      error: {
+        ok: false,
+        errorCode: "INTERNAL_ERROR",
+        message: "Database connection failed unexpectedly",
+      },
+      response: { status: 500 } as Response,
+    });
+
+    const formData = new FormData();
+    formData.set("_csrf", session.csrfToken);
+    formData.set("toDisposition", "scored");
+    formData.set("reason", "Server test");
+    formData.set("versionToken", crypto.randomUUID());
+
+    const request = new Request(`https://localhost:5003/postings/${postingId}`, {
+      method: "POST",
+      headers: {
+        Cookie: `${SECURE_COOKIE_NAME}=${sessionId}`,
+      },
+      body: formData,
+    });
+
+    const result = await callAction(postingDetailAction, request, { id: postingId });
+
+    const { status, data } = unwrapActionResult(result);
+    expect(status).toBe(500);
+    expect(data.ok).toBe(false);
+    expect(String(data.message)).toContain("Database connection failed");
   });
 });

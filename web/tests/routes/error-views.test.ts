@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import NotAuthorized, { loader as notAuthorizedLoader } from "../../app/routes/not-authorized.js";
 import ServiceUnavailable from "../../app/routes/service-unavailable.js";
 import { action as logoutAction } from "../../app/routes/auth.logout.js";
+import { callLoader, callAction } from "../test-helpers.js";
 import {
   saveSession,
   setSessionEncryptionKeyForTesting,
@@ -73,7 +74,7 @@ describe("error views", () => {
         },
       });
 
-      const data = await notAuthorizedLoader({ request, params: {}, context: {} } as any);
+      const data = await callLoader(notAuthorizedLoader, request);
 
       expect(data).toEqual({ csrfToken: "my-valid-csrf-token" });
       const serialized = JSON.stringify(data);
@@ -101,7 +102,7 @@ describe("error views", () => {
       const loaderReq = new Request("https://localhost:5003/not-authorized", {
         headers: { Cookie: `${SECURE_COOKIE_NAME}=${sessionId}` },
       });
-      const loaderData = await notAuthorizedLoader({ request: loaderReq, params: {}, context: {} } as any);
+      const loaderData = await callLoader<{ csrfToken: string }>(notAuthorizedLoader, loaderReq);
       expect(loaderData.csrfToken).toBe(csrfToken);
 
       // 2. Submit form to /auth/logout with the csrfToken
@@ -116,7 +117,7 @@ describe("error views", () => {
         body: formData,
       });
 
-      const response = await logoutAction({ request: logoutReq, params: {}, context: {} } as any);
+      const response = await callAction<Response>(logoutAction, logoutReq);
       expect(response.status).toBe(302);
       expect(response.headers.get("Location")).toBeTruthy();
     });
@@ -124,7 +125,7 @@ describe("error views", () => {
     it("signing out from /not-authorized without a session also succeeds", async () => {
       // 1. Loader returns empty csrfToken when session is missing
       const loaderReq = new Request("https://localhost:5003/not-authorized");
-      const loaderData = await notAuthorizedLoader({ request: loaderReq, params: {}, context: {} } as any);
+      const loaderData = await callLoader<{ csrfToken: string }>(notAuthorizedLoader, loaderReq);
       expect(loaderData.csrfToken).toBe("");
 
       // 2. Submit form to /auth/logout without a session
@@ -136,7 +137,7 @@ describe("error views", () => {
         body: formData,
       });
 
-      const response = await logoutAction({ request: logoutReq, params: {}, context: {} } as any);
+      const response = await callAction<Response>(logoutAction, logoutReq);
       expect(response.status).toBe(302);
       expect(response.headers.get("Location")).toBeTruthy();
     });

@@ -4,6 +4,7 @@ import * as client from "openid-client";
 import { loader as postingsLoader } from "../../app/routes/postings._index.js";
 import * as apiClientModule from "../../app/lib/api-client.server.js";
 import { setOidcConfigForTesting } from "../../app/lib/oidc.server.js";
+import { callLoader } from "../test-helpers.js";
 import {
   saveSession,
   setSessionEncryptionKeyForTesting,
@@ -31,7 +32,7 @@ describe("GET /postings loader (T028)", () => {
     vi.restoreAllMocks();
     vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
       GET: mockApiGet,
-    } as any);
+    } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
   });
 
   function createTestSession(): { sessionId: string; session: UserSession } {
@@ -86,7 +87,7 @@ describe("GET /postings loader (T028)", () => {
       },
     });
 
-    const result = await postingsLoader({ request, params: {}, context: {} } as any);
+    const result = await callLoader(postingsLoader, request);
 
     expect(mockApiGet).toHaveBeenCalledTimes(1);
     const [endpoint, options] = mockApiGet.mock.calls[0];
@@ -136,7 +137,7 @@ describe("GET /postings loader (T028)", () => {
       },
     });
 
-    await postingsLoader({ request, params: {}, context: {} } as any);
+    await callLoader(postingsLoader, request);
 
     const [, options] = mockApiGet.mock.calls[0];
     expect(options.params.query.limit).toBe(100); // clamped from 200
@@ -161,8 +162,8 @@ describe("GET /postings loader (T028)", () => {
 
     let thrown: Response | null = null;
     try {
-      await postingsLoader({ request, params: {}, context: {} } as any);
-    } catch (err: any) {
+      await callLoader(postingsLoader, request);
+    } catch (err: unknown) {
       if (err instanceof Response) thrown = err;
     }
 
@@ -188,8 +189,8 @@ describe("GET /postings loader (T028)", () => {
 
     let thrown: Response | null = null;
     try {
-      await postingsLoader({ request, params: {}, context: {} } as any);
-    } catch (err: any) {
+      await callLoader(postingsLoader, request);
+    } catch (err: unknown) {
       if (err instanceof Response) thrown = err;
     }
 
@@ -227,7 +228,7 @@ describe("GET /postings loader (T028)", () => {
       },
     });
 
-    const result = (await postingsLoader({ request, params: {}, context: {} } as any)) as any;
+    const result = await callLoader(postingsLoader, request);
     expect(result.userLabel).toBe("matt");
     expect(result.userLabel).not.toBe(session.ownerSub);
   });
@@ -257,7 +258,7 @@ describe("GET /postings loader (T028)", () => {
       },
     });
 
-    const result = (await postingsLoader({ request, params: {}, context: {} } as any)) as any;
+    const result = await callLoader(postingsLoader, request);
     expect(result.userLabel).toBe("Signed in");
     expect(result.userLabel).not.toBe(session.ownerSub);
   });

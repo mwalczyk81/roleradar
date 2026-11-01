@@ -29,6 +29,7 @@ import { loader as postingsLoader } from "../../app/routes/postings._index.js";
 import { loader as postingDetailLoader } from "../../app/routes/postings.$id.js";
 import * as apiClientModule from "../../app/lib/api-client.server.js";
 import NotAuthorized from "../../app/routes/not-authorized.js";
+import { callLoader, callAction } from "../test-helpers.js";
 
 describe("Security Invariants", () => {
   const dummyKey = crypto.randomBytes(32);
@@ -48,7 +49,9 @@ describe("Security Invariants", () => {
       claims: () => ({ sub: "owner-subject" }),
     };
 
-    vi.spyOn(oidc, "exchangeCodeForTokens").mockResolvedValueOnce(rawTokens as any);
+    vi.spyOn(oidc, "exchangeCodeForTokens").mockResolvedValueOnce(
+      rawTokens as unknown as Awaited<ReturnType<typeof oidc.exchangeCodeForTokens>>
+    );
 
     const state = "state-invariant-1";
     const verifier = "verifier-invariant-1";
@@ -61,11 +64,7 @@ describe("Security Invariants", () => {
       }
     );
 
-    const response = (await callbackLoader({
-      request,
-      params: {},
-      context: {},
-    } as any)) as Response;
+    const response = await callLoader<Response>(callbackLoader, request);
 
     const setCookie = response.headers.get("Set-Cookie") ?? "";
     const bodyText = await response.text();
@@ -134,38 +133,36 @@ describe("Security Invariants", () => {
         }
         return Promise.resolve({ data: undefined, response: { status: 404 } as Response });
       }),
-    } as any);
+    } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
 
     const headers = { Cookie: `${SECURE_COOKIE_NAME}=${sessionId}` };
 
     // Test loader 1: /not-authorized
-    const notAuthData = await notAuthorizedLoader({
-      request: new Request("https://localhost:5003/not-authorized", { headers }),
-      params: {},
-      context: {},
-    } as any);
+    const notAuthData = await callLoader(
+      notAuthorizedLoader,
+      new Request("https://localhost:5003/not-authorized", { headers })
+    );
     const serializedNotAuth = JSON.stringify(notAuthData);
     expect(serializedNotAuth).not.toContain(rawTokens.accessToken);
     expect(serializedNotAuth).not.toContain(rawTokens.refreshToken);
     expect(serializedNotAuth).not.toContain(rawTokens.idToken);
 
     // Test loader 2: /postings
-    const postingsData = await postingsLoader({
-      request: new Request("https://localhost:5003/postings", { headers }),
-      params: {},
-      context: {},
-    } as any);
+    const postingsData = await callLoader(
+      postingsLoader,
+      new Request("https://localhost:5003/postings", { headers })
+    );
     const serializedPostings = JSON.stringify(postingsData);
     expect(serializedPostings).not.toContain(rawTokens.accessToken);
     expect(serializedPostings).not.toContain(rawTokens.refreshToken);
     expect(serializedPostings).not.toContain(rawTokens.idToken);
 
     // Test loader 3: /postings/:id
-    const detailData = await postingDetailLoader({
-      request: new Request("https://localhost:5003/postings/p1", { headers }),
-      params: { id: "p1" },
-      context: {},
-    } as any);
+    const detailData = await callLoader(
+      postingDetailLoader,
+      new Request("https://localhost:5003/postings/p1", { headers }),
+      { id: "p1" }
+    );
     const serializedDetail = JSON.stringify(detailData);
     expect(serializedDetail).not.toContain(rawTokens.accessToken);
     expect(serializedDetail).not.toContain(rawTokens.refreshToken);
@@ -198,7 +195,9 @@ describe("Security Invariants", () => {
       claims: () => ({ sub: "owner-sub" }),
     };
 
-    vi.spyOn(oidc, "exchangeCodeForTokens").mockResolvedValueOnce(mockTokens as any);
+    vi.spyOn(oidc, "exchangeCodeForTokens").mockResolvedValueOnce(
+      mockTokens as unknown as Awaited<ReturnType<typeof oidc.exchangeCodeForTokens>>
+    );
 
     const state = "state-rotation";
     const verifier = "verifier-rotation";
@@ -211,11 +210,7 @@ describe("Security Invariants", () => {
       }
     );
 
-    const response = (await callbackLoader({
-      request,
-      params: {},
-      context: {},
-    } as any)) as Response;
+    const response = await callLoader<Response>(callbackLoader, request);
 
     const setCookie = response.headers.get("Set-Cookie") ?? "";
     const match = setCookie.match(new RegExp(`${SECURE_COOKIE_NAME}=([^;]+)`));
@@ -305,18 +300,14 @@ describe("Security Invariants", () => {
       },
     });
 
-    const response = await logoutAction({
-      request: req,
-      params: {},
-      context: {},
-    } as any);
+    const response = await callAction<Response>(logoutAction, req);
 
     expect(response.status).toBe(403);
   });
 
   // Invariant 6: CSP uses a per-response nonce with no unsafe-inline in script-src
   it("Invariant 6: CSP headers use a cryptographic per-response nonce with no unsafe-inline in script-src", () => {
-    const res = new http.ServerResponse({} as any);
+    const res = new http.ServerResponse({} as unknown as http.IncomingMessage);
     const nonce1 = generateCspNonce();
     applySecurityHeaders(res, nonce1);
 

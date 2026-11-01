@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import crypto from "node:crypto";
+import * as client from "openid-client";
 import { loader as callbackLoader } from "../../app/routes/auth.callback.js";
 import { action as logoutAction } from "../../app/routes/auth.logout.js";
 import * as oidc from "../../app/lib/oidc.server.js";
+import { callLoader, callAction } from "../test-helpers.js";
 import {
   getAuthStateCookieName,
   getCodeVerifierCookieName,
@@ -45,7 +47,7 @@ describe("auth routes", () => {
         claims: () => idTokenClaims,
       };
 
-      vi.spyOn(oidc, "exchangeCodeForTokens").mockResolvedValueOnce(mockTokens as any);
+      vi.spyOn(oidc, "exchangeCodeForTokens").mockResolvedValueOnce(mockTokens as unknown as client.TokenEndpointResponse);
 
       // Transient state cookie simulating code verifier & expected state stored during auth initiation
       const state = "test-state-abc";
@@ -61,11 +63,7 @@ describe("auth routes", () => {
         }
       );
 
-      const response = (await callbackLoader({
-        request,
-        params: {},
-        context: {},
-      } as any)) as Response;
+      const response = await callLoader<Response>(callbackLoader, request);
 
       // Must be a 302 redirect to /postings
       expect(response.status).toBe(302);
@@ -111,7 +109,7 @@ describe("auth routes", () => {
         claims: () => ({}), // Missing 'sub' claim
       };
 
-      vi.spyOn(oidc, "exchangeCodeForTokens").mockResolvedValueOnce(mockTokensNoSub as any);
+      vi.spyOn(oidc, "exchangeCodeForTokens").mockResolvedValueOnce(mockTokensNoSub as unknown as client.TokenEndpointResponse);
 
       const state = "test-state-no-sub";
       const codeVerifier = "test-verifier";
@@ -126,11 +124,7 @@ describe("auth routes", () => {
         }
       );
 
-      const response = (await callbackLoader({
-        request,
-        params: {},
-        context: {},
-      } as any)) as Response;
+      const response = await callLoader<Response>(callbackLoader, request);
 
       expect(response.status).toBe(400);
       const text = await response.text();
@@ -146,7 +140,7 @@ describe("auth routes", () => {
         claims: () => ({ sub: "test-owner-sub" }),
       };
 
-      vi.spyOn(oidc, "exchangeCodeForTokens").mockResolvedValueOnce(mockTokens as any);
+      vi.spyOn(oidc, "exchangeCodeForTokens").mockResolvedValueOnce(mockTokens as unknown as client.TokenEndpointResponse);
 
       const state = "test-state-return-to";
       const codeVerifier = "test-verifier-return-to";
@@ -165,11 +159,7 @@ describe("auth routes", () => {
         }
       );
 
-      const response = (await callbackLoader({
-        request,
-        params: {},
-        context: {},
-      } as any)) as Response;
+      const response = await callLoader<Response>(callbackLoader, request);
 
       expect(response.status).toBe(302);
       expect(response.headers.get("Location")).toBe(returnTo);
@@ -183,11 +173,7 @@ describe("auth routes", () => {
         "https://localhost:5003/auth/callback?code=already-used-code&state=used-state"
       );
 
-      const result = await callbackLoader({
-        request,
-        params: {},
-        context: {},
-      } as any);
+      const result = await callLoader(callbackLoader, request);
 
       expect(result).toEqual({ replay: true });
       expect(warnSpy).toHaveBeenCalledTimes(1);
@@ -218,11 +204,7 @@ describe("auth routes", () => {
         }
       );
 
-      const result = await callbackLoader({
-        request,
-        params: {},
-        context: {},
-      } as any);
+      const result = await callLoader(callbackLoader, request);
 
       expect(result).toEqual({ replay: true });
       expect(warnSpy).toHaveBeenCalledTimes(1);
@@ -256,11 +238,7 @@ describe("auth routes", () => {
         },
       });
 
-      const response = await logoutAction({
-        request,
-        params: {},
-        context: {},
-      } as any);
+      const response = await callAction<Response>(logoutAction, request);
 
       // Rejection: 403 or 400 for CSRF invalidation
       expect([400, 403]).toContain(response.status);
@@ -297,11 +275,7 @@ describe("auth routes", () => {
         new URL("https://identity:5001/connect/endsession?post_logout_redirect_uri=https://localhost:5003/auth/logout")
       );
 
-      const response = await logoutAction({
-        request,
-        params: {},
-        context: {},
-      } as any);
+      const response = await callAction<Response>(logoutAction, request);
 
       expect(response.status).toBe(302);
       expect(response.headers.get("Location")).toContain("/connect/endsession");
@@ -329,11 +303,7 @@ describe("auth routes", () => {
         new URL("https://identity:5001/connect/endsession?post_logout_redirect_uri=https://localhost:5003/auth/logout")
       );
 
-      const response = await logoutAction({
-        request,
-        params: {},
-        context: {},
-      } as any);
+      const response = await callAction<Response>(logoutAction, request);
 
       // Must NOT fail with 403 CSRF error; must redirect and clear cookie
       expect(response.status).toBe(302);
@@ -376,11 +346,7 @@ describe("auth routes", () => {
         new Error("Identity end-session discovery unavailable")
       );
 
-      const response = await logoutAction({
-        request,
-        params: {},
-        context: {},
-      } as any);
+      const response = await callAction<Response>(logoutAction, request);
 
       expect(response.status).toBe(302);
       expect(response.headers.get("Location")).toBe("/postings");

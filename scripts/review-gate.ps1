@@ -11,7 +11,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Branch
+    [string]$Branch,
+    [switch]$IncludeE2E
 )
 
 Set-StrictMode -Version Latest
@@ -158,6 +159,10 @@ try {
     }
 
     # 7. Build all container images (CLI, MCP, Identity, Web, API)
+    if ($IncludeE2E) {
+        $gateResults['RealStackE2E'] = "FAIL"
+    }
+
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     $null = & docker build --target cli -t "roleradar-cli:review-$cloneGuid" . 2>&1
@@ -200,6 +205,31 @@ try {
         Write-Warning "Web container smoke test failed or skipped (passed=$smokePassed, skipped=$smokeSkipped, exit=$LASTEXITCODE): $($smokeOutput -join "`n")"
     }
 
+    # 9. Optional Real-Stack Playwright E2E test
+    if ($IncludeE2E) {
+        Write-Output "==> [review-gate] Executing real-stack Playwright E2E suite (-IncludeE2E)..."
+        $origIdentityImg = $env:ROLERADAR_IDENTITY_IMAGE
+        $origApiImg = $env:ROLERADAR_API_IMAGE
+        $origWebImg = $env:ROLERADAR_WEB_IMAGE
+        try {
+            $env:ROLERADAR_IDENTITY_IMAGE = "roleradar-identity:review-$cloneGuid"
+            $env:ROLERADAR_API_IMAGE = "roleradar-api:review-$cloneGuid"
+            $env:ROLERADAR_WEB_IMAGE = "roleradar-web:review-$cloneGuid"
+            $e2eOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "test-e2e-real.ps1") -Configuration Release -NoBuild 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                $gateResults['RealStackE2E'] = "PASS"
+            } else {
+                $gateResults['RealStackE2E'] = "FAIL"
+                Write-Warning "Real-stack E2E failed: $($e2eOutput -join "`n")"
+            }
+        }
+        finally {
+            $env:ROLERADAR_IDENTITY_IMAGE = $origIdentityImg
+            $env:ROLERADAR_API_IMAGE = $origApiImg
+            $env:ROLERADAR_WEB_IMAGE = $origWebImg
+        }
+    }
+
     # Cleanup review images
     $null = & docker rmi -f "roleradar-cli:review-$cloneGuid" "roleradar-mcp:review-$cloneGuid" "roleradar-identity:review-$cloneGuid" "roleradar-web:review-$cloneGuid" "roleradar-api:review-$cloneGuid" 2>&1
     $ErrorActionPreference = $prevEap
@@ -224,6 +254,9 @@ Write-Output "5. Tests:         $($gateResults.Tests) (Unit: $($testCounts.Unit)
 Write-Output "6. Domain+App Cov: $coveragePct% (Gate: >= 85%) -> $($gateResults.Coverage)"
 Write-Output "7. Image Builds:  $($gateResults.Images) (CLI: $cliSizeMb, MCP: $mcpSizeMb, Identity: $identitySizeMb, Web: $webSizeMb, API: $apiSizeMb)"
 Write-Output "8. Web image + smoke: $($gateResults.WebSmoke)"
+if ($IncludeE2E) {
+    Write-Output "9. Real-stack E2E:    $($gateResults.RealStackE2E)"
+}
 Write-Output "Verdict: $(if ($allPassed) { 'ALL GATES PASSED' } else { 'GATE FAILURE' })"
 Write-Output "================================================="
 

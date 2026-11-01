@@ -5,6 +5,7 @@ import { action as postingDetailAction } from "../../app/routes/postings.$id.js"
 import { action as applicationDetailAction } from "../../app/routes/applications.$id.js";
 import * as apiClientModule from "../../app/lib/api-client.server.js";
 import { setOidcConfigForTesting } from "../../app/lib/oidc.server.js";
+import { callAction } from "../test-helpers.js";
 import {
   saveSession,
   setSessionEncryptionKeyForTesting,
@@ -34,7 +35,7 @@ describe("Application Actions (T047)", () => {
     vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
       POST: mockApiPost,
       GET: mockApiGet,
-    } as any);
+    } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
   });
 
   function createTestSession(): { sessionId: string; csrfToken: string; session: UserSession } {
@@ -55,14 +56,15 @@ describe("Application Actions (T047)", () => {
     return { sessionId, csrfToken, session };
   }
 
-  function unwrapActionResult(result: any): { status: number; data: any } {
-    if (result && result.type === "DataWithResponseInit") {
-      return { status: result.init?.status ?? 200, data: result.data };
+  function unwrapActionResult(result: unknown): { status: number; data: Record<string, unknown> } {
+    if (result && typeof result === "object" && "type" in result && (result as { type: string }).type === "DataWithResponseInit") {
+      const dataInit = result as unknown as { init?: { status?: number }; data: Record<string, unknown> };
+      return { status: dataInit.init?.status ?? 200, data: dataInit.data };
     }
     if (result instanceof Response) {
-      return { status: result.status, data: result };
+      return { status: result.status, data: {} };
     }
-    return { status: 200, data: result };
+    return { status: 200, data: (result ?? {}) as Record<string, unknown> };
   }
 
   describe("RecordApplicationAction (POST /applications)", () => {
@@ -121,13 +123,13 @@ describe("Application Actions (T047)", () => {
         body: formData,
       });
 
-      const result = await postingDetailAction({ request, params: { id: postingId }, context: {} } as any);
+      const result = await callAction(postingDetailAction, request, { id: postingId });
       const unwrapped = unwrapActionResult(result);
 
       expect(unwrapped.status).toBe(200);
       expect(unwrapped.data.ok).toBe(true);
-      expect(unwrapped.data.application?.id).toBe(appId);
-      expect(unwrapped.data.posting?.disposition).toBe("applied");
+      expect((unwrapped.data.application as { id: string })?.id).toBe(appId);
+      expect((unwrapped.data.posting as { disposition: string })?.disposition).toBe("applied");
 
       // Verify exact fields sent to POST /api/v1/applications
       const postCalls = mockApiPost.mock.calls.filter((c) => c[0] === "/api/v1/applications");
@@ -167,7 +169,7 @@ describe("Application Actions (T047)", () => {
         body: formData,
       });
 
-      const result = await postingDetailAction({ request, params: { id: postingId }, context: {} } as any);
+      const result = await callAction(postingDetailAction, request, { id: postingId });
       const unwrapped = unwrapActionResult(result);
 
       expect(unwrapped.status).toBe(403);
@@ -206,12 +208,12 @@ describe("Application Actions (T047)", () => {
         body: formData,
       });
 
-      const result = await postingDetailAction({ request, params: { id: postingId }, context: {} } as any);
+      const result = await callAction(postingDetailAction, request, { id: postingId });
       const unwrapped = unwrapActionResult(result);
 
       expect(unwrapped.status).toBe(400);
       expect(unwrapped.data.ok).toBe(false);
-      expect(unwrapped.data.fieldErrors?.submittedDate).toBeDefined();
+      expect((unwrapped.data.fieldErrors as Record<string, string>)?.submittedDate).toBeDefined();
     });
 
     it("returns 409 conflict when application already exists or conflict occurs", async () => {
@@ -242,7 +244,7 @@ describe("Application Actions (T047)", () => {
         body: formData,
       });
 
-      const result = await postingDetailAction({ request, params: { id: postingId }, context: {} } as any);
+      const result = await callAction(postingDetailAction, request, { id: postingId });
       const unwrapped = unwrapActionResult(result);
 
       expect(unwrapped.status).toBe(409);
@@ -271,12 +273,12 @@ describe("Application Actions (T047)", () => {
         body: formData,
       });
 
-      const result = await postingDetailAction({ request, params: { id: postingId }, context: {} } as any);
+      const result = await callAction(postingDetailAction, request, { id: postingId });
       const unwrapped = unwrapActionResult(result);
 
       expect(unwrapped.status).toBe(400);
       expect(unwrapped.data.ok).toBe(false);
-      expect(unwrapped.data.fieldErrors?.overrideReason).toBeDefined();
+      expect((unwrapped.data.fieldErrors as Record<string, string>)?.overrideReason).toBeDefined();
     });
   });
 
@@ -318,12 +320,12 @@ describe("Application Actions (T047)", () => {
         body: formData,
       });
 
-      const result = await applicationDetailAction({ request, params: { id: appId }, context: {} } as any);
+      const result = await callAction(applicationDetailAction, request, { id: appId });
       const unwrapped = unwrapActionResult(result);
 
       expect(unwrapped.status).toBe(200);
       expect(unwrapped.data.ok).toBe(true);
-      expect(unwrapped.data.application?.events).toHaveLength(2);
+      expect((unwrapped.data.application as { events: unknown[] })?.events).toHaveLength(2);
 
       const postCalls = mockApiPost.mock.calls.filter((c) => c[0] === "/api/v1/applications/{id}/events");
       expect(postCalls).toHaveLength(1);
@@ -352,12 +354,12 @@ describe("Application Actions (T047)", () => {
         body: formData,
       });
 
-      const result = await applicationDetailAction({ request, params: { id: appId }, context: {} } as any);
+      const result = await callAction(applicationDetailAction, request, { id: appId });
       const unwrapped = unwrapActionResult(result);
 
       expect(unwrapped.status).toBe(400);
       expect(unwrapped.data.ok).toBe(false);
-      expect(unwrapped.data.fieldErrors?.eventType).toBeDefined();
+      expect((unwrapped.data.fieldErrors as Record<string, string>)?.eventType).toBeDefined();
     });
   });
 });

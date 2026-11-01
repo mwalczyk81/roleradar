@@ -141,6 +141,43 @@ describe("session.server", () => {
     expect(getSession(sessionId)).toBeNull();
   });
 
+  it("destroys session when already expired and no refreshFn or refreshToken available", async () => {
+    const sessionId = crypto.randomUUID();
+    const session: UserSession = {
+      sessionId,
+      ownerSub: "owner-user-sub-001",
+      accessToken: "expired-access-token",
+      refreshToken: "",
+      expiresAt: Date.now() - 1000,
+      createdAt: Date.now() - 600_000,
+      csrfToken: "csrf-token-123",
+    };
+
+    saveSession(session);
+    const result = await getValidSession(sessionId);
+    expect(result).toBeNull();
+    expect(getSession(sessionId)).toBeNull();
+  });
+
+  it("destroys session when refreshFn returns empty or missing accessToken", async () => {
+    const sessionId = crypto.randomUUID();
+    const session: UserSession = {
+      sessionId,
+      ownerSub: "owner-user-sub-001",
+      accessToken: "expired-access-token",
+      refreshToken: "dummy-refresh-token",
+      expiresAt: Date.now() + 5000,
+      createdAt: Date.now() - 600_000,
+      csrfToken: "csrf-token-123",
+    };
+
+    saveSession(session);
+    const emptyRefreshFn = vi.fn(async () => null);
+    const result = await getValidSession(sessionId, emptyRefreshFn);
+    expect(result).toBeNull();
+    expect(getSession(sessionId)).toBeNull();
+  });
+
   it("formats session cookies with __Host- prefix, HttpOnly, Secure, SameSite=Lax, and opaque ID only", () => {
     const opaqueId = crypto.randomUUID();
     const cookie = createSessionCookie(opaqueId, true);

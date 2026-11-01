@@ -6,6 +6,7 @@ import { loader as applicationDetailLoader } from "../../app/routes/applications
 import { resolveApplicationContext } from "../../app/lib/application-context.server.js";
 import * as apiClientModule from "../../app/lib/api-client.server.js";
 import { setOidcConfigForTesting } from "../../app/lib/oidc.server.js";
+import { callLoader } from "../test-helpers.js";
 import {
   saveSession,
   setSessionEncryptionKeyForTesting,
@@ -33,7 +34,7 @@ describe("Applications Loaders & Bounded Context Resolution (T046)", () => {
     vi.restoreAllMocks();
     vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
       GET: mockApiGet,
-    } as any);
+    } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
   });
 
   function createTestSession(): { sessionId: string; session: UserSession } {
@@ -114,7 +115,7 @@ describe("Applications Loaders & Bounded Context Resolution (T046)", () => {
         },
       });
 
-      const result = await applicationsListLoader({ request, params: {}, context: {} } as any);
+      const result = await callLoader(applicationsListLoader, request);
 
       // Verify query params sent to /api/v1/applications
       const appCalls = mockApiGet.mock.calls.filter((call) => call[0] === "/api/v1/applications");
@@ -147,7 +148,8 @@ describe("Applications Loaders & Bounded Context Resolution (T046)", () => {
         { id: crypto.randomUUID(), postingId: postingIdB, companyId: companyIdX, status: "closed", appliedAt: "2026-10-04", events: [] },
       ];
 
-      mockApiGet.mockImplementation(async (path: string, options: any) => {
+      mockApiGet.mockImplementation(async (path: string, options: unknown) => {
+        const opts = options as { params?: { path?: { id?: string } } } | undefined;
         if (path === "/api/v1/applications") {
           return {
             data: { items: mockApps, totalCount: 4, limit: 25, offset: 0 },
@@ -156,7 +158,7 @@ describe("Applications Loaders & Bounded Context Resolution (T046)", () => {
           };
         }
         if (path === "/api/v1/postings/{id}") {
-          const id = options?.params?.path?.id;
+          const id = opts?.params?.path?.id ?? "";
           return {
             data: { id, title: `Posting ${id.slice(0, 8)}`, companyName: "Company X" },
             error: undefined,
@@ -164,7 +166,7 @@ describe("Applications Loaders & Bounded Context Resolution (T046)", () => {
           };
         }
         if (path === "/api/v1/companies/{id}") {
-          const id = options?.params?.path?.id;
+          const id = opts?.params?.path?.id ?? "";
           return {
             data: { id, name: "Company X" },
             error: undefined,
@@ -180,7 +182,7 @@ describe("Applications Loaders & Bounded Context Resolution (T046)", () => {
         },
       });
 
-      const result = await applicationsListLoader({ request, params: {}, context: {} } as any);
+      const result = await callLoader(applicationsListLoader, request);
 
       // Verify lookups count
       const postingCalls = mockApiGet.mock.calls.filter((call) => call[0] === "/api/v1/postings/{id}");
@@ -242,7 +244,7 @@ describe("Applications Loaders & Bounded Context Resolution (T046)", () => {
       });
 
       // Must succeed and NOT throw
-      const result = await applicationsListLoader({ request, params: {}, context: {} } as any);
+      const result = await callLoader(applicationsListLoader, request);
 
       expect(result.items).toHaveLength(1);
       expect(result.postingMap[postingIdMissing]?.title).toMatch(/Unavailable/i);
@@ -276,7 +278,7 @@ describe("Applications Loaders & Bounded Context Resolution (T046)", () => {
         companyId: crypto.randomUUID(),
       }));
 
-      await resolveApplicationContext(mockClient as any, apps, { concurrency: 5 });
+      await resolveApplicationContext(mockClient as unknown as Parameters<typeof resolveApplicationContext>[0], apps, { concurrency: 5 });
 
       expect(maxObservedInFlight).toBeLessThanOrEqual(5);
     });
@@ -302,7 +304,7 @@ describe("Applications Loaders & Bounded Context Resolution (T046)", () => {
         ],
       };
 
-      mockApiGet.mockImplementation(async (path: string, _options: any) => {
+      mockApiGet.mockImplementation(async (path: string, _options: unknown) => {
         if (path === "/api/v1/applications/{id}") {
           return {
             data: mockAppDetail,
@@ -333,7 +335,7 @@ describe("Applications Loaders & Bounded Context Resolution (T046)", () => {
         },
       });
 
-      const result = await applicationDetailLoader({ request, params: { id: appId }, context: {} } as any);
+      const result = await callLoader(applicationDetailLoader, request, { id: appId });
 
       expect(result.application.id).toBe(appId);
       expect(result.application.events).toHaveLength(2);

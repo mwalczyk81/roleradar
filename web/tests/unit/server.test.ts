@@ -19,7 +19,7 @@ describe("server.ts TLS and CSP invariants", () => {
   });
 
   it("sets CSP with strict script-src and style-src-attr 'unsafe-inline'", () => {
-    const res = new http.ServerResponse({} as any);
+    const res = new http.ServerResponse({} as unknown as http.IncomingMessage);
     const nonce = generateCspNonce();
     applySecurityHeaders(res, nonce);
 

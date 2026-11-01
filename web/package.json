@@ -11,7 +11,10 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "coverage": "vitest run --coverage",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:real": "playwright test tests/e2e/real-stack.spec.ts --project=real-stack"
   },
   "dependencies": {
     "@react-router/node": "7.18.5",
@@ -35,6 +38,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "@types/selfsigned": "2.1.0",
+    "@vitest/coverage-v8": "5.0.5",
     "axe-core": "4.14.0",
     "eslint": "9.20.1",
     "eslint-plugin-react": "7.37.5",

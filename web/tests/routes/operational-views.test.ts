@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import React from "react";
-import { render } from "@testing-library/react";
+import { render, fireEvent } from "@testing-library/react";
 import { createRoutesStub } from "react-router";
 import crypto from "node:crypto";
 import * as client from "openid-client";
@@ -16,6 +16,7 @@ import CriteriaPage, { loader as criteriaLoader } from "../../app/routes/criteri
 import NotesPage, { loader as notesLoader } from "../../app/routes/notes._index.js";
 import NoteDetailPage, { loader as noteDetailLoader } from "../../app/routes/notes.$id.js";
 import SearchRunsPage, { loader as searchRunsLoader } from "../../app/routes/search-runs.js";
+import { callLoader } from "../test-helpers.js";
 
 describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
   const dummyKey = crypto.randomBytes(32);
@@ -37,7 +38,7 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
     vi.restoreAllMocks();
     vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
       GET: mockApiGet,
-    } as any);
+    } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
   });
 
   function createTestSession(): { sessionId: string; csrfToken: string; session: UserSession } {
@@ -81,7 +82,7 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
         headers: { Cookie: `__Host-roleradar_session=${sessionId}` },
       });
 
-      const result = await criteriaLoader({ request, params: {}, context: {} } as any);
+      const result = await callLoader(criteriaLoader, request);
       expect(result.items.length).toBe(1);
       expect(result.items[0].name).toBe("Remote Only");
       expect(mockApiGet).toHaveBeenCalledWith("/api/v1/criteria", {
@@ -144,6 +145,54 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
       });
       expect(mutationButtons.length).toBe(0);
     });
+
+    it("renders inactive criterion with custom weight and effectiveTo date, and handles loader error", async () => {
+      const sampleCriteria = [
+        {
+          id: "crit-2",
+          name: "Security Clearance",
+          weight: "custom_weight",
+          ruleText: "Must hold active secret clearance.",
+          effectiveFrom: "2026-01-01T00:00:00Z",
+          effectiveTo: "2026-12-31T00:00:00Z",
+          isActive: false,
+        },
+      ];
+
+      const Stub = createRoutesStub([
+        {
+          path: "/criteria",
+          Component: CriteriaPage,
+          loader: () => ({
+            items: sampleCriteria,
+            csrfToken: "mock-csrf",
+            userLabel: "operational-user",
+          }),
+        },
+      ]);
+
+      const { findByText } = render(
+        React.createElement(Stub, { initialEntries: ["/criteria"] })
+      );
+
+      expect(await findByText("Security Clearance")).toBeDefined();
+      expect(await findByText("Inactive")).toBeDefined();
+      expect(await findByText("custom_weight")).toBeDefined();
+
+      // Test loader error branch
+      const { sessionId } = createTestSession();
+      mockApiGet.mockResolvedValueOnce({
+        data: undefined,
+        error: { message: "Internal server error" },
+        response: { status: 500 } as Response,
+      });
+
+      const request = new Request("https://localhost:5003/criteria", {
+        headers: { Cookie: `__Host-roleradar_session=${sessionId}` },
+      });
+
+      await expect(callLoader(criteriaLoader, request)).rejects.toThrow();
+    });
   });
 
   describe("Notes List (/notes)", () => {
@@ -175,7 +224,7 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
         headers: { Cookie: `__Host-roleradar_session=${sessionId}` },
       });
 
-      const result = await notesLoader({ request, params: {}, context: {} } as any);
+      const result = await callLoader(notesLoader, request);
       expect(result.items.length).toBe(1);
       expect(result.limit).toBe(100);
       expect(result.offset).toBe(0);
@@ -248,6 +297,10 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
             userLabel: "operational-user",
           }),
         },
+        {
+          path: "/notes/:id",
+          Component: () => React.createElement("div", null, "Note Detail Stub"),
+        },
       ]);
 
       const { container, findByText } = render(
@@ -274,10 +327,72 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
         (f) => f.getAttribute("method")?.toLowerCase() === "post" && f.getAttribute("action") !== "/auth/logout"
       );
       expect(forms.length).toBe(0);
+
+      // Row click navigates to note detail
+      const noteRow = await findByText("Note Linking to Posting");
+      fireEvent.click(noteRow);
+      expect(await findByText("Note Detail Stub")).toBeDefined();
+    });
+
+    it("handles pagination in NotesPage", async () => {
+      const Stub = createRoutesStub([
+        {
+          path: "/notes",
+          Component: NotesPage,
+          loader: ({ request }) => {
+            const url = new URL(request.url);
+            const offset = parseInt(url.searchParams.get("offset") || "0", 10);
+            return {
+              items: [
+                {
+                  id: "note-1",
+                  heading: "Note Page 1",
+                  linkedEntityType: "posting",
+                  linkedEntityId: "p-1",
+                  createdAt: "2026-10-15T12:00:00Z",
+                  updatedAt: "2026-10-15T12:00:00Z",
+                },
+              ],
+              totalCount: 50,
+              limit: 25,
+              offset,
+              q: "",
+              csrfToken: "mock-csrf",
+              userLabel: "operational-user",
+            };
+          },
+        },
+      ]);
+
+      const { findByText, findByRole } = render(
+        React.createElement(Stub, { initialEntries: ["/notes"] })
+      );
+
+      expect(await findByText(/Showing 1–25 of 50/)).toBeDefined();
+      const nextBtn = await findByRole("button", { name: "Next" });
+      fireEvent.click(nextBtn);
+      expect(await findByText(/Showing 26–50 of 50/)).toBeDefined();
+      expect((nextBtn as HTMLButtonElement).disabled).toBe(true);
     });
   });
 
   describe("Note Detail (/notes/:id)", () => {
+    it("loader rejects missing id parameter with 400", async () => {
+      const { sessionId } = createTestSession();
+      const request = new Request("https://localhost:5003/notes/", {
+        headers: { Cookie: `__Host-roleradar_session=${sessionId}` },
+      });
+
+      let thrown: Response | null = null;
+      try {
+        await callLoader(noteDetailLoader, request);
+      } catch (err) {
+        if (err instanceof Response) thrown = err;
+      }
+      expect(thrown).not.toBeNull();
+      expect(thrown?.status).toBe(400);
+    });
+
     it("loader calls GET /api/v1/notes/{id} and returns 404 when missing", async () => {
       const { sessionId } = createTestSession();
       mockApiGet.mockResolvedValueOnce({
@@ -290,7 +405,7 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
         headers: { Cookie: `__Host-roleradar_session=${sessionId}` },
       });
 
-      await expect(noteDetailLoader({ request, params: { id: "note-missing" }, context: {} } as any)).rejects.toThrow();
+      await expect(callLoader(noteDetailLoader, request, { id: "note-missing" })).rejects.toThrow();
     });
 
     it("renders hostile HTML/scripts and javascript URLs safely as plain text preserving whitespace", async () => {
@@ -376,7 +491,7 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
         headers: { Cookie: `__Host-roleradar_session=${sessionId}` },
       });
 
-      const result = await searchRunsLoader({ request, params: {}, context: {} } as any);
+      const result = await callLoader(searchRunsLoader, request);
       expect(result.items.length).toBe(1);
       expect(mockApiGet).toHaveBeenCalledWith("/api/v1/search-runs", {
         params: {
@@ -427,6 +542,57 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
         (f) => f.getAttribute("method")?.toLowerCase() === "post" && f.getAttribute("action") !== "/auth/logout"
       );
       expect(forms.length).toBe(0);
+    });
+
+    it("renders search runs with errors and empty summary, and handles loader errors", async () => {
+      const sampleRuns = [
+        {
+          id: "run-2",
+          runDate: "2026-10-30T08:00:00Z",
+          companiesSearched: 10,
+          postingsFound: 0,
+          newPostings: 0,
+          errorsCount: 2,
+          summary: null,
+        },
+      ];
+
+      const Stub = createRoutesStub([
+        {
+          path: "/search-runs",
+          Component: SearchRunsPage,
+          loader: () => ({
+            items: sampleRuns,
+            totalCount: 50,
+            limit: 25,
+            offset: 0,
+            csrfToken: "mock-csrf",
+            userLabel: "operational-user",
+          }),
+        },
+      ]);
+
+      const { findByText } = render(
+        React.createElement(Stub, { initialEntries: ["/search-runs"] })
+      );
+
+      expect(await findByText("0 new")).toBeDefined();
+      expect(await findByText("2")).toBeDefined();
+      expect(await findByText("—")).toBeDefined();
+
+      // Test loader error branch
+      const { sessionId } = createTestSession();
+      mockApiGet.mockResolvedValueOnce({
+        data: undefined,
+        error: { message: "Internal server error" },
+        response: { status: 500 } as Response,
+      });
+
+      const request = new Request("https://localhost:5003/search-runs", {
+        headers: { Cookie: `__Host-roleradar_session=${sessionId}` },
+      });
+
+      await expect(callLoader(searchRunsLoader, request)).rejects.toThrow();
     });
   });
 });

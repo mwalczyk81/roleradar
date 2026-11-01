@@ -256,7 +256,7 @@ jobs:
 
       - name: Run full test suite (Unit, Architecture, Contract, Integration) with Coverage
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
-        run: dotnet test RoleRadar.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults --filter "FullyQualifiedName!~WebContainer"
+        run: dotnet test RoleRadar.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults --filter "FullyQualifiedName!~WebContainer&FullyQualifiedName!~RealStack"
 
       - name: Verify dev stack safety canary remains untouched
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
@@ -394,14 +394,62 @@ jobs:
       - name: Run E2E tests
         run: pnpm run test:e2e
 
+      - name: Run web coverage gate (>=80% lines, >=75% branches)
+        run: pnpm run test:coverage
+
       - name: Run Nx affected (typecheck, lint, build, test)
         run: pnpm exec nx affected -t typecheck lint build test
+
+  e2e-real-stack:
+    name: Real-Stack E2E (Identity, API, Web, Mongo)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: [changes]
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.web == 'true' || needs.changes.outputs.images == 'true' || needs.changes.outputs.backend == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.x
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.4.0
+
+      - name: Setup .NET 10 SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Restore dependencies
+        run: |
+          dotnet restore RoleRadar.sln --locked-mode
+          pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium with dependencies
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Build local container images
+        run: |
+          docker build -f deploy/Dockerfile.identity -t roleradar-identity:local .
+          docker build -f deploy/Dockerfile.api -t roleradar-api:local .
+          docker build -f deploy/Dockerfile.web -t roleradar-web:local .
+
+      - name: Run Real-Stack Playwright E2E Suite
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-e2e-real.ps1 -NoBuild
 
   ci-gate:
     name: Ubuntu (Build, Testcontainers, >=85% Coverage & Pre-Commit)
     runs-on: ubuntu-24.04
     if: always()
-    needs: [changes, pre-commit, ubuntu-build-and-test, web, windows-verify]
+    needs: [changes, pre-commit, ubuntu-build-and-test, web, windows-verify, e2e-real-stack]
     steps:
       - name: Verify status of all workflow jobs
         shell: bash
@@ -411,6 +459,7 @@ jobs:
           UBUNTU_RESULT: ${{ needs.ubuntu-build-and-test.result }}
           WEB_RESULT: ${{ needs.web.result }}
           WINDOWS_RESULT: ${{ needs.windows-verify.result }}
+          E2E_RESULT: ${{ needs.e2e-real-stack.result }}
         run: |
           echo "Evaluating CI job results:"
           echo "  changes:               $CHANGES_RESULT"
@@ -418,13 +467,14 @@ jobs:
           echo "  ubuntu-build-and-test: $UBUNTU_RESULT"
           echo "  web:                   $WEB_RESULT"
           echo "  windows-verify:        $WINDOWS_RESULT"
+          echo "  e2e-real-stack:        $E2E_RESULT"
 
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "Error: The 'changes' job did not succeed (result: $CHANGES_RESULT)."
             exit 1
           fi
 
-          for result in "$CHANGES_RESULT" "$PRE_COMMIT_RESULT" "$UBUNTU_RESULT" "$WEB_RESULT" "$WINDOWS_RESULT"; do
+          for result in "$CHANGES_RESULT" "$PRE_COMMIT_RESULT" "$UBUNTU_RESULT" "$WEB_RESULT" "$WINDOWS_RESULT" "$E2E_RESULT"; do
             if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
               echo "Error: One or more required CI jobs did not succeed or skip (encountered: $result)."
               exit 1

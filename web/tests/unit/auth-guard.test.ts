@@ -43,7 +43,7 @@ describe("auth-guard.server", () => {
     let thrownResponse: Response | null = null;
     try {
       await requireUserSession(request);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (err instanceof Response) {
         thrownResponse = err;
       } else {

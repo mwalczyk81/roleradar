@@ -1,10 +1,12 @@
 # Quickstart & Verification Guide: 005b-management-ui
 
 **Feature**: `005b-management-ui`  
-**Date**: 2026-10-31  
+**Date**: 2026-11-01  
 **Status**: Ready for Verification  
 
 This guide provides step-by-step instructions for running the RoleRadar Management Web UI locally in development mode, running it via Docker Compose, and executing automated verification suites.
+
+Every command in this guide is verified and copy-paste compatible with both **Windows PowerShell 5.1** and **PowerShell 7+ (`pwsh`)**.
 
 ---
 
@@ -13,7 +15,7 @@ This guide provides step-by-step instructions for running the RoleRadar Manageme
 Ensure the following tools are installed on the local system:
 - **Node.js**: v22 LTS (pinned in `.node-version`)
 - **pnpm**: v10.4.0+ (pinned in `package.json`)
-- **.NET SDK**: v10.0+ (`10.0.402` pinned in `global.json`)
+- **.NET SDK**: v10.0+ (`10.0.100` pinned in `global.json`)
 - **Docker & Docker Compose**: running Docker daemon
 - **Development Certificates**: generated in `deploy/certs/` (`dev-cert.pfx`, `dev-cert.crt`, `dev-cert.key`)
 
@@ -26,10 +28,10 @@ The Identity discovery URL and canonical issuer are `https://identity:5001` (mat
 ```
 
 > [!IMPORTANT]
-> On Windows, modifying `C:\Windows\System32\drivers\etc\hosts` requires an elevated PowerShell session (Run as Administrator).
+> On Windows, modifying `C:\Windows\System32\drivers\etc\hosts` requires an elevated PowerShell session (**Run as Administrator**).
 > - **Local Dev Path (`web:dev`)**: The web dev server runs in Node on the host and performs server-to-server OIDC discovery and token exchange against `https://identity:5001`. The host OS **must** resolve `identity` to `127.0.0.1`.
 > - **Container Path (`web` in Compose)**: Docker internal networking resolves `identity` and `api` between containers automatically; however, the developer's desktop browser still navigates to `https://identity:5001/Account/Login` during the interactive redirect, requiring the host DNS entry.
-> - **Automated E2E Tests**: Playwright browser tests configure `--host-resolver-rules="MAP identity 127.0.0.1, MAP api 127.0.0.1"` at launch, so automated test suites run without modifying the system hosts file.
+> - **Automated E2E Tests**: Playwright browser tests configure route interception or host resolver rules, so automated test suites run without modifying the system hosts file.
 
 ### Environment Configuration
 
@@ -48,9 +50,9 @@ HTTPS_CERT_KEY_PATH=../deploy/certs/dev-cert.key
 ```
 
 > [!WARNING]
-> **Secret Alignment Requirement**: `ROLERADAR_WEB_CLIENT_SECRET` in `web/.env.local` MUST exactly match the `$env:ROLERADAR_WEB_CLIENT_SECRET` exported when starting the Identity container. Identity registers the `roleradar-web` confidential client using the SHA-256 hash of this secret. If the web client presents a mismatched secret during the authorization code grant exchange (`/auth/callback`), Identity rejects the request with HTTP 400 `invalid_client`.
+> **Secret Alignment Requirement**: `ROLERADAR_WEB_CLIENT_SECRET` in `web/.env.local` MUST exactly match `$env:ROLERADAR_WEB_CLIENT_SECRET` exported when starting the Identity container. Identity registers the `roleradar-web` confidential client using the SHA-256 hash of this secret. If the web client presents a mismatched secret during the authorization code grant exchange (`/auth/callback`), Identity rejects the request with HTTP 400 `invalid_client`.
 
-Generate the session key and client secret once per machine using Node.js (cross-platform, works reliably in Windows PowerShell 5.1 and PowerShell Core):
+Generate the session key and client secret once per machine using Node.js (cross-platform, copy-paste correct in both Windows PowerShell 5.1 and pwsh):
 
 ```powershell
 # Generate session encryption key or web client secret (32 random bytes base64)
@@ -70,11 +72,15 @@ When running Docker Compose commands from the repository root or inside `deploy/
 
 ## 2. Running Supporting Services (Identity & API)
 
-Before starting the web application, start the backend datastore (MongoDB), Identity host, and REST API:
+Before starting the web application, start the backend datastore (MongoDB), Identity host, and REST API. Commands work in both PowerShell 5.1 and pwsh:
 
 ```powershell
 # 1. Start MongoDB and infrastructure services
-pwsh ./scripts/start-services.ps1
+if (Get-Command pwsh -ErrorAction SilentlyContinue) {
+    pwsh ./scripts/start-services.ps1
+} else {
+    powershell -ExecutionPolicy Bypass -File ./scripts/start-services.ps1
+}
 
 # 2. Ensure hosts file contains the required entry (requires Administrator):
 #    127.0.0.1 identity api
@@ -100,7 +106,7 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.apps.yml --
 ```
 
 Verify services are healthy:
-- Identity: `https://localhost:5001/health`
+- Identity: `https://identity:5001/health`
 - API: `https://localhost:5002/health`
 
 ---
@@ -113,11 +119,11 @@ The local dev server runs with React Router v7 and Vite with **in-process TLS** 
 # 1. Install monorepo dependencies
 pnpm install
 
-# 2. Build contracts and run TypeScript typecheck
-pnpm exec nx run web:typecheck
+# 2. Run TypeScript typecheck
+pnpm --filter web run typecheck
 
 # 3. Start the React Router development server with in-process TLS
-pnpm exec nx run web:dev
+pnpm --filter web run dev
 ```
 
 `web/vite.config.ts` automatically loads `web/.env.local` into `process.env` with Vite's `loadEnv` before server modules run, and configures `server.https` from `HTTPS_CERT_PATH` and `HTTPS_CERT_KEY_PATH`.
@@ -151,15 +157,25 @@ Inside the container:
 
 ## 5. End-to-End Interactive Verification Workflow
 
-Follow this manual checklist to verify all P1 user stories:
+> [!IMPORTANT]
+> **Human-Required Verification Steps**:
+> The steps in this section (Steps 1 through 6) require manual human interaction in a real desktop browser. While headless Chromium automated tests (T062) execute identical journeys continuously in CI, automated tools cannot replace human verification of visual contrast, layout comfort, physical TOTP enrollment via mobile authenticator apps, and interactive DevTools inspection.
+>
+> **Explicit list of steps requiring a human**:
+> 1. **Step 1 (Human)**: Launch a physical desktop browser (Chrome/Edge/Firefox) in Incognito mode and navigate to `https://localhost:5003/postings`.
+> 2. **Step 2 (Human)**: Visually inspect the Identity login page, physically enter the owner username and password, use a TOTP authenticator mobile app to read the TOTP 6-digit code, submit the challenge, and open browser DevTools to confirm zero tokens in `localStorage` or `sessionStorage`.
+> 3. **Step 3 (Human)**: Interact with the postings search input, select status and disposition filters, and verify page-local score sorting.
+> 4. **Step 4 (Human)**: Visually inspect raw HTML test strings in posting detail views to ensure zero unescaped script execution.
+> 5. **Step 5 (Human)**: Open two simultaneous browser tabs, submit a disposition change in tab 1, and attempt a concurrent update in tab 2 to visually verify the 409 conflict toast and reload behavior.
+> 6. **Step 6 (Human)**: Click "Sign Out", confirm session eviction, and attempt to re-access `/postings` to verify full re-challenge.
 
-### Step 1: Unauthenticated Visit & Redirect
+### Step 1: Unauthenticated Visit & Redirect (Human Step)
 1. Open an incognito browser window and navigate to `https://localhost:5003/postings`.
 2. **Expected Outcome**: The browser is immediately redirected to `https://identity:5001/Account/Login` with valid `client_id=roleradar-web`, `response_type=code`, `code_challenge`, and `state`.
 
-### Step 2: Sign-In with Owner Credentials & TOTP
+### Step 2: Sign-In with Owner Credentials & TOTP (Human Step)
 1. Enter the configured owner credentials (username and password).
-2. Enter the TOTP code when prompted.
+2. Enter the TOTP code from your mobile authenticator app when prompted.
 3. Submit the form.
 4. **Expected Outcome**:
    - Identity redirects the browser back to `https://localhost:5003/auth/callback?code=...&state=...`.
@@ -167,62 +183,94 @@ Follow this manual checklist to verify all P1 user stories:
    - Browser lands on `https://localhost:5003/postings`.
    - Inspecting browser developer tools (Cookies and LocalStorage) confirms **zero access tokens or refresh tokens are exposed to the browser**.
 
-### Step 3: Browse, Filter, and Sort Postings
+### Step 3: Browse, Filter, and Sort Postings (Human Step)
 1. On `/postings`, verify job opportunities are displayed in the `DataTable`.
 2. Enter a search query in the `Toolbar` (e.g. `engineer`).
-3. Select a disposition filter chip (e.g. `identified`).
-4. **Expected Outcome**: The table updates using the backend parameters `GET /api/v1/postings?q=engineer&disposition=identified`.
+3. Select a disposition filter chip (e.g. `lead` or `scored`).
+4. **Expected Outcome**: The table updates using the backend parameters `GET /api/v1/postings?q=engineer&disposition=lead`.
 5. Click a column header (e.g. `Score`).
 6. **Expected Outcome**: Rows on the current page are sorted locally with a clear banner/badge: *"Sorting page-local results"*.
 
-### Step 4: Untrusted Text Escaping Verification
+### Step 4: Untrusted Text Escaping Verification (Human Step)
 1. Click into a posting detail view with seeded HTML strings (e.g. `<script>alert('xss')</script>`).
 2. **Expected Outcome**: The text renders literally as characters in the DOM text node; no script executes, and the browser console remains clean.
 
-### Step 5: Disposition Transition & Optimistic Concurrency
-1. On the posting detail page, click "Update Disposition".
-2. Select target disposition `scored` (notice `applied` is not offered).
+### Step 5: Disposition Transition & Optimistic Concurrency (Human Step)
+1. On the posting detail page, click "Change Disposition".
+2. Select target disposition `scored` (notice `applied` is not offered directly).
 3. Enter a transition reason: `"Strong alignment with screening criteria"`.
-4. Submit the transition.
-5. **Expected Outcome**: Toast confirms successful transition; posting detail shows updated disposition.
+4. Click "Apply Transition".
+5. **Expected Outcome**: Modal closes, disposition badge updates to `Scored`, and posting detail reflects fresh state.
 6. To test concurrency conflict: In a second tab, submit another transition on the same posting. Return to the first tab and attempt another update without refreshing.
 7. **Expected Outcome**: The API returns HTTP 409 Conflict; the UI captures the error and displays a Toast: *"This posting was modified elsewhere. [Reload Latest]"*. Clicking "Reload Latest" fetches the fresh state without corrupting data.
 
-### Step 6: Sign Out
-1. Click the user menu in the top right corner of the `AppShell`.
-2. Click "Sign Out".
-3. **Expected Outcome**: The server evicts the session, expires the session cookie, redirects to Identity's end-session endpoint, and completes RP-Initiated Logout (clearing Identity and 2FA cookies before redirecting to the post-logout URI). Attempting to return to `https://localhost:5003/postings` redirects to Identity and must require both password and TOTP (confirming Identity's session cookie was fully cleared and does not silently sign the user back in).
+### Step 6: Sign Out (Human Step)
+1. Click the "Sign Out" button in the navigation bar or AppShell.
+2. **Expected Outcome**: The server evicts the session, expires the session cookie, redirects to Identity's end-session endpoint, and completes RP-Initiated Logout. Attempting to return to `https://localhost:5003/postings` redirects to Identity and requires both password and TOTP (confirming Identity's session cookie was fully cleared and does not silently sign the user back in).
 
 ---
 
 ## 6. Automated Test Suites Execution
 
-Execute all test suites from the repository root:
+Execute all test suites from the repository root (commands work across PowerShell 5.1 and pwsh):
 
 ```powershell
-# 1. Monorepo lint and typecheck
-pnpm exec nx affected -t lint build
+# 1. Web TypeScript typecheck
+pnpm --filter web run typecheck
 
-# 2. Fast unit, component, and accessibility tests
-pnpm exec vitest run
+# 2. Web linter
+pnpm --filter web run lint
 
-# 3. Fast .NET tests
-pwsh ./scripts/test-fast.ps1
+# 3. Web unit and component tests
+pnpm --filter web run test
 
-# 4. End-to-end Playwright smoke test (using throwaway containers)
-pnpm exec playwright test tests/e2e/smoke.spec.ts
+# 4. Web coverage gate (>=80% lines, >=75% branches)
+pnpm --filter web run test:coverage
 
-# 5. Container image integration & Web smoke tests (read-only rootfs & in-process TLS)
-pwsh ./scripts/test-images.ps1
+# 5. Web build
+pnpm --filter web run build
+
+# 6. Playwright Chromium component and architecture E2E tests (run 3 times to ensure zero flakes)
+pnpm --filter web run test:e2e -- --repeat-each=3
+
+# 7. Fast .NET test suite (Architecture + Unit + Contract)
+if (Get-Command pwsh -ErrorAction SilentlyContinue) {
+    pwsh ./scripts/test-fast.ps1
+} else {
+    powershell -ExecutionPolicy Bypass -File ./scripts/test-fast.ps1
+}
+
+# 8. Real-Stack End-to-End Test (real Identity, API, Web, Mongo, Chromium, audit log assertions)
+if (Get-Command pwsh -ErrorAction SilentlyContinue) {
+    pwsh ./scripts/test-e2e-real.ps1
+} else {
+    powershell -ExecutionPolicy Bypass -File ./scripts/test-e2e-real.ps1
+}
+
+# 9. Container image parity & Web container smoke tests
+if (Get-Command pwsh -ErrorAction SilentlyContinue) {
+    pwsh ./scripts/test-images.ps1
+} else {
+    powershell -ExecutionPolicy Bypass -File ./scripts/test-images.ps1
+}
+
+# 10. Automated Review Gate (full stack verification with optional real-stack E2E)
+if (Get-Command pwsh -ErrorAction SilentlyContinue) {
+    pwsh ./scripts/review-gate.ps1 -IncludeE2E
+} else {
+    powershell -ExecutionPolicy Bypass -File ./scripts/review-gate.ps1 -IncludeE2E
+}
 ```
 
 ### Container Smoke & Image Verification Notes
-- `pwsh ./scripts/test-images.ps1` builds `roleradar-cli:test`, `roleradar-mcp:test`, `roleradar-identity:test`, and `roleradar-web:test`.
+- `scripts/test-images.ps1` builds `roleradar-cli:test`, `roleradar-mcp:test`, `roleradar-identity:test`, and `roleradar-web:test`.
 - Executes `WebContainerSmokeTests` under production hardening conditions: read-only rootfs, `node` non-root user, tmpfs `/tmp:rw,noexec,nosuid,size=64m`, `cap_drop ALL`, and `no-new-privileges`.
 - Verifies in-process TLS on port 5003, OIDC discovery handshake against an ephemeral Identity container, CSP headers with dynamic nonces, unauthenticated redirect to Identity with HttpOnly PKCE cookies, inspect security flags, secret log hygiene (no secrets in stdout/stderr), and fail-closed termination on missing secrets or TLS certificates.
 - All Docker resources (network, volume, containers) are uniquely named per run (`rrtest-web-*`) and cleaned up immediately in `finally` without touching the developer's compose stack or data volumes.
 
-### Playwright Verification Notes
-- The Playwright smoke test signs in via the real Identity container using throwaway credentials.
-- After executing a disposition transition, the test connects directly to the ephemeral MongoDB container and asserts that an append-only entry exists in the `audit_log` collection with the action and owner subject.
-- Never connects to or mutates developer database instances.
+### Real-Stack Playwright Verification Notes (T062)
+- `scripts/test-e2e-real.ps1` runs the full end-to-end integration test (`RealStackEndToEndTests`).
+- Spins up real `roleradar-identity:local`, `roleradar-api:local`, `roleradar-web:local`, and a real `mongo:8.0.34` replica set on an isolated Docker network.
+- Drives real Chromium via Playwright: performs full 2FA login (password + TOTP), lists postings, filters/searches, transitions disposition, creates an application, edits a company profile, signs out, and asserts re-challenge.
+- Directly inspects MongoDB `audit_log` to assert that all three write operations (`posting_transition`, `application_create`, and `company_update`) were durably recorded with expected actor and entity IDs.
+- Full teardown in `finally` guarantees zero residue on developer machine.

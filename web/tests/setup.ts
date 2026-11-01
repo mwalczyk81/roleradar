@@ -50,7 +50,7 @@ declare module "vitest" {
 
 expect.extend({
   async toHaveNoViolations(received: Element | string) {
-    const results = await axe.run(received as any, {
+    const results = await axe.run(received as unknown as Element, {
       resultTypes: ["violations"],
     });
 

@@ -5,6 +5,7 @@ import { loader as companiesListLoader } from "../../app/routes/companies._index
 import { loader as companyDetailLoader } from "../../app/routes/companies.$id.js";
 import * as apiClientModule from "../../app/lib/api-client.server.js";
 import { setOidcConfigForTesting } from "../../app/lib/oidc.server.js";
+import { callLoader } from "../test-helpers.js";
 import {
   saveSession,
   setSessionEncryptionKeyForTesting,
@@ -32,7 +33,7 @@ describe("Companies Loaders (T040)", () => {
     vi.restoreAllMocks();
     vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
       GET: mockApiGet,
-    } as any);
+    } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
   });
 
   function createTestSession(): { sessionId: string; session: UserSession } {
@@ -96,7 +97,7 @@ describe("Companies Loaders (T040)", () => {
         },
       });
 
-      const result = await companiesListLoader({ request, params: {}, context: {} } as any);
+      const result = await callLoader(companiesListLoader, request);
 
       expect(mockApiGet).toHaveBeenCalledTimes(1);
       const [endpoint, options] = mockApiGet.mock.calls[0];
@@ -140,7 +141,7 @@ describe("Companies Loaders (T040)", () => {
 
       let thrown: Response | null = null;
       try {
-        await companiesListLoader({ request, params: {}, context: {} } as any);
+        await callLoader(companiesListLoader, request);
       } catch (err: unknown) {
         if (err instanceof Response) thrown = err;
       }
@@ -168,7 +169,7 @@ describe("Companies Loaders (T040)", () => {
 
       let thrown: Response | null = null;
       try {
-        await companiesListLoader({ request, params: {}, context: {} } as any);
+        await callLoader(companiesListLoader, request);
       } catch (err: unknown) {
         if (err instanceof Response) thrown = err;
       }
@@ -208,11 +209,7 @@ describe("Companies Loaders (T040)", () => {
         },
       });
 
-      const result = await companyDetailLoader({
-        request,
-        params: { id: companyId },
-        context: {},
-      } as any);
+      const result = await callLoader(companyDetailLoader, request, { id: companyId });
 
       expect(mockApiGet).toHaveBeenCalledTimes(1);
       const [endpoint, options] = mockApiGet.mock.calls[0];
@@ -245,11 +242,7 @@ describe("Companies Loaders (T040)", () => {
 
       let thrown: Response | null = null;
       try {
-        await companyDetailLoader({
-          request,
-          params: { id: companyId },
-          context: {},
-        } as any);
+        await callLoader(companyDetailLoader, request, { id: companyId });
       } catch (err: unknown) {
         if (err instanceof Response) thrown = err;
       }
@@ -276,11 +269,7 @@ describe("Companies Loaders (T040)", () => {
 
       let thrown: Response | null = null;
       try {
-        await companyDetailLoader({
-          request,
-          params: { id: companyId },
-          context: {},
-        } as any);
+        await callLoader(companyDetailLoader, request, { id: companyId });
       } catch (err: unknown) {
         if (err instanceof Response) thrown = err;
       }

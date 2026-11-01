@@ -4,6 +4,7 @@ import * as client from "openid-client";
 import { action as companyDetailAction } from "../../app/routes/companies.$id.js";
 import * as apiClientModule from "../../app/lib/api-client.server.js";
 import { setOidcConfigForTesting } from "../../app/lib/oidc.server.js";
+import { callAction } from "../test-helpers.js";
 import {
   saveSession,
   setSessionEncryptionKeyForTesting,
@@ -31,7 +32,7 @@ describe("Company Detail Action (T041)", () => {
     vi.restoreAllMocks();
     vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
       PATCH: mockApiPatch,
-    } as any);
+    } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
   });
 
   function createTestSession(): { sessionId: string; csrfToken: string; session: UserSession } {
@@ -52,14 +53,15 @@ describe("Company Detail Action (T041)", () => {
     return { sessionId, csrfToken, session };
   }
 
-  function unwrapActionResult(result: any): { status: number; data: any } {
-    if (result && result.type === "DataWithResponseInit") {
-      return { status: result.init?.status ?? 200, data: result.data };
+  function unwrapActionResult(result: unknown): { status: number; data: Record<string, unknown> } {
+    if (result && typeof result === "object" && "type" in result && (result as { type: string }).type === "DataWithResponseInit") {
+      const dataInit = result as unknown as { init?: { status?: number }; data: Record<string, unknown> };
+      return { status: dataInit.init?.status ?? 200, data: dataInit.data };
     }
     if (result instanceof Response) {
-      return { status: result.status, data: result };
+      return { status: result.status, data: {} };
     }
-    return { status: 200, data: result };
+    return { status: 200, data: (result ?? {}) as Record<string, unknown> };
   }
 
   it("enforces CSRF validation and returns error on missing or invalid _csrf", async () => {
@@ -79,16 +81,12 @@ describe("Company Detail Action (T041)", () => {
       },
     });
 
-    const rawResult = await companyDetailAction({
-      request,
-      params: { id: companyId },
-      context: {},
-    } as any);
+    const rawResult = await callAction(companyDetailAction, request, { id: companyId });
 
     const { status, data } = unwrapActionResult(rawResult);
     expect(status).toBe(403);
     expect(mockApiPatch).not.toHaveBeenCalled();
-    expect(data.error).toMatch(/csrf|not authorized/i);
+    expect(String(data.error)).toMatch(/csrf|not authorized/i);
   });
 
   it("sends valid UpdateCompanyRequestDto payload to PATCH /api/v1/companies/{id} with versionToken", async () => {
@@ -154,11 +152,7 @@ describe("Company Detail Action (T041)", () => {
       },
     });
 
-    const rawResult = await companyDetailAction({
-      request,
-      params: { id: companyId },
-      context: {},
-    } as any);
+    const rawResult = await callAction(companyDetailAction, request, { id: companyId });
 
     const { status, data } = unwrapActionResult(rawResult);
     expect(status).toBe(200);
@@ -223,18 +217,15 @@ describe("Company Detail Action (T041)", () => {
       },
     });
 
-    const rawResult = await companyDetailAction({
-      request,
-      params: { id: companyId },
-      context: {},
-    } as any);
+    const rawResult = await callAction(companyDetailAction, request, { id: companyId });
 
     const { status, data } = unwrapActionResult(rawResult);
     expect(status).toBe(400);
     expect(data.ok).toBe(false);
     expect(data.fieldErrors).toBeDefined();
-    expect(data.fieldErrors.name).toBe("Company name cannot be blank.");
-    expect(data.fieldErrors.status).toBe("Invalid status value.");
+    const fieldErrors = data.fieldErrors as Record<string, string>;
+    expect(fieldErrors.name).toBe("Company name cannot be blank.");
+    expect(fieldErrors.status).toBe("Invalid status value.");
   });
 
   it("handles 409 Concurrency Conflict and returns conflict error for toast reload trigger", async () => {
@@ -265,17 +256,13 @@ describe("Company Detail Action (T041)", () => {
       },
     });
 
-    const rawResult = await companyDetailAction({
-      request,
-      params: { id: companyId },
-      context: {},
-    } as any);
+    const rawResult = await callAction(companyDetailAction, request, { id: companyId });
 
     const { status, data } = unwrapActionResult(rawResult);
     expect(status).toBe(409);
     expect(data.ok).toBe(false);
     expect(data.conflict).toBe(true);
-    expect(data.error).toMatch(/modified|conflict/i);
+    expect(String(data.error)).toMatch(/modified|conflict/i);
   });
 
   it("redirects to /not-authorized when API returns 403 Forbidden on update", async () => {
@@ -307,11 +294,7 @@ describe("Company Detail Action (T041)", () => {
 
     let thrown: Response | null = null;
     try {
-      await companyDetailAction({
-        request,
-        params: { id: companyId },
-        context: {},
-      } as any);
+      await callAction(companyDetailAction, request, { id: companyId });
     } catch (err: unknown) {
       if (err instanceof Response) thrown = err;
     }

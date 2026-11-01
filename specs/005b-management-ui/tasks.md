@@ -200,13 +200,13 @@ description: "Task list for Feature 005b Management UI implementation"
 
 **Purpose**: System-wide security verifications, architecture enforcement, CI affected workflow verification, Playwright smoke tests, and final gate checks.
 
-- [ ] T060 [P] Architecture verification test in `web/tests/architecture/dependency-rules.test.ts` asserting that `web/` packages do not import or reference Duende IdentityServer packages (FR-026)
-- [ ] T061 [P] Token leakage assertion test in `web/tests/architecture/token-leakage.test.ts` asserting that zero access, refresh, or ID tokens appear in any response body, cookie value, or browser storage mechanism (FR-028, SC-005)
-- [ ] T062 [P] End-to-end Playwright smoke test in `web/tests/e2e/smoke.spec.ts` automating owner sign-in via Identity container with TOTP, posting search and filter, disposition transition, sign-out, and direct query assertion against the test's isolated ephemeral MongoDB `audit_log` collection using strictly fictional data (FR-027, SC-001)
-- [ ] T063 [P] Verify web application code coverage in `web/tests/coverage-check.ts` asserting >= 80% line coverage and >= 75% branch coverage on `web/app/**` excluding `web/app/ds/**` (SC-007)
-- [ ] T064 [P] Verify CI affected workflow behavior and path-gating in `scripts/verify-ci-affected.ps1` demonstrating three scenarios: docs-only (runs only pre-commit), web-only (runs web job, skips Testcontainers and .NET suite), and backend-only (runs .NET suite, Testcontainers, and coverage gate; skips web)
-- [ ] T065 Execute full quickstart validation scenarios per `specs/005b-management-ui/quickstart.md`
-- [ ] T066 Run full build and test verification gate via `pnpm exec nx run-many -t lint test build` and `pwsh ./scripts/review-gate.ps1`
+- [x] T060 [P] Architecture verification test in `web/tests/architecture/dependency-rules.test.ts` asserting that `web/` packages do not import or reference Duende IdentityServer packages (FR-026)
+- [x] T061 [P] Token leakage assertion test in `web/tests/architecture/token-leakage.test.ts` asserting that zero access, refresh, or ID tokens appear in any response body for every route (including error and /not-authorized pages), in Set-Cookie values, and in localStorage/sessionStorage/IndexedDB after a real Chromium login-free session built from the stubbed harness (FR-028, SC-005)
+- [x] T062 [P] End-to-end real-stack Playwright test executing against real Identity, API, and Web container images and an isolated Mongo replica set on a throwaway network with unique run-id names, random free ports on 127.0.0.1, temporary volumes, runtime-generated secrets/certs, and full finally cleanup; automating owner login with TOTP, posting search and filter, disposition transition, application creation, company editing, sign-out, unauthenticated /postings re-challenge assertion, and direct audit_log MongoDB validation (FR-027, SC-001)
+- [x] T063 [P] Verify web application code coverage via Vitest coverage provider with pinned dependencies asserting >= 80% line coverage and >= 75% branch coverage on `web/app/**` excluding `web/app/ds/**`, wired as an Nx target and CI web job step (SC-007)
+- [x] T064 [P] Confirm CI affected workflow behavior and path-gating in `scripts/verify-ci-affected.ps1` against current `ci.yml` without rewriting the script
+- [x] T065 Review and update `specs/005b-management-ui/quickstart.md` to be copy-paste correct for both PowerShell 5.1 and pwsh, verifying all commands and variables against repo and `deploy/docker-compose.apps.yml`, and listing human-required steps explicitly
+- [x] T066 Run full build and test verification gate via `pnpm exec nx run-many -t lint test build`, web test verification list (`test:e2e --repeat-each=3`), real-stack E2E, and `pwsh ./scripts/review-gate.ps1` with `-IncludeE2E` flag
 
 ---
 

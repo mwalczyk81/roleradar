@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
+import { Link } from "react-router";
 import {
   parseSessionCookie,
   getSession,
@@ -55,15 +56,17 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export async function loader() {
-  // Post-logout redirect arrival from Identity redirects to /postings
-  return new Response(null, {
-    status: 302,
-    headers: {
-      Location: "/postings",
-    },
-  });
+  return new Response(null, { status: 200 });
 }
 
 export default function AuthLogout() {
-  return null;
+  return (
+    <main style={{ padding: "2rem", textAlign: "center" }}>
+      <h1>Signed Out</h1>
+      <p>You have been signed out of RoleRadar.</p>
+      <p style={{ marginTop: "1rem" }}>
+        <Link to="/postings">Sign in</Link>
+      </p>
+    </main>
+  );
 }
