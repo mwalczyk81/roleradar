@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData, useFetcher, useRevalidator, Link, data, redirect } from "react-router";
+import { useLoaderData, useFetcher, useRevalidator, Link, data } from "react-router";
 import React from "react";
-import { requireUserSession, initiateLoginRedirect } from "../lib/auth-guard.server.js";
+import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
 import { useTheme } from "../lib/use-theme.js";
 import { createApiClient, mapApiError } from "../lib/api-client.server.js";
 import { validateCsrfToken } from "../lib/csrf.server.js";
@@ -63,17 +63,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     client.GET("/api/v1/criteria", {}),
   ]);
 
-  if (postingRes.response.status === 401 || criteriaRes.response.status === 401) {
-    await initiateLoginRedirect(request, session.sessionId);
-  }
-
-  if (postingRes.response.status === 403 || criteriaRes.response.status === 403) {
-    throw redirect("/not-authorized");
-  }
-
-  if (postingRes.response.status === 404) {
-    throw new Response("Posting Not Found", { status: 404 });
-  }
+  await assertApiOk(criteriaRes.response, request, session.sessionId);
+  await assertApiOk(postingRes.response, request, session.sessionId, { notFoundMessage: "Posting Not Found" });
 
   if (postingRes.error || !postingRes.data) {
     throw new Response(postingRes.error?.message ?? "Failed to fetch posting", {
@@ -188,13 +179,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     },
   });
 
-  if (transitionRes.response.status === 401) {
-    await initiateLoginRedirect(request, session.sessionId);
-  }
-
-  if (transitionRes.response.status === 403) {
-    throw redirect("/not-authorized");
-  }
+  await assertApiOk(transitionRes.response, request, session.sessionId);
 
   if (transitionRes.response.status === 409) {
     return data<TransitionActionError>(

@@ -9,7 +9,6 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 namespace RoleRadar.Identity.Pages.Account;
 
 [AllowAnonymous]
-[IgnoreAntiforgeryToken]
 public class LogoutModel(
     SignInManager<IdentityUser<Guid>> signInManager,
     IIdentityServerInteractionService interactionService) : PageModel

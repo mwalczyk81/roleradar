@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData, useNavigate, useSearchParams, Link, redirect } from "react-router";
+import { useLoaderData, useNavigate, useSearchParams, Link } from "react-router";
 import React from "react";
-import { requireUserSession, initiateLoginRedirect } from "../lib/auth-guard.server.js";
+import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
 import { useTheme } from "../lib/use-theme.js";
 import { createApiClient } from "../lib/api-client.server.js";
 import { AppShell, Toolbar, DataTable, Badge, Select, Input, Button, type DataTableColumn } from "../ui.js";
@@ -78,13 +78,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
-  if (response.status === 401) {
-    await initiateLoginRedirect(request, session.sessionId);
-  }
-
-  if (response.status === 403) {
-    throw redirect("/not-authorized");
-  }
+  await assertApiOk(response, request, session.sessionId);
 
   if (error || !data) {
     throw new Response(error?.message ?? "Failed to fetch postings", {

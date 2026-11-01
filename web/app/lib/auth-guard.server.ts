@@ -103,6 +103,29 @@ export async function initiateLoginRedirect(
   throw redirect(authUrl.toString(), { headers });
 }
 
+export interface ApiStatusOptions {
+  notFoundMessage?: string;
+}
+
+export async function assertApiOk(
+  response: { status: number },
+  request: Request,
+  sessionId?: string,
+  options?: ApiStatusOptions
+): Promise<void> {
+  if (response.status === 401) {
+    await initiateLoginRedirect(request, sessionId);
+  }
+
+  if (response.status === 403) {
+    throw redirect("/not-authorized");
+  }
+
+  if (response.status === 404 && options?.notFoundMessage) {
+    throw new Response(options.notFoundMessage, { status: 404 });
+  }
+}
+
 export async function requireUserSession(request: Request): Promise<UserSession> {
   const cookieHeader = request.headers.get("Cookie");
   const sessionId = parseSessionCookie(cookieHeader);

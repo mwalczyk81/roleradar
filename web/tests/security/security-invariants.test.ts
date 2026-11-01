@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import crypto from "node:crypto";
 import React from "react";
 import { render } from "@testing-library/react";
@@ -369,6 +371,37 @@ describe("Security Invariants", () => {
       expect(container.querySelector("script")).toBeNull();
       expect(container.querySelector("img")).toBeNull();
       expect(container.querySelector("svg")).toBeNull();
+    }
+  });
+
+  // Invariant 9: every route action reading "_csrf" uses validateCsrfToken
+  it("Invariant 9: every route action reading '_csrf' uses validateCsrfToken", () => {
+    const routesDir = path.resolve(process.cwd(), "app/routes");
+    const altRoutesDir = path.resolve(process.cwd(), "web/app/routes");
+    const targetDir = fs.existsSync(routesDir) ? routesDir : altRoutesDir;
+
+    expect(fs.existsSync(targetDir)).toBe(true);
+
+    const routeFiles = fs
+      .readdirSync(targetDir)
+      .filter((f) => f.endsWith(".tsx") || f.endsWith(".ts"));
+
+    expect(routeFiles.length).toBeGreaterThan(0);
+
+    for (const file of routeFiles) {
+      const filePath = path.join(targetDir, file);
+      const content = fs.readFileSync(filePath, "utf8");
+
+      // Check if file defines an action and reads _csrf
+      const hasAction = /export\s+(async\s+)?function\s+action\b/.test(content);
+      const readsCsrf = content.includes('"_csrf"') || content.includes("'_csrf'");
+
+      if (hasAction && readsCsrf) {
+        expect(
+          content.includes("validateCsrfToken"),
+          `Route file ${file} defines an action that reads '_csrf' but does not call validateCsrfToken`
+        ).toBe(true);
+      }
     }
   });
 });

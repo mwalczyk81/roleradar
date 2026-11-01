@@ -24,6 +24,27 @@ let currentPostingTitle = "Principal Engineer";
 let nextTransitionResponseStatus: number | null = null;
 let nextTransitionResponseBody: unknown = null;
 
+let currentCompanyName = "Acme Cloud Services";
+let currentCompanyStatus = "target";
+let currentCompanyOwnership = "private";
+let currentCompanyDescription = "Cloud hosting and observability tools";
+let currentCompanyHeadquarters = "Seattle, WA";
+let currentCompanyCategoryTags = ["cloud", "devops"];
+let currentCompanyCareerSources = [
+  {
+    sourceType: "ats",
+    atsProvider: "greenhouse",
+    atsTenant: "acmecloud",
+    sourceUrl: "https://boards.greenhouse.io/acmecloud",
+    fetchMethod: "api",
+    active: true,
+  },
+];
+let currentCompanyVersionToken = "comp-ver-1";
+let nextCompanyResponseStatus: number | null = null;
+let nextCompanyResponseBody: unknown = null;
+let lastCompaniesQueryReceived: Record<string, string> = {};
+
 test.beforeAll(async () => {
   const mockOidcConfig = new client.Configuration(
     {
@@ -195,6 +216,94 @@ test.beforeAll(async () => {
       return;
     }
 
+    if (url.pathname === "/api/v1/companies" && req.method === "GET") {
+      lastCompaniesQueryReceived = Object.fromEntries(url.searchParams.entries());
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
+          items: [
+            {
+              id: "comp-e2e-1",
+              name: currentCompanyName,
+              status: currentCompanyStatus,
+              ownershipType: currentCompanyOwnership,
+              description: currentCompanyDescription,
+              headquarters: currentCompanyHeadquarters,
+              categoryTags: currentCompanyCategoryTags,
+              careerSources: currentCompanyCareerSources,
+              versionToken: currentCompanyVersionToken,
+            },
+          ],
+          totalCount: 1,
+          limit: 25,
+          offset: 0,
+        })
+      );
+      return;
+    }
+
+    if (url.pathname === "/api/v1/companies/comp-e2e-1" && req.method === "GET") {
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
+          id: "comp-e2e-1",
+          name: currentCompanyName,
+          status: currentCompanyStatus,
+          ownershipType: currentCompanyOwnership,
+          description: currentCompanyDescription,
+          headquarters: currentCompanyHeadquarters,
+          categoryTags: currentCompanyCategoryTags,
+          careerSources: currentCompanyCareerSources,
+          versionToken: currentCompanyVersionToken,
+        })
+      );
+      return;
+    }
+
+    if (url.pathname === "/api/v1/companies/comp-e2e-1" && req.method === "PATCH") {
+      let bodyStr = "";
+      req.on("data", (chunk) => {
+        bodyStr += chunk;
+      });
+      req.on("end", () => {
+        if (nextCompanyResponseStatus !== null) {
+          const status = nextCompanyResponseStatus;
+          const body = nextCompanyResponseBody;
+          nextCompanyResponseStatus = null;
+          nextCompanyResponseBody = null;
+          res.writeHead(status);
+          res.end(JSON.stringify(body));
+          return;
+        }
+
+        const payload = JSON.parse(bodyStr || "{}");
+        if (payload.name) currentCompanyName = payload.name;
+        if (payload.status) currentCompanyStatus = payload.status;
+        if (payload.ownershipType) currentCompanyOwnership = payload.ownershipType;
+        if (payload.description !== undefined) currentCompanyDescription = payload.description;
+        if (payload.headquarters !== undefined) currentCompanyHeadquarters = payload.headquarters;
+        if (payload.categoryTags) currentCompanyCategoryTags = payload.categoryTags;
+        if (payload.careerSources) currentCompanyCareerSources = payload.careerSources;
+        currentCompanyVersionToken = "comp-ver-2";
+
+        res.writeHead(200);
+        res.end(
+          JSON.stringify({
+            id: "comp-e2e-1",
+            name: currentCompanyName,
+            status: currentCompanyStatus,
+            ownershipType: currentCompanyOwnership,
+            description: currentCompanyDescription,
+            headquarters: currentCompanyHeadquarters,
+            categoryTags: currentCompanyCategoryTags,
+            careerSources: currentCompanyCareerSources,
+            versionToken: currentCompanyVersionToken,
+          })
+        );
+      });
+      return;
+    }
+
     res.writeHead(404);
     res.end(JSON.stringify({ ok: false, errorCode: "NOT_FOUND", message: "Not found" }));
   });
@@ -281,6 +390,27 @@ async function runAxeChecks(page: Page) {
   return results.violations.filter(
     (v: any) => v.impact === "serious" || v.impact === "critical"
   );
+}
+
+async function checkAxeInThemes(page: Page) {
+  // Emulate reduced motion so bundle.css disables transitions during theme changes
+  await page.emulateMedia({ reducedMotion: "reduce" });
+
+  for (const theme of ["light", "dark"] as const) {
+    await page.evaluate((t) => {
+      document.documentElement.setAttribute("data-theme", t);
+    }, theme);
+
+    // Ensure all CSS transitions and animations have fully settled before axe evaluation
+    await page.evaluate(async () => {
+      const animations = document.getAnimations();
+      await Promise.all(animations.map((a) => a.finished));
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+
+    const violations = await runAxeChecks(page);
+    expect(violations).toEqual([]);
+  }
 }
 
 test.describe("CSP and SSR Style Attribute Invariant (Real Chromium)", () => {
@@ -437,19 +567,8 @@ test.describe("CSP and SSR Style Attribute Invariant (Real Chromium)", () => {
     await expect(page.getByText("Principal Engineer")).toBeVisible();
     await expect(page.getByText("Acme Corp")).toBeVisible();
 
-    // Verify axe accessibility in light mode
-    await page.evaluate(() => {
-      document.documentElement.setAttribute("data-theme", "light");
-    });
-    const lightViolations = await runAxeChecks(page);
-    expect(lightViolations).toEqual([]);
-
-    // Verify axe accessibility in dark mode
-    await page.evaluate(() => {
-      document.documentElement.setAttribute("data-theme", "dark");
-    });
-    const darkViolations = await runAxeChecks(page);
-    expect(darkViolations).toEqual([]);
+    // Verify axe accessibility in light and dark mode with settling
+    await checkAxeInThemes(page);
 
     // Assert zero hydration warnings and zero CSP violations
     expect(hydrationWarnings).toEqual([]);
@@ -490,19 +609,8 @@ test.describe("CSP and SSR Style Attribute Invariant (Real Chromium)", () => {
     await expect(page.getByText("REQ-101")).toBeVisible();
     await expect(page.getByText("$180,000 - $220,000")).toBeVisible();
 
-    // Verify axe accessibility in light mode
-    await page.evaluate(() => {
-      document.documentElement.setAttribute("data-theme", "light");
-    });
-    const lightViolations = await runAxeChecks(page);
-    expect(lightViolations).toEqual([]);
-
-    // Verify axe accessibility in dark mode
-    await page.evaluate(() => {
-      document.documentElement.setAttribute("data-theme", "dark");
-    });
-    const darkViolations = await runAxeChecks(page);
-    expect(darkViolations).toEqual([]);
+    // Verify axe accessibility in light and dark mode with settling
+    await checkAxeInThemes(page);
 
     // Assert zero hydration warnings and zero CSP violations
     expect(hydrationWarnings).toEqual([]);
@@ -962,5 +1070,252 @@ test.describe("Theme and Page Reset", () => {
     cookies = await context.cookies();
     const sessionCookie = cookies.find((c) => c.name === "__Host-roleradar_session");
     expect(!sessionCookie || sessionCookie.value === "").toBe(true);
+  });
+});
+
+test.describe("Company Management (Real Chromium)", () => {
+  test.beforeEach(async () => {
+    currentCompanyName = "Acme Cloud Services";
+    currentCompanyStatus = "target";
+    currentCompanyOwnership = "private";
+    currentCompanyDescription = "Cloud hosting and observability tools";
+    currentCompanyHeadquarters = "Seattle, WA";
+    currentCompanyCategoryTags = ["cloud", "devops"];
+    currentCompanyCareerSources = [
+      {
+        sourceType: "ats",
+        atsProvider: "greenhouse",
+        atsTenant: "acmecloud",
+        sourceUrl: "https://boards.greenhouse.io/acmecloud",
+        fetchMethod: "api",
+        active: true,
+      },
+    ];
+    currentCompanyVersionToken = "comp-ver-1";
+    nextCompanyResponseStatus = null;
+    nextCompanyResponseBody = null;
+    lastCompaniesQueryReceived = {};
+  });
+
+  test("loads /companies list with API stubbed, asserting only limit and offset are sent, zero CSP violations and axe zero serious/critical in light and dark", async ({
+    page,
+    context,
+  }) => {
+    const cspViolations: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.text().includes("Content Security Policy") || msg.text().includes("violates")) {
+        cspViolations.push(msg.text());
+      }
+    });
+
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/companies?limit=25&offset=0&q=ignoredQuery&sort=name`, { waitUntil: "networkidle" });
+
+    await expect(page.getByRole("heading", { name: "Companies" })).toBeVisible();
+    await expect(page.getByText("Acme Cloud Services")).toBeVisible();
+
+    // Verify only limit and offset were sent to API
+    expect(lastCompaniesQueryReceived.limit).toBe("25");
+    expect(lastCompaniesQueryReceived.offset).toBe("0");
+    expect(lastCompaniesQueryReceived.q).toBeUndefined();
+    expect(lastCompaniesQueryReceived.sort).toBeUndefined();
+
+    // Axe in light and dark mode with settling
+    await checkAxeInThemes(page);
+
+    expect(cspViolations).toEqual([]);
+  });
+
+  test("loads /companies/:id detail with API stubbed, asserting zero CSP violations and axe zero serious/critical in light and dark", async ({
+    page,
+    context,
+  }) => {
+    const cspViolations: string[] = [];
+    page.on("console", (msg) => {
+      if (msg.text().includes("Content Security Policy") || msg.text().includes("violates")) {
+        cspViolations.push(msg.text());
+      }
+    });
+
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/companies/comp-e2e-1`, { waitUntil: "networkidle" });
+
+    await expect(page.getByRole("heading", { name: "Acme Cloud Services", level: 1 })).toBeVisible();
+    await expect(page.getByLabel("Company Name *")).toHaveValue("Acme Cloud Services");
+
+    // Axe in light and dark mode with settling
+    await checkAxeInThemes(page);
+
+    expect(cspViolations).toEqual([]);
+  });
+
+  test("submits company edit form successfully: updates page, shows success toast, URL remains clean", async ({
+    page,
+    context,
+  }) => {
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/companies/comp-e2e-1`, { waitUntil: "networkidle" });
+
+    await page.getByLabel("Company Name *").fill("Acme Cloud Platform Inc");
+    await page.getByLabel("Headquarters").fill("Bellevue, WA");
+    await page.getByRole("button", { name: "Save Changes" }).click();
+
+    // URL remains clean
+    expect(page.url()).toBe(`${baseUrl}/companies/comp-e2e-1`);
+
+    // Success toast appears
+    await expect(page.getByText("Changes Saved")).toBeVisible();
+    await expect(page.getByText("Company profile has been updated successfully.")).toBeVisible();
+
+    // Header updates with new company name
+    await expect(page.getByRole("heading", { name: "Acme Cloud Platform Inc", level: 1 })).toBeVisible();
+  });
+
+  test("submits company edit form with 400 validation error: displays inline field errors next to fields without closing or raw JSON", async ({
+    page,
+    context,
+  }) => {
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/companies/comp-e2e-1`, { waitUntil: "networkidle" });
+
+    nextCompanyResponseStatus = 400;
+    nextCompanyResponseBody = {
+      errorCode: "VALIDATION_ERROR",
+      message: "Validation failed.",
+      details: [{ field: "name", issue: "Company name cannot be blank." }],
+    };
+
+    await page.getByRole("button", { name: "Save Changes" }).click();
+
+    // Inline field error is displayed
+    await expect(page.getByText("Company name cannot be blank.")).toBeVisible();
+    expect(page.url()).toBe(`${baseUrl}/companies/comp-e2e-1`);
+  });
+
+  test("submits company edit form with 409 Conflict: displays conflict Toast with Reload action that refetches", async ({
+    page,
+    context,
+  }) => {
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/companies/comp-e2e-1`, { waitUntil: "networkidle" });
+
+    nextCompanyResponseStatus = 409;
+    nextCompanyResponseBody = {
+      errorCode: "CONCURRENCY_CONFLICT",
+      message: "This company was modified by another operation.",
+    };
+
+    await page.getByRole("button", { name: "Save Changes" }).click();
+
+    // Conflict toast is displayed
+    await expect(page.getByText("Concurrency Conflict")).toBeVisible();
+    const reloadButton = page.getByRole("button", { name: "Reload" });
+    await expect(reloadButton).toBeVisible();
+
+    // Clicking reload refetches and dismisses toast
+    await reloadButton.click();
+    await expect(page.getByText("Concurrency Conflict")).not.toBeVisible();
+  });
+
+  test("submits company edit form with bad CSRF: shows inline error without raw response", async ({
+    page,
+    context,
+  }) => {
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/companies/comp-e2e-1`, { waitUntil: "networkidle" });
+
+    // Tamper with hidden CSRF input inside company form
+    await page.evaluate(() => {
+      const form = document.querySelector("#ds-main-content form") || document.forms[1];
+      const csrfEl = form?.querySelector("input[name='_csrf']") as HTMLInputElement;
+      if (csrfEl) csrfEl.value = "tampered-invalid-csrf";
+    });
+
+    await page.getByRole("button", { name: "Save Changes" }).click();
+
+    // Error alert is displayed
+    await expect(page.getByText("Error Saving Changes")).toBeVisible();
+    await expect(page.getByText(/csrf|not authorized/i)).toBeVisible();
+    expect(page.url()).toBe(`${baseUrl}/companies/comp-e2e-1`);
+  });
+
+  test("submits company edit form with API 401: redirects into authorization flow, avoids loop, and clears session cookie", async ({
+    page,
+    context,
+  }) => {
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/companies/comp-e2e-1`, { waitUntil: "networkidle" });
+
+    nextCompanyResponseStatus = 401;
+    nextCompanyResponseBody = {
+      errorCode: "UNAUTHORIZED",
+      message: "Token expired",
+    };
+
+    let authRedirectCount = 0;
+    const authRedirectPromise = page.waitForRequest((req) => {
+      const u = req.url();
+      if (u.includes("identity:5001") || u.includes("/connect/authorize") || u.includes("/auth")) {
+        authRedirectCount++;
+        return true;
+      }
+      return false;
+    });
+
+    await page.route("**/connect/authorize*", (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: "text/html",
+        body: "<html><body>Mock Identity Provider Login Page</body></html>",
+      });
+    });
+
+    await page.getByRole("button", { name: "Save Changes" }).click();
+
+    // Assert that redirect into authorization flow was requested
+    const authRequest = await authRedirectPromise;
+    expect(authRequest.url()).toContain("connect/authorize");
+    expect(authRequest.url()).toContain("client_id=roleradar-web");
+
+    // Wait briefly to verify no redirect loop occurs
+    await page.waitForTimeout(500);
+    expect(authRedirectCount).toBe(1);
+
+    // Session cookie cleared
+    const cookies = await context.cookies();
+    const sessionCookie = cookies.find((c) => c.name === "__Host-roleradar_session");
+    expect(!sessionCookie || sessionCookie.value === "").toBe(true);
+  });
+
+  test("hostile company data with <script>, HTML and javascript: career source renders safely as plain text without script execution", async ({
+    page,
+    context,
+  }) => {
+    let alertTriggered = false;
+    page.on("dialog", async (dialog) => {
+      alertTriggered = true;
+      await dialog.dismiss();
+    });
+
+    currentCompanyName = "<script>alert('hostile-xss')</script>";
+    currentCompanyDescription = "<iframe src='evil.com'></iframe><img src=x onerror=alert('img-xss')>";
+    currentCompanyCareerSources = [
+      {
+        sourceType: "ats",
+        atsProvider: "custom",
+        atsTenant: "evil",
+        sourceUrl: "javascript:alert('malicious')",
+        fetchMethod: "browser",
+        active: true,
+      },
+    ];
+
+    await setupSessionCookie(context);
+    await page.goto(`${baseUrl}/companies/comp-e2e-1`, { waitUntil: "networkidle" });
+
+    expect(alertTriggered).toBe(false);
+    expect(await page.locator("script:has-text('hostile-xss')").count()).toBe(0);
+    expect(await page.locator("iframe").count()).toBe(0);
+    expect(await page.locator("a[href*='javascript:']").count()).toBe(0);
   });
 });

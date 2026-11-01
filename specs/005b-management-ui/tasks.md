@@ -134,15 +134,15 @@ description: "Task list for Feature 005b Management UI implementation"
 ### Tests for User Story 4 (MANDATORY - Test-First per Principle II) ⚠️
 > **NOTE: Write these tests FIRST and verify they FAIL before implementation.**
 
-- [ ] T040 [P] [US4] Route loader tests for `GET /companies` (asserting pagination only without search/filter parameters) and `GET /companies/:id` in `web/tests/routes/companies.loader.test.ts` (expected to fail before implementation)
-- [ ] T041 [P] [US4] Route action test for `PATCH /companies/:id` in `web/tests/routes/companies.action.test.ts` verifying `UpdateCompanyRequestDto` payload mapping (`name`, `status`, `ownershipType`, `description`, `headquarters`, `categoryTags`, `careerSources`, `versionToken`), CSRF validation, and 409 conflict handling (expected to fail before implementation)
-- [ ] T042 [P] [US4] Axe accessibility check for company list and edit forms in `web/tests/routes/companies.a11y.test.ts` (expected to fail before implementation)
+- [x] T040 [P] [US4] Route loader tests for `GET /companies` (asserting pagination only without search/filter parameters) and `GET /companies/:id` in `web/tests/routes/companies.loader.test.ts` (expected to fail before implementation)
+- [x] T041 [P] [US4] Route action test for `PATCH /companies/:id` in `web/tests/routes/companies.action.test.ts` verifying `UpdateCompanyRequestDto` payload mapping (`name`, `status`, `ownershipType`, `description`, `headquarters`, `categoryTags`, `careerSources`, `versionToken`), CSRF validation, and 409 conflict handling (expected to fail before implementation)
+- [x] T042 [P] [US4] Axe accessibility check for company list and edit forms in `web/tests/routes/companies.a11y.test.ts` (expected to fail before implementation)
 
 ### Implementation for User Story 4
 
-- [ ] T043 [US4] Implement companies list route loader and page in `web/app/routes/companies._index.tsx` calling `GET /api/v1/companies` with `limit` and `offset`, rendering `web/app/ds/components/src/layout/AppShell.jsx` and `web/app/ds/components/src/data/DataTable.jsx` with pagination controls only
-- [ ] T044 [US4] Implement company detail view and edit form in `web/app/routes/companies.$id.tsx` using `web/app/ds/components/src/layout/AppShell.jsx`, rendering all fields from `CompanyDetailDto`, providing editable form fields for `name`, `status`, `ownershipType`, `description`, `headquarters`, `categoryTags`, and `careerSources`, with hidden `_csrf` and `versionToken`
-- [ ] T045 [US4] Implement company update server action in `web/app/routes/companies.$id.tsx` validating CSRF, calling `PATCH /api/v1/companies/{id}` with `UpdateCompanyRequestDto`, mapping validation errors to form fields, and handling 409 concurrency conflicts with `web/app/ds/components/src/feedback/Toast.jsx`
+- [x] T043 [US4] Implement companies list route loader and page in `web/app/routes/companies._index.tsx` calling `GET /api/v1/companies` with `limit` and `offset`, importing vendored components via `web/app/ui.ts` (`AppShell`, `DataTable`, etc.) with pagination controls only
+- [x] T044 [US4] Implement company detail view and edit form in `web/app/routes/companies.$id.tsx` importing vendored components via `web/app/ui.ts` (`AppShell`, etc.), rendering all fields from `CompanyDetailDto`, providing editable form fields for `name`, `status`, `ownershipType`, `description`, `headquarters`, `categoryTags`, and `careerSources`, with hidden `_csrf` and `versionToken`
+- [x] T045 [US4] Implement company update server action in `web/app/routes/companies.$id.tsx` validating CSRF, calling `PATCH /api/v1/companies/{id}` with `UpdateCompanyRequestDto`, mapping validation errors to form fields, and handling 409 concurrency conflicts with `web/app/ui.ts` (`Toast`, etc.)
 
 **Checkpoint**: User Story 4 is functional and testable independently.
 

@@ -116,4 +116,37 @@ public sealed class IdentityLogoutContractTests
             try { Directory.Delete(dbDir, true); } catch { }
         }
     }
+
+    [Fact]
+    public async Task Logout_PostWithoutAntiforgeryToken_ReturnsBadRequestAndLeavesIdentityCookieIntact()
+    {
+        var (app, client, cookies, dbDir) = await IdentityContractTestServer.StartHostAsync();
+        try
+        {
+            await IdentityContractTestServer.LoginAndGetIdTokenAsync(client, app.Services);
+
+            var cookiesBefore = cookies.GetCookies(new Uri(client.BaseAddress!.ToString()));
+            var appCookieBefore = cookiesBefore.Cast<Cookie>().FirstOrDefault(c => c.Name.Contains("Identity.Application"));
+            Assert.NotNull(appCookieBefore);
+            Assert.False(string.IsNullOrEmpty(appCookieBefore.Value));
+
+            // Directly POST /Account/Logout with empty form content (no antiforgery token)
+            var postContent = new FormUrlEncodedContent(new Dictionary<string, string>());
+            var logoutResponse = await client.PostAsync("/Account/Logout", postContent);
+            Assert.Equal(HttpStatusCode.BadRequest, logoutResponse.StatusCode);
+
+            // Verify Identity cookie is intact (not expired, value preserved)
+            var cookiesAfter = cookies.GetCookies(new Uri(client.BaseAddress!.ToString()));
+            var appCookieAfter = cookiesAfter.Cast<Cookie>().FirstOrDefault(c => c.Name.Contains("Identity.Application"));
+            Assert.NotNull(appCookieAfter);
+            Assert.False(appCookieAfter.Expired);
+            Assert.Equal(appCookieBefore.Value, appCookieAfter.Value);
+        }
+        finally
+        {
+            await app.StopAsync();
+            await app.DisposeAsync();
+            try { Directory.Delete(dbDir, true); } catch { }
+        }
+    }
 }

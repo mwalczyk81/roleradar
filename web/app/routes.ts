@@ -8,4 +8,6 @@ export default [
   route("service-unavailable", "routes/service-unavailable.tsx"),
   route("postings", "routes/postings._index.tsx"),
   route("postings/:id", "routes/postings.$id.tsx"),
+  route("companies", "routes/companies._index.tsx"),
+  route("companies/:id", "routes/companies.$id.tsx"),
 ] satisfies RouteConfig;
