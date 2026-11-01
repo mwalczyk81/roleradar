@@ -182,15 +182,15 @@ description: "Task list for Feature 005b Management UI implementation"
 ### Tests for User Story 6 (MANDATORY - Test-First per Principle II) ⚠️
 > **NOTE: Write these tests FIRST and verify they FAIL before implementation.**
 
-- [ ] T054 [P] [US6] Route loader and rendering tests for `/criteria`, `/notes`, `/notes/:id`, and `/search-runs` in `web/tests/routes/operational-views.test.ts` asserting exact DTO field displays and zero mutation controls (expected to fail before implementation)
-- [ ] T055 [P] [US6] Axe accessibility tests for all read-only operational views in both light and dark themes in `web/tests/routes/operational.a11y.test.ts` (expected to fail before implementation)
+- [x] T054 [P] [US6] Route loader and rendering tests for `/criteria`, `/notes`, `/notes/:id`, and `/search-runs` in `web/tests/routes/operational-views.test.ts` asserting exact DTO field displays and zero mutation controls (expected to fail before implementation)
+- [x] T055 [P] [US6] Axe accessibility tests for all read-only operational views in both light and dark themes in `web/tests/routes/operational.a11y.test.ts` (expected to fail before implementation)
 
 ### Implementation for User Story 6
 
-- [ ] T056 [P] [US6] Implement criteria list route loader and page in `web/app/routes/criteria.tsx` calling `GET /api/v1/criteria` and rendering read-only `web/app/ds/components/src/data/DataTable.jsx` in `web/app/ds/components/src/layout/AppShell.jsx` showing `name`, `weight`, `ruleText`, `effectiveFrom`, `effectiveTo`, and `isActive`
-- [ ] T057 [P] [US6] Implement notes search list in `web/app/routes/notes._index.tsx` calling `GET /api/v1/notes` with text search query `q` only and rendering summary list using `web/app/ds/components/src/layout/AppShell.jsx` and `web/app/ds/components/src/data/DataTable.jsx`
-- [ ] T058 [P] [US6] Implement note detail view in `web/app/routes/notes.$id.tsx` calling `GET /api/v1/notes/{id}` and rendering note content as escaped plain text without edit controls in `web/app/ds/components/src/layout/AppShell.jsx`
-- [ ] T059 [P] [US6] Implement search runs history view in `web/app/routes/search-runs.tsx` calling `GET /api/v1/search-runs` and rendering table in `web/app/ds/components/src/layout/AppShell.jsx` showing `runDate`, `companiesSearched`, `postingsFound`, `newPostings`, `errorsCount`, and `summary`
+- [x] T056 [P] [US6] Implement criteria list route loader and page in `web/app/routes/criteria.tsx` calling `GET /api/v1/criteria` and rendering read-only `web/app/ds/components/src/data/DataTable.jsx` in `web/app/ds/components/src/layout/AppShell.jsx` showing `name`, `weight`, `ruleText`, `effectiveFrom`, `effectiveTo`, and `isActive`
+- [x] T057 [P] [US6] Implement notes search list in `web/app/routes/notes._index.tsx` calling `GET /api/v1/notes` with text search query `q` only and rendering summary list using `web/app/ds/components/src/layout/AppShell.jsx` and `web/app/ds/components/src/data/DataTable.jsx`
+- [x] T058 [P] [US6] Implement note detail view in `web/app/routes/notes.$id.tsx` calling `GET /api/v1/notes/{id}` and rendering note content as escaped plain text without edit controls in `web/app/ds/components/src/layout/AppShell.jsx`
+- [x] T059 [P] [US6] Implement search runs history view in `web/app/routes/search-runs.tsx` calling `GET /api/v1/search-runs` and rendering table in `web/app/ds/components/src/layout/AppShell.jsx` showing `runDate`, `companiesSearched`, `postingsFound`, `newPostings`, `errorsCount`, and `summary`
 
 **Checkpoint**: All user stories (P1, P2, P3) are implemented.
 

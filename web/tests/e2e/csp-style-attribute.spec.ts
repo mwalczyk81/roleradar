@@ -53,6 +53,16 @@ let nextApplicationResponseStatus: number | null = null;
 let nextApplicationResponseBody: unknown = null;
 let lastApplicationsQueryReceived: Record<string, string> = {};
 
+let lastCriteriaQueryReceived: Record<string, string> = {};
+let currentCriteriaList: Array<any> | null = null;
+
+let lastNotesQueryReceived: Record<string, string> = {};
+let currentNotesList: Array<any> = [];
+let currentNoteDetail: any = null;
+
+let lastSearchRunsQueryReceived: Record<string, string> = {};
+let currentSearchRunsList: Array<any> = [];
+
 test.beforeAll(async () => {
   const mockOidcConfig = new client.Configuration(
     {
@@ -207,19 +217,24 @@ test.beforeAll(async () => {
     }
 
     if (url.pathname === "/api/v1/criteria") {
+      lastCriteriaQueryReceived = Object.fromEntries(url.searchParams.entries());
       res.writeHead(200);
       res.end(
-        JSON.stringify([
-          {
-            id: "crit-1",
-            name: "Remote Policy",
-            weight: "high",
-            ruleText: "Must allow remote work",
-            effectiveFrom: "2026-01-01T00:00:00Z",
-            effectiveTo: null,
-            isActive: true,
-          },
-        ])
+        JSON.stringify(
+          currentCriteriaList !== null
+            ? currentCriteriaList
+            : [
+                {
+                  id: "crit-1",
+                  name: "Remote Policy",
+                  weight: "high",
+                  ruleText: "Must allow remote work",
+                  effectiveFrom: "2026-01-01T00:00:00Z",
+                  effectiveTo: null,
+                  isActive: true,
+                },
+              ]
+        )
       );
       return;
     }
@@ -436,6 +451,45 @@ test.beforeAll(async () => {
           })
         );
       });
+      return;
+    }
+
+    if (url.pathname === "/api/v1/notes" && req.method === "GET") {
+      lastNotesQueryReceived = Object.fromEntries(url.searchParams.entries());
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
+          items: currentNotesList,
+          totalCount: currentNotesList.length,
+          limit: Number(url.searchParams.get("limit")) || 25,
+          offset: Number(url.searchParams.get("offset")) || 0,
+        })
+      );
+      return;
+    }
+
+    if (url.pathname === "/api/v1/notes/note-e2e-1" && req.method === "GET") {
+      if (!currentNoteDetail) {
+        res.writeHead(404);
+        res.end(JSON.stringify({ ok: false, errorCode: "NOT_FOUND", message: "Note not found" }));
+        return;
+      }
+      res.writeHead(200);
+      res.end(JSON.stringify(currentNoteDetail));
+      return;
+    }
+
+    if (url.pathname === "/api/v1/search-runs" && req.method === "GET") {
+      lastSearchRunsQueryReceived = Object.fromEntries(url.searchParams.entries());
+      res.writeHead(200);
+      res.end(
+        JSON.stringify({
+          items: currentSearchRunsList,
+          totalCount: currentSearchRunsList.length,
+          limit: Number(url.searchParams.get("limit")) || 25,
+          offset: Number(url.searchParams.get("offset")) || 0,
+        })
+      );
       return;
     }
 
@@ -1680,7 +1734,32 @@ test.describe("Company Management (Real Chromium)", () => {
       await expect(modal).toBeVisible();
       await expect(page.getByText("Append Timeline Event")).toBeVisible();
 
+      // Verify posting sync note appears only for rejected, offer_accepted, offer_declined, withdrawn
+      const syncNote = modal.getByTestId("posting-sync-note");
+      await expect(syncNote).not.toBeVisible();
+
+      await page.getByLabel("Event Type *").selectOption("interview");
+      await expect(syncNote).not.toBeVisible();
+
+      await page.getByLabel("Event Type *").selectOption("offer");
+      await expect(syncNote).not.toBeVisible();
+
+      await page.getByLabel("Event Type *").selectOption("offer_accepted");
+      await expect(syncNote).toBeVisible();
+      await expect(syncNote).toContainText("Closed");
+
+      await page.getByLabel("Event Type *").selectOption("offer_declined");
+      await expect(syncNote).toBeVisible();
+      await expect(syncNote).toContainText("Closed");
+
+      await page.getByLabel("Event Type *").selectOption("withdrawn");
+      await expect(syncNote).toBeVisible();
+      await expect(syncNote).toContainText("Closed");
+
       await page.getByLabel("Event Type *").selectOption("rejected");
+      await expect(syncNote).toBeVisible();
+      await expect(syncNote).toContainText("Rejected");
+
       await page.getByLabel("Event Date *").fill("2026-11-01");
       await page.getByLabel("Notes & Details").fill("Received standard rejection email after phone screen.");
       await modal.getByRole("button", { name: "Append Event" }).click();
@@ -1826,6 +1905,274 @@ test.describe("Company Management (Real Chromium)", () => {
       expect(await page.locator("script:has-text('hostile-posting-title')").count()).toBe(0);
       expect(await page.locator("script:has-text('hostile-app-notes')").count()).toBe(0);
       expect(await page.locator("iframe").count()).toBe(0);
+    });
+  });
+
+  test.describe("Operational Views (Real Chromium - Phase 8)", () => {
+    test("loads /criteria list with API stubbed, asserting only effectiveDate is sent, zero CSP violations, axe zero serious/critical in light and dark, and zero mutation controls", async ({
+      page,
+      context,
+    }) => {
+      const cspErrors: string[] = [];
+      page.on("console", (msg) => {
+        if (msg.type() === "error" && msg.text().includes("Content Security Policy")) {
+          cspErrors.push(msg.text());
+        }
+      });
+
+      currentCriteriaList = [
+        {
+          id: "crit-e2e-1",
+          name: "Remote Only",
+          weight: "hard_skip",
+          ruleText: "Must be 100% remote within US.",
+          effectiveFrom: "2026-01-01T00:00:00Z",
+          effectiveTo: null,
+          isActive: true,
+        },
+      ];
+
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/criteria?effectiveDate=2026-06-01&badParam=123`, { waitUntil: "networkidle" });
+
+      await expect(page.getByRole("heading", { name: "Screening Criteria", level: 1 })).toBeVisible();
+      expect(cspErrors).toEqual([]);
+
+      // Verify parameter filtering: only effectiveDate sent to API
+      expect(lastCriteriaQueryReceived.effectiveDate).toBe("2026-06-01");
+      expect(lastCriteriaQueryReceived.badParam).toBeUndefined();
+
+      // Criteria content visible
+      await expect(page.getByText("Remote Only")).toBeVisible();
+      await expect(page.getByText("Must be 100% remote within US.")).toBeVisible();
+
+      // Axe check in both themes
+      await checkAxeInThemes(page);
+
+      // Invariant: zero mutation controls (no forms other than Sign Out, zero edit/create/delete buttons)
+      const forms = await page.locator("form").all();
+      for (const form of forms) {
+        const action = await form.getAttribute("action");
+        expect(action).toBe("/auth/logout");
+      }
+      const buttons = await page.getByRole("button").all();
+      for (const btn of buttons) {
+        const text = ((await btn.textContent()) || "").toLowerCase();
+        expect(text).not.toMatch(/create|edit|delete|save|add/);
+      }
+    });
+
+    test("loads /criteria empty state cleanly", async ({ page, context }) => {
+      currentCriteriaList = [];
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/criteria`, { waitUntil: "networkidle" });
+
+      await expect(page.getByRole("heading", { name: "Screening Criteria", level: 1 })).toBeVisible();
+      await expect(page.getByText("No criteria found.")).toBeVisible();
+    });
+
+    test("loads /notes list with API stubbed, asserting only q, limit, offset sent, zero CSP violations, axe zero serious/critical in light and dark, and zero mutation controls", async ({
+      page,
+      context,
+    }) => {
+      const cspErrors: string[] = [];
+      page.on("console", (msg) => {
+        if (msg.type() === "error" && msg.text().includes("Content Security Policy")) {
+          cspErrors.push(msg.text());
+        }
+      });
+
+      currentNotesList = [
+        {
+          id: "note-e2e-1",
+          heading: "Senior SRE Architecture Review",
+          content: "Detailed technical notes on distributed caching.",
+          tags: ["distributed-systems", "sre"],
+          linkedEntityType: "posting",
+          linkedEntityId: "post-e2e-1",
+          createdAt: "2026-10-15T12:00:00Z",
+          updatedAt: "2026-10-16T12:00:00Z",
+        },
+      ];
+
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/notes?q=architecture&limit=25&offset=0&bad=param&sort=foo`, {
+        waitUntil: "networkidle",
+      });
+
+      await expect(page.getByRole("heading", { name: "Notes", level: 1 })).toBeVisible();
+      expect(cspErrors).toEqual([]);
+
+      // Verify parameters: only q, limit, offset sent
+      expect(lastNotesQueryReceived.q).toBe("architecture");
+      expect(lastNotesQueryReceived.limit).toBe("25");
+      expect(lastNotesQueryReceived.offset).toBe("0");
+      expect(lastNotesQueryReceived.bad).toBeUndefined();
+      expect(lastNotesQueryReceived.sort).toBeUndefined();
+
+      // Content rendered
+      await expect(page.getByText("Senior SRE Architecture Review")).toBeVisible();
+
+      // Axe check in both themes
+      await checkAxeInThemes(page);
+
+      // Invariant: zero mutation controls (no POST forms outside signOut)
+      const forms = await page.locator("form").all();
+      for (const form of forms) {
+        const method = (await form.getAttribute("method"))?.toLowerCase();
+        if (method === "post") {
+          const action = await form.getAttribute("action");
+          expect(action).toBe("/auth/logout");
+        }
+      }
+    });
+
+    test("loads /notes empty state cleanly", async ({ page, context }) => {
+      currentNotesList = [];
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/notes?q=nonexistent`, { waitUntil: "networkidle" });
+
+      await expect(page.getByRole("heading", { name: "Notes", level: 1 })).toBeVisible();
+      await expect(page.getByText("No notes found.")).toBeVisible();
+    });
+
+    test("loads /notes/:id detail with API stubbed, asserting safe plain text rendering of hostile script/HTML, zero CSP violations, axe zero serious/critical, and zero mutation controls", async ({
+      page,
+      context,
+    }) => {
+      let alertTriggered = false;
+      page.on("dialog", async (dialog) => {
+        alertTriggered = true;
+        await dialog.dismiss();
+      });
+
+      const cspErrors: string[] = [];
+      page.on("console", (msg) => {
+        if (msg.type() === "error" && msg.text().includes("Content Security Policy")) {
+          cspErrors.push(msg.text());
+        }
+      });
+
+      currentNoteDetail = {
+        id: "note-e2e-1",
+        heading: "<script>alert('hostile-heading')</script>System Scaling Notes",
+        content: "Multi-line note body.\n<script>alert('hostile-content')</script>\n<a href='javascript:alert(1)'>Exploit</a>\nSecond line preserved.",
+        tags: ["<script>alert('tag-xss')</script>", "kubernetes"],
+        linkedEntityType: "posting",
+        linkedEntityId: "post-e2e-1",
+        createdAt: "2026-10-15T12:00:00Z",
+        updatedAt: "2026-10-16T12:00:00Z",
+      };
+
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/notes/note-e2e-1`, { waitUntil: "networkidle" });
+
+      await expect(page.getByRole("heading", { level: 1 })).toContainText("System Scaling Notes");
+      expect(cspErrors).toEqual([]);
+      expect(alertTriggered).toBe(false);
+
+      // Untrusted content renders as text, scripts never executed
+      expect(await page.locator("script:has-text('hostile-heading')").count()).toBe(0);
+      expect(await page.locator("script:has-text('hostile-content')").count()).toBe(0);
+      expect(await page.locator("script:has-text('tag-xss')").count()).toBe(0);
+      expect(await page.locator('a[href^="javascript:"]').count()).toBe(0);
+
+      // Preserves whitespace via pre-wrap
+      const contentEl = page.getByTestId("note-content");
+      await expect(contentEl).toBeVisible();
+      const style = await contentEl.getAttribute("style");
+      expect(style).toContain("pre-wrap");
+
+      // Linked entity route check
+      const linkedPosting = page.getByRole("link", { name: /Job Opportunity/i });
+      await expect(linkedPosting).toBeVisible();
+      expect(await linkedPosting.getAttribute("href")).toBe("/postings/post-e2e-1");
+
+      // Axe check in both themes
+      await checkAxeInThemes(page);
+
+      // Invariant: zero mutation controls (no POST forms outside signOut)
+      const forms = await page.locator("form").all();
+      for (const form of forms) {
+        const method = (await form.getAttribute("method"))?.toLowerCase();
+        if (method === "post") {
+          const action = await form.getAttribute("action");
+          expect(action).toBe("/auth/logout");
+        }
+      }
+      const buttons = await page.getByRole("button").all();
+      for (const btn of buttons) {
+        const text = ((await btn.textContent()) || "").toLowerCase();
+        expect(text).not.toMatch(/create|edit|delete|save|add/);
+      }
+    });
+
+    test("loads /search-runs list with API stubbed, asserting only limit/offset sent, zero CSP violations, axe zero serious/critical, and zero mutation controls", async ({
+      page,
+      context,
+    }) => {
+      const cspErrors: string[] = [];
+      page.on("console", (msg) => {
+        if (msg.type() === "error" && msg.text().includes("Content Security Policy")) {
+          cspErrors.push(msg.text());
+        }
+      });
+
+      currentSearchRunsList = [
+        {
+          id: "run-e2e-1",
+          runDate: "2026-10-31T08:00:00Z",
+          companiesSearched: 25,
+          postingsFound: 14,
+          newPostings: 3,
+          errorsCount: 0,
+          summary: "Automated batch search run completed with 3 new postings.",
+        },
+      ];
+
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/search-runs?limit=25&offset=0&badParam=1&sort=date`, {
+        waitUntil: "networkidle",
+      });
+
+      await expect(page.getByRole("heading", { name: "Search Runs", level: 1 })).toBeVisible();
+      expect(cspErrors).toEqual([]);
+
+      // Verify parameters: only limit and offset sent
+      expect(lastSearchRunsQueryReceived.limit).toBe("25");
+      expect(lastSearchRunsQueryReceived.offset).toBe("0");
+      expect(lastSearchRunsQueryReceived.badParam).toBeUndefined();
+      expect(lastSearchRunsQueryReceived.sort).toBeUndefined();
+
+      // Content rendered
+      await expect(page.getByText("Automated batch search run completed with 3 new postings.")).toBeVisible();
+
+      // Axe check in both themes
+      await checkAxeInThemes(page);
+
+      // Invariant: zero mutation controls (no POST forms outside signOut)
+      const forms = await page.locator("form").all();
+      for (const form of forms) {
+        const method = (await form.getAttribute("method"))?.toLowerCase();
+        if (method === "post") {
+          const action = await form.getAttribute("action");
+          expect(action).toBe("/auth/logout");
+        }
+      }
+      const buttons = await page.getByRole("button").all();
+      for (const btn of buttons) {
+        const text = ((await btn.textContent()) || "").toLowerCase();
+        expect(text).not.toMatch(/create|edit|delete|save|add/);
+      }
+    });
+
+    test("loads /search-runs empty state cleanly", async ({ page, context }) => {
+      currentSearchRunsList = [];
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/search-runs`, { waitUntil: "networkidle" });
+
+      await expect(page.getByRole("heading", { name: "Search Runs", level: 1 })).toBeVisible();
+      await expect(page.getByText("No search runs found.")).toBeVisible();
     });
   });
 });

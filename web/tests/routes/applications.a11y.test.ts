@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import React from "react";
-import { render } from "@testing-library/react";
+import { render, fireEvent } from "@testing-library/react";
 import { createRoutesStub } from "react-router";
 import ApplicationsList from "../../app/routes/applications._index.js";
 import ApplicationDetail from "../../app/routes/applications.$id.js";
@@ -183,5 +183,61 @@ describe("Applications Accessibility & Hostile Text Safety (T048)", () => {
 
     expect(container.textContent).toContain("<script>alert('posting-title-xss')</script>");
     expect(container.textContent).toContain("<script>alert('event-notes-xss')</script>");
+  });
+
+  it("displays posting status synchronization note in append event dialog only for rejected, offer_accepted, offer_declined, and withdrawn", async () => {
+    const { findByRole, getByLabelText, queryByTestId, findByTestId } = render(
+      React.createElement(ApplicationDetailStub, {
+        initialEntries: ["/applications/app-sample-1"],
+      })
+    );
+
+    const appendBtn = await findByRole("button", { name: "Append Event" });
+    fireEvent.click(appendBtn);
+
+    const select = getByLabelText(/Event Type/i);
+
+    // Initial value is follow_up -> no note
+    expect(queryByTestId("posting-sync-note")).toBeNull();
+
+    // applied -> no note
+    fireEvent.change(select, { target: { value: "applied" } });
+    expect(queryByTestId("posting-sync-note")).toBeNull();
+
+    // interview -> no note
+    fireEvent.change(select, { target: { value: "interview" } });
+    expect(queryByTestId("posting-sync-note")).toBeNull();
+
+    // offer -> no note
+    fireEvent.change(select, { target: { value: "offer" } });
+    expect(queryByTestId("posting-sync-note")).toBeNull();
+
+    // rejected -> note is visible and mentions Rejected
+    fireEvent.change(select, { target: { value: "rejected" } });
+    const rejectedNote = await findByTestId("posting-sync-note");
+    expect(rejectedNote).toBeDefined();
+    expect(rejectedNote.textContent).toMatch(/Rejected/i);
+
+    // offer_accepted -> note is visible and mentions Closed
+    fireEvent.change(select, { target: { value: "offer_accepted" } });
+    const acceptedNote = await findByTestId("posting-sync-note");
+    expect(acceptedNote).toBeDefined();
+    expect(acceptedNote.textContent).toMatch(/Closed/i);
+
+    // offer_declined -> note is visible and mentions Closed
+    fireEvent.change(select, { target: { value: "offer_declined" } });
+    const declinedNote = await findByTestId("posting-sync-note");
+    expect(declinedNote).toBeDefined();
+    expect(declinedNote.textContent).toMatch(/Closed/i);
+
+    // withdrawn -> note is visible and mentions Closed
+    fireEvent.change(select, { target: { value: "withdrawn" } });
+    const withdrawnNote = await findByTestId("posting-sync-note");
+    expect(withdrawnNote).toBeDefined();
+    expect(withdrawnNote.textContent).toMatch(/Closed/i);
+
+    // back to follow_up -> note disappears
+    fireEvent.change(select, { target: { value: "follow_up" } });
+    expect(queryByTestId("posting-sync-note")).toBeNull();
   });
 });

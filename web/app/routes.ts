@@ -12,4 +12,8 @@ export default [
   route("companies/:id", "routes/companies.$id.tsx"),
   route("applications", "routes/applications._index.tsx"),
   route("applications/:id", "routes/applications.$id.tsx"),
+  route("criteria", "routes/criteria.tsx"),
+  route("notes", "routes/notes._index.tsx"),
+  route("notes/:id", "routes/notes.$id.tsx"),
+  route("search-runs", "routes/search-runs.tsx"),
 ] satisfies RouteConfig;

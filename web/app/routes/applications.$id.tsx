@@ -262,8 +262,9 @@ export default function ApplicationDetail() {
   React.useEffect(() => {
     if (isDialogOpen && fetcher.data?.ok === true && fetcher.state === "idle") {
       setIsDialogOpen(false);
+      revalidator.revalidate();
     }
-  }, [isDialogOpen, fetcher.data, fetcher.state]);
+  }, [isDialogOpen, fetcher.data, fetcher.state, revalidator]);
 
   const navItems = getNavItems("/applications");
 
@@ -282,6 +283,27 @@ export default function ApplicationDetail() {
 
   const fieldErrors = (fetcher.data && !fetcher.data.ok ? fetcher.data.fieldErrors : {}) || {};
   const isSubmitting = fetcher.state === "submitting" || fetcher.state === "loading";
+
+  const postingDisposition = (loaderData.posting as { disposition?: string } | undefined)?.disposition;
+  const isPostingTerminal = postingDisposition === "rejected" || postingDisposition === "closed";
+
+  const getPostingSyncNote = () => {
+    if (eventType === "rejected") {
+      if (isPostingTerminal) {
+        return `Note: The linked job posting is already ${postingDisposition === "rejected" ? "Rejected" : "Closed"}; its status will remain unchanged.`;
+      }
+      return "Note: Appending this event will also update the linked job posting status to Rejected.";
+    }
+    if (eventType === "offer_accepted" || eventType === "offer_declined" || eventType === "withdrawn") {
+      if (isPostingTerminal) {
+        return `Note: The linked job posting is already ${postingDisposition === "rejected" ? "Rejected" : "Closed"}; its status will remain unchanged.`;
+      }
+      return "Note: Appending this event will also update the linked job posting status to Closed.";
+    }
+    return null;
+  };
+
+  const postingSyncNote = getPostingSyncNote();
 
   return (
     <AppShell
@@ -504,6 +526,21 @@ export default function ApplicationDetail() {
                   <span style={{ color: "var(--ds-danger)", fontSize: "var(--ds-text-xs)" }}>
                     {fieldErrors.eventType}
                   </span>
+                ) : null}
+                {postingSyncNote ? (
+                  <p
+                    data-testid="posting-sync-note"
+                    style={{
+                      margin: "var(--ds-space-2) 0 0 0",
+                      fontSize: "var(--ds-text-xs)",
+                      color: "var(--ds-text-secondary)",
+                      backgroundColor: "var(--ds-surface-sunken)",
+                      padding: "var(--ds-space-2)",
+                      borderRadius: "var(--ds-radius-sm)",
+                    }}
+                  >
+                    {postingSyncNote}
+                  </p>
                 ) : null}
               </div>
 
