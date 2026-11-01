@@ -19,7 +19,7 @@
   "dependencies": {
     "@react-router/node": "7.18.5",
     "@react-router/serve": "7.18.5",
-    "cookie": "1.0.2",
+    "cookie": "2.0.1",
     "isbot": "5.2.2",
     "lucide-react": "1.66.0",
     "openapi-fetch": "0.17.0",
