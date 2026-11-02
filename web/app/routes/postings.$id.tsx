@@ -1,6 +1,7 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useFetcher, useRevalidator, Link, data } from "react-router";
 import React from "react";
+import { getNavItems } from "../lib/nav.js";
 import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
 import { useTheme } from "../lib/use-theme.js";
 import { createApiClient, mapApiError } from "../lib/api-client.server.js";
@@ -366,11 +367,7 @@ export default function PostingDetail() {
     tone: "neutral",
   };
 
-  const navItems = [
-    { label: "Postings", href: "/postings", active: true },
-    { label: "Companies", href: "/companies", active: false },
-    { label: "Applications", href: "/applications", active: false },
-  ];
+  const navItems = getNavItems("/postings");
 
   const signOutForm = (
     <form method="post" action="/auth/logout">
