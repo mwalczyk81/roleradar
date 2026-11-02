@@ -30,7 +30,7 @@ pwsh ./scripts/test-fast.ps1
 **Expected Results**:
 - `RoleRadar.Tests.Architecture`: Passes. Enforces that `RoleRadar.Api` contains zero direct references to `MongoDB.Driver` collections and that all OData controller queries route through `IOwnerReadSeam`.
 - `RoleRadar.Tests.Unit`: Passes. Validates query options parsing, `buildODataQuery` TypeScript utility, disposition rank mapping, and null ordering.
-- `RoleRadar.Tests.Contract`: Passes. Asserts byte-for-byte / canonical equality between running `/odata/$metadata` and `contracts/odata/$metadata.xml`.
+- `RoleRadar.Tests.Contract`: Passes. Asserts byte-for-byte / canonical equality between running `/odata/$metadata` and `contracts/odata/metadata.xml`.
 
 ---
 

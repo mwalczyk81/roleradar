@@ -56,8 +56,8 @@ export const Badge = BadgeRaw as React.FC<BadgeProps>;
 export const Button = ButtonRaw as React.FC<ButtonProps>;
 export const Card = CardRaw as React.FC<CardProps>;
 export const Checkbox = CheckboxRaw as React.FC<CheckboxProps>;
-export const DataTable = DataTableRaw as <T extends Record<string, unknown> = Record<string, unknown>>(
-  props: DataTableProps<T>
+export const DataTable = DataTableRaw as <T = Record<string, unknown>>(
+  props: Omit<DataTableProps<T>, "keyField"> & { keyField?: string }
 ) => React.ReactElement;
 export const EmptyState = EmptyStateRaw as React.FC<EmptyStateProps>;
 export const Input = InputRaw as React.FC<InputProps>;

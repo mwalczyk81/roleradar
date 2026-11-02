@@ -23,7 +23,7 @@ Migrate all read-only list queries across Postings, Companies, Applications, Not
 **Testing**: xUnit v3, NetArchTest.Rules, Testcontainers.MongoDb 4.16.0, Playwright (Chromium E2E), Vitest (Web unit/SSR)  
 **Target Platform**: Linux containers / Windows dev (Docker Compose)  
 **Project Type**: Monorepo with .NET Web API host, Application/Domain/Infrastructure libraries, and React Router SSR web app  
-**Performance Goals**: < 500ms initial list page loads; < 1 second for 5,000-row filtered & sorted benchmark queries (SC-006)  
+**Performance Goals**: < 500ms initial list page loads; < 1 second for 5,000-row filtered & sorted benchmark queries (SC-007)  
 **Constraints**:
 - Max `$top = 100` (default 25)
 - Non-GET methods return HTTP 405 with `Allow: GET`
@@ -111,7 +111,7 @@ src/
 │       └── ReconcileReadModelsCommand.cs    # Unified CLI command (--dry-run default, --confirm)
 contracts/
 ├── odata/
-│   └── $metadata.xml                        # Generated from running service & committed
+│   └── metadata.xml                         # Generated from running service & committed
 ├── openapi/
 │   └── roleradar-api.json                   # Regenerated after retiring /api/v1 list endpoints
 └── client/
@@ -141,7 +141,7 @@ tests/
 │   ├── ODataAbuseTests.cs                   # Top > 100, invalid fields, 405 on non-GET
 │   ├── ODataOwnerIsolationTests.cs          # Second-owner data isolation verification
 │   ├── ODataMongoTranslationTests.cs        # LINQ3 translation for operators & collation
-│   ├── ODataBenchmarkTests.cs               # 5,000-row query latency < 1s (SC-006)
+│   ├── ODataBenchmarkTests.cs               # 5,000-row query latency < 1s (SC-007)
 │   ├── RenameCascadeTests.cs                # Atomic propagation of company & posting renames
 │   └── ReconcileReadModelsTests.cs          # Tests CLI reconcile idempotency & safety
 └── web/tests/
@@ -164,54 +164,74 @@ tests/
   3. Prove validation settings return HTTP 400 Problem Details and non-GET methods return HTTP 405 with `Allow: GET`.
   4. Write `specs/006-odata-reads/spike/REPORT.md` documenting verified results, unverified boundaries, and the Go/No-Go decision.
   5. Write `docs/adr/0028-odata-read-seam-and-query-execution.md` recording the agreed architecture.
+  6. **STOP GATE**: Matt reviews `REPORT.md` and approves Go/No-Go.
 
-### Phase 2: Read Seam & Postings End-to-End
+### Phase 2: Foundational Infrastructure & Read Seam Setup
+- Pin packages in `Directory.Packages.props` and configure OData middleware.
+- Define `IOwnerReadSeam` interface in `src/RoleRadar.Application/Reading/IOwnerReadSeam.cs`.
+- Implement `ODataExceptionFilter` for Problem Details (400) and `MongoOwnerReadSeam` for owner pre-scoping.
+
+### Phase 3: User Story 1 - Global Sorting, Filtering & Postings Reconcile (Priority: P1) [US1]
 - **Tests First**:
+  - **Read seam composition test** (`ODataReadSeamCompositionTests.cs`): written first against a throwaway Testcontainers Mongo instance, testing one combined query with `contains(tolower(title), 'x')` filter, `$orderby=score asc` with nulls last (`has_score: -1, score: 1, _id: 1`), `$skip`/`$top` page 2, `$count=true`, and secondary collation. *Fallback*: if LINQ composition fails on complex combinations, fallback is native filter and sort definitions built from the validated OData filter AST for allowlisted operators; using this fallback widens scope and requires Matt's review.
   - Architecture test: `ODataSeamArchitectureTests.cs` (verifies API layer cannot touch MongoDB collection types).
   - Authorization tests: `ODataAuthorizationTests.cs` (asserts 401 for anonymous, 403 for missing scope, 403 for non-owner subject, 200 for valid owner).
-  - Consistency test: `ReadModelConsistencyTests.cs` asserting every posting's `disposition_rank == rank(disposition)`.
-  - Abuse tests: `$top=500` -> 400, POST -> 405 with `Allow: GET`, unlisted field -> 400.
+  - Consistency test: `ReadModelConsistencyTests.cs` asserting every posting's `disposition_rank == rank(disposition)` and `has_score == (score != null)`.
+  - Postings query integration tests: `ODataPostingsTests.cs` in Testcontainers testing POST (405 with `Allow: GET`), case-insensitive collation, disposition pipeline rank sort (`unscored` -> `lead` -> `scored` -> `applied` -> `rejected` -> `screened_out` -> `closed`), null scores sorted last in both directions, string function rejection (400 if `contains/startswith/endswith` not applied as `function(tolower(p), 'lowercased')`), and pagination continuity.
+  - Postings multi-owner isolation test: `ODataPostingsIsolationTests.cs` in Testcontainers using two distinct owner IDs, proving zero cross-owner document exposure and asserting `owner_id` is never present in JSON responses.
+  - Postings abuse tests: `ODataPostingsAbuseTests.cs` in Testcontainers testing `$top > 100` (400), unlisted properties, filter trees exceeding 100 nodes, depth limits, and arithmetic/lambda operators.
+  - Postings reconcile tests: `ReconcilePostingsTests.cs` in Testcontainers verifying dry-run default, `--confirm` requirement, count report accuracy, and idempotency for postings (`disposition_rank`, `companyName`, and `has_score`).
   - Contract drift test: `ODataMetadataDriftTests.cs` comparing running `/odata/$metadata` against generated snapshot.
 - **Backend Implementation**:
   - Add `PostingReadModel` and `IOwnerReadSeam.QueryPostings(OwnerId)`.
-  - Update `MongoPostingRepository.SerializePosting` (the single choke point) to compute `disposition_rank` and populate `company_name`.
-  - Add compound indexes in `TrackingIndexInitializer` (`{ owner_id: 1, disposition_rank: 1, _id: 1 }`, collation indexes).
-  - Implement `PostingsController : ODataController` under `/odata/Postings`.
-  - Generate and commit definitive `contracts/odata/$metadata.xml` from the running service.
+  - Update `MongoPostingRepository.SerializePosting` (the single choke point) to compute `disposition_rank`, populate `company_name`, and maintain `has_score = (score != null)`.
+  - Add compound indexes in `TrackingIndexInitializer`: `{ owner_id: 1, disposition_rank: 1, _id: 1 }`, `{ owner_id: 1, has_score: -1, score: 1, _id: 1 }` (ASC), `{ owner_id: 1, has_score: -1, score: -1, _id: 1 }` (DESC), and secondary collation text indexes.
+  - Implement query validation in `PostingsController : ODataController` under `/odata/Postings`: reject `contains/startswith/endswith` unless applied as `function(tolower(property), 'lowercased term')` returning HTTP 400 Problem Details (noting that such filters are unindexed scans).
+  - Generate and commit definitive `contracts/odata/metadata.xml` from the running service.
+  - Implement postings portion of `reconcile-read-models` CLI command in `src/RoleRadar.Cli/Commands/ReconcileReadModelsCommand.cs` backfilling `disposition_rank`, `companyName`, and `has_score`.
+  - Document operational rule in `docs/operations/reconcile-read-models.md`: Matt runs `reconcile-read-models` on the real database after taking an encrypted backup, running dry run first; agy and CI jobs never run it on live databases.
 - **Frontend Implementation**:
-  - Create typed query builder `web/app/lib/odata-client.ts`.
+  - Create typed query builder `web/app/lib/odata-client.ts`, ensuring it always emits string functions in `function(tolower(property), 'lowercased term')` form.
   - Migrate `web/app/routes/postings._index.tsx` to `/odata/Postings`.
   - Remove "Sorting applies to the rows on this page only" footer disclaimer.
   - Add Playwright E2E test verifying server-side sort and pagination.
+  - **Operator Note**: Matt runs postings reconcile on the real database (dry run first, after a backup) before using the new postings sort in production.
 
-### Phase 3: Applications Read Model, Renames, Reconcile & Cleanup
+### Phase 4: User Story 2 - Enriched Application Tracking, Renames, App Reconcile & Cleanup (Priority: P1) [US2]
 - **Tests First**:
   - Rename cascade tests (`RenameCascadeTests.cs`): assert company name change atomically updates postings and applications; posting title change updates applications.
-  - Reconcile tests (`ReconcileReadModelsTests.cs`): assert dry-run default, `--confirm` requirement, count report accuracy, and idempotency.
-  - Applications query tests verifying derived milestones (`hasInterview`, `firstResponseAt`, `lastEventAt`, `ageInDays`).
+  - Applications reconcile tests (`ReconcileApplicationsTests.cs`): assert dry-run default, `--confirm` requirement, count report accuracy, and idempotency for applications (`postingTitle`, `companyName`, `hasInterview`, `firstResponseAt`, `lastEventAt`, `has_first_response`, `has_last_event`).
+  - Applications query tests verifying derived milestones (`hasInterview`, `firstResponseAt`, `lastEventAt`, `ageInDays`) and null timestamps sorted last in both directions via stored flags.
+  - Replacement web loader tests in `web/tests/routes/applications.odata-loader.test.ts` re-creating every behavior from `applications.loader.test.ts` (401 one re-login, 403, 404, limit clamp, supported params only) against OData.
 - **Backend Implementation**:
-  - Update `CreateApplicationHandler` to materialize initial milestones, `postingTitle`, and `companyName`.
-  - Update `AppendApplicationEventHandler` to materialize status, interview, and response timestamps.
+  - Update `CreateApplicationHandler` and `AppendApplicationEventHandler` to materialize initial milestones, `postingTitle`, `companyName`, and maintain `has_first_response = (firstResponseAt != null)` and `has_last_event = (lastEventAt != null)` at the repository choke point.
   - Add transactional rename logic in `MongoCompanyRepository` and posting title update paths.
-  - Implement `reconcile-read-models` command in `RoleRadar.Cli` covering postings (rank, companyName) and applications (postingTitle, companyName, milestones).
-  - Add compound indexes for applications in `TrackingIndexInitializer`.
+  - Extend `reconcile-read-models` CLI command in `src/RoleRadar.Cli/Commands/ReconcileReadModelsCommand.cs` to backfill applications (`postingTitle`, `companyName`, `hasInterview`, `firstResponseAt`, `lastEventAt`, `has_first_response`, `has_last_event`).
+  - Add compound indexes for applications in `TrackingIndexInitializer`: ASC and DESC indexes per nullable sort field (`{ owner_id: 1, has_first_response: -1, first_response_at: 1, _id: 1 }`, `{ owner_id: 1, has_first_response: -1, first_response_at: -1, _id: 1 }`, `{ owner_id: 1, has_last_event: -1, last_event_at: 1, _id: 1 }`, `{ owner_id: 1, has_last_event: -1, last_event_at: -1, _id: 1 }`).
   - Expose `/odata/Applications` in `ApplicationsController`.
 - **Frontend Implementation & Deletions**:
   - Migrate `web/app/routes/applications._index.tsx` to `/odata/Applications`.
-  - **Delete obsolete code**: Delete `web/app/lib/application-context.server.ts` and its test `web/tests/routes/applications.loader.test.ts`. Replace with direct OData loader assertions.
+  - **Delete obsolete code**: Delete `web/app/lib/application-context.server.ts` and its test `web/tests/routes/applications.loader.test.ts`. Replace with direct OData loader assertions, maintaining line coverage >= 80% and branch coverage >= 75%.
 
-### Phase 4: Companies, Notes, Criteria & Search Runs
+### Phase 5: User Story 3 - Server-Side Querying for Companies, Notes, Criteria & Search Runs (Priority: P2) [US3]
 - **Tests First**:
   - Query contract tests for remaining entity sets.
   - Filter restrictions test (verifying note `content` is rejected in `$filter` / `$orderby`).
+  - **Notes content projection test**: verify that the Notes query projects `content` away in the database query (`content == null` or omitted in MongoDB fetch) unless `$select` explicitly requests it.
 - **Backend Implementation**:
   - Add read models and seam methods for Companies, Notes, Criteria, and SearchRuns.
+  - Implement database-level projection in `MongoOwnerReadSeam.QueryNotes` excluding `content` unless `$select` requests it.
   - Add compound indexes with `owner_id` first in `TrackingIndexInitializer`.
   - Expose controllers for each entity set under `/odata`.
 - **Frontend Implementation**:
   - Migrate `/companies`, `/notes`, `/criteria`, and `/search-runs` list pages to OData.
 
-### Phase 5: Legacy Endpoint Retirement & Contract Regeneration
+### Phase 6: User Story 4 - Query Guardrails, Abuse Prevention & Benchmark (Priority: P2) [US4]
+- Extend query abuse integration test suite across Companies, Applications, Notes, Criteria, and SearchRuns.
+- Extend multi-owner isolation tests across all entity sets.
+- Execute 5,000-document Testcontainers benchmark test verifying query latency < 1 second (SC-007).
+
+### Phase 7: User Story 5 - Contract Drift, Legacy Retirement & Web Verification (Priority: P3) [US5]
 - **Tests First**:
   - Playwright assertion verifying zero network requests go to `/api/v1/` list endpoints during full UI traversal.
 - **Retirement Implementation**:
@@ -221,11 +241,13 @@ tests/
   - Run `pnpm --filter web run generate-api-types` to update `contracts/client/api-types.ts`.
   - Update OpenAPI contract drift assertions.
 
-### Phase 6: Operational Guides & Documentation
+### Phase 8: Polish, Operational Docs & Spike Cleanup
 - **Deliverables**:
   - Update documentation with curl examples demonstrating bearer token querying of `/odata`.
   - Document operational instructions for `reconcile-read-models` (emphasizing that Matt runs it on the real database after taking a backup; agy never does).
   - Document Excel and Power BI connectivity as a prospective follow-up feature, detailing required headers and bearer auth configuration.
+  - Update `AGENTS.md` with standing rules: OData allowlists, mandatory `IOwnerReadSeam`, and zero bypass of repository choke points.
+  - Delete throwaway spike code in `specs/006-odata-reads/spike/` while preserving `REPORT.md` and `docs/adr/0028-odata-read-seam-and-query-execution.md`.
 
 ---
 
@@ -237,13 +259,13 @@ tests/
                 /----\    - Server sorting across pages in Chromium
                /      \   - Zero calls to retired /api/v1 list endpoints
               /--------\  5,000-Row Benchmark & Translation (Testcontainers)
-             /          \ - Latency < 1s for 5,000 synthetic rows (SC-006)
+             /          \ - Latency < 1s for 5,000 synthetic rows (SC-007)
             /------------\- Case-insensitive collation & nulls-last ordering
            /              \ Abuse, Isolation & Authorization Tests (Testcontainers)
           /----------------\- 401 anon, 403 scope/subject, 405 on non-GET, 400 bad queries
          /                  \- Owner A cannot see Owner B data (0 docs returned)
         /--------------------\ Contract Drift Tests (xUnit)
-       /                      \- Running /odata/$metadata == contracts/odata/$metadata.xml
+       /                      \- Running /odata/$metadata == contracts/odata/metadata.xml
       /------------------------\ Architecture & Unit Tests (NetArchTest / xUnit / Vitest)
      /                          \- API zero Mongo refs; consistency test: rank == rank(disp)
 ```

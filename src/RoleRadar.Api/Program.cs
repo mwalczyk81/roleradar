@@ -1,13 +1,19 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.OData;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OData.Edm;
+using Microsoft.OData.ModelBuilder;
 using RoleRadar.Api.Authentication;
 using RoleRadar.Api.Endpoints;
+using RoleRadar.Api.Filters;
 using RoleRadar.Api.OpenApi;
 using RoleRadar.Application;
 using RoleRadar.Application.Abstractions;
+using RoleRadar.Application.Reading.Models;
 using RoleRadar.Domain.Common;
 using RoleRadar.Infrastructure;
 
@@ -59,7 +65,7 @@ public partial class Program
 
         builder.Services.AddHttpContextAccessor();
         builder.Services.Configure<OwnerSecurityOptions>(builder.Configuration.GetSection(OwnerSecurityOptions.SectionName));
-        builder.Services.AddScoped<IOwnerIdProvider, HttpUserOwnerIdProvider>();
+        builder.Services.TryAddScoped<IOwnerIdProvider, HttpUserOwnerIdProvider>();
         builder.Services.AddSingleton<IAuthorizationHandler, OwnerAllowlistHandler>();
         builder.Services.AddSingleton<IAuthorizationHandler, ScopeAuthorizationHandler>();
 
@@ -137,6 +143,24 @@ public partial class Program
             options.AddExplicitTypeTransformers();
         });
 
+        builder.Services.AddControllers(options =>
+        {
+            options.Filters.Add<ODataExceptionFilter>();
+        })
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+        })
+        .AddOData(options =>
+        {
+            options.AddRouteComponents("odata", GetEdmModel())
+                .Select()
+                .Filter()
+                .OrderBy()
+                .Count()
+                .SetMaxTop(100);
+        });
+
         // Intentionally zero CORS middleware registered (server-to-server only per ADR-0018 / FR-009)
         var app = builder.Build();
 
@@ -159,7 +183,22 @@ public partial class Program
         apiV1.MapApplicationsEndpoints();
         apiV1.MapAncillaryEndpoints();
 
+        app.MapControllers();
+
         return app;
+    }
+
+    public static IEdmModel GetEdmModel()
+    {
+        var builder = new ODataConventionModelBuilder();
+        builder.EnableLowerCamelCase();
+        builder.EntitySet<PostingReadModel>("Postings");
+        builder.EntitySet<CompanyReadModel>("Companies");
+        builder.EntitySet<ApplicationReadModel>("Applications");
+        builder.EntitySet<NoteReadModel>("Notes");
+        builder.EntitySet<CriterionReadModel>("Criteria");
+        builder.EntitySet<SearchRunReadModel>("SearchRuns");
+        return builder.GetEdmModel();
     }
 
     private sealed class OwnerAllowlistRequirement : IAuthorizationRequirement;

@@ -97,6 +97,14 @@ public static class DependencyInjection
             return new Mongo.Repositories.MongoIntegrityRepository(client, database);
         });
 
+        services.TryAddScoped<RoleRadar.Application.Reading.IOwnerReadSeam>(sp =>
+        {
+            var client = sp.GetRequiredService<IMongoClient>();
+            var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
+            var database = client.GetDatabase(opts.DatabaseName);
+            return new Mongo.Reading.MongoOwnerReadSeam(database);
+        });
+
         services.TryAddSingleton<MongoScratchDatabaseManager>();
         services.TryAddSingleton<ITrackerScratchManager>(sp => sp.GetRequiredService<MongoScratchDatabaseManager>());
         services.TryAddSingleton<ITrackingContextFactory, MongoTrackingContextFactory>();

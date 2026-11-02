@@ -135,6 +135,11 @@ describe("Security Invariants", () => {
       }),
     } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
 
+    vi.spyOn(apiClientModule, "fetchOData").mockResolvedValue({
+      data: { value: [], "@odata.count": 0 },
+      response: { status: 200 } as Response,
+    });
+
     const headers = { Cookie: `${SECURE_COOKIE_NAME}=${sessionId}` };
 
     // Test loader 1: /not-authorized

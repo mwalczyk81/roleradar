@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-16"?>
+<edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
+  <edmx:DataServices>
+    <Schema Namespace="RoleRadar.Application.Reading.Models" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+      <EntityType Name="PostingReadModel">
+        <Key>
+          <PropertyRef Name="id" />
+        </Key>
+        <Property Name="id" Type="Edm.Guid" Nullable="false" />
+        <Property Name="companyId" Type="Edm.Guid" Nullable="false" />
+        <Property Name="companyName" Type="Edm.String" Nullable="false" />
+        <Property Name="title" Type="Edm.String" Nullable="false" />
+        <Property Name="requisitionId" Type="Edm.String" />
+        <Property Name="location" Type="Edm.String" />
+        <Property Name="disposition" Type="Edm.String" Nullable="false" />
+        <Property Name="resurfacePolicy" Type="Edm.String" Nullable="false" />
+        <Property Name="score" Type="Edm.Decimal" Scale="variable" />
+        <Property Name="createdAt" Type="Edm.DateTimeOffset" Nullable="false" />
+        <Property Name="updatedAt" Type="Edm.DateTimeOffset" Nullable="false" />
+      </EntityType>
+      <EntityType Name="CompanyReadModel">
+        <Key>
+          <PropertyRef Name="id" />
+        </Key>
+        <Property Name="id" Type="Edm.Guid" Nullable="false" />
+        <Property Name="name" Type="Edm.String" Nullable="false" />
+        <Property Name="status" Type="Edm.String" Nullable="false" />
+        <Property Name="ownershipType" Type="Edm.String" Nullable="false" />
+        <Property Name="headquarters" Type="Edm.String" />
+        <Property Name="description" Type="Edm.String" />
+        <Property Name="categoryTags" Type="Collection(Edm.String)" />
+      </EntityType>
+      <EntityType Name="ApplicationReadModel">
+        <Key>
+          <PropertyRef Name="id" />
+        </Key>
+        <Property Name="id" Type="Edm.Guid" Nullable="false" />
+        <Property Name="postingId" Type="Edm.Guid" Nullable="false" />
+        <Property Name="companyId" Type="Edm.Guid" Nullable="false" />
+        <Property Name="postingTitle" Type="Edm.String" Nullable="false" />
+        <Property Name="companyName" Type="Edm.String" Nullable="false" />
+        <Property Name="status" Type="Edm.String" Nullable="false" />
+        <Property Name="appliedAt" Type="Edm.DateTimeOffset" Nullable="false" />
+        <Property Name="hasInterview" Type="Edm.Boolean" Nullable="false" />
+        <Property Name="firstResponseAt" Type="Edm.DateTimeOffset" />
+        <Property Name="lastEventAt" Type="Edm.DateTimeOffset" Nullable="false" />
+        <Property Name="ageInDays" Type="Edm.Int32" Nullable="false" />
+      </EntityType>
+      <EntityType Name="NoteReadModel">
+        <Key>
+          <PropertyRef Name="id" />
+        </Key>
+        <Property Name="id" Type="Edm.Guid" Nullable="false" />
+        <Property Name="heading" Type="Edm.String" Nullable="false" />
+        <Property Name="tags" Type="Collection(Edm.String)" />
+        <Property Name="linkedEntityType" Type="Edm.String" Nullable="false" />
+        <Property Name="linkedEntityId" Type="Edm.Guid" Nullable="false" />
+        <Property Name="createdAt" Type="Edm.DateTimeOffset" Nullable="false" />
+        <Property Name="updatedAt" Type="Edm.DateTimeOffset" Nullable="false" />
+        <Property Name="content" Type="Edm.String" Nullable="false" />
+      </EntityType>
+      <EntityType Name="CriterionReadModel">
+        <Key>
+          <PropertyRef Name="id" />
+        </Key>
+        <Property Name="id" Type="Edm.Guid" Nullable="false" />
+        <Property Name="name" Type="Edm.String" Nullable="false" />
+        <Property Name="category" Type="Edm.String" Nullable="false" />
+        <Property Name="ruleText" Type="Edm.String" Nullable="false" />
+        <Property Name="effectiveFrom" Type="Edm.DateTimeOffset" Nullable="false" />
+        <Property Name="effectiveTo" Type="Edm.DateTimeOffset" />
+        <Property Name="isActive" Type="Edm.Boolean" Nullable="false" />
+      </EntityType>
+      <EntityType Name="SearchRunReadModel">
+        <Key>
+          <PropertyRef Name="id" />
+        </Key>
+        <Property Name="id" Type="Edm.Guid" Nullable="false" />
+        <Property Name="runDate" Type="Edm.DateTimeOffset" Nullable="false" />
+        <Property Name="companiesSearched" Type="Edm.Int32" Nullable="false" />
+        <Property Name="postingsFound" Type="Edm.Int32" Nullable="false" />
+        <Property Name="newPostings" Type="Edm.Int32" Nullable="false" />
+        <Property Name="errorsCount" Type="Edm.Int32" Nullable="false" />
+        <Property Name="summary" Type="Edm.String" />
+      </EntityType>
+    </Schema>
+    <Schema Namespace="Default" xmlns="http://docs.oasis-open.org/odata/ns/edm">
+      <EntityContainer Name="Container">
+        <EntitySet Name="Postings" EntityType="RoleRadar.Application.Reading.Models.PostingReadModel" />
+        <EntitySet Name="Companies" EntityType="RoleRadar.Application.Reading.Models.CompanyReadModel" />
+        <EntitySet Name="Applications" EntityType="RoleRadar.Application.Reading.Models.ApplicationReadModel" />
+        <EntitySet Name="Notes" EntityType="RoleRadar.Application.Reading.Models.NoteReadModel" />
+        <EntitySet Name="Criteria" EntityType="RoleRadar.Application.Reading.Models.CriterionReadModel" />
+        <EntitySet Name="SearchRuns" EntityType="RoleRadar.Application.Reading.Models.SearchRunReadModel" />
+      </EntityContainer>
+    </Schema>
+  </edmx:DataServices>
+</edmx:Edmx>

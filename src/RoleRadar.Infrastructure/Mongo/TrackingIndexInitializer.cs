@@ -202,7 +202,30 @@ public static class TrackingIndexInitializer
                 new CreateIndexOptions { Name = "ix_postings_owner_disposition_resurface" }),
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("company_id").Ascending("disposition"),
-                new CreateIndexOptions { Name = "ix_postings_owner_company_disposition" })
+                new CreateIndexOptions { Name = "ix_postings_owner_company_disposition" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("disposition_rank").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_postings_owner_disposition_rank" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Descending("has_score").Ascending("score").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_postings_owner_score_asc_nulls_last" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Descending("has_score").Descending("score").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_postings_owner_score_desc_nulls_last" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("title").Ascending("_id"),
+                new CreateIndexOptions
+                {
+                    Name = "ix_postings_owner_title_collation",
+                    Collation = new Collation("en", strength: CollationStrength.Secondary)
+                }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("company_name").Ascending("_id"),
+                new CreateIndexOptions
+                {
+                    Name = "ix_postings_owner_company_name_collation",
+                    Collation = new Collation("en", strength: CollationStrength.Secondary)
+                })
         };
         await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }

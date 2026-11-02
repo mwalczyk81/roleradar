@@ -150,4 +150,60 @@ describe("PostingsIndex Component View", () => {
     expect(await findByText(/Showing 26–50 of 50/)).toBeDefined();
     expect((nextBtn as HTMLButtonElement).disabled).toBe(true);
   });
+
+  it("triggers toolbar input changes, select changes, individual chip removals, and column sort changes", async () => {
+    const AppStub = createRoutesStub([
+      {
+        path: "/postings",
+        Component: PostingsIndex,
+        loader: () => ({
+          items: dummyPostings,
+          totalCount: 2,
+          limit: 25,
+          offset: 0,
+          csrfToken: "dummy-csrf-token",
+          userLabel: "matt@example.com",
+        }),
+      },
+    ]);
+
+    const { findByLabelText, findByPlaceholderText, findByRole } = render(
+      React.createElement(AppStub, {
+        initialEntries: ["/postings?disposition=lead&minScore=80&resurfacePolicy=never&q=Cloud"],
+      })
+    );
+
+    // Individual chip removal
+    const removeDispChip = await findByLabelText("Remove filter Disposition: Lead");
+    fireEvent.click(removeDispChip);
+
+    const removeMinScoreChip = await findByLabelText("Remove filter Min Score: 80");
+    fireEvent.click(removeMinScoreChip);
+
+    const removePolicyChip = await findByLabelText("Remove filter Policy: Never");
+    fireEvent.click(removePolicyChip);
+
+    // Selects
+    const dispSelect = await findByLabelText(/Filter by Disposition/i);
+    fireEvent.change(dispSelect, { target: { value: "scored" } });
+    fireEvent.change(dispSelect, { target: { value: "" } });
+
+    const policySelect = await findByLabelText(/Filter by Resurface Policy/i);
+    fireEvent.change(policySelect, { target: { value: "if_reopened" } });
+    fireEvent.change(policySelect, { target: { value: "" } });
+
+    // Min score input
+    const minScoreInput = await findByLabelText(/Filter by Minimum Score/i);
+    fireEvent.change(minScoreInput, { target: { value: "90" } });
+    fireEvent.change(minScoreInput, { target: { value: "" } });
+
+    // Search input
+    const searchInput = await findByLabelText(/Search job postings/i);
+    fireEvent.change(searchInput, { target: { value: "engineer" } });
+    fireEvent.change(searchInput, { target: { value: "" } });
+
+    // Sort header change
+    const companyHeader = await findByRole("button", { name: "Company" });
+    fireEvent.click(companyHeader);
+  });
 });

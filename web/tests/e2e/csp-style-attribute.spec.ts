@@ -102,7 +102,7 @@ test.beforeAll(async () => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
     res.setHeader("Content-Type", "application/json");
 
-    if (url.pathname === "/api/v1/postings") {
+    if (url.pathname === "/api/v1/postings" || url.pathname === "/odata/Postings") {
       res.writeHead(200);
       res.end(
         JSON.stringify({
@@ -122,6 +122,22 @@ test.beforeAll(async () => {
               updatedAt: "2026-10-31T11:00:00Z",
             },
           ],
+          value: [
+            {
+              id: "post-e2e-1",
+              companyId: "comp-1",
+              companyName: "Acme Corp",
+              title: currentPostingTitle,
+              requisitionId: "REQ-101",
+              location: "Remote",
+              disposition: currentPostingDisposition,
+              resurfacePolicy: "never",
+              score: 92.5,
+              createdAt: "2026-10-31T10:00:00Z",
+              updatedAt: "2026-10-31T11:00:00Z",
+            },
+          ],
+          "@odata.count": 1,
           totalCount: 1,
           limit: 25,
           offset: 0,

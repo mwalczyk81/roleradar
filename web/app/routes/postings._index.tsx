@@ -4,7 +4,6 @@ import React from "react";
 import { getNavItems } from "../lib/nav.js";
 import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
 import { useTheme } from "../lib/use-theme.js";
-import { createApiClient } from "../lib/api-client.server.js";
 import { AppShell, Toolbar, DataTable, Badge, Select, Input, Button, type DataTableColumn } from "../ui.js";
 import { formatDate } from "../lib/format-date.js";
 import {
@@ -12,12 +11,42 @@ import {
   DISPOSITION_METADATA,
   RESURFACE_POLICY_VALUES,
   RESURFACE_POLICY_LABELS,
+  isPostingDisposition,
+  isResurfacePolicy,
   type PostingDisposition,
   type ResurfacePolicy,
 } from "../lib/dispositions.js";
-import type { components } from "../../../contracts/client/api-types.js";
+import { buildODataQuery, type FilterExpression, type OrderByClause } from "../lib/odata-client.js";
+import { fetchOData } from "../lib/api-client.server.js";
 
-type PostingListItemDto = components["schemas"]["PostingListItemDto"];
+export interface PostingODataModel {
+  id: string;
+  companyId: string;
+  companyName: string;
+  title: string;
+  requisitionId: string | null;
+  location: string | null;
+  disposition: string;
+  resurfacePolicy: string;
+  score: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const ALLOWED_SORT_FIELDS = [
+  "title",
+  "companyName",
+  "score",
+  "disposition",
+  "createdAt",
+  "updatedAt",
+] as const;
+
+export type AllowedSortField = (typeof ALLOWED_SORT_FIELDS)[number];
+
+export function isAllowedSortField(val: string): val is AllowedSortField {
+  return (ALLOWED_SORT_FIELDS as readonly string[]).includes(val);
+}
 
 export const meta: MetaFunction = () => [
   { title: "Job Postings - RoleRadar" },
@@ -27,10 +56,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const session = await requireUserSession(request);
   const url = new URL(request.url);
 
-  // Filters are strictly: disposition, companyId, resurfacePolicy, minScore, q, limit, offset
-  const disposition = url.searchParams.get("disposition") || undefined;
+  const dispositionRaw = url.searchParams.get("disposition");
+  const disposition = dispositionRaw && isPostingDisposition(dispositionRaw) ? dispositionRaw : undefined;
+
   const companyId = url.searchParams.get("companyId") || undefined;
-  const resurfacePolicy = url.searchParams.get("resurfacePolicy") || undefined;
+
+  const resurfacePolicyRaw = url.searchParams.get("resurfacePolicy");
+  const resurfacePolicy = resurfacePolicyRaw && isResurfacePolicy(resurfacePolicyRaw) ? resurfacePolicyRaw : undefined;
 
   const minScoreRaw = url.searchParams.get("minScore");
   let minScore: number | undefined;
@@ -52,32 +84,102 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let offset = offsetRaw ? Number(offsetRaw) : 0;
   if (Number.isNaN(offset) || offset < 0) offset = 0;
 
-  // Sorting is page-local only; do NOT pass sort parameters to the API
-  const queryParams: {
-    disposition?: string;
-    companyId?: string;
-    resurfacePolicy?: string;
-    minScore?: number;
-    q?: string;
-    limit?: number;
-    offset?: number;
-  } = {
-    limit,
-    offset,
-  };
+  const sortRaw = url.searchParams.get("sort");
+  const sort = sortRaw && isAllowedSortField(sortRaw) ? sortRaw : undefined;
+  const direction: "asc" | "desc" = url.searchParams.get("direction") === "asc" ? "asc" : "desc";
 
-  if (disposition) queryParams.disposition = disposition;
-  if (companyId) queryParams.companyId = companyId;
-  if (resurfacePolicy) queryParams.resurfacePolicy = resurfacePolicy;
-  if (minScore !== undefined) queryParams.minScore = minScore;
-  if (q) queryParams.q = q;
+  // Build filters using typed odata-client
+  const filterParts: FilterExpression[] = [];
 
-  const client = createApiClient(session.accessToken);
-  const { data, error, response } = await client.GET("/api/v1/postings", {
-    params: {
-      query: queryParams,
-    },
+  if (disposition) {
+    filterParts.push({
+      type: "comparison",
+      operator: "eq",
+      field: "disposition",
+      value: disposition,
+    });
+  }
+
+  if (companyId) {
+    filterParts.push({
+      type: "comparison",
+      operator: "eq",
+      field: "companyId",
+      value: companyId,
+    });
+  }
+
+  if (resurfacePolicy) {
+    filterParts.push({
+      type: "comparison",
+      operator: "eq",
+      field: "resurfacePolicy",
+      value: resurfacePolicy,
+    });
+  }
+
+  if (minScore !== undefined) {
+    filterParts.push({
+      type: "comparison",
+      operator: "ge",
+      field: "score",
+      value: minScore,
+    });
+  }
+
+  if (q && q.trim()) {
+    const term = q.trim();
+    filterParts.push({
+      type: "binary",
+      operator: "or",
+      left: {
+        type: "function",
+        name: "contains",
+        field: "title",
+        value: term,
+      },
+      right: {
+        type: "function",
+        name: "contains",
+        field: "companyName",
+        value: term,
+      },
+    });
+  }
+
+  let filterExpr: FilterExpression | undefined;
+  if (filterParts.length === 1) {
+    filterExpr = filterParts[0];
+  } else if (filterParts.length > 1) {
+    filterExpr = filterParts.reduce((acc, part) => ({
+      type: "binary",
+      operator: "and",
+      left: acc,
+      right: part,
+    }));
+  }
+
+  const orderByList: OrderByClause[] = [];
+  if (sort) {
+    orderByList.push({ field: sort, direction });
+  } else {
+    // Default order: when the URL has no sort, loader sends $orderby=score desc
+    orderByList.push({ field: "score", direction: "desc" });
+  }
+
+  const queryString = buildODataQuery({
+    filter: filterExpr,
+    orderBy: orderByList.length > 0 ? orderByList : undefined,
+    top: limit,
+    skip: offset,
+    count: true,
   });
+
+  const { data, error, response } = await fetchOData<PostingODataModel>(
+    "/odata/Postings",
+    queryString,
+    session.accessToken
+  );
 
   await assertApiOk(response, request, session.sessionId);
 
@@ -87,12 +189,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     });
   }
 
-  // Invariant: Never return tokens or session object to browser
   return {
-    items: data.items,
-    totalCount: data.totalCount,
-    limit: data.limit,
-    offset: data.offset,
+    items: data.value ?? [],
+    totalCount: data["@odata.count"] ?? (data.value ? data.value.length : 0),
+    limit,
+    offset,
+    sort,
+    direction,
     csrfToken: session.csrfToken,
     userLabel: session.ownerUsername || "Signed in",
   };
@@ -161,17 +264,19 @@ export default function PostingsIndex() {
     });
   }
 
-  const columns: DataTableColumn<PostingListItemDto>[] = [
+  const columns: DataTableColumn<PostingODataModel>[] = [
     {
       key: "companyName",
       header: "Company",
       sortable: true,
+      sortValue: () => 0,
       render: (row) => <span>{row.companyName}</span>,
     },
     {
       key: "title",
       header: "Role Title",
       sortable: true,
+      sortValue: () => 0,
       render: (row) => (
         <Link
           to={`/postings/${row.id}`}
@@ -188,13 +293,14 @@ export default function PostingsIndex() {
     {
       key: "location",
       header: "Location",
-      sortable: true,
+      sortable: false,
       render: (row) => <span>{row.location ?? "—"}</span>,
     },
     {
       key: "disposition",
       header: "Disposition",
       sortable: true,
+      sortValue: () => 0,
       render: (row) => {
         const dispMeta = DISPOSITION_METADATA[row.disposition as PostingDisposition] ?? {
           label: row.disposition,
@@ -211,6 +317,7 @@ export default function PostingsIndex() {
       key: "score",
       header: "Score",
       sortable: true,
+      sortValue: () => 0,
       numeric: true,
       render: (row) => <span>{row.score !== null ? row.score : "—"}</span>,
     },
@@ -218,6 +325,7 @@ export default function PostingsIndex() {
       key: "createdAt",
       header: "Added",
       sortable: true,
+      sortValue: () => 0,
       render: (row) => <span>{formatDate(row.createdAt)}</span>,
     },
   ];
@@ -341,13 +449,20 @@ export default function PostingsIndex() {
           </div>
         </Toolbar>
 
-        <DataTable
+        <DataTable<PostingODataModel>
           caption="Job Postings"
           columns={columns}
           data={data.items}
           keyField="id"
-          defaultSortColumn="score"
-          defaultSortDirection="desc"
+          sortColumn={data.sort ?? "score"}
+          sortDirection={data.direction}
+          onSortChange={(newSort, newDirection) => {
+            const next = new URLSearchParams(searchParams);
+            next.set("sort", newSort);
+            next.set("direction", newDirection);
+            next.set("offset", "0");
+            setSearchParams(next);
+          }}
           onRowClick={(row) => {
             navigate(`/postings/${row.id}`);
           }}

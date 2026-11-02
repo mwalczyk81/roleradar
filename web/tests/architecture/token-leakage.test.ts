@@ -145,6 +145,11 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
         }),
       } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
 
+      vi.spyOn(apiClientModule, "fetchOData").mockResolvedValue({
+        data: { value: [], "@odata.count": 0 },
+        response: { status: 200 } as Response,
+      });
+
       const headers = { Cookie: `${SECURE_COOKIE_NAME}=${CANARY_SESSION_ID}` };
       const loadersToTest: Array<{ name: string; invoke: () => Promise<unknown> }> = [
         {
