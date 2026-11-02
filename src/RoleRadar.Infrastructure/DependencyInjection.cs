@@ -105,6 +105,16 @@ public static class DependencyInjection
             return new Mongo.Reading.MongoOwnerReadSeam(database);
         });
 
+        services.TryAddScoped<Mongo.Reconcile.ReadModelReconciliationService>(sp =>
+        {
+            var client = sp.GetRequiredService<IMongoClient>();
+            var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
+            var database = client.GetDatabase(opts.DatabaseName);
+            return new Mongo.Reconcile.ReadModelReconciliationService(database);
+        });
+        services.TryAddScoped<Mongo.Reconcile.IReadModelReconciliationService>(sp =>
+            sp.GetRequiredService<Mongo.Reconcile.ReadModelReconciliationService>());
+
         services.TryAddSingleton<MongoScratchDatabaseManager>();
         services.TryAddSingleton<ITrackerScratchManager>(sp => sp.GetRequiredService<MongoScratchDatabaseManager>());
         services.TryAddSingleton<ITrackingContextFactory, MongoTrackingContextFactory>();

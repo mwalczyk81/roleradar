@@ -169,7 +169,7 @@
 - [ ] T070 [P] Update operational documentation in `docs/api/odata-queries.md` with copy-pasteable `curl` examples demonstrating bearer token querying of `/odata` with `$filter`, `$orderby`, `$select`, and `$count`.
 - [ ] T071 [P] Document Excel and Power BI connectivity as a prospective follow-up feature in `docs/integrations/excel-powerbi.md`, detailing bearer authentication headers and OData v4 URL structures.
 - [ ] T072 [P] Update `AGENTS.md` with feature standing rules: OData property allowlists, mandatory use of `IOwnerReadSeam`, rejection of un-lowercased string filters, and strict rule never to bypass the repository choke point for derived stored fields.
-- [ ] T073 Delete throwaway spike code in `specs/006-odata-reads/spike/` (`SpikeApp.csproj`, `Program.cs`, `MongoTests.cs`), preserving only `specs/006-odata-reads/spike/REPORT.md` and `docs/adr/0028-odata-read-seam-and-query-execution.md`.
+- [ ] T073 Confirm `specs/006-odata-reads/spike/` contains only `REPORT.md` (the throwaway spike code was moved out of the repo on 2026-11-02, before the Phase 2-3 commit) and that `docs/adr/0028-odata-read-seam-and-query-execution.md` is present. Nothing to delete.
 - [ ] T074 Final verification: execute `pwsh ./scripts/review-gate.ps1 -IncludeE2E` once and run full web CI verification on Linux in a throwaway container (`node:22`) before leaving working tree for review.
 
 ---

@@ -326,7 +326,7 @@ export default function PostingsIndex() {
       header: "Added",
       sortable: true,
       sortValue: () => 0,
-      render: (row) => <span>{formatDate(row.createdAt)}</span>,
+      render: (row) => <span style={{ whiteSpace: "nowrap" }}>{formatDate(row.createdAt)}</span>,
     },
   ];
 
