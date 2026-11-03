@@ -43,7 +43,7 @@ Start the local API host in test mode or launch integration tests. Querying endp
 ```bash
 curl -s -k https://localhost:5002/odata/\$metadata
 ```
-**Expected Outcome**: Returns HTTP 200 OK with `Content-Type: application/xml` matching the EDM schema in [`contracts/odata-metadata.xml`](./contracts/odata-metadata.xml).
+**Expected Outcome**: Returns HTTP 200 OK with `Content-Type: application/xml` matching the committed snapshot [`contracts/odata/metadata.xml`](../../contracts/odata/metadata.xml) (the draft in this folder is superseded).
 
 ### 3.2 Global Sorting, Filtering & Count over Postings
 

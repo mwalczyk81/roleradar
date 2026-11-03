@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  DRAFT ONLY
-  This hand-written document is an advisory design draft for Phase 1.
+  SUPERSEDED - do not use as the contract.
+  This hand-written document was an advisory design draft for Phase 1.
   The definitive machine-readable $metadata snapshot is generated directly
-  from the running OData service during implementation and committed to
-  contracts/odata/metadata.xml with an automated drift test.
+  from the running OData service and committed to contracts/odata/metadata.xml,
+  where an automated drift test keeps it equal to what the service serves.
 -->
 <edmx:Edmx Version="4.0" xmlns:edmx="http://docs.oasis-open.org/odata/ns/edmx">
   <edmx:DataServices>

@@ -155,6 +155,8 @@ To maintain consistency across denormalized fields without multi-collection read
 
 All compound indexes are initialized in `TrackingIndexInitializer` with `owner_id` as the leading field, enforcing tenant isolation directly in the index B-tree.
 
+Indexes are created at API startup (`ReadIndexStartupService` calling `ReadIndexInitializer`, both idempotent and gated once per database per process), so an API that only serves OData reads has them without any write. If Mongo is unreachable at startup, the failure is logged and `MongoOwnerReadSeam` retries on the first OData read after Mongo is back (at most one attempt per 30 seconds while it keeps failing, never failing the read), and stops once an attempt succeeds. The CLI and MCP hosts do not run this.
+
 ```text
 Collection: postings
 - { owner_id: 1, disposition_rank: 1, _id: 1 }

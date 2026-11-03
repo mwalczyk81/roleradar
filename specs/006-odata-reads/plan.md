@@ -64,7 +64,7 @@ specs/006-odata-reads/
 ├── data-model.md        # Read models, indexes, single choke points, and rename cascades
 ├── quickstart.md        # End-to-end verification guide
 ├── contracts/
-│   └── odata-metadata.xml  # Draft EDM schema (definitive version generated in Phase 2)
+│   └── odata-metadata.xml  # Draft EDM schema (SUPERSEDED by the committed contracts/odata/metadata.xml)
 ├── checklists/
 │   └── requirements.md  # Specification quality checklist
 └── spike/               # Phase 1 executable throwaway spike (not shipped)

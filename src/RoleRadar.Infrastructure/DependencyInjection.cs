@@ -104,7 +104,7 @@ public static class DependencyInjection
             var client = sp.GetRequiredService<IMongoClient>();
             var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
             var database = client.GetDatabase(opts.DatabaseName);
-            return new Mongo.Reading.MongoOwnerReadSeam(database);
+            return new Mongo.Reading.MongoOwnerReadSeam(database, sp.GetRequiredService<Mongo.Reading.ReadIndexInitializer>());
         });
 
         services.TryAddScoped<Mongo.Reconcile.ReadModelReconciliationService>(sp =>

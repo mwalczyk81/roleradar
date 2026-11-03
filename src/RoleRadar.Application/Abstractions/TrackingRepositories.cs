@@ -87,5 +87,4 @@ public interface ISearchRunRepository
     Task<Result<Domain.Tracking.SearchRun?>> GetByIdAsync(string ownerId, Guid id, CancellationToken cancellationToken = default);
     Task<Result<Domain.Tracking.SearchRun?>> GetByStartedAtAsync(string ownerId, DateTimeOffset startedAt, CancellationToken cancellationToken = default);
     Task<Result<bool>> UpsertSearchRunAsync(Domain.Tracking.SearchRun searchRun, CancellationToken cancellationToken = default);
-    Task<Result<int>> CountSearchRunsAsync(string ownerId, CancellationToken cancellationToken = default);
 }

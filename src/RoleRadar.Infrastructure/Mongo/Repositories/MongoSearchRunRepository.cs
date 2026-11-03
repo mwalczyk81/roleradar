@@ -72,18 +72,6 @@ public sealed class MongoSearchRunRepository : ISearchRunRepository
         }
     }
 
-    public async Task<Result<int>> CountSearchRunsAsync(string ownerId, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
-        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
-        var filter = Builders<BsonDocument>.Filter.Eq("owner_id", ownerId);
-        var session = MongoNoteRepository.CurrentSession;
-        var count = session is not null
-            ? await _searchRuns.CountDocumentsAsync(session, filter, cancellationToken: cancellationToken)
-            : await _searchRuns.CountDocumentsAsync(filter, cancellationToken: cancellationToken);
-        return Result<int>.Success((int)count);
-    }
-
     private static BsonDocument SerializeSearchRun(SearchRun run) =>
         new()
         {

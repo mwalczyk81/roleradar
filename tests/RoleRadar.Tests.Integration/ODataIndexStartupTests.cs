@@ -1,6 +1,7 @@
 namespace RoleRadar.Tests.Integration;
 
 using System.Net;
+using System.Net.Sockets;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -67,10 +68,123 @@ public sealed class ODataIndexStartupTests : IAsyncLifetime
             Assert.True(status == HttpStatusCode.OK, $"{query}: {(int)status} {body.RootElement}");
         }
 
+        await AssertExpectedIndexesAsync(_host.Database);
+    }
+
+    [Fact]
+    public async Task IndexCreationFailure_IsLogged_AndDoesNotStopTheHost()
+    {
+        // A Mongo that cannot be reached: creating indexes fails, the startup service must still complete.
+        var client = new MongoClient("mongodb://127.0.0.1:1/?serverSelectionTimeoutMS=300&connectTimeoutMS=300");
+        var initializer = new ReadIndexInitializer(client, Options.Create(new MongoOptions { DatabaseName = "unreachable_db" }), NullLogger<ReadIndexInitializer>.Instance);
+        var logger = new CapturingLogger<ReadIndexStartupService>();
+
+        var service = new ReadIndexStartupService(initializer, logger);
+        await service.StartAsync(CancellationToken.None);
+
+        var entry = Assert.Single(logger.Entries);
+        Assert.Equal(LogLevel.Error, entry.Level);
+        Assert.NotNull(entry.Exception);
+    }
+
+    [Fact]
+    public async Task ApiStartedWhileMongoWasDown_CreatesTheIndexesOnTheFirstODataRead()
+    {
+        // Own host: the API boots while its Mongo address refuses connections, so the startup attempt fails.
+        await using var host = new ODataTestHost("odata_index_retry_test_db", Owner);
+        await host.StartDatabaseAsync();
+
+        var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+
+        // Same credentials as the container, but at an address where nothing is listening yet.
+        var container = MongoUrl.Create(host.ContainerConnectionString);
+        var unreachable = new MongoUrlBuilder(container.ToString())
+        {
+            Server = new MongoServerAddress("127.0.0.1", port),
+            DirectConnection = true,
+            ServerSelectionTimeout = TimeSpan.FromSeconds(1.5),
+            ConnectTimeout = TimeSpan.FromSeconds(1.5)
+        };
+        host.ApiMongoConnectionString = unreachable.ToString();
+        await host.StartApiAsync();
+
+        // Mongo "comes up": a relay on that address forwards to the real container.
+        using var relay = new TcpRelay(port, container.Server.Host, container.Server.Port);
+
+        // Prove the relay itself works before blaming the API.
+        await new MongoClient(host.ApiMongoConnectionString).GetDatabase("admin").RunCommandAsync<BsonDocument>(new BsonDocument("ping", 1));
+
+        foreach (var query in new[] { "Postings?$orderby=score desc", "Companies?$orderby=name asc" })
+        {
+            // The driver may need a heartbeat or two before it notices the server is back, so a read right
+            // after Mongo returns can still time out; keep reading until one succeeds.
+            var deadline = DateTime.UtcNow.AddSeconds(30);
+            HttpStatusCode status;
+            do
+            {
+                (status, _) = await host.GetJsonAsync(Owner, "/odata/" + query);
+            }
+            while (status != HttpStatusCode.OK && DateTime.UtcNow < deadline);
+
+            Assert.True(status == HttpStatusCode.OK, $"{query}: {(int)status}");
+        }
+
+        await AssertExpectedIndexesAsync(host.Database);
+    }
+
+    private sealed class TcpRelay : IDisposable
+    {
+        private readonly TcpListener _listener;
+        private readonly CancellationTokenSource _stop = new();
+
+        public TcpRelay(int listenPort, string targetHost, int targetPort)
+        {
+            _listener = new TcpListener(IPAddress.Loopback, listenPort);
+            _listener.Start();
+            _ = Task.Run(async () =>
+            {
+                while (!_stop.IsCancellationRequested)
+                {
+                    TcpClient client;
+                    try
+                    {
+                        client = await _listener.AcceptTcpClientAsync(_stop.Token);
+                    }
+                    catch (Exception)
+                    {
+                        return;
+                    }
+
+                    _ = Task.Run(async () =>
+                    {
+                        using var from = client;
+                        using var to = new TcpClient();
+                        await to.ConnectAsync(targetHost, targetPort);
+                        var a = from.GetStream().CopyToAsync(to.GetStream());
+                        var b = to.GetStream().CopyToAsync(from.GetStream());
+                        await Task.WhenAny(a, b);
+                    });
+                }
+            });
+        }
+
+        public void Dispose()
+        {
+            _stop.Cancel();
+            _listener.Stop();
+            _stop.Dispose();
+        }
+    }
+
+    private static async Task AssertExpectedIndexesAsync(IMongoDatabase database)
+    {
         var problems = new List<string>();
         foreach (var (collection, indexName, flag, collation) in Expected)
         {
-            var indexes = (await _host.Database.GetCollection<BsonDocument>(collection).Indexes.ListAsync()).ToList();
+            var indexes = (await database.GetCollection<BsonDocument>(collection).Indexes.ListAsync()).ToList();
             var index = indexes.SingleOrDefault(i => i["name"].AsString == indexName);
             if (index is null)
             {
@@ -98,21 +212,6 @@ public sealed class ODataIndexStartupTests : IAsyncLifetime
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
     }
 
-    [Fact]
-    public async Task IndexCreationFailure_IsLogged_AndDoesNotStopTheHost()
-    {
-        // A Mongo that cannot be reached: creating indexes fails, the startup service must still complete.
-        var client = new MongoClient("mongodb://127.0.0.1:1/?serverSelectionTimeoutMS=300&connectTimeoutMS=300");
-        var initializer = new ReadIndexInitializer(client, Options.Create(new MongoOptions { DatabaseName = "unreachable_db" }));
-        var logger = new CapturingLogger<ReadIndexStartupService>();
-
-        var service = new ReadIndexStartupService(initializer, logger);
-        await service.StartAsync(CancellationToken.None);
-
-        var entry = Assert.Single(logger.Entries);
-        Assert.Equal(LogLevel.Error, entry.Level);
-        Assert.NotNull(entry.Exception);
-    }
 
     private sealed class CapturingLogger<T> : ILogger<T>
     {

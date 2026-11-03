@@ -29,7 +29,7 @@ Standing rules for every web phase. A phase prompt only adds scope and contract 
 - Every action: call `validateCsrfToken(...)` (timing-safe), use `data()` with typed action data, never hand-built JSON responses. Use `assertApiOk` for 401 (one re-login, no loop), 403 (`/not-authorized`) and 404. Forms use `<Form>`/`useFetcher`: 400 shows inline field errors, 409 shows the Toast with Reload (revalidate), success revalidates.
 - Treat all posting, company and application text as untrusted: React text nodes only, links only for http/https with `rel="noopener noreferrer"`.
 - Shared helpers: `formatDate` (UTC dates, no locale formatting), `useTheme`, `nav.ts` for nav items, `dispositions.ts` and `company-enums.ts` for enums. Do not copy their logic into routes.
-- Only send query parameters the API supports (postings: no sort; companies: limit and offset only). Clamp `limit` to 1..100 and `offset` to >= 0.
+- List pages read through OData (`/odata/<Set>`) with the typed `odata-client` builder and `loadODataList`; detail reads and commands stay on `/api/v1`. Sort only by the allowlisted fields of that set (`docs/api/odata-queries.md`), sort and page server-side, never in the browser, and clamp `limit` to 1..100 and `offset` to >= 0.
 - Tests first and shown failing before the implementation. Axe checks use the shared reduced-motion helper in `web/tests/e2e` so results are deterministic. Mutations get real-Chromium e2e tests (success, 400, 409, bad CSRF, 401). Fictional data only.
 - Verify with: `pnpm --filter web run typecheck`, `lint`, `test`, `build`, `test:e2e`, then `pwsh ./scripts/test-fast.ps1`, `pre-commit run --all-files`, and `pwsh ./scripts/review-gate.ps1` at the end of a phase. Report numbers from command output only, say what you could not run, and stop at the phase boundary.
 - Never read or print secrets (`web/.env.local`, `deploy/.env`). Never run anything against the developer's running stack.
@@ -44,6 +44,10 @@ Standing rules for every web phase. A phase prompt only adds scope and contract 
 - `stdout` in `Mcp.Stdio` is reserved for MCP frames; log to `stderr`.
 - Owner ids come from `OwnerId` only; no string literals elsewhere.
 - Tool and API schemas must declare explicit types for every parameter.
+- OData reads (feature 006, ADR 0028): `$orderby` fields are allowlisted per controller and heavy or private properties (note `content`, `ruleText`) are blocked from `$filter`. Widen either deliberately, with a test.
+- All OData reads go through `IOwnerReadSeam`, which scopes by `OwnerId`. The API never touches Mongo directly.
+- String `$filter` terms must be `tolower()` over a lowercase literal; anything else is rejected with 400.
+- Derived stored fields (`disposition_rank`, `company_name`, `has_*` flags, milestones) are written only at the repository choke point. Never bypass it; after changing a derived field run `reconcile-read-models`.
 
 ## Constitution (full text: `.specify/memory/constitution.md`)
 

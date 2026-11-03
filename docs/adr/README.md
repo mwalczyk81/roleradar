@@ -21,13 +21,14 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0015](./0015-identity-operational-store-selection.md) | Identity Operational Store Selection — SQLite File Volume vs. PostgreSQL Container | Accepted | `005a-api-and-login` |
 | [ADR-0016](./0016-duende-identityserver-community-edition-and-fallback.md) | Duende IdentityServer Community Edition Licensing and IdP Fallback Strategy | Accepted | `005a-api-and-login` |
 | [ADR-0017](./0017-owner-credential-and-security-controls.md) | Single-Owner Credential Handling and Authentication Security Controls | Accepted | `005a-api-and-login` |
-| [ADR-0018](./0018-rest-api-style-and-owner-mapping.md) | REST API Style, Error Envelope, Paging, and Owner Mapping | Accepted | `005a-api-and-login` |
+| [ADR-0018](./0018-rest-api-style-and-owner-mapping.md) | REST API Style, Error Envelope, Paging, and Owner Mapping | Accepted; superseded in part by ADR-0028 | `005a-api-and-login` |
 | [ADR-0019](./0019-openapi-generation-and-typed-client.md) | OpenAPI Contract Generation, Committed Snapshot Verification, and Typed Client Generation | Accepted | `005a-api-and-login` |
 | [ADR-0020](./0020-https-transport-and-local-compose-certificates.md) | Transport Security, Local Compose Certificates, and Self-Contained Health Probing | Accepted | `005a-api-and-login` |
 | [ADR-0021](./0021-oidc-client-library-selection.md) | OIDC Client Library Selection (`openid-client` v6) | Accepted | `005b-management-ui` |
 | [ADR-0022](./0022-encrypted-in-memory-session-store.md) | Encrypted In-Memory Session Store and Single-Flight Token Refresh | Accepted | `005b-management-ui` |
-| [ADR-0023](./0023-openapi-fetch-typed-api-consumption.md) | Strongly-Typed API Consumption via `openapi-fetch` and Committed OpenAPI Types | Accepted | `005b-management-ui` |
+| [ADR-0023](./0023-openapi-fetch-typed-api-consumption.md) | Strongly-Typed API Consumption via `openapi-fetch` and Committed OpenAPI Types | Accepted; superseded in part by ADR-0028 | `005b-management-ui` |
 | [ADR-0024](./0024-nx-and-nx-dotnet-monorepo-orchestration.md) | Monorepo Orchestration with Nx and `@nx/dotnet` | Accepted | `005b-management-ui` |
 | [ADR-0025](./0025-web-in-process-tls-and-dev-cert-trust.md) | Web Host In-Process TLS Termination, Dev Certificate Trust, and Port 5003 Migration | Accepted | `005b-management-ui` |
 | [ADR-0026](./0026-strict-csp-nonce-and-theme-initialization.md) | Strict CSP with Nonce, Zero-FOUC Theme Initialization, and Untrusted Plain-Text Rendering | Accepted | `005b-management-ui` |
 | [ADR-0027](./0027-web-test-pyramid-and-e2e-strategy.md) | Web Test Pyramid and Verification Strategy | Accepted | `005b-management-ui` |
+| [ADR-0028](./0028-odata-read-seam-and-query-execution.md) | OData Read Seam and Query Execution Architecture | Accepted | `006-odata-reads` |

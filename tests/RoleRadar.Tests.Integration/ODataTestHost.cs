@@ -48,6 +48,12 @@ internal sealed class ODataTestHost : IAsyncDisposable
 
     public IServiceProvider Services => _app!.Services;
 
+    /// <summary>When set, the API connects here instead of the container (used to start the API with Mongo unreachable).</summary>
+    public string? ApiMongoConnectionString { get; set; }
+
+    /// <summary>The container's connection string (credentials and mapped port included).</summary>
+    public string ContainerConnectionString => _container.GetConnectionString();
+
     /// <summary>Starts the container and the database. Call <see cref="StartApiAsync"/> after seeding.</summary>
     public async Task StartDatabaseAsync()
     {
@@ -65,7 +71,7 @@ internal sealed class ODataTestHost : IAsyncDisposable
             {
                 var settings = new Dictionary<string, string?>
                 {
-                    ["ConnectionStrings:MongoConnection"] = _container.GetConnectionString(),
+                    ["ConnectionStrings:MongoConnection"] = ApiMongoConnectionString ?? _container.GetConnectionString(),
                     ["DatabaseName"] = _databaseName,
                     ["Authentication:Authority"] = TestIssuer,
                     ["Authentication:Audience"] = TestAudience
