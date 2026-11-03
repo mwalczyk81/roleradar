@@ -18,9 +18,6 @@ public static class PostingsEndpoints
         var writeGroup = group.MapGroup(string.Empty)
             .RequireAuthorization(Program.WritePolicyName);
 
-        readGroup.MapGet("/postings", GetPostingsAsync)
-            .Produces<PagedResult<PostingListItemDto>>(StatusCodes.Status200OK)
-            .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest);
         readGroup.MapGet("/postings/{id:guid}", GetPostingByIdAsync)
             .Produces<PostingDetailDto>(StatusCodes.Status200OK)
             .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
@@ -30,97 +27,6 @@ public static class PostingsEndpoints
             .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound)
             .Produces<ErrorEnvelope>(StatusCodes.Status409Conflict);
         return group;
-    }
-
-    private static async Task<IResult> GetPostingsAsync(
-        string? disposition,
-        Guid? companyId,
-        string? resurfacePolicy,
-        decimal? minScore,
-        string? q,
-        int? limit,
-        int? offset,
-        IOwnerIdProvider ownerIdProvider,
-        IPostingRepository postingRepository,
-        ICompanyRepository companyRepository,
-        CancellationToken cancellationToken)
-    {
-        var ownerId = ownerIdProvider.GetOwnerId().Value;
-        var clampedLimit = Math.Clamp(limit is null or <= 0 ? 50 : limit.Value, 1, 200);
-        var clampedOffset = Math.Max(0, offset ?? 0);
-
-        PostingDisposition? parsedDisposition = null;
-        if (!string.IsNullOrWhiteSpace(disposition))
-        {
-            if (!TrackingEnumExtensions.TryParseDisposition(disposition, out var disp))
-            {
-                return Results.BadRequest(ErrorEnvelope.Validation($"Invalid disposition '{disposition}'."));
-            }
-            parsedDisposition = disp;
-        }
-
-        ResurfacePolicy? parsedResurface = null;
-        if (!string.IsNullOrWhiteSpace(resurfacePolicy))
-        {
-            if (!TrackingEnumExtensions.TryParseResurfacePolicy(resurfacePolicy, out var rp))
-            {
-                return Results.BadRequest(ErrorEnvelope.Validation($"Invalid resurfacePolicy '{resurfacePolicy}'."));
-            }
-            parsedResurface = rp;
-        }
-
-        var listRes = await postingRepository.ListPostingsAsync(
-            ownerId,
-            companyId,
-            parsedDisposition,
-            page: 1,
-            pageSize: 1000,
-            cancellationToken);
-
-        if (!listRes.IsSuccess || listRes.Value is null)
-        {
-            return ErrorEnvelope.FromResultError(listRes.Error);
-        }
-
-        var companiesRes = await companyRepository.ListAsync(ownerId, status: null, cancellationToken);
-        var companyNames = companiesRes.IsSuccess && companiesRes.Value is not null
-            ? companiesRes.Value.ToDictionary(c => c.Id, c => c.Name)
-            : new Dictionary<Guid, string>();
-
-        IEnumerable<Posting> filtered = listRes.Value;
-
-        if (parsedResurface.HasValue)
-        {
-            filtered = filtered.Where(p => p.ResurfacePolicy == parsedResurface.Value);
-        }
-
-        if (minScore.HasValue)
-        {
-            filtered = filtered.Where(p => p.Score.HasValue && p.Score.Value >= minScore.Value);
-        }
-
-        if (!string.IsNullOrWhiteSpace(q))
-        {
-            var queryText = q.Trim();
-            filtered = filtered.Where(p =>
-                p.Title.Contains(queryText, StringComparison.OrdinalIgnoreCase) ||
-                (p.Location is not null && p.Location.Contains(queryText, StringComparison.OrdinalIgnoreCase)) ||
-                (p.RequisitionId is not null && p.RequisitionId.Contains(queryText, StringComparison.OrdinalIgnoreCase)));
-        }
-
-        var materialized = filtered.ToList();
-        var totalCount = materialized.Count;
-        var pageItems = materialized
-            .Skip(clampedOffset)
-            .Take(clampedLimit)
-            .Select(p => MapToListItemDto(p, companyNames.GetValueOrDefault(p.CompanyId, string.Empty)))
-            .ToArray();
-
-        return Results.Ok(new PagedResult<PostingListItemDto>(
-            Items: pageItems,
-            TotalCount: totalCount,
-            Limit: clampedLimit,
-            Offset: clampedOffset));
     }
 
     private static async Task<IResult> GetPostingByIdAsync(
@@ -254,19 +160,4 @@ public static class PostingsEndpoints
 
         return Results.Ok(detail);
     }
-
-    private static PostingListItemDto MapToListItemDto(Posting p, string companyName) =>
-        new(
-            Id: p.Id,
-            CompanyId: p.CompanyId,
-            CompanyName: companyName,
-            Title: p.Title,
-            RequisitionId: p.RequisitionId,
-            Location: p.Location,
-            Disposition: p.Disposition.ToSnakeCase(),
-            ResurfacePolicy: p.ResurfacePolicy.ToSnakeCase(),
-            Score: p.Score,
-            VersionToken: p.VersionToken,
-            CreatedAt: p.CreatedAt,
-            UpdatedAt: p.UpdatedAt);
 }

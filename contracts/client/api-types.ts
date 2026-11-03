@@ -37,58 +37,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/postings": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: {
-            parameters: {
-                query?: {
-                    disposition?: string;
-                    companyId?: null | string;
-                    resurfacePolicy?: string;
-                    minScore?: null | number;
-                    q?: string;
-                    limit?: null | number;
-                    offset?: null | number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["PagedResultOfPostingListItemDto"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/postings/{id}": {
         parameters: {
             query?: never;
@@ -203,53 +151,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/companies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: {
-            parameters: {
-                query?: {
-                    limit?: null | number;
-                    offset?: null | number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["PagedResultOfCompanyDetailDto"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/companies/{id}": {
         parameters: {
             query?: never;
@@ -348,7 +249,7 @@ export interface paths {
         };
         trace?: never;
     };
-    "/api/v1/applications": {
+    "/api/v1/applications/{id}": {
         parameters: {
             query?: never;
             header?: never;
@@ -357,13 +258,11 @@ export interface paths {
         };
         get: {
             parameters: {
-                query?: {
-                    status?: string;
-                    limit?: null | number;
-                    offset?: null | number;
-                };
+                query?: never;
                 header?: never;
-                path?: never;
+                path: {
+                    id: string;
+                };
                 cookie?: never;
             };
             requestBody?: never;
@@ -374,11 +273,11 @@ export interface paths {
                         [name: string]: unknown;
                     };
                     content: {
-                        "application/json": components["schemas"]["PagedResultOfApplicationDetailDto"];
+                        "application/json": components["schemas"]["ApplicationDetailDto"];
                     };
                 };
-                /** @description Bad Request */
-                400: {
+                /** @description Not Found */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -388,6 +287,22 @@ export interface paths {
                 };
             };
         };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
         put?: never;
         post: {
             parameters: {
@@ -431,52 +346,6 @@ export interface paths {
                 };
             };
         };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/applications/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ApplicationDetailDto"];
-                    };
-                };
-                /** @description Not Found */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -542,52 +411,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/criteria": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: {
-            parameters: {
-                query?: {
-                    effectiveDate?: string;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["CriterionDto"][];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/notes/{id}": {
         parameters: {
             query?: never;
@@ -617,101 +440,6 @@ export interface paths {
                 };
                 /** @description Not Found */
                 404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/notes": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: {
-            parameters: {
-                query?: {
-                    q?: string;
-                    limit?: null | number;
-                    offset?: null | number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["PagedResultOfNoteDto"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/search-runs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: {
-            parameters: {
-                query?: {
-                    limit?: null | number;
-                    offset?: null | number;
-                };
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description OK */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["PagedResultOfSearchRunDto"];
-                    };
-                };
-                /** @description Bad Request */
-                400: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -783,18 +511,6 @@ export interface components {
             /** Format: uuid */
             versionToken: string;
         };
-        CriterionDto: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            weight: string;
-            ruleText: string;
-            /** Format: date-time */
-            effectiveFrom: string;
-            /** Format: date-time */
-            effectiveTo: null | string;
-            isActive: boolean;
-        };
         ErrorEnvelope: {
             ok: boolean;
             errorCode: string;
@@ -818,51 +534,6 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
-        };
-        PagedResultOfApplicationDetailDto: {
-            items: components["schemas"]["ApplicationDetailDto"][];
-            /** Format: int32 */
-            totalCount: number;
-            /** Format: int32 */
-            limit: number;
-            /** Format: int32 */
-            offset: number;
-        };
-        PagedResultOfCompanyDetailDto: {
-            items: components["schemas"]["CompanyDetailDto"][];
-            /** Format: int32 */
-            totalCount: number;
-            /** Format: int32 */
-            limit: number;
-            /** Format: int32 */
-            offset: number;
-        };
-        PagedResultOfNoteDto: {
-            items: components["schemas"]["NoteDto"][];
-            /** Format: int32 */
-            totalCount: number;
-            /** Format: int32 */
-            limit: number;
-            /** Format: int32 */
-            offset: number;
-        };
-        PagedResultOfPostingListItemDto: {
-            items: components["schemas"]["PostingListItemDto"][];
-            /** Format: int32 */
-            totalCount: number;
-            /** Format: int32 */
-            limit: number;
-            /** Format: int32 */
-            offset: number;
-        };
-        PagedResultOfSearchRunDto: {
-            items: components["schemas"]["SearchRunDto"][];
-            /** Format: int32 */
-            totalCount: number;
-            /** Format: int32 */
-            limit: number;
-            /** Format: int32 */
-            offset: number;
         };
         PostingCompensationDto: {
             currency: string;
@@ -894,26 +565,6 @@ export interface components {
             signals: components["schemas"]["PostingSignalDto"][];
             assessmentNote: null | components["schemas"]["AssessmentNoteSummaryDto"];
         };
-        PostingListItemDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            companyId: string;
-            companyName: string;
-            title: string;
-            requisitionId: null | string;
-            location: null | string;
-            disposition: string;
-            resurfacePolicy: string;
-            /** Format: double */
-            score: null | number;
-            /** Format: uuid */
-            versionToken: string;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
         PostingSignalDto: {
             signalType: string;
             evidence: string;
@@ -938,21 +589,6 @@ export interface components {
             /** @default false */
             overrideDecided: boolean;
             overrideReason?: null | string;
-        };
-        SearchRunDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: date-time */
-            runDate: string;
-            /** Format: int32 */
-            companiesSearched: number;
-            /** Format: int32 */
-            postingsFound: number;
-            /** Format: int32 */
-            newPostings: number;
-            /** Format: int32 */
-            errorsCount: number;
-            summary: null | string;
         };
         TransitionPostingRequestDto: {
             toDisposition: string;

@@ -60,12 +60,6 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
     it("verifies zero tokens appear in serialized return values of all route loaders", async () => {
       const createApiSpy = vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
         GET: vi.fn().mockImplementation((pathStr: string) => {
-          if (pathStr === "/api/v1/postings") {
-            return Promise.resolve({
-              data: { items: [], totalCount: 0, limit: 25, offset: 0 },
-              response: { status: 200 } as Response,
-            });
-          }
           if (pathStr === "/api/v1/postings/{id}") {
             return Promise.resolve({
               data: {
@@ -102,18 +96,6 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
                 careerSources: [],
                 versionToken: "cv1",
               },
-              response: { status: 200 } as Response,
-            });
-          }
-          if (pathStr === "/api/v1/applications") {
-            return Promise.resolve({
-              data: { items: [], totalCount: 0, limit: 25, offset: 0 },
-              response: { status: 200 } as Response,
-            });
-          }
-          if (pathStr === "/api/v1/criteria") {
-            return Promise.resolve({
-              data: [],
               response: { status: 200 } as Response,
             });
           }
@@ -255,34 +237,6 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
         const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
         res.setHeader("Content-Type", "application/json");
 
-        if (url.pathname === "/api/v1/postings") {
-          res.writeHead(200);
-          res.end(
-            JSON.stringify({
-              items: [
-                {
-                  id: "post-leak-1",
-                  companyId: "comp-1",
-                  companyName: "Safe Corp",
-                  title: "Security Engineer",
-                  requisitionId: "REQ-LEAK",
-                  location: "Remote",
-                  disposition: "lead",
-                  resurfacePolicy: "never",
-                  score: 95.0,
-                  versionToken: "ver-1",
-                  createdAt: "2026-10-31T10:00:00Z",
-                  updatedAt: "2026-10-31T11:00:00Z",
-                },
-              ],
-              totalCount: 1,
-              limit: 25,
-              offset: 0,
-            })
-          );
-          return;
-        }
-
         if (url.pathname === "/api/v1/postings/post-leak-1") {
           res.writeHead(200);
           res.end(
@@ -344,25 +298,6 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
               versionToken: "comp-ver-1",
             })
           );
-          return;
-        }
-
-        if (url.pathname === "/api/v1/applications") {
-          res.writeHead(200);
-          res.end(
-            JSON.stringify({
-              items: [],
-              totalCount: 0,
-              limit: 25,
-              offset: 0,
-            })
-          );
-          return;
-        }
-
-        if (url.pathname === "/api/v1/criteria") {
-          res.writeHead(200);
-          res.end(JSON.stringify([]));
           return;
         }
 

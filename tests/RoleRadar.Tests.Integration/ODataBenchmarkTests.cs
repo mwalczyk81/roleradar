@@ -145,10 +145,8 @@ public sealed class BenchmarkFixture : IAsyncLifetime
         await InsertAsync(db, TrackingMongoOptions.CriteriaCollectionName, Criteria);
         await InsertAsync(db, TrackingMongoOptions.SearchRunsCollectionName, SearchRuns);
 
-        // A deployed database has its indexes: the repositories create them on first use. This host only reads,
-        // so create them the same way before measuring.
-        await MongoBootstrapAndIndexes.EnsureIndexesAsync(db);
-        await TrackingIndexInitializer.EnsureIndexesAsync(db);
+        // No explicit index creation: the API host creates the indexes itself at startup (ReadIndexStartupService),
+        // so this measures the real startup path.
 
         await Host.StartApiAsync();
     }

@@ -17,102 +17,6 @@
         }
       }
     },
-    "/api/v1/postings": {
-      "get": {
-        "tags": [
-          "PostingsEndpoints"
-        ],
-        "parameters": [
-          {
-            "name": "disposition",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "companyId",
-            "in": "query",
-            "schema": {
-              "type": [
-                "null",
-                "string"
-              ],
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "resurfacePolicy",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "minScore",
-            "in": "query",
-            "schema": {
-              "type": [
-                "null",
-                "number"
-              ],
-              "format": "double"
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": [
-                "null",
-                "integer"
-              ],
-              "format": "int32"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "schema": {
-              "type": [
-                "null",
-                "integer"
-              ],
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PagedResultOfPostingListItemDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/postings/{id}": {
       "get": {
         "tags": [
@@ -212,59 +116,6 @@
           },
           "409": {
             "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/companies": {
-      "get": {
-        "tags": [
-          "CompaniesEndpoints"
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": [
-                "null",
-                "integer"
-              ],
-              "format": "int32"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "schema": {
-              "type": [
-                "null",
-                "integer"
-              ],
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PagedResultOfCompanyDetailDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
@@ -384,39 +235,19 @@
         }
       }
     },
-    "/api/v1/applications": {
+    "/api/v1/applications/{id}": {
       "get": {
         "tags": [
           "ApplicationsEndpoints"
         ],
         "parameters": [
           {
-            "name": "status",
-            "in": "query",
+            "name": "id",
+            "in": "path",
+            "required": true,
             "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": [
-                "null",
-                "integer"
-              ],
-              "format": "int32"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "schema": {
-              "type": [
-                "null",
-                "integer"
-              ],
-              "format": "int32"
+              "type": "string",
+              "format": "uuid"
             }
           }
         ],
@@ -426,13 +257,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PagedResultOfApplicationDetailDto"
+                  "$ref": "#/components/schemas/ApplicationDetailDto"
                 }
               }
             }
           },
-          "400": {
-            "description": "Bad Request",
+          "404": {
+            "description": "Not Found",
             "content": {
               "application/json": {
                 "schema": {
@@ -442,7 +273,9 @@
             }
           }
         }
-      },
+      }
+    },
+    "/api/v1/applications": {
       "post": {
         "tags": [
           "ApplicationsEndpoints"
@@ -480,46 +313,6 @@
           },
           "409": {
             "description": "Conflict",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/applications/{id}": {
-      "get": {
-        "tags": [
-          "ApplicationsEndpoints"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApplicationDetailDto"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
             "content": {
               "application/json": {
                 "schema": {
@@ -591,47 +384,6 @@
         }
       }
     },
-    "/api/v1/criteria": {
-      "get": {
-        "tags": [
-          "AncillaryEndpoints"
-        ],
-        "parameters": [
-          {
-            "name": "effectiveDate",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/CriterionDto"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/notes/{id}": {
       "get": {
         "tags": [
@@ -661,119 +413,6 @@
           },
           "404": {
             "description": "Not Found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/notes": {
-      "get": {
-        "tags": [
-          "AncillaryEndpoints"
-        ],
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": [
-                "null",
-                "integer"
-              ],
-              "format": "int32"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "schema": {
-              "type": [
-                "null",
-                "integer"
-              ],
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PagedResultOfNoteDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorEnvelope"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/search-runs": {
-      "get": {
-        "tags": [
-          "AncillaryEndpoints"
-        ],
-        "parameters": [
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": [
-                "null",
-                "integer"
-              ],
-              "format": "int32"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "schema": {
-              "type": [
-                "null",
-                "integer"
-              ],
-              "format": "int32"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PagedResultOfSearchRunDto"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
             "content": {
               "application/json": {
                 "schema": {
@@ -989,47 +628,6 @@
           }
         }
       },
-      "CriterionDto": {
-        "required": [
-          "id",
-          "name",
-          "weight",
-          "ruleText",
-          "effectiveFrom",
-          "effectiveTo",
-          "isActive"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "weight": {
-            "type": "string"
-          },
-          "ruleText": {
-            "type": "string"
-          },
-          "effectiveFrom": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "effectiveTo": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "format": "date-time"
-          },
-          "isActive": {
-            "type": "boolean"
-          }
-        }
-      },
       "ErrorEnvelope": {
         "required": [
           "ok",
@@ -1122,151 +720,6 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
-          }
-        }
-      },
-      "PagedResultOfApplicationDetailDto": {
-        "required": [
-          "items",
-          "totalCount",
-          "limit",
-          "offset"
-        ],
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ApplicationDetailDto"
-            }
-          },
-          "totalCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "limit": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "offset": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "PagedResultOfCompanyDetailDto": {
-        "required": [
-          "items",
-          "totalCount",
-          "limit",
-          "offset"
-        ],
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CompanyDetailDto"
-            }
-          },
-          "totalCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "limit": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "offset": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "PagedResultOfNoteDto": {
-        "required": [
-          "items",
-          "totalCount",
-          "limit",
-          "offset"
-        ],
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NoteDto"
-            }
-          },
-          "totalCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "limit": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "offset": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "PagedResultOfPostingListItemDto": {
-        "required": [
-          "items",
-          "totalCount",
-          "limit",
-          "offset"
-        ],
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PostingListItemDto"
-            }
-          },
-          "totalCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "limit": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "offset": {
-            "type": "integer",
-            "format": "int32"
-          }
-        }
-      },
-      "PagedResultOfSearchRunDto": {
-        "required": [
-          "items",
-          "totalCount",
-          "limit",
-          "offset"
-        ],
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SearchRunDto"
-            }
-          },
-          "totalCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "limit": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "offset": {
-            "type": "integer",
-            "format": "int32"
           }
         }
       },
@@ -1398,76 +851,6 @@
           }
         }
       },
-      "PostingListItemDto": {
-        "required": [
-          "id",
-          "companyId",
-          "companyName",
-          "title",
-          "requisitionId",
-          "location",
-          "disposition",
-          "resurfacePolicy",
-          "score",
-          "versionToken",
-          "createdAt",
-          "updatedAt"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "companyId": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "companyName": {
-            "type": "string"
-          },
-          "title": {
-            "type": "string"
-          },
-          "requisitionId": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "location": {
-            "type": [
-              "null",
-              "string"
-            ]
-          },
-          "disposition": {
-            "type": "string"
-          },
-          "resurfacePolicy": {
-            "type": "string"
-          },
-          "score": {
-            "type": [
-              "null",
-              "number"
-            ],
-            "format": "double"
-          },
-          "versionToken": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
       "PostingSignalDto": {
         "required": [
           "signalType",
@@ -1550,50 +933,6 @@
             "default": false
           },
           "overrideReason": {
-            "type": [
-              "null",
-              "string"
-            ]
-          }
-        }
-      },
-      "SearchRunDto": {
-        "required": [
-          "id",
-          "runDate",
-          "companiesSearched",
-          "postingsFound",
-          "newPostings",
-          "errorsCount",
-          "summary"
-        ],
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "runDate": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "companiesSearched": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "postingsFound": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "newPostings": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "errorsCount": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "summary": {
             "type": [
               "null",
               "string"

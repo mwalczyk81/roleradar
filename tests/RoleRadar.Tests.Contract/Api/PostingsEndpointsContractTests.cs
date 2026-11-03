@@ -14,50 +14,6 @@ public sealed class PostingsEndpointsContractTests(SharedMongoFixture sharedMong
     private readonly SharedMongoFixture _sharedMongo = sharedMongo;
 
     [Fact]
-    public async Task GetPostings_EnforcesBoundedPagination_Default50_Max200_AndFilters()
-    {
-        await using var host = await ApiContractTestHost.StartAsync(_sharedMongo, "rrtest_api_postings_page");
-        using var scope = host.Services.CreateScope();
-        var companyHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto>>();
-        var postingHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordPostingCommand, PostingRecordResultDto>>();
-
-        var companyRes = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: "Acme Cloud Corp"));
-        Assert.True(companyRes.IsSuccess);
-        var companyId = companyRes.Value!.Company.Id;
-
-        for (var i = 1; i <= 5; i++)
-        {
-            var pRes = await postingHandler.HandleAsync(new RecordPostingCommand(
-                CompanyId: companyId,
-                Title: $"Staff Platform Engineer {i}",
-                RequisitionId: $"REQ-{i:D3}",
-                AtsTenant: "acme",
-                Location: "Remote - US",
-                Score: 8.5m));
-            Assert.True(pRes.IsSuccess);
-        }
-
-        // Default paging (limit omitted -> 50, offset omitted -> 0)
-        var defaultResp = await host.Client.GetAsync("/api/v1/postings");
-        Assert.Equal(HttpStatusCode.OK, defaultResp.StatusCode);
-
-        var defaultJson = await defaultResp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(5, defaultJson.GetProperty("totalCount").GetInt32());
-        Assert.Equal(50, defaultJson.GetProperty("limit").GetInt32());
-        Assert.Equal(0, defaultJson.GetProperty("offset").GetInt32());
-        Assert.Equal(5, defaultJson.GetProperty("items").GetArrayLength());
-
-        // Clamp limit > 200 down to 200
-        var clampedResp = await host.Client.GetAsync("/api/v1/postings?limit=500&offset=2");
-        Assert.Equal(HttpStatusCode.OK, clampedResp.StatusCode);
-
-        var clampedJson = await clampedResp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(200, clampedJson.GetProperty("limit").GetInt32());
-        Assert.Equal(2, clampedJson.GetProperty("offset").GetInt32());
-        Assert.Equal(3, clampedJson.GetProperty("items").GetArrayLength());
-    }
-
-    [Fact]
     public async Task GetPostingById_Returns200WithDetail_Or404WithErrorEnvelope()
     {
         await using var host = await ApiContractTestHost.StartAsync(_sharedMongo, "rrtest_api_posting_detail");

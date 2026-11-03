@@ -150,15 +150,15 @@
 
 ### Tests for User Story 5
 
-- [ ] T064 [P] [US5] Write .NET contract drift test in `tests/RoleRadar.Tests.Contract/ODataMetadataDriftTests.cs` and web contract equality test in `web/tests/unit/odata-metadata-drift.test.ts` asserting running `/odata/$metadata` equals committed `contracts/odata/metadata.xml`.
-- [ ] T065 [US5] Write Playwright network interception test in `web/tests/e2e/legacy-api-retirement.spec.ts` asserting that zero HTTP requests are dispatched to `/api/v1/` list endpoints during full UI navigation.
+- [X] T064 [P] [US5] Write .NET contract drift test in `tests/RoleRadar.Tests.Contract/ODataMetadataDriftTests.cs` and web contract equality test in `web/tests/unit/odata-metadata-drift.test.ts` asserting running `/odata/$metadata` equals committed `contracts/odata/metadata.xml`.
+- [X] T065 [US5] Write Playwright network interception test in `web/tests/e2e/legacy-api-retirement.spec.ts` asserting that zero HTTP requests are dispatched to `/api/v1/` list endpoints during full UI navigation.
 
 ### Implementation for User Story 5
 
-- [ ] T066 [US5] Decommission and delete the 6 legacy list endpoints (`GET /api/v1/postings`, `GET /api/v1/companies`, `GET /api/v1/applications`, `GET /api/v1/notes`, `GET /api/v1/criteria`, `GET /api/v1/search-runs`) from `src/RoleRadar.Api/Endpoints/` (depends on T064, T065 passing).
-- [ ] T067 [US5] Rebuild `src/RoleRadar.Api` to regenerate `contracts/openapi/roleradar-api.json` and run `pnpm --filter web run generate-api-types` to update `contracts/client/api-types.ts`.
-- [ ] T068 [US5] Verify that single-entity detail endpoints (`GET /api/v1/{entity}/{id}`), command mutation endpoints (`POST`, `PATCH`), the CLI, and the agent MCP server remain fully functional and pass contract checks.
-- [ ] T069 [US5] Phase 7 verification: run `pwsh ./scripts/review-gate.ps1 -IncludeE2E` once, and run web CI steps in Linux container confirming zero requests dispatched to retired endpoints.
+- [X] T066 [US5] Decommission and delete the 6 legacy list endpoints (`GET /api/v1/postings`, `GET /api/v1/companies`, `GET /api/v1/applications`, `GET /api/v1/notes`, `GET /api/v1/criteria`, `GET /api/v1/search-runs`) from `src/RoleRadar.Api/Endpoints/` (depends on T064, T065 passing).
+- [X] T067 [US5] Rebuild `src/RoleRadar.Api` to regenerate `contracts/openapi/roleradar-api.json` and run `pnpm --filter web run generate-api-types` to update `contracts/client/api-types.ts`.
+- [X] T068 [US5] Verify that single-entity detail endpoints (`GET /api/v1/{entity}/{id}`), command mutation endpoints (`POST`, `PATCH`), the CLI, and the agent MCP server remain fully functional and pass contract checks.
+- [X] T069 [US5] Phase 7 verification: run `pwsh ./scripts/review-gate.ps1 -IncludeE2E` once, and run web CI steps in Linux container confirming zero requests dispatched to retired endpoints.
 
 ---
 

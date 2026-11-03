@@ -14,7 +14,7 @@ public sealed class ApplicationsEndpointsContractTests(SharedMongoFixture shared
     private readonly SharedMongoFixture _sharedMongo = sharedMongo;
 
     [Fact]
-    public async Task CreateApplication_AppendEvent_AndQueryApplications_Succeed()
+    public async Task CreateApplication_AppendEvent_AndGetById_Succeed()
     {
         await using var host = await ApiContractTestHost.StartAsync(_sharedMongo, "rrtest_api_applications");
         using var scope = host.Services.CreateScope();
@@ -67,12 +67,5 @@ public sealed class ApplicationsEndpointsContractTests(SharedMongoFixture shared
         var fetchedApp = await getResp.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(applicationId, fetchedApp.GetProperty("id").GetGuid());
         Assert.Equal(2, fetchedApp.GetProperty("events").GetArrayLength());
-
-        // 4. GET /api/v1/applications -> 200 OK with paged items
-        var listResp = await host.Client.GetAsync("/api/v1/applications?limit=25&offset=0");
-        Assert.Equal(HttpStatusCode.OK, listResp.StatusCode);
-        var listJson = await listResp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(1, listJson.GetProperty("totalCount").GetInt32());
-        Assert.Equal(1, listJson.GetProperty("items").GetArrayLength());
     }
 }

@@ -68,6 +68,7 @@ public partial class Program
         builder.Services.TryAddScoped<IOwnerIdProvider, HttpUserOwnerIdProvider>();
         builder.Services.AddSingleton<IAuthorizationHandler, OwnerAllowlistHandler>();
         builder.Services.AddSingleton<IAuthorizationHandler, ScopeAuthorizationHandler>();
+        builder.Services.AddHostedService<RoleRadar.Api.OData.ReadIndexStartupService>();
 
         var authority = builder.Configuration["Authentication:Authority"]
             ?? Environment.GetEnvironmentVariable("ROLERADAR_OIDC_AUTHORITY")

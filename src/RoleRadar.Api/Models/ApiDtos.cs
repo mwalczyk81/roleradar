@@ -1,20 +1,6 @@
 namespace RoleRadar.Api.Models;
 
 // Postings DTOs
-public sealed record PostingListItemDto(
-    Guid Id,
-    Guid CompanyId,
-    string CompanyName,
-    string Title,
-    string? RequisitionId,
-    string? Location,
-    string Disposition,
-    string ResurfacePolicy,
-    decimal? Score,
-    Guid VersionToken,
-    DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
-
 public sealed record PostingCompensationDto(
     string Currency,
     string? RawText,
@@ -130,16 +116,7 @@ public sealed record AppendApplicationEventRequestDto(
     string? Notes = null,
     string? EventSource = null);
 
-// Criteria, Notes, and Search Runs DTOs
-public sealed record CriterionDto(
-    Guid Id,
-    string Name,
-    string Weight,
-    string RuleText,
-    DateTimeOffset EffectiveFrom,
-    DateTimeOffset? EffectiveTo,
-    bool IsActive);
-
+// Notes DTOs
 public sealed record NoteDto(
     Guid Id,
     string Heading,
@@ -149,12 +126,3 @@ public sealed record NoteDto(
     Guid? LinkedEntityId,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
-
-public sealed record SearchRunDto(
-    Guid Id,
-    DateTimeOffset RunDate,
-    int CompaniesSearched,
-    int PostingsFound,
-    int NewPostings,
-    int ErrorsCount,
-    string? Summary);

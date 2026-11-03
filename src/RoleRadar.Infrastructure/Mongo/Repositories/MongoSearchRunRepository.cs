@@ -72,31 +72,6 @@ public sealed class MongoSearchRunRepository : ISearchRunRepository
         }
     }
 
-    public async Task<Result<IReadOnlyList<SearchRun>>> ListSearchRunsAsync(string ownerId, int page = 1, int pageSize = 50, CancellationToken cancellationToken = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);
-        if (page < 1) page = 1;
-        if (pageSize < 1) pageSize = 50;
-        if (pageSize > 200) pageSize = 200;
-
-        await TrackingIndexInitializer.EnsureIndexesOnceAsync(_database, cancellationToken);
-        var filter = Builders<BsonDocument>.Filter.Eq("owner_id", ownerId);
-        var session = MongoNoteRepository.CurrentSession;
-        var docs = session is not null
-            ? await _searchRuns.Find(session, filter)
-                .Sort(Builders<BsonDocument>.Sort.Descending("started_at"))
-                .Skip((page - 1) * pageSize)
-                .Limit(pageSize)
-                .ToListAsync(cancellationToken)
-            : await _searchRuns.Find(filter)
-                .Sort(Builders<BsonDocument>.Sort.Descending("started_at"))
-                .Skip((page - 1) * pageSize)
-                .Limit(pageSize)
-                .ToListAsync(cancellationToken);
-
-        return Result<IReadOnlyList<SearchRun>>.Success(docs.Select(MapSearchRun).ToArray());
-    }
-
     public async Task<Result<int>> CountSearchRunsAsync(string ownerId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerId);

@@ -97,6 +97,8 @@ public static class DependencyInjection
             return new Mongo.Repositories.MongoIntegrityRepository(client, database);
         });
 
+        services.TryAddSingleton<Mongo.Reading.ReadIndexInitializer>();
+
         services.TryAddScoped<RoleRadar.Application.Reading.IOwnerReadSeam>(sp =>
         {
             var client = sp.GetRequiredService<IMongoClient>();

@@ -102,7 +102,7 @@ test.beforeAll(async () => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
     res.setHeader("Content-Type", "application/json");
 
-    if (url.pathname === "/api/v1/postings" || url.pathname === "/odata/Postings") {
+    if (url.pathname === "/odata/Postings") {
       res.writeHead(200);
       res.end(
         JSON.stringify({
@@ -233,29 +233,6 @@ test.beforeAll(async () => {
           })
         );
       });
-      return;
-    }
-
-    if (url.pathname === "/api/v1/criteria") {
-      lastCriteriaQueryReceived = Object.fromEntries(url.searchParams.entries());
-      res.writeHead(200);
-      res.end(
-        JSON.stringify(
-          currentCriteriaList !== null
-            ? currentCriteriaList
-            : [
-                {
-                  id: "crit-1",
-                  name: "Remote Policy",
-                  weight: "high",
-                  ruleText: "Must allow remote work",
-                  effectiveFrom: "2026-01-01T00:00:00Z",
-                  effectiveTo: null,
-                  isActive: true,
-                },
-              ]
-        )
-      );
       return;
     }
 

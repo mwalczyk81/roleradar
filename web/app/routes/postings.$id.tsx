@@ -5,6 +5,8 @@ import { getNavItems } from "../lib/nav.js";
 import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
 import { useTheme } from "../lib/use-theme.js";
 import { createApiClient, mapApiError } from "../lib/api-client.server.js";
+import { buildODataQuery } from "../lib/odata-client.js";
+import { loadODataList } from "../lib/odata-list.server.js";
 import { validateCsrfToken } from "../lib/csrf.server.js";
 import { AppShell, Badge, Card, Button, Toast, ToastRegion } from "../ui.js";
 import { TransitionPostingDialog } from "../components/TransitionPostingDialog.jsx";
@@ -22,7 +24,10 @@ import {
 import type { components } from "../../../contracts/client/api-types.js";
 
 export type PostingDetailDto = components["schemas"]["PostingDetailDto"];
-export type CriterionDto = components["schemas"]["CriterionDto"];
+export interface CriterionOption {
+  id: string;
+  name: string;
+}
 export type PostingSignalDto = components["schemas"]["PostingSignalDto"];
 export type AssessmentNoteSummaryDto = components["schemas"]["AssessmentNoteSummaryDto"];
 export type ApplicationDetailDto = components["schemas"]["ApplicationDetailDto"];
@@ -62,14 +67,24 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const client = createApiClient(session.accessToken);
 
-  const [postingRes, criteriaRes] = await Promise.all([
+  const [postingRes, criteria] = await Promise.all([
     client.GET("/api/v1/postings/{id}", {
       params: { path: { id: postingId } },
     }),
-    client.GET("/api/v1/criteria", {}),
+    // Criteria for the transition dialog's picker: id and name only, from the OData read seam.
+    loadODataList<CriterionOption>({
+      path: "/odata/Criteria",
+      queryString: buildODataQuery({
+        select: ["id", "name"],
+        orderBy: [{ field: "name", direction: "asc" }],
+        top: 100,
+      }),
+      request,
+      session,
+      failureMessage: "Failed to load criteria",
+    }),
   ]);
 
-  await assertApiOk(criteriaRes.response, request, session.sessionId);
   await assertApiOk(postingRes.response, request, session.sessionId, { notFoundMessage: "Posting Not Found" });
 
   if (postingRes.error || !postingRes.data) {
@@ -81,7 +96,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   // Invariant: Never return tokens to browser
   return {
     posting: postingRes.data,
-    criteria: criteriaRes.data ?? [],
+    criteria: criteria.items,
     csrfToken: session.csrfToken,
     userLabel: session.ownerUsername || "Signed in",
   };

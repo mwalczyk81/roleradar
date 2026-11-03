@@ -228,11 +228,11 @@ public sealed class IdpAgnosticOidcIntegrationTests(IsolatedContainerMongoFixtur
             using var apiClient = new HttpClient { BaseAddress = new Uri(apiBaseUrl) };
             apiClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
-            var getCompaniesResp = await apiClient.GetAsync("/api/v1/companies");
+            var getCompaniesResp = await apiClient.GetAsync("/odata/Companies?$count=true");
             Assert.Equal(HttpStatusCode.OK, getCompaniesResp.StatusCode);
             var companiesJson = await getCompaniesResp.Content.ReadFromJsonAsync<JsonElement>();
-            Assert.Equal(1, companiesJson.GetProperty("totalCount").GetInt32());
-            Assert.Equal(seededCompanyId, companiesJson.GetProperty("items")[0].GetProperty("id").GetGuid());
+            Assert.Equal(1, companiesJson.GetProperty("@odata.count").GetInt32());
+            Assert.Equal(seededCompanyId, companiesJson.GetProperty("value")[0].GetProperty("id").GetGuid());
 
             // 7. Rotate refresh token via discovered token_endpoint and call API with new access token
             var refreshResp = await idpClient.PostAsync(tokenEndpoint, new FormUrlEncodedContent(new Dictionary<string, string>
@@ -354,7 +354,7 @@ public sealed class IdpAgnosticOidcIntegrationTests(IsolatedContainerMongoFixtur
         using var apiClient = new HttpClient { BaseAddress = new Uri(apiBaseUrl) };
         apiClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
-        var response = await apiClient.GetAsync("/api/v1/companies");
+        var response = await apiClient.GetAsync("/odata/Companies");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
         // 4. Verify a token signed by an unknown RSA key is rejected with 401
@@ -372,7 +372,7 @@ public sealed class IdpAgnosticOidcIntegrationTests(IsolatedContainerMongoFixtur
         var rogueToken = new JwtSecurityTokenHandler().CreateEncodedJwt(rogueDescriptor);
         apiClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", rogueToken);
 
-        var rogueResponse = await apiClient.GetAsync("/api/v1/companies");
+        var rogueResponse = await apiClient.GetAsync("/odata/Companies");
         Assert.Equal(HttpStatusCode.Unauthorized, rogueResponse.StatusCode);
 
         await apiApp.StopAsync();
