@@ -27,7 +27,7 @@ public sealed class RenameCascadeTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await _container.StartAsync();
+        await MongoContainerStartGate.StartAsync(_container);
 
         var services = new ServiceCollection();
         services.AddLogging(b => b.AddConsole().SetMinimumLevel(LogLevel.Warning));

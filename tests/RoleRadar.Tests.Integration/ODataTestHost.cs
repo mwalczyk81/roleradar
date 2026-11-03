@@ -51,7 +51,7 @@ internal sealed class ODataTestHost : IAsyncDisposable
     /// <summary>Starts the container and the database. Call <see cref="StartApiAsync"/> after seeding.</summary>
     public async Task StartDatabaseAsync()
     {
-        await _container.StartAsync();
+        await MongoContainerStartGate.StartAsync(_container);
         Database = new MongoClient(_container.GetConnectionString()).GetDatabase(_databaseName);
     }
 

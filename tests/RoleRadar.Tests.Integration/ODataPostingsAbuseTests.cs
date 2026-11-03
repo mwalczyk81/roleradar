@@ -16,7 +16,7 @@ using RoleRadar.Api;
 using Testcontainers.MongoDb;
 using Xunit;
 
-public sealed class ODataPostingsAbuseTests : IAsyncLifetime
+public sealed class ODataPostingsAbuseTestsFixture : IAsyncLifetime
 {
     private const string TestSecret = "this-is-a-very-long-test-secret-key-for-odata-abuse-32-bytes!";
     private const string TestIssuer = "https://test-identity.local";
@@ -33,7 +33,7 @@ public sealed class ODataPostingsAbuseTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await _container.StartAsync();
+        await MongoContainerStartGate.StartAsync(_container);
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestSecret));
 
@@ -109,6 +109,16 @@ public sealed class ODataPostingsAbuseTests : IAsyncLifetime
         var token = tokenHandler.CreateToken(descriptor);
         return tokenHandler.WriteToken(token);
     }
+
+    public HttpClient Client => _client;
+}
+
+/// <summary>Read-only tests share one container and API host (see <see cref="ODataPostingsAbuseTestsFixture"/>); each test is independent of the others.</summary>
+public sealed class ODataPostingsAbuseTests : IClassFixture<ODataPostingsAbuseTestsFixture>
+{
+    private readonly HttpClient _client;
+
+    public ODataPostingsAbuseTests(ODataPostingsAbuseTestsFixture fixture) => _client = fixture.Client;
 
     [Fact]
     public async Task Top_Exceeding_100_Returns_400_Problem_Details()

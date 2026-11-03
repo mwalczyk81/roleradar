@@ -147,9 +147,6 @@ public static class ReadModelClassMaps
                 cm.MapProperty(p => p.RunDate).SetElementName("started_at");
                 cm.MapProperty(p => p.NewPostings).SetElementName("new_postings_count");
                 cm.MapProperty(p => p.Summary).SetElementName("notes");
-                cm.UnmapProperty(p => p.CompaniesSearched);
-                cm.UnmapProperty(p => p.PostingsFound);
-                cm.UnmapProperty(p => p.ErrorsCount);
                 cm.MapMember(p => p.OwnerId).SetElementName("owner_id");
             });
         }

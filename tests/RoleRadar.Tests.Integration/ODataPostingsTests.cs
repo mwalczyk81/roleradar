@@ -20,7 +20,7 @@ using RoleRadar.Infrastructure.Mongo;
 using Testcontainers.MongoDb;
 using Xunit;
 
-public sealed class ODataPostingsTests : IAsyncLifetime
+public sealed class ODataPostingsTestsFixture : IAsyncLifetime
 {
     private const string TestSecret = "this-is-a-very-long-test-secret-key-for-odata-postings-32-bytes!";
     private const string TestIssuer = "https://test-identity.local";
@@ -38,7 +38,7 @@ public sealed class ODataPostingsTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await _container.StartAsync();
+        await MongoContainerStartGate.StartAsync(_container);
 
         var client = new MongoClient(_container.GetConnectionString());
         _database = client.GetDatabase("odata_postings_test_db");
@@ -159,6 +159,16 @@ public sealed class ODataPostingsTests : IAsyncLifetime
         await collection.InsertManyAsync(docs);
     }
 
+    public HttpClient Client => _client;
+}
+
+/// <summary>Read-only tests share one container and API host (see <see cref="ODataPostingsTestsFixture"/>); each test is independent of the others.</summary>
+public sealed class ODataPostingsTests : IClassFixture<ODataPostingsTestsFixture>
+{
+    private readonly HttpClient _client;
+
+    public ODataPostingsTests(ODataPostingsTestsFixture fixture) => _client = fixture.Client;
+
     [Fact]
     public async Task Post_Method_Returns_405_With_Allow_Get()
     {
@@ -271,8 +281,8 @@ public sealed class ODataPostingsTests : IAsyncLifetime
         var response = await _client.GetAsync("/odata/Postings?$select=title,companyName");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var json = await response.Content.ReadFromJsonAsync<JsonElement>();
-        var itemsProp = json.TryGetProperty("value", out var v) ? v : json.GetProperty("items");
-        var items = itemsProp.EnumerateArray().ToList();
+        Assert.False(json.TryGetProperty("items", out _), "responses use the OData 'value' envelope only");
+        var items = json.GetProperty("value").EnumerateArray().ToList();
         Assert.NotEmpty(items);
 
         var first = items[0];

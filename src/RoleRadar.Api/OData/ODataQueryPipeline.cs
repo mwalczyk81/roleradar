@@ -1,6 +1,7 @@
 namespace RoleRadar.Api.OData;
 
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.OData.Extensions;
 using Microsoft.AspNetCore.OData.Query;
 using Microsoft.AspNetCore.OData.Query.Validator;
 using Microsoft.AspNetCore.OData.Results;
@@ -82,9 +83,13 @@ public static class ODataQueryPipeline
         // 6. Project if $select is present
         if (!string.IsNullOrWhiteSpace(options.SelectExpand?.RawSelect))
         {
+            // Return the wrapper sequence itself so the OData formatter writes the standard envelope
+            // ({ "value": [...], "@odata.count": n }); a PageResult<object> would fall back to plain JSON.
             var projected = options.SelectExpand.ApplyTo(items.AsQueryable(), querySettings);
-            var projectedList = projected.Cast<object>().ToList();
-            return new OkObjectResult(new PageResult<object>(projectedList, null, totalCount));
+            var feature = options.Request.ODataFeature();
+            feature.TotalCount = totalCount;
+            feature.SelectExpandClause = options.SelectExpand.SelectExpandClause;
+            return new OkObjectResult(projected);
         }
 
         return new OkObjectResult(new PageResult<T>(items, null, totalCount));

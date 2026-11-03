@@ -78,9 +78,6 @@
         <Property Name="id" Type="Edm.Guid" Nullable="false" />
         <Property Name="runDate" Type="Edm.DateTimeOffset" Nullable="false" />
         <Property Name="newPostings" Type="Edm.Int32" Nullable="false" />
-        <Property Name="companiesSearched" Type="Edm.Int32" Nullable="false" />
-        <Property Name="postingsFound" Type="Edm.Int32" Nullable="false" />
-        <Property Name="errorsCount" Type="Edm.Int32" Nullable="false" />
         <Property Name="summary" Type="Edm.String" />
       </EntityType>
     </Schema>

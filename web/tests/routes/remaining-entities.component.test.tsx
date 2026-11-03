@@ -65,8 +65,8 @@ const CRITERIA = [
 ];
 
 const RUNS = [
-  { id: "r-1", runDate: "2026-10-31T08:00:00Z", companiesSearched: 0, postingsFound: 3, newPostings: 3, errorsCount: 0, summary: "weekly sweep" },
-  { id: "r-2", runDate: "2026-10-24T08:00:00Z", companiesSearched: 0, postingsFound: 0, newPostings: 0, errorsCount: 0, summary: null },
+  { id: "r-1", runDate: "2026-10-31T08:00:00Z", newPostings: 3, summary: "weekly sweep" },
+  { id: "r-2", runDate: "2026-10-24T08:00:00Z", newPostings: 0, summary: null },
 ];
 
 describe("Companies list interactions", () => {
@@ -227,12 +227,17 @@ describe("Search runs list interactions", () => {
     await waitFor(() => expect(harness.last().searchParams.get("sort")).toBe("newPostings"));
   });
 
-  it("does not offer sorting on the derived counters", async () => {
-    const { findByText, queryByRole } = mount("/search-runs", SearchRunsIndex, RUNS);
+  it("shows only stored columns: no companies-searched, postings-found or errors counters", async () => {
+    const { findByText, queryByText, queryByRole } = mount("/search-runs", SearchRunsIndex, RUNS);
 
     await findByText("weekly sweep");
-    expect(queryByRole("button", { name: "Companies Searched" })).toBeNull();
-    expect(queryByRole("button", { name: "Errors" })).toBeNull();
+    for (const header of ["Companies Searched", "Postings Found", "Errors"]) {
+      expect(queryByText(header)).toBeNull();
+      expect(queryByRole("button", { name: header })).toBeNull();
+    }
+    expect(queryByText("Run Date")).not.toBeNull();
+    expect(queryByText("New Postings")).not.toBeNull();
+    expect(queryByText("Batch Summary")).not.toBeNull();
   });
 
   it("pages through the server, keeps run dates on one line, and renders text as plain text", async () => {

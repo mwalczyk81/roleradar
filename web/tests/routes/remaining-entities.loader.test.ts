@@ -368,7 +368,7 @@ describe("Remaining entities OData list loaders (T050)", () => {
       const { decoded, result } = await run(criteria, "?effectiveDate=2026-10-01");
 
       expect(decoded).toContain(
-        "$filter=(effectiveFrom le 2026-10-01T00:00:00Z) and ((effectiveTo eq null) or (effectiveTo ge 2026-10-01T00:00:00Z))"
+        "$filter=(effectiveFrom le 2026-10-01T00:00:00Z) and ((effectiveTo eq null) or (effectiveTo gt 2026-10-01T00:00:00Z))"
       );
       expect(result.effectiveDate).toBe("2026-10-01");
     });
@@ -417,8 +417,8 @@ describe("Remaining entities OData list loaders (T050)", () => {
       expect(decoded).toContain("$orderby=runDate asc");
     });
 
-    it("does not allow sorting by the unstored counters or the summary", async () => {
-      for (const field of ["companiesSearched", "postingsFound", "errorsCount", "summary"]) {
+    it("does not allow sorting by the summary", async () => {
+      for (const field of ["summary"]) {
         mockFetchOData.mockReset();
         const { decoded } = await run(runs, `?sort=${field}`);
         expect(decoded).toContain("$orderby=runDate desc");

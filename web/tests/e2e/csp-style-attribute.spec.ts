@@ -1993,7 +1993,7 @@ test.describe("Company Management (Real Chromium)", () => {
 
       // Verify parameter filtering: effectiveDate becomes the effective-interval filter, nothing else is forwarded
       expect(lastCriteriaQueryReceived["$filter"]).toBe(
-        "(effectiveFrom le 2026-06-01T00:00:00Z) and ((effectiveTo eq null) or (effectiveTo ge 2026-06-01T00:00:00Z))"
+        "(effectiveFrom le 2026-06-01T00:00:00Z) and ((effectiveTo eq null) or (effectiveTo gt 2026-06-01T00:00:00Z))"
       );
       expect(lastCriteriaQueryReceived["$orderby"]).toBe("name asc");
       expect(Object.keys(lastCriteriaQueryReceived).sort()).toEqual(["$count", "$filter", "$orderby", "$skip", "$top"]);
@@ -2205,10 +2205,7 @@ test.describe("Company Management (Real Chromium)", () => {
         {
           id: "run-e2e-1",
           runDate: "2026-10-31T08:00:00Z",
-          companiesSearched: 25,
-          postingsFound: 14,
           newPostings: 3,
-          errorsCount: 0,
           summary: "Automated batch search run completed with 3 new postings.",
         },
       ];

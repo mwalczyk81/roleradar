@@ -11,15 +11,11 @@ import { AppShell, DataTable, Badge, Button, type DataTableColumn } from "../ui.
 export interface SearchRunODataModel {
   id: string;
   runDate: string;
-  companiesSearched: number;
-  postingsFound: number;
   newPostings: number;
-  errorsCount: number;
   summary: string | null;
 }
 
-// Only stored columns are sortable. companiesSearched, postingsFound and errorsCount are constants derived by
-// the API (the collection does not store them), so sorting by them would be meaningless.
+// Only stored columns are sortable; the summary is free text and is displayed only.
 export const ALLOWED_SORT_FIELDS = ["runDate", "newPostings"] as const;
 
 export const meta: MetaFunction = () => [{ title: "Search Runs - RoleRadar" }];
@@ -87,16 +83,6 @@ export default function SearchRunsIndex() {
       ),
     },
     {
-      key: "companiesSearched",
-      header: "Companies Searched",
-      render: (row) => <span>{row.companiesSearched}</span>,
-    },
-    {
-      key: "postingsFound",
-      header: "Postings Found",
-      render: (row) => <span>{row.postingsFound}</span>,
-    },
-    {
       key: "newPostings",
       header: "New Postings",
       sortable: true,
@@ -104,15 +90,6 @@ export default function SearchRunsIndex() {
       render: (row) => (
         <Badge tone={row.newPostings > 0 ? "success" : "neutral"}>
           {row.newPostings} new
-        </Badge>
-      ),
-    },
-    {
-      key: "errorsCount",
-      header: "Errors",
-      render: (row) => (
-        <Badge tone={row.errorsCount > 0 ? "danger" : "neutral"}>
-          {row.errorsCount}
         </Badge>
       ),
     },

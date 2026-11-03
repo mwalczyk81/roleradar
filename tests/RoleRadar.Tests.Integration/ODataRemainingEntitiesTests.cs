@@ -113,14 +113,38 @@ public sealed class ODataRemainingEntitiesTests : IClassFixture<RemainingEntitie
         Assert.Equal(["growth stage", "Salary floor", "remote only"], Strings(desc, "name"));
     }
 
+    // The web interval filter: effective on D means effectiveFrom <= D and (effectiveTo is open or D < effectiveTo).
+    // That is the domain's Criterion.IsEffectiveAt, so the end date is exclusive.
+    private static string EffectiveOn(DateTime date)
+    {
+        var d = date.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+        return $"/odata/Criteria?$filter=effectiveFrom%20le%20{d}%20and%20(effectiveTo%20eq%20null%20or%20effectiveTo%20gt%20{d})&$orderby=name%20asc";
+    }
+
     [Fact]
     public async Task Criteria_IntervalFilter_ReturnsCriteriaEffectiveOnAGivenDate()
     {
-        // effective on 2026-10-01: from <= date and (to is open or to >= date)
-        var page = await OkAsync(
-            OwnerA,
-            "/odata/Criteria?$filter=effectiveFrom%20le%202026-10-01T00:00:00Z%20and%20(effectiveTo%20eq%20null%20or%20effectiveTo%20ge%202026-10-01T00:00:00Z)&$orderby=name%20asc");
+        var page = await OkAsync(OwnerA, EffectiveOn(new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc)));
         Assert.Equal(["growth stage", "remote only"], Strings(page, "name"));
+    }
+
+    [Fact]
+    public async Task Criteria_IntervalFilter_TreatsEffectiveToAsExclusive_LikeTheDomain()
+    {
+        // "growth stage" ends exactly at EndsAt: one second earlier it is effective, at EndsAt it is not.
+        var endsAt = RemainingEntitiesSeed.Now.AddDays(40);
+        var endsAtOffset = new DateTimeOffset(endsAt, TimeSpan.Zero);
+        var growth = RoleRadar.Domain.Tracking.Criterion.Rehydrate(
+            Guid.NewGuid(), OwnerA, "growth stage", RoleRadar.Domain.Tracking.CriterionCategory.Preference, "Series C or later",
+            new DateTimeOffset(RemainingEntitiesSeed.Now.AddDays(-20), TimeSpan.Zero), endsAtOffset,
+            RoleRadar.Domain.Tracking.ProvenanceKind.Stated, true, Guid.NewGuid(), endsAtOffset);
+
+        var justBefore = endsAt.AddSeconds(-1);
+        Assert.True(growth.IsEffectiveAt(new DateTimeOffset(justBefore, TimeSpan.Zero)));
+        Assert.Equal(["growth stage", "remote only"], Strings(await OkAsync(OwnerA, EffectiveOn(justBefore)), "name"));
+
+        Assert.False(growth.IsEffectiveAt(endsAtOffset));
+        Assert.Equal(["remote only"], Strings(await OkAsync(OwnerA, EffectiveOn(endsAt)), "name"));
     }
 
     // ---------------------------------------------------------------- SearchRuns
@@ -164,6 +188,26 @@ public sealed class ODataRemainingEntitiesTests : IClassFixture<RemainingEntitie
         var aIds = a.GetProperty("value").EnumerateArray().Select(e => e.GetProperty("id").GetGuid()).ToHashSet();
         var bIds = b.GetProperty("value").EnumerateArray().Select(e => e.GetProperty("id").GetGuid()).ToHashSet();
         Assert.Empty(aIds.Intersect(bIds));
+    }
+
+    [Theory]
+    [InlineData("companiesSearched")]
+    [InlineData("postingsFound")]
+    [InlineData("errorsCount")]
+    public async Task SearchRuns_UnstoredCounters_AreNotPartOfTheReadModel(string counter)
+    {
+        // Not stored, so not exposed: absent from rows and rejected in $select, $filter and $orderby.
+        var page = await OkAsync(OwnerA, "/odata/SearchRuns");
+        foreach (var row in page.GetProperty("value").EnumerateArray())
+        {
+            Assert.False(row.TryGetProperty(counter, out _), row.ToString());
+        }
+
+        foreach (var query in new[] { $"$select={counter}", $"$filter={counter}%20eq%200", $"$orderby={counter}%20asc" })
+        {
+            var (status, _) = await _host.GetJsonAsync(OwnerA, $"/odata/SearchRuns?{query}");
+            Assert.Equal(HttpStatusCode.BadRequest, status);
+        }
     }
 
     [Theory]

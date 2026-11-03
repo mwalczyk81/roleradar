@@ -16,13 +16,13 @@ using RoleRadar.Tests.Integration.Fixtures;
 using Testcontainers.MongoDb;
 using Xunit;
 
-public sealed class ODataAuthorizationTests : IAsyncLifetime
+public sealed class ODataAuthorizationTestsFixture : IAsyncLifetime
 {
     private const string TestSecret = "this-is-a-very-long-test-secret-key-for-odata-auth-32-bytes!";
     private const string TestIssuer = "https://test-identity.local";
     private const string TestAudience = "roleradar.api";
-    private const string ValidOwnerSub = "valid-owner-subject-1234";
-    private const string InvalidOwnerSub = "attacker-subject-5678";
+    public const string ValidOwnerSub = "valid-owner-subject-1234";
+    public const string InvalidOwnerSub = "attacker-subject-5678";
 
     private readonly MongoDbContainer _container = new MongoDbBuilder("mongo:8.0.34")
         .WithEnvironment("GLIBC_TUNABLES", "glibc.pthread.rseq=1")
@@ -34,7 +34,7 @@ public sealed class ODataAuthorizationTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await _container.StartAsync();
+        await MongoContainerStartGate.StartAsync(_container);
 
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestSecret));
 
@@ -89,7 +89,7 @@ public sealed class ODataAuthorizationTests : IAsyncLifetime
         await _container.DisposeAsync();
     }
 
-    private static string GenerateJwt(string sub, string scope)
+    public static string GenerateJwt(string sub, string scope)
     {
         var tokenHandler = new JwtSecurityTokenHandler();
         var key = Encoding.UTF8.GetBytes(TestSecret);
@@ -107,6 +107,21 @@ public sealed class ODataAuthorizationTests : IAsyncLifetime
         var token = tokenHandler.CreateToken(descriptor);
         return tokenHandler.WriteToken(token);
     }
+
+    public HttpClient Client => _client;
+}
+
+/// <summary>Read-only tests share one container and API host (see <see cref="ODataAuthorizationTestsFixture"/>); each test is independent of the others.</summary>
+public sealed class ODataAuthorizationTests : IClassFixture<ODataAuthorizationTestsFixture>
+{
+    private readonly HttpClient _client;
+
+    private const string ValidOwnerSub = ODataAuthorizationTestsFixture.ValidOwnerSub;
+    private const string InvalidOwnerSub = ODataAuthorizationTestsFixture.InvalidOwnerSub;
+
+    public ODataAuthorizationTests(ODataAuthorizationTestsFixture fixture) => _client = fixture.Client;
+
+    private static string GenerateJwt(string sub, string scope) => ODataAuthorizationTestsFixture.GenerateJwt(sub, scope);
 
     [Fact]
     public async Task AnonymousRequest_Returns_401Unauthorized()

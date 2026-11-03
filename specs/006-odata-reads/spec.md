@@ -55,8 +55,8 @@ As a user organizing job-search assets and research history, I want consistent s
 
 1. **Given** a collection of companies, **When** the user sorts by company name (`name`), status (`status`), or headquarters (`headquarters`), **Then** the server sorts case-insensitively and returns paginated records with total count metadata.
 2. **Given** interview and research notes, **When** the user filters notes by heading (`heading`), tags (`tags`), or linked entity (`linkedEntityType`, `linkedEntityId`), **Then** matching notes are returned with selectable fields projected according to the view requirements, while full note `content` is selectable but not sortable or filterable.
-3. **Given** scoring criteria with validity dates, **When** filtering by effective date, **Then** the system filters where `effectiveFrom` is on or before the date and `effectiveTo` is either null or on or after the date.
-4. **Given** search runs logged by automation agents, **When** the user inspects recent runs ordered by `runDate` descending, **Then** the runs are sorted chronologically across all historical records displaying `runDate`, `companiesSearched`, `postingsFound`, `newPostings`, `errorsCount`, and `summary`.
+3. **Given** scoring criteria with validity dates, **When** filtering by effective date, **Then** the system filters where `effectiveFrom` is on or before the date and `effectiveTo` is either null or strictly after the date (the end date is exclusive, matching the domain rule `Criterion.IsEffectiveAt`).
+4. **Given** search runs logged by automation agents, **When** the user inspects recent runs ordered by `runDate` descending, **Then** the runs are sorted chronologically across all historical records displaying `runDate`, `newPostings`, and `summary`.
 
 ---
 
@@ -125,7 +125,7 @@ As a developer and system maintainer, I want the query service schema to serve a
   - `Applications`: `id`, `postingId`, `companyId`, `postingTitle`, `companyName`, `status` (`applied` | `rejected` | `closed`), `appliedAt`, `hasInterview`, `firstResponseAt`, `lastEventAt`, `ageInDays`.
   - `Notes`: `id`, `heading`, `tags`, `linkedEntityType`, `linkedEntityId`, `createdAt`, `updatedAt`, and selectable-only `content`.
   - `Criteria`: `id`, `name`, `category` (mapped from the current criteria category representation), `ruleText`, `effectiveFrom`, `effectiveTo`, `isActive`.
-  - `SearchRuns`: `id`, `runDate`, `companiesSearched`, `postingsFound`, `newPostings`, `errorsCount`, `summary`. Only `runDate` and `newPostings` are stored; `companiesSearched` (0), `postingsFound` (equal to `newPostings`) and `errorsCount` (0) are constants that mirror the REST `SearchRunDto`, so they are selectable but neither filterable nor sortable.
+  - `SearchRuns`: `id`, `runDate`, `newPostings`, `summary`. Only stored fields are exposed. `companiesSearched`, `postingsFound` and `errorsCount` are not stored, so they are not part of the OData read model (they remain on the legacy REST `SearchRunDto` until that list endpoint is retired). `runDate` and `newPostings` are filterable and sortable; `summary` is selectable only.
   - Stored-field mapping (see data-model.md): note `linkedEntityType` is the stored `area` and `linkedEntityId` is always null; criteria `name` and `ruleText` are the stored `key` and `value`; search run `runDate` and `summary` are the stored `started_at` and `notes`.
 - **FR-011**: Text property ordering and filtering MUST execute case-insensitively.
 - **FR-012**: Sorting by posting disposition MUST order records by the domain pipeline progression rank order (`unscored`, `lead`, `scored`, `applied`, `rejected`, `screened_out`, `closed`) rather than alphabetical order. Dispositions MUST be strictly validated against the 7 recognized domain values.
@@ -144,7 +144,7 @@ As a developer and system maintainer, I want the query service schema to serve a
   - `resurfacePolicy`: `resurfacePolicy eq '<value>'`
   - `minScore`: `score ge <minScore>`
   - Text search `q`: combined case-insensitive text match across searchable fields (e.g., for postings: `(contains(tolower(title), '<q>') or contains(tolower(companyName), '<q>'))`)
-  - Criteria `effectiveDate`: `(effectiveFrom le <date> and (effectiveTo eq null or effectiveTo ge <date>))`
+  - Criteria `effectiveDate`: `(effectiveFrom le <date> and (effectiveTo eq null or effectiveTo gt <date>))` (end date exclusive, matching `Criterion.IsEffectiveAt`)
 - **FR-023**: Clicking table column headers on web list views MUST update the URL query state with an allowlisted sort expression and trigger a server-side query across all matching records.
 - **FR-024**: The web list views MUST remove any disclaimer or note indicating that sorting applies only to the current page.
 - **FR-025**: Following web client migration to the query service, the legacy list endpoints (`GET /api/v1/postings`, `GET /api/v1/companies`, `GET /api/v1/applications`, `GET /api/v1/notes`, `GET /api/v1/criteria`, `GET /api/v1/search-runs`) MUST be removed from the API and OpenAPI contract. Single-entity detail endpoints (`GET /api/v1/{entity}/{id}`), mutation endpoints (`POST`, `PATCH`), the CLI, and the agent MCP server MUST remain intact and unaffected.
@@ -158,7 +158,7 @@ As a developer and system maintainer, I want the query service schema to serve a
 - **ApplicationReadModel**: Enriched representation of a job application record. Attributes: `id` (identifier), `postingId` (identifier), `companyId` (identifier), `postingTitle` (text), `companyName` (text), `status` (application status: `applied`, `rejected`, `closed`), `appliedAt` (UTC timestamp), `hasInterview` (boolean indicator), `firstResponseAt` (optional UTC timestamp), `lastEventAt` (optional UTC timestamp, null only when the application has no events), `ageInDays` (integer count).
 - **NoteReadModel**: Representation of a research or interview note. Attributes: `id` (identifier), `heading` (text), `tags` (list of text tags), `linkedEntityType` (entity discriminator), `linkedEntityId` (identifier), `createdAt` (UTC timestamp), `updatedAt` (UTC timestamp), `content` (selectable-only narrative text).
 - **CriterionReadModel**: Representation of a scoring criterion. Attributes: `id` (identifier), `name` (text), `category` (classification category), `ruleText` (rule description), `effectiveFrom` (UTC timestamp), `effectiveTo` (optional UTC timestamp), `isActive` (boolean indicator).
-- **SearchRunReadModel**: Representation of an automated search execution log. Attributes: `id` (identifier), `runDate` (UTC timestamp), `companiesSearched` (integer count), `postingsFound` (integer count), `newPostings` (integer count), `errorsCount` (integer count), `summary` (optional text).
+- **SearchRunReadModel**: Representation of an automated search execution log. Attributes: `id` (identifier), `runDate` (UTC timestamp), `newPostings` (integer count), `summary` (optional text).
 
 ## Success Criteria *(mandatory)*
 

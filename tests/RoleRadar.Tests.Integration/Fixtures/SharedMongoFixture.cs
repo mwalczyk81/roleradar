@@ -23,7 +23,7 @@ public sealed class SharedMongoFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await _mongoContainer.StartAsync();
+        await RoleRadar.Tests.Integration.MongoContainerStartGate.StartAsync(_mongoContainer);
         var rawConn = _mongoContainer.GetConnectionString();
         if (!rawConn.Contains("authSource=", StringComparison.OrdinalIgnoreCase))
         {

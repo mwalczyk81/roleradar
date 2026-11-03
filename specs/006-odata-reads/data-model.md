@@ -107,7 +107,7 @@ All read models strictly omit the internal `owner_id` field from client payloads
   - `category` (`string`, the stored `category`: `hard_skip` | `weight` | `preference`; surfaced as `weight` by the REST `CriterionDto`)
   - `ruleText` (`string`, the stored `value`)
   - `effectiveFrom` (`DateTimeOffset` in UTC)
-  - `effectiveTo` (`DateTimeOffset?` in UTC, nullable)
+  - `effectiveTo` (`DateTimeOffset?` in UTC, nullable; the end of the validity interval is **exclusive**, matching `Criterion.IsEffectiveAt`: a criterion is effective on `D` when `effectiveFrom <= D` and (`effectiveTo` is null or `D < effectiveTo`))
   - `isActive` (`bool`)
 - **Allowlisted Query Properties**:
   - **Filterable**: `name`, `category`, `effectiveFrom`, `effectiveTo`, `isActive` (`ruleText` is not filterable)
@@ -121,13 +121,10 @@ All read models strictly omit the internal `owner_id` field from client payloads
 - **Attributes**:
   - `id` (`Guid`, Primary Key)
   - `runDate` (`DateTimeOffset` in UTC, the stored `started_at`)
-  - `companiesSearched` (`int`, constant 0: not stored; matches the REST `SearchRunDto`)
-  - `postingsFound` (`int`, equals `newPostings`: not stored; matches the REST `SearchRunDto`)
   - `newPostings` (`int`, the stored `new_postings_count`)
-  - `errorsCount` (`int`, constant 0: not stored; matches the REST `SearchRunDto`)
   - `summary` (`string?`, the stored `notes`)
 - **Allowlisted Query Properties**:
-  - **Filterable**: `runDate`, `newPostings` (the other counters are constants and `summary` is free text; none are stored counters)
+  - **Filterable**: `runDate`, `newPostings` (`summary` is free text and is returned but not filterable)
   - **Sortable**: `id`, `runDate`, `newPostings`
   - **Selectable**: All attributes
   - Default order (no `$orderby`): `runDate desc`.

@@ -32,10 +32,7 @@ describe("Operational Views Accessibility (T055: Light & Dark Axe)", () => {
   const sampleRun = {
     id: "run-1",
     runDate: "2026-10-31T08:00:00Z",
-    companiesSearched: 25,
-    postingsFound: 14,
     newPostings: 3,
-    errorsCount: 0,
     summary: "Automated batch search run completed with 3 new postings.",
   };
 

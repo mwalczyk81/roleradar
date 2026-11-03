@@ -33,7 +33,7 @@ public sealed class ReconcileApplicationsTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await _container.StartAsync();
+        await MongoContainerStartGate.StartAsync(_container);
         var client = new MongoClient(_container.GetConnectionString());
         _database = client.GetDatabase("reconcile_applications_test_db");
         await SeedLegacyApplicationsAsync();

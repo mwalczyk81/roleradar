@@ -76,9 +76,11 @@ public sealed class ODataNotesProjectionTests : IAsyncLifetime
         return new NotesAggregate(entry!["command"]["pipeline"].ToJson(), entry["responseLength"].ToInt64());
     }
 
-    // Responses that carry $select are enveloped as "items" by the shared pipeline; plain lists use "value".
-    private static JsonElement Rows(JsonDocument body) =>
-        body.RootElement.TryGetProperty("value", out var value) ? value : body.RootElement.GetProperty("items");
+    private static JsonElement Rows(JsonDocument body)
+    {
+        Assert.False(body.RootElement.TryGetProperty("items", out _), "responses use the OData 'value' envelope only");
+        return body.RootElement.GetProperty("value");
+    }
 
     private async Task ClearProfileAsync()
     {

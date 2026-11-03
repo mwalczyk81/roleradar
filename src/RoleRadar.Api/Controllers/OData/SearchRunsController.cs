@@ -23,12 +23,9 @@ public sealed class SearchRunsController : ODataController
             .Add("runDate", r => r.RunDate)
             .Add("newPostings", r => r.NewPostings);
 
-    // Filterable: runDate, newPostings. The other counters are constants derived in memory (not stored).
+    // Filterable: runDate, newPostings. The free-text summary is returned but not filterable.
     private static readonly HashSet<string> DisallowedFilter = new(StringComparer.OrdinalIgnoreCase)
     {
-        "companiesSearched",
-        "postingsFound",
-        "errorsCount",
         "summary"
     };
 

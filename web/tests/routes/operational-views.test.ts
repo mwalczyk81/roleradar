@@ -353,15 +353,12 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
   });
 
   describe("Search Runs (/search-runs)", () => {
-    it("renders exact SearchRunDto fields and zero mutation controls", async () => {
+    it("renders the stored search run fields and zero mutation controls", async () => {
       const sampleRuns = [
         {
           id: "run-1",
           runDate: "2026-10-31T08:00:00Z",
-          companiesSearched: 25,
-          postingsFound: 14,
           newPostings: 3,
-          errorsCount: 0,
           summary: "Automated batch search run completed with 3 new postings.",
         },
       ];
@@ -394,15 +391,12 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
       expect(forms.length).toBe(0);
     });
 
-    it("renders search runs with errors and empty summary", async () => {
+    it("renders search runs with no new postings and an empty summary", async () => {
       const sampleRuns = [
         {
           id: "run-2",
           runDate: "2026-10-30T08:00:00Z",
-          companiesSearched: 10,
-          postingsFound: 0,
           newPostings: 0,
-          errorsCount: 2,
           summary: null,
         },
       ];
@@ -427,7 +421,6 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
       );
 
       expect(await findByText("0 new")).toBeDefined();
-      expect(await findByText("2")).toBeDefined();
       expect(await findByText("—")).toBeDefined();
     });
   });

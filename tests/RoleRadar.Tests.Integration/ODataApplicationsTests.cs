@@ -43,7 +43,7 @@ public sealed class ODataApplicationsTests : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await _container.StartAsync();
+        await MongoContainerStartGate.StartAsync(_container);
 
         var client = new MongoClient(_container.GetConnectionString());
         _database = client.GetDatabase("odata_apps_test_db");

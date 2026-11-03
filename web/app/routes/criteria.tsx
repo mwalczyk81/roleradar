@@ -26,7 +26,7 @@ export const ALLOWED_SORT_FIELDS = ["name", "category", "effectiveFrom", "effect
 
 export const meta: MetaFunction = () => [{ title: "Screening Criteria - RoleRadar" }];
 
-/** Criteria in force on a date: started on or before it, and either open-ended or ending on or after it. */
+/** Criteria in force on a date: started on or before it, and either open-ended or ending after it (end date exclusive, like Criterion.IsEffectiveAt). */
 function effectiveOnFilter(date: ODataDateTime): FilterExpression {
   return {
     type: "binary",
@@ -36,7 +36,7 @@ function effectiveOnFilter(date: ODataDateTime): FilterExpression {
       type: "binary",
       operator: "or",
       left: { type: "comparison", operator: "eq", field: "effectiveTo", value: null },
-      right: { type: "comparison", operator: "ge", field: "effectiveTo", value: date },
+      right: { type: "comparison", operator: "gt", field: "effectiveTo", value: date },
     },
   };
 }

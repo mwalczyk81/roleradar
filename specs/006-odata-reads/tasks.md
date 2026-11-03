@@ -137,10 +137,10 @@
 
 ### Tests & Validation for User Story 4
 
-- [ ] T060 [P] [US4] Extend query abuse integration test suite in `tests/RoleRadar.Tests.Integration/ODataAbuseGuardrailsTests.cs` across Companies, Applications, Notes, Criteria, and SearchRuns, asserting HTTP 400 Problem Details for expression trees exceeding 100 nodes, depth limits, arithmetic functions, and lambda expressions.
-- [ ] T061 [P] [US4] Extend multi-owner isolation integration test in `tests/RoleRadar.Tests.Integration/ODataMultiOwnerIsolationTests.cs` across all entity sets using two distinct owner IDs, proving zero cross-owner document exposure and asserting `owner_id` is never present in JSON responses.
-- [ ] T062 [US4] Implement performance benchmark test in `tests/RoleRadar.Tests.Integration/ODataBenchmarkTests.cs` verifying filtered and sorted queries against a 5,000-document collection in Testcontainers complete in under 1 second (SC-007).
-- [ ] T063 [US4] Phase 6 verification: run `pwsh ./scripts/review-gate.ps1 -IncludeE2E` once, asserting that benchmark tests pass under 1 second and all abuse tests pass.
+- [X] T060 [P] [US4] Extend query abuse integration test suite in `tests/RoleRadar.Tests.Integration/ODataAbuseGuardrailsTests.cs` across Companies, Applications, Notes, Criteria, and SearchRuns, asserting HTTP 400 Problem Details for expression trees exceeding 100 nodes, depth limits, arithmetic functions, and lambda expressions.
+- [X] T061 [P] [US4] Extend multi-owner isolation integration test in `tests/RoleRadar.Tests.Integration/ODataMultiOwnerIsolationTests.cs` across all entity sets using two distinct owner IDs, proving zero cross-owner document exposure and asserting `owner_id` is never present in JSON responses.
+- [X] T062 [US4] Implement performance benchmark test in `tests/RoleRadar.Tests.Integration/ODataBenchmarkTests.cs` verifying filtered and sorted queries against a 5,000-document collection in Testcontainers complete in under 1 second (SC-007).
+- [X] T063 [US4] Phase 6 verification: run `pwsh ./scripts/review-gate.ps1 -IncludeE2E` once, asserting that benchmark tests pass under 1 second and all abuse tests pass.
 
 ---
 
