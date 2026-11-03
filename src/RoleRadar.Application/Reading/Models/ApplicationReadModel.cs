@@ -11,8 +11,12 @@ public sealed class ApplicationReadModel
     public DateTimeOffset AppliedAt { get; init; }
     public bool HasInterview { get; init; }
     public DateTimeOffset? FirstResponseAt { get; init; }
-    public DateTimeOffset LastEventAt { get; init; }
-    public int AgeInDays { get; init; }
+    public DateTimeOffset? LastEventAt { get; init; }
+    public int AgeInDays
+    {
+        get => AppliedAt == default ? 0 : Math.Max(0, (int)(DateTimeOffset.UtcNow.Date - AppliedAt.UtcDateTime.Date).TotalDays);
+        init { }
+    }
 
     internal string OwnerId { get; init; } = string.Empty;
     internal bool HasFirstResponse { get; init; }

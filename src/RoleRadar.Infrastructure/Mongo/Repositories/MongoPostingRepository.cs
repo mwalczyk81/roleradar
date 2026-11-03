@@ -282,6 +282,30 @@ public sealed class MongoPostingRepository : IPostingRepository
         var result = session is not null
             ? await _postings.ReplaceOneAsync(session, filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken)
             : await _postings.ReplaceOneAsync(filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken);
+
+        // Transactional rename cascade to applications
+        var appsCollection = _database.GetCollection<BsonDocument>(TrackingMongoOptions.ApplicationsCollectionName);
+        var postFilter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("owner_id", posting.OwnerId),
+            Builders<BsonDocument>.Filter.Eq("posting_id", new BsonBinaryData(posting.Id, GuidRepresentation.Standard)));
+
+        var postTitleUpdate = Builders<BsonDocument>.Update
+            .Set("posting_title", posting.Title);
+
+        if (!string.IsNullOrWhiteSpace(companyName))
+        {
+            postTitleUpdate = postTitleUpdate.Set("company_name", companyName);
+        }
+
+        if (session is not null)
+        {
+            await appsCollection.UpdateManyAsync(session, postFilter, postTitleUpdate, cancellationToken: cancellationToken);
+        }
+        else
+        {
+            await appsCollection.UpdateManyAsync(postFilter, postTitleUpdate, cancellationToken: cancellationToken);
+        }
+
         return Result<bool>.Success(result.IsAcknowledged);
     }
 

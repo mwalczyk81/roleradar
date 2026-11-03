@@ -85,7 +85,7 @@ public static class DependencyInjection
             var contacts = sp.GetRequiredService<IContactRepository>();
             var searchRuns = sp.GetRequiredService<ISearchRunRepository>();
             var auditLog = database.GetCollection<MongoDB.Bson.BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
-            return new Mongo.Repositories.MongoTrackingTransactionContext(companies, postings, criteria, applications, contacts, searchRuns, auditLog);
+            return new Mongo.Repositories.MongoTrackingTransactionContext(client, companies, postings, criteria, applications, contacts, searchRuns, auditLog);
         });
         services.AddOptions<Backup.BackupOptions>();
         services.TryAddScoped<IBackupArchiveService, Backup.SecretStreamBackupArchiveService>();

@@ -64,8 +64,65 @@ public sealed class MongoApplicationRepository : IApplicationRepository
             Builders<BsonDocument>.Filter.Eq("owner_id", application.OwnerId),
             Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(application.Id, GuidRepresentation.Standard)));
 
-        var doc = SerializeApplication(application);
         var session = MongoNoteRepository.CurrentSession;
+
+        // Resolve posting and company details for denormalized read model
+        var postings = _database.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
+        var postFilter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("owner_id", application.OwnerId),
+            Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(application.PostingId, GuidRepresentation.Standard)));
+
+        var postingDoc = session is not null
+            ? await postings.Find(session, postFilter).FirstOrDefaultAsync(cancellationToken)
+            : await postings.Find(postFilter).FirstOrDefaultAsync(cancellationToken);
+
+        string postingTitle = postingDoc is not null && postingDoc.Contains("title") && !postingDoc["title"].IsBsonNull
+            ? postingDoc["title"].AsString
+            : string.Empty;
+
+        Guid companyId = postingDoc is not null && postingDoc.Contains("company_id") && !postingDoc["company_id"].IsBsonNull
+            ? postingDoc["company_id"].AsGuid
+            : Guid.Empty;
+
+        string companyName = postingDoc is not null && postingDoc.Contains("company_name") && !postingDoc["company_name"].IsBsonNull
+            ? postingDoc["company_name"].AsString
+            : string.Empty;
+
+        if (string.IsNullOrWhiteSpace(companyName) && companyId != Guid.Empty)
+        {
+            var companies = _database.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName);
+            var compFilter = Builders<BsonDocument>.Filter.And(
+                Builders<BsonDocument>.Filter.Eq("owner_id", application.OwnerId),
+                Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(companyId, GuidRepresentation.Standard)));
+            var compDoc = session is not null
+                ? await companies.Find(session, compFilter).FirstOrDefaultAsync(cancellationToken)
+                : await companies.Find(compFilter).FirstOrDefaultAsync(cancellationToken);
+            if (compDoc is not null && compDoc.Contains("name") && !compDoc["name"].IsBsonNull)
+            {
+                companyName = compDoc["name"].AsString;
+            }
+        }
+
+        // Query events to compute milestones
+        var eventFilter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("owner_id", application.OwnerId),
+            Builders<BsonDocument>.Filter.Eq("application_id", new BsonBinaryData(application.Id, GuidRepresentation.Standard)));
+
+        var events = session is not null
+            ? await _applicationEvents.Find(session, eventFilter).ToListAsync(cancellationToken)
+            : await _applicationEvents.Find(eventFilter).ToListAsync(cancellationToken);
+
+        var (hasInterview, firstResponseAt, lastEventAt) = ComputeApplicationMilestones(events, application.CreatedAt.UtcDateTime);
+
+        var doc = SerializeApplication(
+            application,
+            postingTitle,
+            companyId,
+            companyName,
+            hasInterview,
+            firstResponseAt,
+            lastEventAt);
+
         var result = session is not null
             ? await _applications.ReplaceOneAsync(session, filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken)
             : await _applications.ReplaceOneAsync(filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken);
@@ -87,6 +144,47 @@ public sealed class MongoApplicationRepository : IApplicationRepository
         else
         {
             await _applicationEvents.InsertOneAsync(doc, cancellationToken: cancellationToken);
+        }
+
+        // Recompute milestones and update parent application
+        var eventFilter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("owner_id", appEvent.OwnerId),
+            Builders<BsonDocument>.Filter.Eq("application_id", new BsonBinaryData(appEvent.ApplicationId, GuidRepresentation.Standard)));
+
+        var allEvents = session is not null
+            ? await _applicationEvents.Find(session, eventFilter).ToListAsync(cancellationToken)
+            : await _applicationEvents.Find(eventFilter).ToListAsync(cancellationToken);
+
+        var appFilter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("owner_id", appEvent.OwnerId),
+            Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(appEvent.ApplicationId, GuidRepresentation.Standard)));
+
+        var appDoc = session is not null
+            ? await _applications.Find(session, appFilter).FirstOrDefaultAsync(cancellationToken)
+            : await _applications.Find(appFilter).FirstOrDefaultAsync(cancellationToken);
+
+        var defaultCreated = appDoc is not null && appDoc.Contains("created_at")
+            ? appDoc["created_at"].ToUniversalTime()
+            : appEvent.CreatedAt.UtcDateTime;
+
+        var (hasInterview, firstResponseAt, lastEventAt) = ComputeApplicationMilestones(allEvents, defaultCreated);
+
+        BsonValue firstResponseBson = firstResponseAt.HasValue ? BsonDateTime.Create(firstResponseAt.Value) : BsonNull.Value;
+        BsonValue lastEventBson = lastEventAt.HasValue ? BsonDateTime.Create(lastEventAt.Value) : BsonNull.Value;
+        var update = Builders<BsonDocument>.Update
+            .Set("has_interview", hasInterview)
+            .Set("first_response_at", firstResponseBson)
+            .Set("has_first_response", firstResponseAt.HasValue)
+            .Set("last_event_at", lastEventBson)
+            .Set("has_last_event", lastEventAt.HasValue);
+
+        if (session is not null)
+        {
+            await _applications.UpdateOneAsync(session, appFilter, update, cancellationToken: cancellationToken);
+        }
+        else
+        {
+            await _applications.UpdateOneAsync(appFilter, update, cancellationToken: cancellationToken);
         }
 
         return Result<bool>.Success(true);
@@ -166,7 +264,14 @@ public sealed class MongoApplicationRepository : IApplicationRepository
         return Result<int>.Success((int)count);
     }
 
-    private static BsonDocument SerializeApplication(ApplicationEntity application)
+    internal static BsonDocument SerializeApplication(
+        ApplicationEntity application,
+        string postingTitle = "",
+        Guid? companyId = null,
+        string companyName = "",
+        bool hasInterview = false,
+        DateTime? firstResponseAt = null,
+        DateTime? lastEventAt = null)
     {
         var desiredSalaryDoc = new BsonDocument
         {
@@ -175,12 +280,27 @@ public sealed class MongoApplicationRepository : IApplicationRepository
             ["currency"] = application.DesiredSalary.Currency
         };
 
+        var hasFirstResponse = firstResponseAt.HasValue;
+        var hasLastEvent = lastEventAt.HasValue;
+
+        DateTime appliedAtUtc = DeriveAppliedAt(application.SubmittedDate, application.CreatedAt.UtcDateTime);
+
         return new BsonDocument
         {
             ["_id"] = new BsonBinaryData(application.Id, GuidRepresentation.Standard),
             ["owner_id"] = application.OwnerId,
             ["posting_id"] = new BsonBinaryData(application.PostingId, GuidRepresentation.Standard),
+            ["company_id"] = companyId.HasValue ? new BsonBinaryData(companyId.Value, GuidRepresentation.Standard) : BsonNull.Value,
+            ["posting_title"] = postingTitle,
+            ["company_name"] = companyName,
             ["submitted_date"] = application.SubmittedDate,
+            ["applied_at"] = BsonDateTime.Create(appliedAtUtc),
+            ["status"] = DeriveStatus(application.Outcome.ToSnakeCase()),
+            ["has_interview"] = hasInterview,
+            ["first_response_at"] = firstResponseAt.HasValue ? BsonDateTime.Create(firstResponseAt.Value) : BsonNull.Value,
+            ["last_event_at"] = lastEventAt.HasValue ? BsonDateTime.Create(lastEventAt.Value) : BsonNull.Value,
+            ["has_first_response"] = hasFirstResponse,
+            ["has_last_event"] = hasLastEvent,
             ["desired_salary"] = desiredSalaryDoc,
             ["target_start_date"] = application.TargetStartDate is not null ? new BsonString(application.TargetStartDate) : BsonNull.Value,
             ["resume_variant"] = application.ResumeVariant.ToSnakeCase(),
@@ -195,6 +315,90 @@ public sealed class MongoApplicationRepository : IApplicationRepository
             ["created_at"] = BsonDateTime.Create(application.CreatedAt.UtcDateTime),
             ["updated_at"] = BsonDateTime.Create(application.UpdatedAt.UtcDateTime)
         };
+    }
+
+    /// <summary>
+    /// Derives the read-model <c>status</c> (applied | rejected | closed) from the stored legacy
+    /// <c>outcome</c> value. Unknown or missing values map to <c>applied</c>, matching <see cref="MapApplication"/>.
+    /// Single implementation shared by <see cref="SerializeApplication"/> and the reconcile service.
+    /// </summary>
+    internal static string DeriveStatus(string? outcome)
+    {
+        var parsed = ApplicationOutcome.Applied;
+        if (!string.IsNullOrWhiteSpace(outcome))
+        {
+            _ = TrackingEnumExtensions.TryParseApplicationOutcome(outcome, out parsed);
+        }
+
+        return parsed.ToSnakeCase();
+    }
+
+    /// <summary>
+    /// Derives the read-model <c>applied_at</c> from <c>submitted_date</c> (yyyy-MM-dd) as UTC midnight,
+    /// falling back to the supplied <paramref name="createdAtUtc"/> when the date is missing or unparseable.
+    /// </summary>
+    internal static DateTime DeriveAppliedAt(string? submittedDate, DateTime createdAtUtc)
+    {
+        return DateOnly.TryParseExact(submittedDate, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var subDate)
+            ? subDate.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc)
+            : createdAtUtc;
+    }
+
+    internal static (bool HasInterview, DateTime? FirstResponseAt, DateTime? LastEventAt) ComputeApplicationMilestones(
+        IEnumerable<BsonDocument> events,
+        DateTime defaultCreatedAt)
+    {
+        bool hasInterview = false;
+        DateTime? firstResponseAt = null;
+        DateTime? lastEventAt = null;
+
+        // Only employer-originated events count as a "first response". follow_up and withdrawn are
+        // the candidate's own actions, so they must not.
+        var responseEventTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "interview", "offer", "offer_accepted", "offer_declined", "rejected"
+        };
+
+        foreach (var ev in events)
+        {
+            var evType = ev.Contains("event_type") && ev["event_type"].IsString ? ev["event_type"].AsString : string.Empty;
+            if (string.Equals(evType, "interview", StringComparison.OrdinalIgnoreCase))
+            {
+                hasInterview = true;
+            }
+
+            // The event's own date (UTC midnight) is authoritative so that backfilled events order by
+            // when they happened, not when they were inserted. created_at is only a fallback.
+            DateTime evTimestamp;
+            if (ev.Contains("event_date") && ev["event_date"].IsString
+                && DateOnly.TryParseExact(ev["event_date"].AsString, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var d))
+            {
+                evTimestamp = d.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
+            }
+            else if (ev.Contains("created_at") && !ev["created_at"].IsBsonNull)
+            {
+                evTimestamp = ev["created_at"].ToUniversalTime();
+            }
+            else
+            {
+                evTimestamp = defaultCreatedAt;
+            }
+
+            if (lastEventAt is null || evTimestamp > lastEventAt.Value)
+            {
+                lastEventAt = evTimestamp;
+            }
+
+            if (responseEventTypes.Contains(evType))
+            {
+                if (firstResponseAt is null || evTimestamp < firstResponseAt.Value)
+                {
+                    firstResponseAt = evTimestamp;
+                }
+            }
+        }
+
+        return (hasInterview, firstResponseAt, lastEventAt);
     }
 
     private static ApplicationEntity MapApplication(BsonDocument doc)

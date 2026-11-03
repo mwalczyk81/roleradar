@@ -43,7 +43,7 @@
         <Property Name="appliedAt" Type="Edm.DateTimeOffset" Nullable="false" />
         <Property Name="hasInterview" Type="Edm.Boolean" Nullable="false" />
         <Property Name="firstResponseAt" Type="Edm.DateTimeOffset" />
-        <Property Name="lastEventAt" Type="Edm.DateTimeOffset" Nullable="false" />
+        <Property Name="lastEventAt" Type="Edm.DateTimeOffset" />
         <Property Name="ageInDays" Type="Edm.Int32" Nullable="false" />
       </EntityType>
       <EntityType Name="NoteReadModel">

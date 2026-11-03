@@ -66,7 +66,7 @@ All read models strictly omit the internal `owner_id` field from client payloads
   - `appliedAt` (`DateTimeOffset` in UTC)
   - `hasInterview` (`bool`, materialized from lifecycle events)
   - `firstResponseAt` (`DateTimeOffset?` in UTC, nullable)
-  - `lastEventAt` (`DateTimeOffset` in UTC)
+  - `lastEventAt` (`DateTimeOffset?` in UTC; optional, null only when the application has no events)
   - `ageInDays` (`int`, computed at runtime from `appliedAt`)
 - **Allowlisted Query Properties**:
   - **Filterable**: `postingId`, `companyId`, `companyName`, `postingTitle`, `status`, `appliedAt`, `hasInterview`, `firstResponseAt`, `lastEventAt`
@@ -76,6 +76,7 @@ All read models strictly omit the internal `owner_id` field from client payloads
   - Maps to `applications` collection.
   - `postingTitle` and `companyName` are materialized during `CreateApplicationHandler` and updated via rename cascades.
   - `hasInterview`, `firstResponseAt`, `lastEventAt`, and `status` are materialized during `AppendApplicationEventHandler` inside the same transaction with audit logging.
+  - Milestone semantics: `firstResponseAt` is the earliest event_date (UTC midnight) among interview, offer, offer_accepted, offer_declined and rejected events (follow_up and withdrawn do not count). `hasInterview` is true when any interview event exists. `lastEventAt` is the latest event timestamp across all event types. Event timestamps come from event_date, falling back to created_at only when event_date is missing or unparseable.
   - `ageInDays` is computed in memory as `(DateTime.UtcNow.Date - appliedAt.Date).Days` and not stored or indexed independently.
 
 ### 1.4 NoteReadModel

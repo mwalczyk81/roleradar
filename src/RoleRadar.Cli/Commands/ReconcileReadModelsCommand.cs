@@ -48,13 +48,16 @@ public static class ReconcileReadModelsCommand
                 Console.WriteLine("Running in CONFIRMED mode. Applying updates to database...");
             }
 
-            var service = services.GetRequiredService<ReadModelReconciliationService>();
-            var report = await service.ReconcilePostingsAsync(isDryRun, ct);
+            var service = services.GetRequiredService<IReadModelReconciliationService>();
+            var postReport = await service.ReconcilePostingsAsync(isDryRun, ct);
+            var appReport = await service.ReconcileApplicationsAsync(isDryRun, ct);
 
             Console.WriteLine("--- Reconciliation Summary ---");
-            Console.WriteLine($"Mode: {(report.IsDryRun ? "DRY RUN" : "COMMITTED")}");
-            Console.WriteLine($"Postings Examined: {report.PostingsExamined}");
-            Console.WriteLine($"Postings Updated: {report.PostingsUpdated}");
+            Console.WriteLine($"Mode: {(postReport.IsDryRun ? "DRY RUN" : "COMMITTED")}");
+            Console.WriteLine($"Postings Examined: {postReport.PostingsExamined}");
+            Console.WriteLine($"Postings Updated: {postReport.PostingsUpdated}");
+            Console.WriteLine($"Applications Examined: {appReport.ApplicationsExamined}");
+            Console.WriteLine($"Applications Updated: {appReport.ApplicationsUpdated}");
             return 0;
         });
 

@@ -128,10 +128,47 @@ public sealed class MongoCompanyRepository : ICompanyRepository
 
         var doc = SerializeCompany(company);
         var session = MongoNoteRepository.CurrentSession;
-        var result = session is not null
-            ? await _companies.ReplaceOneAsync(session, filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken)
-            : await _companies.ReplaceOneAsync(filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken);
-        return Result<bool>.Success(result.IsAcknowledged);
+
+        // FindOneAndReplace returns the pre-image in the same round trip, so we can tell whether the name
+        // actually changed without an extra read.
+        var replaceOptions = new FindOneAndReplaceOptions<BsonDocument> { IsUpsert = true, ReturnDocument = ReturnDocument.Before };
+        var previous = session is not null
+            ? await _companies.FindOneAndReplaceAsync(session, filter, doc, replaceOptions, cancellationToken)
+            : await _companies.FindOneAndReplaceAsync(filter, doc, replaceOptions, cancellationToken);
+
+        // Rename cascade to postings and applications (same transaction when a session is active).
+        // Skipped when the stored name equals the new name, so unrelated edits do not touch child documents.
+        // A brand-new company (previous is null) has no children yet, but we still cascade to stay safe against
+        // pre-existing orphaned children carrying this company id.
+        var nameUnchanged = previous is not null
+            && previous.Contains("name")
+            && previous["name"].IsString
+            && string.Equals(previous["name"].AsString, company.Name, StringComparison.Ordinal);
+
+        if (!nameUnchanged)
+        {
+            var postingsCollection = _database.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
+            var appsCollection = _database.GetCollection<BsonDocument>(TrackingMongoOptions.ApplicationsCollectionName);
+
+            var companyFilter = Builders<BsonDocument>.Filter.And(
+                Builders<BsonDocument>.Filter.Eq("owner_id", company.OwnerId),
+                Builders<BsonDocument>.Filter.Eq("company_id", new BsonBinaryData(company.Id, GuidRepresentation.Standard)));
+
+            var companyNameUpdate = Builders<BsonDocument>.Update.Set("company_name", company.Name);
+
+            if (session is not null)
+            {
+                await postingsCollection.UpdateManyAsync(session, companyFilter, companyNameUpdate, cancellationToken: cancellationToken);
+                await appsCollection.UpdateManyAsync(session, companyFilter, companyNameUpdate, cancellationToken: cancellationToken);
+            }
+            else
+            {
+                await postingsCollection.UpdateManyAsync(companyFilter, companyNameUpdate, cancellationToken: cancellationToken);
+                await appsCollection.UpdateManyAsync(companyFilter, companyNameUpdate, cancellationToken: cancellationToken);
+            }
+        }
+
+        return Result<bool>.Success(true);
     }
 
     public async Task<Result<bool>> UpsertCareerSourceAsync(CareerSource careerSource, CancellationToken cancellationToken = default)

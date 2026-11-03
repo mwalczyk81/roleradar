@@ -4,11 +4,11 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OData.Query;
 using Microsoft.AspNetCore.OData.Query.Validator;
-using Microsoft.AspNetCore.OData.Results;
 using Microsoft.AspNetCore.OData.Routing.Controllers;
 using Microsoft.OData;
 using Microsoft.OData.UriParser;
 using RoleRadar.Api.Authentication;
+using RoleRadar.Api.OData;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Reading;
 using RoleRadar.Application.Reading.Models;
@@ -20,6 +20,22 @@ public sealed class PostingsController : ODataController
     private readonly IOwnerIdProvider _ownerIdProvider;
     private readonly IOwnerReadSeam _readSeam;
 
+    private static readonly string[] AllowedOrderBy =
+    [
+        "title",
+        "companyName",
+        "location",
+        "disposition",
+        "resurfacePolicy",
+        "score",
+        "createdAt",
+        "updatedAt",
+        "id"
+    ];
+
+    private static readonly ODataValidationSettings ValidationSettings =
+        ODataQueryPipeline.CreateDefaultValidationSettings(AllowedOrderBy);
+
     public PostingsController(IOwnerIdProvider ownerIdProvider, IOwnerReadSeam readSeam)
     {
         _ownerIdProvider = ownerIdProvider ?? throw new ArgumentNullException(nameof(ownerIdProvider));
@@ -29,75 +45,14 @@ public sealed class PostingsController : ODataController
     [HttpGet]
     public IActionResult Get(ODataQueryOptions<PostingReadModel> options)
     {
-        var validationSettings = new ODataValidationSettings
-        {
-            AllowedQueryOptions = AllowedQueryOptions.Filter | AllowedQueryOptions.OrderBy | AllowedQueryOptions.Top | AllowedQueryOptions.Skip | AllowedQueryOptions.Count | AllowedQueryOptions.Select,
-            MaxTop = 100,
-            MaxNodeCount = 100,
-            MaxOrderByNodeCount = 5,
-            AllowedFunctions = AllowedFunctions.ToLower | AllowedFunctions.Contains | AllowedFunctions.StartsWith | AllowedFunctions.EndsWith,
-            AllowedLogicalOperators = AllowedLogicalOperators.Equal | AllowedLogicalOperators.NotEqual | AllowedLogicalOperators.GreaterThan | AllowedLogicalOperators.GreaterThanOrEqual | AllowedLogicalOperators.LessThan | AllowedLogicalOperators.LessThanOrEqual | AllowedLogicalOperators.And | AllowedLogicalOperators.Or | AllowedLogicalOperators.Not,
-            AllowedArithmeticOperators = AllowedArithmeticOperators.None
-        };
-
-        validationSettings.AllowedOrderByProperties.Add("title");
-        validationSettings.AllowedOrderByProperties.Add("companyName");
-        validationSettings.AllowedOrderByProperties.Add("location");
-        validationSettings.AllowedOrderByProperties.Add("disposition");
-        validationSettings.AllowedOrderByProperties.Add("resurfacePolicy");
-        validationSettings.AllowedOrderByProperties.Add("score");
-        validationSettings.AllowedOrderByProperties.Add("createdAt");
-        validationSettings.AllowedOrderByProperties.Add("updatedAt");
-        validationSettings.AllowedOrderByProperties.Add("id");
-
-        options.Validate(validationSettings);
-        ValidateStringFunctions(options.Filter);
-
         var ownerId = _ownerIdProvider.GetOwnerId();
         var baseQuery = _readSeam.QueryPostings(ownerId);
-        var querySettings = new ODataQuerySettings { HandleNullPropagation = HandleNullPropagationOption.False };
 
-        // 1. Filter
-        var filtered = (IQueryable<PostingReadModel>)(options.Filter?.ApplyTo(baseQuery, querySettings) ?? baseQuery);
-
-        // 2. Count
-        long? totalCount = null;
-        if (options.Count?.Value == true)
-        {
-            totalCount = filtered.Count();
-        }
-
-        // 3. Sort
-        var ordered = ApplyPostingsOrdering(filtered, options.OrderBy);
-
-        // 4. Paging
-        var paged = ordered;
-        if (options.Skip is not null)
-        {
-            paged = (IQueryable<PostingReadModel>)options.Skip.ApplyTo(paged, querySettings);
-        }
-
-        if (options.Top is not null)
-        {
-            paged = (IQueryable<PostingReadModel>)options.Top.ApplyTo(paged, querySettings);
-        }
-        else
-        {
-            paged = paged.Take(25);
-        }
-
-        // 5. Materialize capped page
-        var items = paged.ToList();
-
-        // 6. Project if $select is present
-        if (!string.IsNullOrWhiteSpace(options.SelectExpand?.RawSelect))
-        {
-            var projected = options.SelectExpand.ApplyTo(items.AsQueryable(), querySettings);
-            var projectedList = projected.Cast<object>().ToList();
-            return Ok(new PageResult<object>(projectedList, null, totalCount));
-        }
-
-        return Ok(new PageResult<PostingReadModel>(items, null, totalCount));
+        return ODataQueryPipeline.ExecuteQuery(
+            options,
+            baseQuery,
+            ValidationSettings,
+            ApplyPostingsOrdering);
     }
 
     [HttpPost]
@@ -195,73 +150,5 @@ public sealed class PostingsController : ODataController
         return ordered is null
             ? source.OrderBy(p => p.Id)
             : ordered.ThenBy(p => p.Id);
-    }
-
-    private static void ValidateStringFunctions(FilterQueryOption? filter)
-    {
-        if (filter?.FilterClause?.Expression is null)
-        {
-            return;
-        }
-
-        ValidateNode(filter.FilterClause.Expression, 1);
-    }
-
-    private static void ValidateNode(QueryNode node, int depth)
-    {
-        if (depth > 10)
-        {
-            throw new ODataException("Filter expression depth exceeds maximum depth limit of 10.");
-        }
-
-        if (node is BinaryOperatorNode binary)
-        {
-            ValidateNode(binary.Left, depth + 1);
-            ValidateNode(binary.Right, depth + 1);
-        }
-        else if (node is UnaryOperatorNode unary)
-        {
-            ValidateNode(unary.Operand, depth + 1);
-        }
-        else if (node is SingleValueFunctionCallNode fn)
-        {
-            var fnName = fn.Name?.ToLowerInvariant();
-            if (fnName is "contains" or "startswith" or "endswith")
-            {
-                var parameters = fn.Parameters.ToList();
-                if (parameters.Count < 2)
-                {
-                    throw new ODataException($"Function '{fn.Name}' requires 2 parameters.");
-                }
-
-                var firstArg = parameters[0];
-                if (firstArg is not SingleValueFunctionCallNode innerFn ||
-                    !string.Equals(innerFn.Name, "tolower", StringComparison.OrdinalIgnoreCase))
-                {
-                    throw new ODataException($"String search function '{fn.Name}' must wrap property in tolower().");
-                }
-
-                var secondArg = parameters[1];
-                if (secondArg is ConstantNode constant && constant.Value is string s)
-                {
-                    if (!string.Equals(s, s.ToLowerInvariant(), StringComparison.Ordinal))
-                    {
-                        throw new ODataException($"String search term '{s}' in function '{fn.Name}' must be lowercase.");
-                    }
-                }
-
-                foreach (var p in parameters)
-                {
-                    ValidateNode(p, depth + 1);
-                }
-            }
-            else
-            {
-                foreach (var p in fn.Parameters)
-                {
-                    ValidateNode(p, depth + 1);
-                }
-            }
-        }
     }
 }

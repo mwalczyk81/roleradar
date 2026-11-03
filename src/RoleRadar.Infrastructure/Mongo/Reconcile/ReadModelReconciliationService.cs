@@ -81,10 +81,139 @@ public sealed class ReadModelReconciliationService : IReadModelReconciliationSer
         return new ReconcileResult(examined, updated, 0, 0, dryRun);
     }
 
-    public Task<ReconcileResult> ReconcileApplicationsAsync(bool dryRun, CancellationToken cancellationToken = default)
+    public async Task<ReconcileResult> ReconcileApplicationsAsync(bool dryRun, CancellationToken cancellationToken = default)
     {
-        // Handled in Phase 4
-        return Task.FromResult(new ReconcileResult(0, 0, 0, 0, dryRun));
+        var appsCollection = _database.GetCollection<BsonDocument>(TrackingMongoOptions.ApplicationsCollectionName);
+        var postingsCollection = _database.GetCollection<BsonDocument>(TrackingMongoOptions.PostingsCollectionName);
+        var companiesCollection = _database.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName);
+        var eventsCollection = _database.GetCollection<BsonDocument>(TrackingMongoOptions.ApplicationEventsCollectionName);
+
+        var allApps = await appsCollection.Find(FilterDefinition<BsonDocument>.Empty).ToListAsync(cancellationToken);
+        var allPostings = await postingsCollection.Find(FilterDefinition<BsonDocument>.Empty).ToListAsync(cancellationToken);
+        var allCompanies = await companiesCollection.Find(FilterDefinition<BsonDocument>.Empty).ToListAsync(cancellationToken);
+        var allEvents = await eventsCollection.Find(FilterDefinition<BsonDocument>.Empty).ToListAsync(cancellationToken);
+
+        var postingMap = allPostings.ToDictionary(
+            p => p["_id"].AsGuid,
+            p => (
+                Title: p.Contains("title") && !p["title"].IsBsonNull ? p["title"].AsString : string.Empty,
+                CompanyId: p.Contains("company_id") && !p["company_id"].IsBsonNull ? p["company_id"].AsGuid : Guid.Empty,
+                CompanyName: p.Contains("company_name") && !p["company_name"].IsBsonNull ? p["company_name"].AsString : string.Empty
+            ));
+
+        var companyMap = allCompanies.ToDictionary(
+            c => c["_id"].AsGuid,
+            c => c.Contains("name") && !c["name"].IsBsonNull ? c["name"].AsString : string.Empty);
+
+        var eventsByApp = allEvents
+            .Where(e => e.Contains("application_id") && !e["application_id"].IsBsonNull)
+            .GroupBy(e => e["application_id"].AsGuid)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        int examined = allApps.Count;
+        int updated = 0;
+
+        foreach (var doc in allApps)
+        {
+            var appId = doc["_id"].AsGuid;
+            var postingId = doc.Contains("posting_id") && !doc["posting_id"].IsBsonNull ? doc["posting_id"].AsGuid : Guid.Empty;
+
+            postingMap.TryGetValue(postingId, out var postingInfo);
+            var expectedPostingTitle = postingInfo.Title ?? string.Empty;
+
+            // The posting is the source of truth for company_id (UpsertApplicationAsync copies it from there).
+            // Fall back to the document's own value only when the posting is missing or has no company.
+            var expectedCompanyId = postingInfo.CompanyId != Guid.Empty
+                ? postingInfo.CompanyId
+                : (doc.Contains("company_id") && !doc["company_id"].IsBsonNull ? doc["company_id"].AsGuid : Guid.Empty);
+
+            string expectedCompanyName = postingInfo.CompanyName;
+            if (string.IsNullOrWhiteSpace(expectedCompanyName) && expectedCompanyId != Guid.Empty && companyMap.TryGetValue(expectedCompanyId, out var cName))
+            {
+                expectedCompanyName = cName;
+            }
+            expectedCompanyName ??= string.Empty;
+
+            eventsByApp.TryGetValue(appId, out var appEventsList);
+            appEventsList ??= new List<BsonDocument>();
+
+            DateTime defaultCreated = doc.Contains("created_at") && !doc["created_at"].IsBsonNull
+                ? doc["created_at"].ToUniversalTime()
+                : (doc.Contains("applied_at") && !doc["applied_at"].IsBsonNull ? doc["applied_at"].ToUniversalTime() : DateTime.UtcNow);
+
+            var (hasInterview, firstResponseAt, lastEventAt) = MongoApplicationRepository.ComputeApplicationMilestones(appEventsList, defaultCreated);
+
+            // Legacy documents only carry outcome and submitted_date; derive status and applied_at with the
+            // same helpers SerializeApplication uses so the two code paths cannot drift.
+            var expectedStatus = MongoApplicationRepository.DeriveStatus(
+                doc.Contains("outcome") && doc["outcome"].IsString ? doc["outcome"].AsString : null);
+            var expectedAppliedAt = MongoApplicationRepository.DeriveAppliedAt(
+                doc.Contains("submitted_date") && doc["submitted_date"].IsString ? doc["submitted_date"].AsString : null,
+                defaultCreated);
+            bool hasFirstResponse = firstResponseAt.HasValue;
+            bool hasLastEvent = lastEventAt.HasValue;
+
+            var currentPostingTitle = doc.Contains("posting_title") && !doc["posting_title"].IsBsonNull ? doc["posting_title"].AsString : null;
+            var currentCompanyName = doc.Contains("company_name") && !doc["company_name"].IsBsonNull ? doc["company_name"].AsString : null;
+            var currentHasInterview = doc.Contains("has_interview") && !doc["has_interview"].IsBsonNull ? doc["has_interview"].AsBoolean : (bool?)null;
+            var currentHasFirstResponse = doc.Contains("has_first_response") && !doc["has_first_response"].IsBsonNull ? doc["has_first_response"].AsBoolean : (bool?)null;
+            var currentHasLastEvent = doc.Contains("has_last_event") && !doc["has_last_event"].IsBsonNull ? doc["has_last_event"].AsBoolean : (bool?)null;
+
+            bool firstResponseMatches = (!firstResponseAt.HasValue && (!doc.Contains("first_response_at") || doc["first_response_at"].IsBsonNull))
+                || (firstResponseAt.HasValue && doc.Contains("first_response_at") && !doc["first_response_at"].IsBsonNull && Math.Abs((doc["first_response_at"].ToUniversalTime() - firstResponseAt.Value).TotalMilliseconds) < 1000);
+
+            bool lastEventMatches = (!lastEventAt.HasValue && (!doc.Contains("last_event_at") || doc["last_event_at"].IsBsonNull))
+                || (lastEventAt.HasValue && doc.Contains("last_event_at") && !doc["last_event_at"].IsBsonNull && Math.Abs((doc["last_event_at"].ToUniversalTime() - lastEventAt.Value).TotalMilliseconds) < 1000);
+
+            var currentStatus = doc.Contains("status") && doc["status"].IsString ? doc["status"].AsString : null;
+            var currentCompanyId = doc.Contains("company_id") && doc["company_id"].IsGuid ? doc["company_id"].AsGuid : Guid.Empty;
+            bool appliedAtMatches = doc.Contains("applied_at") && doc["applied_at"].IsValidDateTime
+                && Math.Abs((doc["applied_at"].ToUniversalTime() - expectedAppliedAt).TotalMilliseconds) < 1000;
+
+            bool needsUpdate = currentStatus != expectedStatus
+                || !appliedAtMatches
+                || currentCompanyId != expectedCompanyId
+                || currentPostingTitle != expectedPostingTitle
+                || currentCompanyName != expectedCompanyName
+                || currentHasInterview != hasInterview
+                || currentHasFirstResponse != hasFirstResponse
+                || currentHasLastEvent != hasLastEvent
+                || !firstResponseMatches
+                || !lastEventMatches;
+
+            if (needsUpdate)
+            {
+                updated++;
+                if (!dryRun)
+                {
+                    BsonValue firstRespVal = firstResponseAt.HasValue ? BsonDateTime.Create(firstResponseAt.Value) : BsonNull.Value;
+                    BsonValue lastEventVal = lastEventAt.HasValue ? BsonDateTime.Create(lastEventAt.Value) : BsonNull.Value;
+
+                    var update = Builders<BsonDocument>.Update
+                        .Set("status", expectedStatus)
+                        .Set("applied_at", BsonDateTime.Create(expectedAppliedAt))
+                        .Set("posting_title", expectedPostingTitle)
+                        .Set("company_name", expectedCompanyName)
+                        .Set("has_interview", hasInterview)
+                        .Set("has_first_response", hasFirstResponse)
+                        .Set("has_last_event", hasLastEvent)
+                        .Set("first_response_at", firstRespVal)
+                        .Set("last_event_at", lastEventVal);
+
+                    if (expectedCompanyId != Guid.Empty)
+                    {
+                        update = update.Set("company_id", new BsonBinaryData(expectedCompanyId, GuidRepresentation.Standard));
+                    }
+
+                    await appsCollection.UpdateOneAsync(
+                        Builders<BsonDocument>.Filter.Eq("_id", doc["_id"]),
+                        update,
+                        cancellationToken: cancellationToken);
+                }
+            }
+        }
+
+        return new ReconcileResult(0, 0, examined, updated, dryRun);
     }
 
     public static int MapDispositionRank(string disposition)

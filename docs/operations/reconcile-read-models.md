@@ -2,16 +2,16 @@
 
 ## Overview
 
-Read models in RoleRadar maintain denormalized, queryable, and pre-indexed fields in MongoDB collections to support fast server-side OData queries (e.g. `disposition_rank`, `company_name`, `has_score` on postings; `posting_title`, `company_name`, `has_interview`, `first_response_at`, `last_event_at`, `has_first_response`, `has_last_event` on applications).
+Read models in RoleRadar maintain denormalized, queryable, and pre-indexed fields in MongoDB collections to support fast server-side OData queries (e.g. `disposition_rank`, `company_name`, `has_score` on postings; `status`, `applied_at`, `company_id`, `posting_title`, `company_name`, `has_interview`, `first_response_at`, `last_event_at`, `has_first_response`, `has_last_event` on applications).
 
 When schema versions change, migrations occur, or data is restored from legacy snapshots, read models must be reconciled to backfill or re-sync these computed fields.
 
 ## Semantics & Boundaries
 
-- **Derived Fields Only**: Reconciliation only writes derived/denormalized fields (`disposition_rank`, `company_name`, `has_score` for postings). It does **not** modify `updated_at` timestamps on documents.
+- **Derived Fields Only**: Reconciliation only writes derived/denormalized fields (`disposition_rank`, `company_name`, `has_score` for postings; `status`, `applied_at`, `company_id`, `posting_title`, `company_name`, `has_interview`, `first_response_at`, `last_event_at`, `has_first_response`, `has_last_event` for applications). It does **not** modify `updated_at` timestamps on documents.
 - **No Audit Entries**: Reconciliation is an operational backfill/maintenance procedure, not a domain action; it does **not** record audit trail entries.
 - **Global Scope (Not Owner-Scoped)**: Reconciliation runs across all documents across all owners in the database to align read models globally.
-- **Rename-Cascade Gap (Phase 3 Note)**: Until Phase 4 is implemented, renaming a company does not yet automatically cascade to update denormalized `company_name` on existing postings or applications. Running `reconcile-read-models` reconciles these denormalized company names until domain event cascading lands in Phase 4.
+- **Transactional Cascades**: Company renames and posting title changes automatically cascade transactionally across postings and applications at runtime. Reconciliation serves as the safe backfill mechanism for data imported before cascades were active or restored from legacy snapshots.
 
 ## Operational Rules & Safety
 
@@ -37,7 +37,7 @@ When schema versions change, migrations occur, or data is restored from legacy s
    roleradar reconcile-read-models
    ```
 
-   Inspect the summary output (`Postings Examined`, `Postings Updated`).
+   Inspect the summary output (`Postings Examined`, `Postings Updated`, `Applications Examined`, `Applications Updated`).
 
 4. **Step 4: Execute Confirmed Reconciliation**
    Once the dry-run summary is verified, apply the updates by passing the explicit confirmation token:
@@ -47,7 +47,7 @@ When schema versions change, migrations occur, or data is restored from legacy s
    ```
 
 5. **Step 5: Verify Idempotency (Dry Run Again)**
-   Re-running the dry-run command immediately after confirmation must report `Postings Updated: 0`:
+   Re-running the dry-run command immediately after confirmation must report `Postings Updated: 0, Applications Updated: 0`:
 
    ```bash
    roleradar reconcile-read-models

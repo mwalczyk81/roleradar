@@ -347,24 +347,28 @@ test.beforeAll(async () => {
       return;
     }
 
-    if (url.pathname === "/api/v1/applications" && req.method === "GET") {
+    // The applications list reads from OData (Phase 4); the REST list endpoint is no longer used by the web.
+    if (url.pathname === "/odata/Applications" && req.method === "GET") {
       lastApplicationsQueryReceived = Object.fromEntries(url.searchParams.entries());
       res.writeHead(200);
       res.end(
         JSON.stringify({
-          items: [
+          "@odata.count": 1,
+          value: [
             {
               id: "app-e2e-1",
               postingId: "post-e2e-1",
               companyId: "comp-e2e-1",
+              postingTitle: "Principal Engineer",
+              companyName: "Acme Cloud Services",
               status: currentApplicationStatus,
-              appliedAt: "2026-10-31",
-              events: currentApplicationEvents,
+              appliedAt: "2026-10-31T00:00:00Z",
+              hasInterview: false,
+              firstResponseAt: null,
+              lastEventAt: "2026-10-31T00:00:00Z",
+              ageInDays: 2,
             },
           ],
-          totalCount: 1,
-          limit: 25,
-          offset: 0,
         })
       );
       return;
@@ -1541,7 +1545,7 @@ test.describe("Company Management (Real Chromium)", () => {
       nextApplicationResponseBody = null;
     });
 
-    test("loads /applications list with API stubbed, asserting only status, limit, offset are sent, zero CSP violations and axe zero serious/critical in light and dark", async ({
+    test("loads /applications list from stubbed /odata/Applications, asserting only whitelisted OData options are sent, zero CSP violations and axe zero serious/critical in light and dark", async ({
       page,
       context,
     }) => {
@@ -1559,10 +1563,13 @@ test.describe("Company Management (Real Chromium)", () => {
       await expect(page.getByText("Principal Engineer")).toBeVisible();
       await expect(page.getByText("Acme Cloud Services").first()).toBeVisible();
 
-      // Verify only status, limit, offset were sent
-      expect(lastApplicationsQueryReceived.status).toBe("applied");
-      expect(lastApplicationsQueryReceived.limit).toBe("25");
-      expect(lastApplicationsQueryReceived.offset).toBe("0");
+      // Verify only the whitelisted OData options were sent, and unknown or unsupported URL params were dropped
+      expect(lastApplicationsQueryReceived["$filter"]).toBe("status eq 'applied'");
+      expect(lastApplicationsQueryReceived["$orderby"]).toBe("appliedAt desc");
+      expect(lastApplicationsQueryReceived["$top"]).toBe("25");
+      expect(lastApplicationsQueryReceived["$skip"]).toBe("0");
+      expect(lastApplicationsQueryReceived["$count"]).toBe("true");
+      expect(Object.keys(lastApplicationsQueryReceived).sort()).toEqual(["$count", "$filter", "$orderby", "$skip", "$top"]);
       expect(lastApplicationsQueryReceived.bad).toBeUndefined();
       expect(lastApplicationsQueryReceived.sort).toBeUndefined();
 
