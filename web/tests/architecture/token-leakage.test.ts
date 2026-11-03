@@ -89,12 +89,6 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
               response: { status: 200 } as Response,
             });
           }
-          if (pathStr === "/api/v1/companies") {
-            return Promise.resolve({
-              data: { items: [], totalCount: 0, limit: 25, offset: 0 },
-              response: { status: 200 } as Response,
-            });
-          }
           if (pathStr === "/api/v1/companies/{id}") {
             return Promise.resolve({
               data: {
@@ -123,21 +117,9 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
               response: { status: 200 } as Response,
             });
           }
-          if (pathStr === "/api/v1/notes") {
-            return Promise.resolve({
-              data: [],
-              response: { status: 200 } as Response,
-            });
-          }
           if (pathStr === "/api/v1/notes/{id}") {
             return Promise.resolve({
               data: { id: "n1", noteText: "test note", createdAt: new Date().toISOString() },
-              response: { status: 200 } as Response,
-            });
-          }
-          if (pathStr === "/api/v1/search-runs") {
-            return Promise.resolve({
-              data: { items: [], totalCount: 0, limit: 25, offset: 0 },
               response: { status: 200 } as Response,
             });
           }
@@ -326,23 +308,22 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
           return;
         }
 
-        if (url.pathname === "/api/v1/companies") {
+        if (url.pathname === "/odata/Companies") {
           res.writeHead(200);
           res.end(
             JSON.stringify({
-              items: [
+              "@odata.count": 1,
+              value: [
                 {
                   id: "comp-1",
                   name: "Safe Corp",
                   status: "target",
                   ownershipType: "private",
-                  careerSourcesCount: 1,
-                  versionToken: "comp-ver-1",
+                  headquarters: "Austin, TX",
+                  description: null,
+                  categoryTags: [],
                 },
               ],
-              totalCount: 1,
-              limit: 25,
-              offset: 0,
             })
           );
           return;
@@ -385,22 +366,9 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
           return;
         }
 
-        if (url.pathname === "/api/v1/notes") {
+        if (url.pathname === "/odata/Criteria" || url.pathname === "/odata/Notes" || url.pathname === "/odata/SearchRuns") {
           res.writeHead(200);
-          res.end(JSON.stringify([]));
-          return;
-        }
-
-        if (url.pathname === "/api/v1/search-runs") {
-          res.writeHead(200);
-          res.end(
-            JSON.stringify({
-              items: [],
-              totalCount: 0,
-              limit: 25,
-              offset: 0,
-            })
-          );
+          res.end(JSON.stringify({ "@odata.count": 0, value: [] }));
           return;
         }
 

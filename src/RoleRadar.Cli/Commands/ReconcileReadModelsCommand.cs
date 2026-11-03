@@ -12,7 +12,7 @@ public static class ReconcileReadModelsCommand
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        var command = new Command("reconcile-read-models", "Reconcile derived stored fields for read models (postings, applications)");
+        var command = new Command("reconcile-read-models", "Reconcile derived stored fields for read models (postings, applications, criteria)");
 
         var confirmOption = new Option<string?>("--confirm")
         {
@@ -51,6 +51,7 @@ public static class ReconcileReadModelsCommand
             var service = services.GetRequiredService<IReadModelReconciliationService>();
             var postReport = await service.ReconcilePostingsAsync(isDryRun, ct);
             var appReport = await service.ReconcileApplicationsAsync(isDryRun, ct);
+            var criteriaReport = await service.ReconcileCriteriaAsync(isDryRun, ct);
 
             Console.WriteLine("--- Reconciliation Summary ---");
             Console.WriteLine($"Mode: {(postReport.IsDryRun ? "DRY RUN" : "COMMITTED")}");
@@ -58,6 +59,8 @@ public static class ReconcileReadModelsCommand
             Console.WriteLine($"Postings Updated: {postReport.PostingsUpdated}");
             Console.WriteLine($"Applications Examined: {appReport.ApplicationsExamined}");
             Console.WriteLine($"Applications Updated: {appReport.ApplicationsUpdated}");
+            Console.WriteLine($"Criteria Examined: {criteriaReport.CriteriaExamined}");
+            Console.WriteLine($"Criteria Updated: {criteriaReport.CriteriaUpdated}");
             return 0;
         });
 

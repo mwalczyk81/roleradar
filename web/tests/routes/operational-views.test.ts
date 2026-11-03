@@ -12,10 +12,10 @@ import {
   type UserSession,
 } from "../../app/lib/session.server.js";
 
-import CriteriaPage, { loader as criteriaLoader } from "../../app/routes/criteria.js";
-import NotesPage, { loader as notesLoader } from "../../app/routes/notes._index.js";
+import CriteriaPage from "../../app/routes/criteria.js";
+import NotesPage from "../../app/routes/notes._index.js";
 import NoteDetailPage, { loader as noteDetailLoader } from "../../app/routes/notes.$id.js";
-import SearchRunsPage, { loader as searchRunsLoader } from "../../app/routes/search-runs.js";
+import SearchRunsPage from "../../app/routes/search-runs.js";
 import { callLoader } from "../test-helpers.js";
 
 describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
@@ -60,46 +60,12 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
   }
 
   describe("Criteria (/criteria)", () => {
-    it("loader calls GET /api/v1/criteria with only effectiveDate parameter", async () => {
-      const { sessionId } = createTestSession();
-      mockApiGet.mockResolvedValueOnce({
-        data: [
-          {
-            id: "crit-1",
-            name: "Remote Only",
-            weight: "hard_skip",
-            ruleText: "Must be 100% remote within US.",
-            effectiveFrom: "2026-01-01T00:00:00Z",
-            effectiveTo: null,
-            isActive: true,
-          },
-        ],
-        error: undefined,
-        response: { status: 200 } as Response,
-      });
-
-      const request = new Request("https://localhost:5003/criteria?effectiveDate=2026-06-01&badParam=hack", {
-        headers: { Cookie: `__Host-roleradar_session=${sessionId}` },
-      });
-
-      const result = await callLoader(criteriaLoader, request);
-      expect(result.items.length).toBe(1);
-      expect(result.items[0].name).toBe("Remote Only");
-      expect(mockApiGet).toHaveBeenCalledWith("/api/v1/criteria", {
-        params: {
-          query: {
-            effectiveDate: "2026-06-01",
-          },
-        },
-      });
-    });
-
     it("renders exact CriterionDto fields and contains zero mutation controls", async () => {
       const sampleCriteria = [
         {
           id: "crit-1",
           name: "Remote Only",
-          weight: "hard_skip",
+          category: "hard_skip",
           ruleText: "Must be 100% remote within US.",
           effectiveFrom: "2026-01-01T00:00:00Z",
           effectiveTo: null,
@@ -113,6 +79,11 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
           Component: CriteriaPage,
           loader: () => ({
             items: sampleCriteria,
+            totalCount: sampleCriteria.length,
+            limit: 25,
+            offset: 0,
+            sort: "name",
+            direction: "asc",
             csrfToken: "mock-csrf",
             userLabel: "operational-user",
           }),
@@ -146,12 +117,12 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
       expect(mutationButtons.length).toBe(0);
     });
 
-    it("renders inactive criterion with custom weight and effectiveTo date, and handles loader error", async () => {
+    it("renders inactive criterion with custom category and effectiveTo date", async () => {
       const sampleCriteria = [
         {
           id: "crit-2",
           name: "Security Clearance",
-          weight: "custom_weight",
+          category: "custom_weight",
           ruleText: "Must hold active secret clearance.",
           effectiveFrom: "2026-01-01T00:00:00Z",
           effectiveTo: "2026-12-31T00:00:00Z",
@@ -165,6 +136,11 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
           Component: CriteriaPage,
           loader: () => ({
             items: sampleCriteria,
+            totalCount: sampleCriteria.length,
+            limit: 25,
+            offset: 0,
+            sort: "name",
+            direction: "asc",
             csrfToken: "mock-csrf",
             userLabel: "operational-user",
           }),
@@ -178,108 +154,29 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
       expect(await findByText("Security Clearance")).toBeDefined();
       expect(await findByText("Inactive")).toBeDefined();
       expect(await findByText("custom_weight")).toBeDefined();
-
-      // Test loader error branch
-      const { sessionId } = createTestSession();
-      mockApiGet.mockResolvedValueOnce({
-        data: undefined,
-        error: { message: "Internal server error" },
-        response: { status: 500 } as Response,
-      });
-
-      const request = new Request("https://localhost:5003/criteria", {
-        headers: { Cookie: `__Host-roleradar_session=${sessionId}` },
-      });
-
-      await expect(callLoader(criteriaLoader, request)).rejects.toThrow();
     });
   });
 
   describe("Notes List (/notes)", () => {
-    it("loader sends only q, limit, offset and clamps limit 1..100 and offset >= 0", async () => {
-      const { sessionId } = createTestSession();
-      mockApiGet.mockResolvedValueOnce({
-        data: {
-          items: [
-            {
-              id: "note-1",
-              heading: "Systems Architecture Notes",
-              content: "First round architecture review notes.",
-              tags: ["architecture", "review"],
-              linkedEntityType: "posting",
-              linkedEntityId: "post-100",
-              createdAt: "2026-10-15T12:00:00Z",
-              updatedAt: "2026-10-16T12:00:00Z",
-            },
-          ],
-          totalCount: 1,
-          limit: 100,
-          offset: 0,
-        },
-        error: undefined,
-        response: { status: 200 } as Response,
-      });
-
-      const request = new Request("https://localhost:5003/notes?q=architecture&limit=999&offset=-5&sort=desc", {
-        headers: { Cookie: `__Host-roleradar_session=${sessionId}` },
-      });
-
-      const result = await callLoader(notesLoader, request);
-      expect(result.items.length).toBe(1);
-      expect(result.limit).toBe(100);
-      expect(result.offset).toBe(0);
-      expect(mockApiGet).toHaveBeenCalledWith("/api/v1/notes", {
-        params: {
-          query: {
-            q: "architecture",
-            limit: 100,
-            offset: 0,
-          },
-        },
-      });
-    });
-
-    it("renders linked entity as route link when type is posting, company or application; plain text otherwise", async () => {
+    it("renders the area as plain text, never as a link, and shows no note body", async () => {
       const sampleNotes = [
         {
           id: "note-p",
-          heading: "Note Linking to Posting",
-          content: "Discussed posting details.",
+          heading: "Note With Hostile Area",
           tags: ["posting-tag"],
-          linkedEntityType: "posting",
-          linkedEntityId: "post-100",
+          linkedEntityType: "javascript:alert(1)",
+          linkedEntityId: null,
           createdAt: "2026-10-15T12:00:00Z",
-          updatedAt: "2026-10-15T12:00:00Z",
+          updatedAt: "2026-10-16T12:00:00Z",
         },
         {
-          id: "note-c",
-          heading: "Note Linking to Company",
-          content: "Company research details.",
-          tags: ["company-tag"],
-          linkedEntityType: "company",
-          linkedEntityId: "comp-200",
-          createdAt: "2026-10-15T12:00:00Z",
-          updatedAt: "2026-10-15T12:00:00Z",
-        },
-        {
-          id: "note-a",
-          heading: "Note Linking to Application",
-          content: "Application interview notes.",
-          tags: ["app-tag"],
-          linkedEntityType: "application",
-          linkedEntityId: "app-300",
-          createdAt: "2026-10-15T12:00:00Z",
-          updatedAt: "2026-10-15T12:00:00Z",
-        },
-        {
-          id: "note-unknown",
-          heading: "Note Linking to Contact (No Route)",
-          content: "Met recruiter at conference.",
-          tags: ["contact-tag"],
-          linkedEntityType: "contact",
-          linkedEntityId: "contact-400",
-          createdAt: "2026-10-15T12:00:00Z",
-          updatedAt: "2026-10-15T12:00:00Z",
+          id: "note-b",
+          heading: "Note Without Area",
+          tags: [],
+          linkedEntityType: "",
+          linkedEntityId: null,
+          createdAt: "2026-10-14T12:00:00Z",
+          updatedAt: "2026-10-14T12:00:00Z",
         },
       ];
 
@@ -289,9 +186,11 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
           Component: NotesPage,
           loader: () => ({
             items: sampleNotes,
-            totalCount: 4,
+            totalCount: 2,
             limit: 25,
             offset: 0,
+            sort: "updatedAt",
+            direction: "desc",
             q: "",
             csrfToken: "mock-csrf",
             userLabel: "operational-user",
@@ -307,20 +206,11 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
         React.createElement(Stub, { initialEntries: ["/notes"] })
       );
 
-      expect(await findByText("Note Linking to Posting")).toBeDefined();
-
-      const postingLink = container.querySelector('a[href="/postings/post-100"]');
-      expect(postingLink).not.toBeNull();
-
-      const companyLink = container.querySelector('a[href="/companies/comp-200"]');
-      expect(companyLink).not.toBeNull();
-
-      const appLink = container.querySelector('a[href="/applications/app-300"]');
-      expect(appLink).not.toBeNull();
-
-      // Contact has NO route: no link to /contact or /contacts
-      const contactLink = container.querySelector('a[href*="contact-400"]');
-      expect(contactLink).toBeNull();
+      expect(await findByText("Note With Hostile Area")).toBeDefined();
+      expect(await findByText("javascript:alert(1)")).toBeDefined();
+      expect(container.querySelector('a[href^="javascript"]')).toBeNull();
+      expect(container.querySelector('a[href*="alert"]')).toBeNull();
+      expect(container.textContent).not.toContain("Preview");
 
       // Zero mutation controls (no POST forms outside signOut)
       const forms = Array.from(container.querySelectorAll("form")).filter(
@@ -329,8 +219,7 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
       expect(forms.length).toBe(0);
 
       // Row click navigates to note detail
-      const noteRow = await findByText("Note Linking to Posting");
-      fireEvent.click(noteRow);
+      fireEvent.click(await findByText("Note With Hostile Area"));
       expect(await findByText("Note Detail Stub")).toBeDefined();
     });
 
@@ -464,45 +353,6 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
   });
 
   describe("Search Runs (/search-runs)", () => {
-    it("loader sends only limit and offset and does not support sort", async () => {
-      const { sessionId } = createTestSession();
-      mockApiGet.mockResolvedValueOnce({
-        data: {
-          items: [
-            {
-              id: "run-1",
-              runDate: "2026-10-31T08:00:00Z",
-              companiesSearched: 25,
-              postingsFound: 14,
-              newPostings: 3,
-              errorsCount: 0,
-              summary: "Automated batch search run completed with 3 new postings.",
-            },
-          ],
-          totalCount: 1,
-          limit: 25,
-          offset: 0,
-        },
-        error: undefined,
-        response: { status: 200 } as Response,
-      });
-
-      const request = new Request("https://localhost:5003/search-runs?limit=25&offset=0&sort=runDate:asc", {
-        headers: { Cookie: `__Host-roleradar_session=${sessionId}` },
-      });
-
-      const result = await callLoader(searchRunsLoader, request);
-      expect(result.items.length).toBe(1);
-      expect(mockApiGet).toHaveBeenCalledWith("/api/v1/search-runs", {
-        params: {
-          query: {
-            limit: 25,
-            offset: 0,
-          },
-        },
-      });
-    });
-
     it("renders exact SearchRunDto fields and zero mutation controls", async () => {
       const sampleRuns = [
         {
@@ -544,7 +394,7 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
       expect(forms.length).toBe(0);
     });
 
-    it("renders search runs with errors and empty summary, and handles loader errors", async () => {
+    it("renders search runs with errors and empty summary", async () => {
       const sampleRuns = [
         {
           id: "run-2",
@@ -579,20 +429,6 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
       expect(await findByText("0 new")).toBeDefined();
       expect(await findByText("2")).toBeDefined();
       expect(await findByText("—")).toBeDefined();
-
-      // Test loader error branch
-      const { sessionId } = createTestSession();
-      mockApiGet.mockResolvedValueOnce({
-        data: undefined,
-        error: { message: "Internal server error" },
-        response: { status: 500 } as Response,
-      });
-
-      const request = new Request("https://localhost:5003/search-runs", {
-        headers: { Cookie: `__Host-roleradar_session=${sessionId}` },
-      });
-
-      await expect(callLoader(searchRunsLoader, request)).rejects.toThrow();
     });
   });
 });

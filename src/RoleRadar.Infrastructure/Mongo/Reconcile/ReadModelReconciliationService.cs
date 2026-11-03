@@ -10,12 +10,15 @@ public sealed record ReconcileResult(
     int PostingsUpdated,
     int ApplicationsExamined,
     int ApplicationsUpdated,
-    bool IsDryRun);
+    bool IsDryRun,
+    int CriteriaExamined = 0,
+    int CriteriaUpdated = 0);
 
 public interface IReadModelReconciliationService
 {
     Task<ReconcileResult> ReconcilePostingsAsync(bool dryRun, CancellationToken cancellationToken = default);
     Task<ReconcileResult> ReconcileApplicationsAsync(bool dryRun, CancellationToken cancellationToken = default);
+    Task<ReconcileResult> ReconcileCriteriaAsync(bool dryRun, CancellationToken cancellationToken = default);
 }
 
 public sealed class ReadModelReconciliationService : IReadModelReconciliationService
@@ -214,6 +217,39 @@ public sealed class ReadModelReconciliationService : IReadModelReconciliationSer
         }
 
         return new ReconcileResult(0, 0, examined, updated, dryRun);
+    }
+
+    public async Task<ReconcileResult> ReconcileCriteriaAsync(bool dryRun, CancellationToken cancellationToken = default)
+    {
+        var criteria = _database.GetCollection<BsonDocument>(TrackingMongoOptions.CriteriaCollectionName);
+        var all = await criteria.Find(FilterDefinition<BsonDocument>.Empty).ToListAsync(cancellationToken);
+
+        int updated = 0;
+
+        foreach (var doc in all)
+        {
+            // Criteria written before Phase 5 carry effective_to but no has_effective_to flag.
+            var expected = doc.Contains("effective_to") && !doc["effective_to"].IsBsonNull;
+            var current = doc.Contains("has_effective_to") && doc["has_effective_to"].IsBoolean
+                ? doc["has_effective_to"].AsBoolean
+                : (bool?)null;
+
+            if (current == expected)
+            {
+                continue;
+            }
+
+            updated++;
+            if (!dryRun)
+            {
+                await criteria.UpdateOneAsync(
+                    Builders<BsonDocument>.Filter.Eq("_id", doc["_id"]),
+                    Builders<BsonDocument>.Update.Set("has_effective_to", expected),
+                    cancellationToken: cancellationToken);
+            }
+        }
+
+        return new ReconcileResult(0, 0, 0, 0, dryRun, all.Count, updated);
     }
 
     public static int MapDispositionRank(string disposition)

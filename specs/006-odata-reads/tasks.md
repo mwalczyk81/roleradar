@@ -113,21 +113,21 @@
 
 ### Tests for User Story 3 (MANDATORY - Test-First per Principle II)
 
-- [ ] T048 [P] [US3] Write query contract and restriction integration tests in `tests/RoleRadar.Tests.Integration/ODataRemainingEntitiesTests.cs` in Testcontainers for Companies, Notes, Criteria, and SearchRuns, asserting that note `content` is rejected with HTTP 400 in `$filter` and `$orderby` (expected to fail before implementation).
-- [ ] T049 [P] [US3] Write Notes database-level projection integration test in `tests/RoleRadar.Tests.Integration/ODataNotesProjectionTests.cs` in Testcontainers asserting that querying `/odata/Notes` projects `content` away in the database query (`content == null` or omitted in MongoDB fetch) unless `$select` explicitly requests `content` (expected to fail before implementation).
-- [ ] T050 [P] [US3] Write web route loader unit tests in `web/tests/routes/remaining-entities.loader.test.ts` for Companies, Notes, Criteria, and SearchRuns OData queries (expected to fail before implementation).
+- [X] T048 [P] [US3] Write query contract and restriction integration tests in `tests/RoleRadar.Tests.Integration/ODataRemainingEntitiesTests.cs` in Testcontainers for Companies, Notes, Criteria, and SearchRuns, asserting that note `content` is rejected with HTTP 400 in `$filter` and `$orderby` (expected to fail before implementation).
+- [X] T049 [P] [US3] Write Notes database-level projection integration test in `tests/RoleRadar.Tests.Integration/ODataNotesProjectionTests.cs` in Testcontainers asserting that querying `/odata/Notes` projects `content` away in the database query (`content == null` or omitted in MongoDB fetch) unless `$select` explicitly requests `content` (expected to fail before implementation).
+- [X] T050 [P] [US3] Write web route loader unit tests in `web/tests/routes/remaining-entities.loader.test.ts` for Companies, Notes, Criteria, and SearchRuns OData queries (expected to fail before implementation).
 
 ### Implementation for User Story 3
 
-- [ ] T051 [P] [US3] Implement `CompanyReadModel`, `NoteReadModel`, `CriterionReadModel`, and `SearchRunReadModel` in `src/RoleRadar.Application/Reading/Models/` matching specifications in `data-model.md` (depends on T048–T050 failing first).
-- [ ] T052 [US3] Implement database-level projection in `MongoOwnerReadSeam.QueryNotes` in `src/RoleRadar.Infrastructure/Mongo/Reading/MongoOwnerReadSeam.cs` excluding `content` in the MongoDB query unless `$select` explicitly requests it.
-- [ ] T053 [US3] Add compound indexes for Companies, Notes, Criteria, and SearchRuns in `src/RoleRadar.Infrastructure/Mongo/TrackingIndexInitializer.cs`.
-- [ ] T054 [US3] Implement `CompaniesController`, `NotesController`, `CriteriaController`, and `SearchRunsController` in `src/RoleRadar.Api/Controllers/OData/`.
-- [ ] T055 [P] [US3] Migrate companies list route `web/app/routes/companies._index.tsx` to `/odata/Companies`.
-- [ ] T056 [P] [US3] Migrate notes list route `web/app/routes/notes._index.tsx` to `/odata/Notes`.
-- [ ] T057 [P] [US3] Migrate criteria list route `web/app/routes/criteria._index.tsx` to `/odata/Criteria` with `effectiveFrom`/`effectiveTo` interval filter mapping.
-- [ ] T058 [P] [US3] Migrate search runs list route `web/app/routes/search-runs._index.tsx` to `/odata/SearchRuns`.
-- [ ] T059 [US3] Phase 5 verification: run `pwsh ./scripts/review-gate.ps1 -IncludeE2E` once, and run web CI steps in Linux container confirming tests, lint, typecheck, and coverage pass.
+- [X] T051 [P] [US3] Implement `CompanyReadModel`, `NoteReadModel`, `CriterionReadModel`, and `SearchRunReadModel` in `src/RoleRadar.Application/Reading/Models/` matching specifications in `data-model.md` (depends on T048–T050 failing first).
+- [X] T052 [US3] Implement database-level projection in `MongoOwnerReadSeam.QueryNotes` in `src/RoleRadar.Infrastructure/Mongo/Reading/MongoOwnerReadSeam.cs` excluding `content` in the MongoDB query unless `$select` explicitly requests it.
+- [X] T053 [US3] Add compound indexes for Companies, Notes, Criteria, and SearchRuns in `src/RoleRadar.Infrastructure/Mongo/TrackingIndexInitializer.cs`.
+- [X] T054 [US3] Implement `CompaniesController`, `NotesController`, `CriteriaController`, and `SearchRunsController` in `src/RoleRadar.Api/Controllers/OData/`.
+- [X] T055 [P] [US3] Migrate companies list route `web/app/routes/companies._index.tsx` to `/odata/Companies`.
+- [X] T056 [P] [US3] Migrate notes list route `web/app/routes/notes._index.tsx` to `/odata/Notes`.
+- [X] T057 [P] [US3] Migrate criteria list route `web/app/routes/criteria._index.tsx` to `/odata/Criteria` with `effectiveFrom`/`effectiveTo` interval filter mapping.
+- [X] T058 [P] [US3] Migrate search runs list route `web/app/routes/search-runs._index.tsx` to `/odata/SearchRuns`.
+- [X] T059 [US3] Phase 5 verification: run `pwsh ./scripts/review-gate.ps1 -IncludeE2E` once, and run web CI steps in Linux container confirming tests, lint, typecheck, and coverage pass.
 
 ---
 

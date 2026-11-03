@@ -108,8 +108,10 @@ public static class ReadModelClassMaps
                 cm.MapIdProperty(p => p.Id).SetElementName("_id").SetSerializer(guidSerializer);
                 cm.MapProperty(p => p.Heading).SetElementName("title");
                 cm.MapProperty(p => p.Tags).SetElementName("tags");
-                cm.MapProperty(p => p.LinkedEntityType).SetElementName("linked_entity_type");
-                cm.MapProperty(p => p.LinkedEntityId).SetElementName("linked_entity_id").SetSerializer(guidSerializer);
+                // Notes store no polymorphic link; the REST NoteDto reports the stored area as the linked type
+                // and no linked id. Same here, so the two read paths agree and no backfill is needed.
+                cm.MapProperty(p => p.LinkedEntityType).SetElementName("area");
+                cm.UnmapProperty(p => p.LinkedEntityId);
                 cm.MapProperty(p => p.CreatedAt).SetElementName("created_at");
                 cm.MapProperty(p => p.UpdatedAt).SetElementName("updated_at");
                 cm.MapProperty(p => p.Content).SetElementName("body");
@@ -124,13 +126,14 @@ public static class ReadModelClassMaps
                 cm.AutoMap();
                 cm.SetIgnoreExtraElements(true);
                 cm.MapIdProperty(p => p.Id).SetElementName("_id").SetSerializer(guidSerializer);
-                cm.MapProperty(p => p.Name).SetElementName("name");
+                cm.MapProperty(p => p.Name).SetElementName("key");
                 cm.MapProperty(p => p.Category).SetElementName("category");
-                cm.MapProperty(p => p.RuleText).SetElementName("rule_text");
+                cm.MapProperty(p => p.RuleText).SetElementName("value");
                 cm.MapProperty(p => p.EffectiveFrom).SetElementName("effective_from");
                 cm.MapProperty(p => p.EffectiveTo).SetElementName("effective_to");
                 cm.MapProperty(p => p.IsActive).SetElementName("is_active");
                 cm.MapMember(p => p.OwnerId).SetElementName("owner_id");
+                cm.MapMember(p => p.HasEffectiveTo).SetElementName("has_effective_to");
             });
         }
 
@@ -141,12 +144,12 @@ public static class ReadModelClassMaps
                 cm.AutoMap();
                 cm.SetIgnoreExtraElements(true);
                 cm.MapIdProperty(p => p.Id).SetElementName("_id").SetSerializer(guidSerializer);
-                cm.MapProperty(p => p.RunDate).SetElementName("run_date");
-                cm.MapProperty(p => p.CompaniesSearched).SetElementName("companies_searched");
-                cm.MapProperty(p => p.PostingsFound).SetElementName("postings_found");
-                cm.MapProperty(p => p.NewPostings).SetElementName("new_postings");
-                cm.MapProperty(p => p.ErrorsCount).SetElementName("errors_count");
-                cm.MapProperty(p => p.Summary).SetElementName("summary");
+                cm.MapProperty(p => p.RunDate).SetElementName("started_at");
+                cm.MapProperty(p => p.NewPostings).SetElementName("new_postings_count");
+                cm.MapProperty(p => p.Summary).SetElementName("notes");
+                cm.UnmapProperty(p => p.CompaniesSearched);
+                cm.UnmapProperty(p => p.PostingsFound);
+                cm.UnmapProperty(p => p.ErrorsCount);
                 cm.MapMember(p => p.OwnerId).SetElementName("owner_id");
             });
         }

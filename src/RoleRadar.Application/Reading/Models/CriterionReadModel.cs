@@ -11,4 +11,5 @@ public sealed class CriterionReadModel
     public bool IsActive { get; init; }
 
     internal string OwnerId { get; init; } = string.Empty;
+    internal bool HasEffectiveTo { get; init; }
 }

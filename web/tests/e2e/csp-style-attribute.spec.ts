@@ -259,12 +259,14 @@ test.beforeAll(async () => {
       return;
     }
 
-    if (url.pathname === "/api/v1/companies" && req.method === "GET") {
+    // Companies, notes, criteria and search runs list pages read from OData (Phase 5).
+    if (url.pathname === "/odata/Companies" && req.method === "GET") {
       lastCompaniesQueryReceived = Object.fromEntries(url.searchParams.entries());
       res.writeHead(200);
       res.end(
         JSON.stringify({
-          items: [
+          "@odata.count": 1,
+          value: [
             {
               id: "comp-e2e-1",
               name: currentCompanyName,
@@ -273,15 +275,42 @@ test.beforeAll(async () => {
               description: currentCompanyDescription,
               headquarters: currentCompanyHeadquarters,
               categoryTags: currentCompanyCategoryTags,
-              careerSources: currentCompanyCareerSources,
-              versionToken: currentCompanyVersionToken,
             },
           ],
-          totalCount: 1,
-          limit: 25,
-          offset: 0,
         })
       );
+      return;
+    }
+
+    if (url.pathname === "/odata/Criteria" && req.method === "GET") {
+      lastCriteriaQueryReceived = Object.fromEntries(url.searchParams.entries());
+      const rows = currentCriteriaList ?? [
+        {
+          id: "crit-1",
+          name: "Remote Policy",
+          category: "weight",
+          ruleText: "Must allow remote work",
+          effectiveFrom: "2026-01-01T00:00:00Z",
+          effectiveTo: null,
+          isActive: true,
+        },
+      ];
+      res.writeHead(200);
+      res.end(JSON.stringify({ "@odata.count": rows.length, value: rows }));
+      return;
+    }
+
+    if (url.pathname === "/odata/Notes" && req.method === "GET") {
+      lastNotesQueryReceived = Object.fromEntries(url.searchParams.entries());
+      res.writeHead(200);
+      res.end(JSON.stringify({ "@odata.count": currentNotesList.length, value: currentNotesList }));
+      return;
+    }
+
+    if (url.pathname === "/odata/SearchRuns" && req.method === "GET") {
+      lastSearchRunsQueryReceived = Object.fromEntries(url.searchParams.entries());
+      res.writeHead(200);
+      res.end(JSON.stringify({ "@odata.count": currentSearchRunsList.length, value: currentSearchRunsList }));
       return;
     }
 
@@ -478,20 +507,6 @@ test.beforeAll(async () => {
       return;
     }
 
-    if (url.pathname === "/api/v1/notes" && req.method === "GET") {
-      lastNotesQueryReceived = Object.fromEntries(url.searchParams.entries());
-      res.writeHead(200);
-      res.end(
-        JSON.stringify({
-          items: currentNotesList,
-          totalCount: currentNotesList.length,
-          limit: Number(url.searchParams.get("limit")) || 25,
-          offset: Number(url.searchParams.get("offset")) || 0,
-        })
-      );
-      return;
-    }
-
     if (url.pathname === "/api/v1/notes/note-e2e-1" && req.method === "GET") {
       if (!currentNoteDetail) {
         res.writeHead(404);
@@ -500,20 +515,6 @@ test.beforeAll(async () => {
       }
       res.writeHead(200);
       res.end(JSON.stringify(currentNoteDetail));
-      return;
-    }
-
-    if (url.pathname === "/api/v1/search-runs" && req.method === "GET") {
-      lastSearchRunsQueryReceived = Object.fromEntries(url.searchParams.entries());
-      res.writeHead(200);
-      res.end(
-        JSON.stringify({
-          items: currentSearchRunsList,
-          totalCount: currentSearchRunsList.length,
-          limit: Number(url.searchParams.get("limit")) || 25,
-          offset: Number(url.searchParams.get("offset")) || 0,
-        })
-      );
       return;
     }
 
@@ -1312,7 +1313,7 @@ test.describe("Company Management (Real Chromium)", () => {
     lastCompaniesQueryReceived = {};
   });
 
-  test("loads /companies list with API stubbed, asserting only limit and offset are sent, zero CSP violations and axe zero serious/critical in light and dark", async ({
+  test("loads /companies list with API stubbed, asserting only whitelisted OData options are sent, zero CSP violations and axe zero serious/critical in light and dark", async ({
     page,
     context,
   }) => {
@@ -1324,14 +1325,19 @@ test.describe("Company Management (Real Chromium)", () => {
     });
 
     await setupSessionCookie(context);
-    await page.goto(`${baseUrl}/companies?limit=25&offset=0&q=ignoredQuery&sort=name`, { waitUntil: "networkidle" });
+    await page.goto(`${baseUrl}/companies?limit=25&offset=0&q=ignoredQuery&sort=bogus`, { waitUntil: "networkidle" });
 
     await expect(page.getByRole("heading", { name: "Companies" })).toBeVisible();
     await expect(page.getByText("Acme Cloud Services")).toBeVisible();
 
-    // Verify only limit and offset were sent to API
-    expect(lastCompaniesQueryReceived.limit).toBe("25");
-    expect(lastCompaniesQueryReceived.offset).toBe("0");
+    // Verify only whitelisted OData options were sent: the q search becomes a name filter, the unknown
+    // sort field is dropped in favour of the default name order, and nothing else reaches the API.
+    expect(lastCompaniesQueryReceived["$filter"]).toBe("contains(tolower(name),'ignoredquery')");
+    expect(lastCompaniesQueryReceived["$orderby"]).toBe("name asc");
+    expect(lastCompaniesQueryReceived["$top"]).toBe("25");
+    expect(lastCompaniesQueryReceived["$skip"]).toBe("0");
+    expect(lastCompaniesQueryReceived["$count"]).toBe("true");
+    expect(Object.keys(lastCompaniesQueryReceived).sort()).toEqual(["$count", "$filter", "$orderby", "$skip", "$top"]);
     expect(lastCompaniesQueryReceived.q).toBeUndefined();
     expect(lastCompaniesQueryReceived.sort).toBeUndefined();
 
@@ -1971,7 +1977,7 @@ test.describe("Company Management (Real Chromium)", () => {
         {
           id: "crit-e2e-1",
           name: "Remote Only",
-          weight: "hard_skip",
+          category: "hard_skip",
           ruleText: "Must be 100% remote within US.",
           effectiveFrom: "2026-01-01T00:00:00Z",
           effectiveTo: null,
@@ -1985,8 +1991,13 @@ test.describe("Company Management (Real Chromium)", () => {
       await expect(page.getByRole("heading", { name: "Screening Criteria", level: 1 })).toBeVisible();
       expect(cspErrors).toEqual([]);
 
-      // Verify parameter filtering: only effectiveDate sent to API
-      expect(lastCriteriaQueryReceived.effectiveDate).toBe("2026-06-01");
+      // Verify parameter filtering: effectiveDate becomes the effective-interval filter, nothing else is forwarded
+      expect(lastCriteriaQueryReceived["$filter"]).toBe(
+        "(effectiveFrom le 2026-06-01T00:00:00Z) and ((effectiveTo eq null) or (effectiveTo ge 2026-06-01T00:00:00Z))"
+      );
+      expect(lastCriteriaQueryReceived["$orderby"]).toBe("name asc");
+      expect(Object.keys(lastCriteriaQueryReceived).sort()).toEqual(["$count", "$filter", "$orderby", "$skip", "$top"]);
+      expect(lastCriteriaQueryReceived.effectiveDate).toBeUndefined();
       expect(lastCriteriaQueryReceived.badParam).toBeUndefined();
 
       // Criteria content visible
@@ -2018,7 +2029,7 @@ test.describe("Company Management (Real Chromium)", () => {
       await expect(page.getByText("No criteria found.")).toBeVisible();
     });
 
-    test("loads /notes list with API stubbed, asserting only q, limit, offset sent, zero CSP violations, axe zero serious/critical in light and dark, and zero mutation controls", async ({
+    test("loads /notes list with API stubbed, asserting only whitelisted OData options sent (never content), zero CSP violations, axe zero serious/critical in light and dark, and zero mutation controls", async ({
       page,
       context,
     }) => {
@@ -2033,10 +2044,9 @@ test.describe("Company Management (Real Chromium)", () => {
         {
           id: "note-e2e-1",
           heading: "Senior SRE Architecture Review",
-          content: "Detailed technical notes on distributed caching.",
           tags: ["distributed-systems", "sre"],
-          linkedEntityType: "posting",
-          linkedEntityId: "post-e2e-1",
+          linkedEntityType: "architecture",
+          linkedEntityId: null,
           createdAt: "2026-10-15T12:00:00Z",
           updatedAt: "2026-10-16T12:00:00Z",
         },
@@ -2050,12 +2060,15 @@ test.describe("Company Management (Real Chromium)", () => {
       await expect(page.getByRole("heading", { name: "Notes", level: 1 })).toBeVisible();
       expect(cspErrors).toEqual([]);
 
-      // Verify parameters: only q, limit, offset sent
-      expect(lastNotesQueryReceived.q).toBe("architecture");
-      expect(lastNotesQueryReceived.limit).toBe("25");
-      expect(lastNotesQueryReceived.offset).toBe("0");
+      // Verify parameters: q becomes a heading filter, the unknown sort falls back to updatedAt desc,
+      // and neither $select nor the note body is ever requested.
+      expect(lastNotesQueryReceived["$filter"]).toBe("contains(tolower(heading),'architecture')");
+      expect(lastNotesQueryReceived["$orderby"]).toBe("updatedAt desc");
+      expect(lastNotesQueryReceived["$top"]).toBe("25");
+      expect(lastNotesQueryReceived["$skip"]).toBe("0");
+      expect(Object.keys(lastNotesQueryReceived).sort()).toEqual(["$count", "$filter", "$orderby", "$skip", "$top"]);
+      expect(lastNotesQueryReceived.q).toBeUndefined();
       expect(lastNotesQueryReceived.bad).toBeUndefined();
-      expect(lastNotesQueryReceived.sort).toBeUndefined();
 
       // Content rendered
       await expect(page.getByText("Senior SRE Architecture Review")).toBeVisible();
@@ -2072,6 +2085,29 @@ test.describe("Company Management (Real Chromium)", () => {
           expect(action).toBe("/auth/logout");
         }
       }
+    });
+
+    test("loads /notes with no search term and lists recent notes, sorted by updatedAt descending", async ({
+      page,
+      context,
+    }) => {
+      currentNotesList = [
+        {
+          id: "note-e2e-2",
+          heading: "Recent Planning Note",
+          tags: [],
+          linkedEntityType: "",
+          linkedEntityId: null,
+          createdAt: "2026-10-20T12:00:00Z",
+          updatedAt: "2026-10-21T12:00:00Z",
+        },
+      ];
+      await setupSessionCookie(context);
+      await page.goto(`${baseUrl}/notes`, { waitUntil: "networkidle" });
+
+      await expect(page.getByText("Recent Planning Note")).toBeVisible();
+      expect(lastNotesQueryReceived["$filter"]).toBeUndefined();
+      expect(lastNotesQueryReceived["$orderby"]).toBe("updatedAt desc");
     });
 
     test("loads /notes empty state cleanly", async ({ page, context }) => {
@@ -2154,7 +2190,7 @@ test.describe("Company Management (Real Chromium)", () => {
       }
     });
 
-    test("loads /search-runs list with API stubbed, asserting only limit/offset sent, zero CSP violations, axe zero serious/critical, and zero mutation controls", async ({
+    test("loads /search-runs list with API stubbed, asserting only whitelisted OData options sent, zero CSP violations, axe zero serious/critical, and zero mutation controls", async ({
       page,
       context,
     }) => {
@@ -2185,9 +2221,11 @@ test.describe("Company Management (Real Chromium)", () => {
       await expect(page.getByRole("heading", { name: "Search Runs", level: 1 })).toBeVisible();
       expect(cspErrors).toEqual([]);
 
-      // Verify parameters: only limit and offset sent
-      expect(lastSearchRunsQueryReceived.limit).toBe("25");
-      expect(lastSearchRunsQueryReceived.offset).toBe("0");
+      // Verify parameters: newest run first by default (the unknown sort is dropped), nothing else forwarded
+      expect(lastSearchRunsQueryReceived["$orderby"]).toBe("runDate desc");
+      expect(lastSearchRunsQueryReceived["$top"]).toBe("25");
+      expect(lastSearchRunsQueryReceived["$skip"]).toBe("0");
+      expect(Object.keys(lastSearchRunsQueryReceived).sort()).toEqual(["$count", "$orderby", "$skip", "$top"]);
       expect(lastSearchRunsQueryReceived.badParam).toBeUndefined();
       expect(lastSearchRunsQueryReceived.sort).toBeUndefined();
 

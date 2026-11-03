@@ -283,6 +283,7 @@ export default function ApplicationsIndex() {
             fontSize: "var(--ds-text-sm)",
             color: "var(--ds-primary)",
             textDecoration: "none",
+            whiteSpace: "nowrap",
           }}
         >
           View Timeline →

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildODataQuery } from "../../app/lib/odata-client";
+import { buildODataQuery, toODataDateTime } from "../../app/lib/odata-client";
 
 describe("odata-client query builder", () => {
   it("builds basic top and skip parameters", () => {
@@ -113,5 +113,42 @@ describe("odata-client query builder", () => {
       });
       expect(qs).toBe(`$filter=${expectedEncoded}`);
     }
+  });
+});
+
+describe("odata-client date-time literals", () => {
+  it("converts a plain date to a UTC midnight literal", () => {
+    expect(toODataDateTime("2026-10-01")).toEqual({ dateTime: "2026-10-01T00:00:00Z" });
+  });
+
+  it("normalizes an offset timestamp to UTC and drops fractional seconds", () => {
+    expect(toODataDateTime("2026-10-01T12:30:15.123+02:00")).toEqual({ dateTime: "2026-10-01T10:30:15Z" });
+    expect(toODataDateTime(" 2026-10-01T12:30:00Z ")).toEqual({ dateTime: "2026-10-01T12:30:00Z" });
+  });
+
+  it("rejects anything that is not a real date", () => {
+    for (const bad of ["", "tomorrow", "2026-13-45", "2026-10-01' or true", "2026-10-01T99:99:99Z", "20261001"]) {
+      expect(toODataDateTime(bad), bad).toBeUndefined();
+    }
+  });
+
+  it("emits date-time comparisons unquoted and null as the null literal", () => {
+    const qs = buildODataQuery({
+      filter: {
+        type: "binary",
+        operator: "and",
+        left: { type: "comparison", operator: "le", field: "effectiveFrom", value: { dateTime: "2026-10-01T00:00:00Z" } },
+        right: { type: "comparison", operator: "eq", field: "effectiveTo", value: null },
+      },
+    });
+    expect(decodeURIComponent(qs)).toBe("$filter=(effectiveFrom le 2026-10-01T00:00:00Z) and (effectiveTo eq null)");
+  });
+
+  it("refuses to emit a hand-built literal that is not a strict UTC timestamp", () => {
+    expect(() =>
+      buildODataQuery({
+        filter: { type: "comparison", operator: "eq", field: "effectiveFrom", value: { dateTime: "x or true" } },
+      })
+    ).toThrow(/Invalid OData date-time literal/);
   });
 });

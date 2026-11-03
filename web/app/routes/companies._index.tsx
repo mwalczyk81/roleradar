@@ -1,7 +1,6 @@
-import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData, useNavigate, useSearchParams, Link } from "react-router";
-import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
-import { createApiClient } from "../lib/api-client.server.js";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { useLoaderData, useNavigate, useSearchParams, Link, Form } from "react-router";
+import { requireUserSession } from "../lib/auth-guard.server.js";
 import { useTheme } from "../lib/use-theme.js";
 import { getNavItems } from "../lib/nav.js";
 import {
@@ -9,45 +8,57 @@ import {
   OWNERSHIP_TYPE_OPTIONS,
   isCompanyStatus,
 } from "../lib/company-enums.js";
-import { AppShell, DataTable, Badge, Button, type DataTableColumn } from "../ui.js";
-import type { components } from "../../../contracts/client/api-types.js";
+import { buildODataQuery } from "../lib/odata-client.js";
+import { andFilters, containsAny, loadODataList, parsePaging, parseSort } from "../lib/odata-list.server.js";
+import { AppShell, DataTable, Badge, Button, Input, type DataTableColumn } from "../ui.js";
 
-type CompanyDetailDto = components["schemas"]["CompanyDetailDto"];
+export interface CompanyODataModel {
+  id: string;
+  name: string;
+  status: string;
+  ownershipType: string;
+  headquarters: string | null;
+  description: string | null;
+  categoryTags: string[];
+}
+
+export const ALLOWED_SORT_FIELDS = ["name", "status", "ownershipType"] as const;
+
+export const meta: MetaFunction = () => [{ title: "Companies - RoleRadar" }];
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const session = await requireUserSession(request);
   const url = new URL(request.url);
 
-  const rawLimit = Number(url.searchParams.get("limit"));
-  const rawOffset = Number(url.searchParams.get("offset"));
+  const { limit, offset } = parsePaging(url);
+  const { sort, direction } = parseSort(url, ALLOWED_SORT_FIELDS, { field: "name", direction: "asc" });
 
-  // Clamp limit to 1..100 (default 25) and offset to >= 0 per scope facts
-  const limit = Number.isNaN(rawLimit) || rawLimit <= 0 ? 25 : Math.min(100, Math.max(1, Math.floor(rawLimit)));
-  const offset = Number.isNaN(rawOffset) || rawOffset < 0 ? 0 : Math.max(0, Math.floor(rawOffset));
+  const q = (url.searchParams.get("q") ?? "").trim();
 
-  const client = createApiClient(session.accessToken);
-  const { data, response, error } = await client.GET("/api/v1/companies", {
-    params: {
-      query: {
-        limit,
-        offset,
-      },
-    },
+  const queryString = buildODataQuery({
+    filter: andFilters([containsAny(["name"], q)].filter((part) => part !== undefined)),
+    orderBy: [{ field: sort, direction }],
+    top: limit,
+    skip: offset,
+    count: true,
   });
 
-  await assertApiOk(response, request, session.sessionId);
-
-  if (error || !data) {
-    throw new Response(error?.message || "Failed to load companies", {
-      status: response.status || 500,
-    });
-  }
+  const { items, totalCount } = await loadODataList<CompanyODataModel>({
+    path: "/odata/Companies",
+    queryString,
+    request,
+    session,
+    failureMessage: "Failed to load companies",
+  });
 
   return {
-    items: data.items,
-    totalCount: data.totalCount,
-    limit: data.limit,
-    offset: data.offset,
+    items,
+    totalCount,
+    limit,
+    offset,
+    sort,
+    direction,
+    q,
     csrfToken: session.csrfToken,
     userLabel: session.ownerUsername || "Signed in",
   };
@@ -70,10 +81,12 @@ export default function CompaniesIndex() {
     </form>
   );
 
-  const columns: DataTableColumn<CompanyDetailDto>[] = [
+  const columns: DataTableColumn<CompanyODataModel>[] = [
     {
       key: "name",
       header: "Company",
+      sortable: true,
+      sortValue: () => 0,
       render: (row) => (
         <Link
           to={`/companies/${row.id}`}
@@ -81,6 +94,7 @@ export default function CompaniesIndex() {
             fontWeight: "var(--ds-weight-medium)",
             color: "var(--ds-primary)",
             textDecoration: "none",
+            whiteSpace: "nowrap",
           }}
         >
           {row.name}
@@ -90,6 +104,8 @@ export default function CompaniesIndex() {
     {
       key: "status",
       header: "Status",
+      sortable: true,
+      sortValue: () => 0,
       render: (row) => {
         const meta = isCompanyStatus(row.status)
           ? COMPANY_STATUS_METADATA[row.status]
@@ -100,6 +116,8 @@ export default function CompaniesIndex() {
     {
       key: "ownershipType",
       header: "Ownership",
+      sortable: true,
+      sortValue: () => 0,
       render: (row) => {
         const option = OWNERSHIP_TYPE_OPTIONS.find((o) => o.value === row.ownershipType);
         return <span>{option ? option.label : row.ownershipType}</span>;
@@ -127,15 +145,6 @@ export default function CompaniesIndex() {
         </div>
       ),
     },
-    {
-      key: "careerSources",
-      header: "Career Sources",
-      render: (row) => (
-        <span>
-          {row.careerSources.length} source{row.careerSources.length === 1 ? "" : "s"}
-        </span>
-      ),
-    },
   ];
 
   return (
@@ -150,11 +159,32 @@ export default function CompaniesIndex() {
       onThemeToggle={toggleTheme}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+        <Form method="get" style={{ display: "flex", gap: "var(--ds-space-2)", maxWidth: "30rem" }}>
+          <Input
+            name="q"
+            defaultValue={data.q}
+            placeholder="Search companies by name..."
+            aria-label="Search companies"
+          />
+          <Button type="submit" variant="secondary">
+            Search
+          </Button>
+        </Form>
+
         <DataTable
           caption="Tracked Companies"
           columns={columns}
           data={data.items}
           keyField="id"
+          sortColumn={data.sort}
+          sortDirection={data.direction}
+          onSortChange={(col, dir) => {
+            const next = new URLSearchParams(searchParams);
+            next.set("sort", col);
+            next.set("direction", dir);
+            next.set("offset", "0");
+            setSearchParams(next);
+          }}
           onRowClick={(row) => {
             navigate(`/companies/${row.id}`);
           }}

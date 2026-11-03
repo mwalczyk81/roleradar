@@ -50,8 +50,9 @@ All read models strictly omit the internal `owner_id` field from client payloads
   - `categoryTags` (`List<string>`)
 - **Allowlisted Query Properties**:
   - **Filterable**: `name`, `status`, `ownershipType`, `headquarters`
-  - **Sortable**: `id`, `name`, `status`, `ownershipType`
+  - **Sortable**: `id`, `name` (case-insensitive), `status`, `ownershipType`
   - **Selectable**: All attributes
+  - Reads the stored fields directly (`name`, `status`, `ownership_type`, `headquarters`, `description`, `category_tags`); no derived field, no backfill. `description` and `categoryTags` are not filterable.
 
 ### 1.3 ApplicationReadModel
 - **Entity Set**: `Applications` (`/odata/Applications`)
@@ -86,47 +87,50 @@ All read models strictly omit the internal `owner_id` field from client payloads
   - `id` (`Guid`, Primary Key)
   - `heading` (`string`)
   - `tags` (`List<string>`)
-  - `linkedEntityType` (`string`)
-  - `linkedEntityId` (`Guid`)
+  - `linkedEntityType` (`string`, the stored `area`; matches the REST `NoteDto`)
+  - `linkedEntityId` (`Guid?`, always null: notes store no polymorphic link, matching the REST `NoteDto`; not filterable)
   - `createdAt` (`DateTimeOffset` in UTC)
   - `updatedAt` (`DateTimeOffset` in UTC)
-  - `content` (`string`, narrative content)
+  - `content` (`string?`, narrative content; null unless `$select` explicitly includes `content`)
 - **Allowlisted Query Properties**:
-  - **Filterable**: `heading`, `linkedEntityType`, `linkedEntityId`, `createdAt`, `updatedAt`
+  - **Filterable**: `heading`, `linkedEntityType`, `createdAt`, `updatedAt`
   - **Sortable**: `id`, `heading`, `createdAt`, `updatedAt`
   - **Selectable**: All attributes (including `content`). `content` is **strictly forbidden** in `$filter` and `$orderby`.
+  - Default order (no `$orderby`): `updatedAt desc`. Stored fields: `title`, `tags`, `area`, `created_at`, `updated_at`, `body`. The database query excludes `body` unless `$select` names `content` (`IOwnerReadSeam.QueryNotes(ownerId, includeContent)`), so list pages never read note bodies.
 
 ### 1.5 CriterionReadModel
 - **Entity Set**: `Criteria` (`/odata/Criteria`)
 - **Key**: `id` (`Edm.Guid`)
 - **Attributes**:
   - `id` (`Guid`, Primary Key)
-  - `name` (`string`)
-  - `category` (`string`, mapped from existing `weight` field)
-  - `ruleText` (`string`)
+  - `name` (`string`, the stored `key`)
+  - `category` (`string`, the stored `category`: `hard_skip` | `weight` | `preference`; surfaced as `weight` by the REST `CriterionDto`)
+  - `ruleText` (`string`, the stored `value`)
   - `effectiveFrom` (`DateTimeOffset` in UTC)
   - `effectiveTo` (`DateTimeOffset?` in UTC, nullable)
   - `isActive` (`bool`)
 - **Allowlisted Query Properties**:
-  - **Filterable**: `name`, `category`, `effectiveFrom`, `effectiveTo`, `isActive`
-  - **Sortable**: `id`, `name`, `category`, `effectiveFrom`, `effectiveTo`, `isActive`
+  - **Filterable**: `name`, `category`, `effectiveFrom`, `effectiveTo`, `isActive` (`ruleText` is not filterable)
+  - **Sortable**: `id`, `name`, `category`, `effectiveFrom`, `effectiveTo` (nulls last in both directions), `isActive`
   - **Selectable**: All attributes
+  - Derived stored field `has_effective_to` (`bool`) is written by `MongoCriterionRepository.SerializeCriterion` and backfilled by `reconcile-read-models` for criteria written earlier.
 
 ### 1.6 SearchRunReadModel
 - **Entity Set**: `SearchRuns` (`/odata/SearchRuns`)
 - **Key**: `id` (`Edm.Guid`)
 - **Attributes**:
   - `id` (`Guid`, Primary Key)
-  - `runDate` (`DateTimeOffset` in UTC)
-  - `companiesSearched` (`int`)
-  - `postingsFound` (`int`)
-  - `newPostings` (`int`)
-  - `errorsCount` (`int`)
-  - `summary` (`string?`)
+  - `runDate` (`DateTimeOffset` in UTC, the stored `started_at`)
+  - `companiesSearched` (`int`, constant 0: not stored; matches the REST `SearchRunDto`)
+  - `postingsFound` (`int`, equals `newPostings`: not stored; matches the REST `SearchRunDto`)
+  - `newPostings` (`int`, the stored `new_postings_count`)
+  - `errorsCount` (`int`, constant 0: not stored; matches the REST `SearchRunDto`)
+  - `summary` (`string?`, the stored `notes`)
 - **Allowlisted Query Properties**:
-  - **Filterable**: `runDate`, `companiesSearched`, `postingsFound`, `newPostings`, `errorsCount`
-  - **Sortable**: `id`, `runDate`, `companiesSearched`, `postingsFound`, `newPostings`, `errorsCount`
+  - **Filterable**: `runDate`, `newPostings` (the other counters are constants and `summary` is free text; none are stored counters)
+  - **Sortable**: `id`, `runDate`, `newPostings`
   - **Selectable**: All attributes
+  - Default order (no `$orderby`): `runDate desc`.
 
 ---
 
@@ -171,17 +175,25 @@ Collection: applications
 - { owner_id: 1, status: 1, _id: 1 }
 
 Collection: companies
-- { owner_id: 1, normalized_name: 1, _id: 1 }  [Collation: locale="en", strength=2]
-- { owner_id: 1, status: 1, _id: 1 }
+- { owner_id: 1, name: 1, _id: 1 }             [Collation: locale="en", strength=2]
+- { owner_id: 1, status: 1 }                   (existing)
+- { owner_id: 1, ownership_type: 1, _id: 1 }
 
 Collection: notes
+- { owner_id: 1, updated_at: -1, _id: 1 }
 - { owner_id: 1, created_at: -1, _id: 1 }
-- { owner_id: 1, heading: 1, _id: 1 }         [Collation: locale="en", strength=2]
-- { owner_id: 1, linked_entity_type: 1, linked_entity_id: 1, _id: 1 }
+- { owner_id: 1, title: 1, _id: 1 }            [Collation: locale="en", strength=2]
+- { owner_id: 1, area: 1, _id: 1 }
 
 Collection: criteria
+- { owner_id: 1, key: 1, _id: 1 }              [Collation: locale="en", strength=2]
+- { owner_id: 1, category: 1, _id: 1 }
 - { owner_id: 1, is_active: 1, effective_from: 1, _id: 1 }
+- { owner_id: 1, effective_from: 1, effective_to: 1 }                (existing)
+- { owner_id: 1, has_effective_to: -1, effective_to: 1, _id: 1 }     (nulls last, ascending)
+- { owner_id: 1, has_effective_to: -1, effective_to: -1, _id: 1 }    (nulls last, descending)
 
 Collection: search_runs
-- { owner_id: 1, run_date: -1, _id: 1 }
+- { owner_id: 1, started_at: 1 } unique        (existing; serves runDate in both directions)
+- { owner_id: 1, new_postings_count: 1, _id: 1 }
 ```

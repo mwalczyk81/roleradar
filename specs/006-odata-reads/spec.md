@@ -125,10 +125,11 @@ As a developer and system maintainer, I want the query service schema to serve a
   - `Applications`: `id`, `postingId`, `companyId`, `postingTitle`, `companyName`, `status` (`applied` | `rejected` | `closed`), `appliedAt`, `hasInterview`, `firstResponseAt`, `lastEventAt`, `ageInDays`.
   - `Notes`: `id`, `heading`, `tags`, `linkedEntityType`, `linkedEntityId`, `createdAt`, `updatedAt`, and selectable-only `content`.
   - `Criteria`: `id`, `name`, `category` (mapped from the current criteria category representation), `ruleText`, `effectiveFrom`, `effectiveTo`, `isActive`.
-  - `SearchRuns`: `id`, `runDate`, `companiesSearched`, `postingsFound`, `newPostings`, `errorsCount`, `summary`.
+  - `SearchRuns`: `id`, `runDate`, `companiesSearched`, `postingsFound`, `newPostings`, `errorsCount`, `summary`. Only `runDate` and `newPostings` are stored; `companiesSearched` (0), `postingsFound` (equal to `newPostings`) and `errorsCount` (0) are constants that mirror the REST `SearchRunDto`, so they are selectable but neither filterable nor sortable.
+  - Stored-field mapping (see data-model.md): note `linkedEntityType` is the stored `area` and `linkedEntityId` is always null; criteria `name` and `ruleText` are the stored `key` and `value`; search run `runDate` and `summary` are the stored `started_at` and `notes`.
 - **FR-011**: Text property ordering and filtering MUST execute case-insensitively.
 - **FR-012**: Sorting by posting disposition MUST order records by the domain pipeline progression rank order (`unscored`, `lead`, `scored`, `applied`, `rejected`, `screened_out`, `closed`) rather than alphabetical order. Dispositions MUST be strictly validated against the 7 recognized domain values.
-- **FR-013**: Nullable sortable fields (`score`, `firstResponseAt`, `lastEventAt`) MUST order null values last regardless of whether the sort order is ascending or descending (`nulls last`).
+- **FR-013**: Nullable sortable fields (`score`, `firstResponseAt`, `lastEventAt`, `effectiveTo`) MUST order null values last regardless of whether the sort order is ascending or descending (`nulls last`).
 - **FR-014**: All ordering operations MUST automatically append a stable identifier tiebreaker (`id`) to guarantee deterministic pagination.
 - **FR-015**: The query service MUST authenticate requests using the same token authorization scheme as the existing API, requiring the `roleradar.api` scope and validating the allowlisted owner subject.
 - **FR-016**: Data access in the query engine MUST be scoped strictly to the authenticated `OwnerId` in the application layer; the query endpoint MUST NOT expose or connect directly to un-scoped database collections.

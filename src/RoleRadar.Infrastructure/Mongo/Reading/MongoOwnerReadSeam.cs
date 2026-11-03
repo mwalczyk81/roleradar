@@ -37,10 +37,25 @@ public sealed class MongoOwnerReadSeam : IOwnerReadSeam
         return collection.AsQueryable(DefaultAggregateOptions).Where(p => p.OwnerId == ownerId.Value);
     }
 
-    public IQueryable<NoteReadModel> QueryNotes(OwnerId ownerId)
+    public IQueryable<NoteReadModel> QueryNotes(OwnerId ownerId, bool includeContent = false)
     {
         var collection = _database.GetCollection<NoteReadModel>(MongoBootstrapAndIndexes.NotesCollectionName);
-        return collection.AsQueryable(DefaultAggregateOptions).Where(p => p.OwnerId == ownerId.Value);
+        var owned = collection.AsQueryable(DefaultAggregateOptions).Where(p => p.OwnerId == ownerId.Value);
+        if (includeContent)
+        {
+            return owned;
+        }
+
+        // Explicit member projection: MongoDB receives a $project that simply never names "body".
+        return owned.Select(n => new NoteReadModel
+        {
+            Id = n.Id,
+            Heading = n.Heading,
+            Tags = n.Tags,
+            LinkedEntityType = n.LinkedEntityType,
+            CreatedAt = n.CreatedAt,
+            UpdatedAt = n.UpdatedAt
+        });
     }
 
     public IQueryable<CriterionReadModel> QueryCriteria(OwnerId ownerId)

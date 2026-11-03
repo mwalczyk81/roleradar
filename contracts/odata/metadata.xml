@@ -54,10 +54,10 @@
         <Property Name="heading" Type="Edm.String" Nullable="false" />
         <Property Name="tags" Type="Collection(Edm.String)" />
         <Property Name="linkedEntityType" Type="Edm.String" Nullable="false" />
-        <Property Name="linkedEntityId" Type="Edm.Guid" Nullable="false" />
+        <Property Name="linkedEntityId" Type="Edm.Guid" />
         <Property Name="createdAt" Type="Edm.DateTimeOffset" Nullable="false" />
         <Property Name="updatedAt" Type="Edm.DateTimeOffset" Nullable="false" />
-        <Property Name="content" Type="Edm.String" Nullable="false" />
+        <Property Name="content" Type="Edm.String" />
       </EntityType>
       <EntityType Name="CriterionReadModel">
         <Key>
@@ -77,9 +77,9 @@
         </Key>
         <Property Name="id" Type="Edm.Guid" Nullable="false" />
         <Property Name="runDate" Type="Edm.DateTimeOffset" Nullable="false" />
+        <Property Name="newPostings" Type="Edm.Int32" Nullable="false" />
         <Property Name="companiesSearched" Type="Edm.Int32" Nullable="false" />
         <Property Name="postingsFound" Type="Edm.Int32" Nullable="false" />
-        <Property Name="newPostings" Type="Edm.Int32" Nullable="false" />
         <Property Name="errorsCount" Type="Edm.Int32" Nullable="false" />
         <Property Name="summary" Type="Edm.String" />
       </EntityType>

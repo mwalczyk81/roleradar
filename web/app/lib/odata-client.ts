@@ -7,6 +7,33 @@
 
 export type SortDirection = "asc" | "desc";
 
+/** An OData DateTimeOffset literal. Emitted unquoted (quoting it would make it a string comparison). */
+export interface ODataDateTime {
+  dateTime: string;
+}
+
+export function isODataDateTime(value: unknown): value is ODataDateTime {
+  return typeof value === "object" && value !== null && "dateTime" in value && typeof value.dateTime === "string";
+}
+
+const DATE_TIME_LITERAL = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
+
+/**
+ * Builds a UTC DateTimeOffset literal from a yyyy-MM-dd date or an ISO timestamp. Returns undefined for
+ * anything that is not a real date, so callers can ignore a bad URL parameter instead of forwarding it.
+ */
+export function toODataDateTime(input: string): ODataDateTime | undefined {
+  const trimmed = input.trim();
+  if (!/^\d{4}-\d{2}-\d{2}(T[\d:.]+(Z|[+-]\d{2}:\d{2}))?$/.test(trimmed)) {
+    return undefined;
+  }
+  const parsed = new Date(trimmed.length === 10 ? `${trimmed}T00:00:00Z` : trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return undefined;
+  }
+  return { dateTime: `${parsed.toISOString().slice(0, 19)}Z` };
+}
+
 export interface OrderByClause {
   field: string;
   direction?: SortDirection;
@@ -17,7 +44,7 @@ export type FilterExpression =
       type: "comparison";
       operator: "eq" | "ne" | "gt" | "ge" | "lt" | "le";
       field: string;
-      value: string | number | boolean | null;
+      value: string | number | boolean | ODataDateTime | null;
     }
   | {
       type: "function";
@@ -45,15 +72,24 @@ export interface ODataQueryParams {
   select?: string[];
 }
 
+function assertDateTimeLiteral(literal: string): string {
+  if (!DATE_TIME_LITERAL.test(literal)) {
+    throw new Error(`Invalid OData date-time literal: ${literal}`);
+  }
+  return literal;
+}
+
 export function formatFilterExpression(expr: FilterExpression): string {
   switch (expr.type) {
     case "comparison": {
       const valStr =
         expr.value === null
           ? "null"
-          : typeof expr.value === "string"
-            ? `'${expr.value.replace(/'/g, "''")}'`
-            : `${expr.value}`;
+          : isODataDateTime(expr.value)
+            ? assertDateTimeLiteral(expr.value.dateTime)
+            : typeof expr.value === "string"
+              ? `'${expr.value.replace(/'/g, "''")}'`
+              : `${expr.value}`;
       return `${expr.field} ${expr.operator} ${valStr}`;
     }
     case "function": {
