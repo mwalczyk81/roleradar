@@ -423,6 +423,59 @@
           }
         }
       }
+    },
+    "/api/v1/insights/stats": {
+      "get": {
+        "tags": [
+          "InsightsEndpoints"
+        ],
+        "operationId": "GetInsightsStats",
+        "parameters": [
+          {
+            "name": "window",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "enum": [
+                "last90Days",
+                "allTime"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "asOf",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightsStatsDto"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -668,6 +721,49 @@
           },
           "issue": {
             "type": "string"
+          }
+        }
+      },
+      "InsightsStatsDto": {
+        "required": [
+          "asOf",
+          "window",
+          "windowStart",
+          "responseTime",
+          "weeklyApplications",
+          "searchRunYield"
+        ],
+        "type": "object",
+        "properties": {
+          "asOf": {
+            "type": "string",
+            "format": "date"
+          },
+          "window": {
+            "enum": [
+              "last90Days",
+              "allTime"
+            ],
+            "type": "string"
+          },
+          "windowStart": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "date"
+          },
+          "responseTime": {
+            "$ref": "#/components/schemas/ResponseTimeDto"
+          },
+          "weeklyApplications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WeeklyApplicationsDto"
+            }
+          },
+          "searchRunYield": {
+            "$ref": "#/components/schemas/SearchRunYieldDto"
           }
         }
       },
@@ -940,6 +1036,61 @@
           }
         }
       },
+      "ResponseTimeDto": {
+        "required": [
+          "medianDays",
+          "sampleSize"
+        ],
+        "type": "object",
+        "properties": {
+          "medianDays": {
+            "type": [
+              "null",
+              "number"
+            ],
+            "format": "double"
+          },
+          "sampleSize": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SearchRunYieldDto": {
+        "required": [
+          "runs",
+          "truncated"
+        ],
+        "type": "object",
+        "properties": {
+          "runs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchRunYieldPointDto"
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SearchRunYieldPointDto": {
+        "required": [
+          "startedAt",
+          "newPostings"
+        ],
+        "type": "object",
+        "properties": {
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "newPostings": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
       "TransitionPostingRequestDto": {
         "required": [
           "toDisposition",
@@ -1093,6 +1244,23 @@
             "format": "uuid"
           }
         }
+      },
+      "WeeklyApplicationsDto": {
+        "required": [
+          "weekStart",
+          "count"
+        ],
+        "type": "object",
+        "properties": {
+          "weekStart": {
+            "type": "string",
+            "format": "date"
+          },
+          "count": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
       }
     }
   },
@@ -1111,6 +1279,9 @@
     },
     {
       "name": "AncillaryEndpoints"
+    },
+    {
+      "name": "InsightsEndpoints"
     }
   ]
 }

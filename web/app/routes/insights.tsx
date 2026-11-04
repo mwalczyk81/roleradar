@@ -1,13 +1,17 @@
+import { useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { Brand } from "../components/Brand.js";
-import { requireUserSession } from "../lib/auth-guard.server.js";
-import { loadInsightsCounts } from "../lib/insights-counts.server.js";
+import { assertApiOk, requireUserSession } from "../lib/auth-guard.server.js";
+import { loadInsightsCounts, MAX_IN_FLIGHT } from "../lib/insights-counts.server.js";
 import { LENS_LABELS, lensListHref, parseWindowParams } from "../lib/insights-lenses.js";
+import type { StatsView } from "../lib/insights-stats.js";
+import { loadInsightsStats } from "../lib/insights-stats.server.js";
 import { buildInsightsView, type CountItem, type FunnelView, type InsightsView, type RateView } from "../lib/insights-view.js";
 import { getNavItems } from "../lib/nav.js";
+import { createLimiter } from "../lib/request-limiter.server.js";
 import { useTheme } from "../lib/use-theme.js";
-import { Alert, AppShell, BarChart, Button, StatTile, type BarChartItem } from "../ui.js";
+import { Alert, AppShell, BarChart, Button, ColumnChart, Sparkline, StatTile, type BarChartItem } from "../ui.js";
 
 export const meta: MetaFunction = () => [{ title: "Insights - RoleRadar" }];
 
@@ -15,11 +19,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const session = await requireUserSession(request);
   const ctx = parseWindowParams(new URL(request.url));
 
-  const counts = await loadInsightsCounts({ request, session, ctx });
+  // One limiter for the counts and the stats read. The stats request is started first, so it runs in the first wave
+  // alongside the first counts, and the total in flight never exceeds MAX_IN_FLIGHT.
+  const limiter = createLimiter(MAX_IN_FLIGHT);
+  const statsPromise = loadInsightsStats({ request, session, ctx, limiter });
+  const counts = await loadInsightsCounts({ request, session, ctx, limiter });
+  const stats = await statsPromise;
+  if (stats.authFailure) {
+    // 401 re-challenges once (never in a loop) and 403 goes to /not-authorized. Any other stats failure only
+    // degrades the trend and median tiles.
+    await assertApiOk(stats.authFailure, request, session.sessionId);
+  }
+
   const view = buildInsightsView(counts, ctx);
 
   return {
     view,
+    stats: stats.view,
     csrfToken: session.csrfToken,
     userLabel: session.ownerUsername || "Signed in",
   };
@@ -166,8 +182,87 @@ function BackfillNotice({ view }: { view: InsightsView }) {
   );
 }
 
+const MEDIAN_HELP =
+  "Median days from the applied date to the first response: an interview, offer, offer accepted, offer declined or rejected event. Follow-ups and withdrawals do not count. Whole UTC days, and a median, not a mean.";
+
+function TrendsSection({ stats }: { stats: StatsView }) {
+  const [runsAsTable, setRunsAsTable] = useState(false);
+  const runTitle = "New postings per search run";
+
+  return (
+    <section aria-labelledby="trends" className="insights-section">
+      <h2 id="trends" className="page-heading">
+        Trends
+      </h2>
+
+      {stats.state === "unavailable" ? (
+        <Alert variant="warning" title="Trends are unavailable">
+          The median response time, applications per week and search-run yield could not be loaded. Everything else on this page is unaffected.
+        </Alert>
+      ) : null}
+
+      <div className="insights-tiles">
+        <div className="insights-tile" data-rate="median-response-time">
+          <StatTile label="Median response time" value={stats.median.value} note={stats.median.sampleText} />
+          <p className="insights-help">{MEDIAN_HELP}</p>
+        </div>
+      </div>
+
+      {stats.state === "ok" ? (
+        <>
+          <div className="insights-trend">
+            <ColumnChart
+              title="Applications per week"
+              subtitle="By application date. Weeks start on Monday (UTC); weeks with none are shown as zero."
+              data={stats.weekly.items}
+              labelHeader="Week"
+              valueHeader="Applications"
+              emptyMessage="No applications in this window."
+            />
+          </div>
+
+          <div className="insights-trend">
+            <h3 className="insights-trend-title page-heading">{runTitle}</h3>
+            {stats.runs.empty ? (
+              <p className="insights-help">No search runs in this window.</p>
+            ) : (
+              <>
+                <button type="button" className="insights-run-toggle" aria-pressed={runsAsTable} onClick={() => setRunsAsTable((value) => !value)}>
+                  Table view of search runs
+                </button>
+                {runsAsTable ? (
+                  <table className="insights-run-table">
+                    <caption>{runTitle}</caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Run date</th>
+                        <th scope="col">New postings</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.runs.rows.map((row, index) => (
+                        <tr key={`${row.date}-${index}`}>
+                          <td>{row.date}</td>
+                          <td>{row.newPostings}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <Sparkline className="insights-sparkline" values={stats.runs.values} label={runTitle} width={320} height={56} />
+                )}
+              </>
+            )}
+            {stats.runs.note ? <p className="insights-trend-note">{stats.runs.note}</p> : null}
+          </div>
+        </>
+      ) : null}
+    </section>
+  );
+}
+
 export default function Insights() {
-  const { view, csrfToken, userLabel } = useLoaderData<typeof loader>();
+  const { view, stats, csrfToken, userLabel } = useLoaderData<typeof loader>();
   const { theme, toggleTheme } = useTheme();
   const { ctx } = view;
 
@@ -278,6 +373,8 @@ export default function Insights() {
           </div>
         </section>
 
+        <TrendsSection stats={stats} />
+
         <section aria-labelledby="how-calculated" className="insights-section">
           <h2 id="how-calculated" className="page-heading">
             How these are calculated
@@ -285,8 +382,9 @@ export default function Insights() {
           <p className="insights-help">
             Posting figures (leads, reviewed, applied to, screened out, expired) are counted by first-seen date. Application figures are counted by
             application date. Responded means at least one interview, offer, offer accepted, offer declined or rejected event; follow-ups and withdrawals do
-            not count. Applications older than 14 days form the mature cohort for the interview rate, and older than 30 days for the ghost rate. Lists open
-            with the same filter, window and as-of date, so the number you click and the rows you see agree.
+            not count. Applications older than 14 days form the mature cohort for the interview rate, and older than 30 days for the ghost rate. An application exactly 30 days old
+            is in the ghost rate denominator (30 days or older) but is not ghosted until it is older than 30 days. Lists open with the same filter,
+            window and as-of date, so the number you click and the rows you see agree.
           </p>
           <p className="insights-help">
             <Link to={lensListHref("leads", ctx)}>See all postings in this window</Link>

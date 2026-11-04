@@ -155,3 +155,78 @@ body {
   margin: 0;
   font-size: var(--ds-text-sm);
 }
+
+/* Insights trends (007 phase 4). The charts come from the kit; these are only the wrappers the page writes itself and
+   the search-run table view. Tokens only, no raw colours. */
+.insights-trend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+
+.insights-trend-title {
+  margin: 0;
+  font-size: var(--ds-text-lg);
+}
+
+.insights-trend-note {
+  margin: 0;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+}
+
+.insights-sparkline {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.insights-run-toggle {
+  align-self: flex-start;
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  color: var(--ds-text);
+  font-family: inherit;
+  font-size: var(--ds-text-sm);
+  cursor: pointer;
+}
+
+.insights-run-toggle[aria-pressed="true"] {
+  border-color: var(--ds-primary);
+  background: var(--ds-primary-subtle);
+  color: var(--ds-primary-subtle-text);
+}
+
+.insights-run-toggle:focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
+
+.insights-run-table {
+  width: 100%;
+  max-width: 28rem;
+  border-collapse: collapse;
+  font-size: var(--ds-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.insights-run-table caption {
+  padding-bottom: var(--ds-space-2);
+  color: var(--ds-text-secondary);
+  text-align: left;
+}
+
+.insights-run-table th,
+.insights-run-table td {
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border-bottom: 1px solid var(--ds-border);
+  text-align: left;
+}
+
+.insights-run-table th:last-child,
+.insights-run-table td:last-child {
+  text-align: right;
+}

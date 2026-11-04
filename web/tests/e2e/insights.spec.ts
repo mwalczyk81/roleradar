@@ -107,7 +107,7 @@ test.describe("Insights page (real Chromium, fictional loopback stub)", () => {
     await page.goto(`${harness.baseUrl}/insights?window=90d&asOf=${AS_OF}`, { waitUntil: "networkidle" });
 
     const tableViewButtons = page.getByRole("button", { name: /table view/i });
-    await expect(tableViewButtons).toHaveCount(2);
+    await expect(tableViewButtons).toHaveCount(4); // two funnels, the weekly chart and the search-run yield
     await tableViewButtons.first().focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("table").first()).toBeVisible();

@@ -53,14 +53,10 @@ public sealed class ODataOrdering<T>
             return _defaultOrder(source).ThenBy(_id);
         }
 
+        var plan = ODataOrderPlan.From(orderBy);
         IOrderedQueryable<T>? ordered = null;
-        foreach (var node in orderBy.OrderByNodes)
+        foreach (var propNode in plan.Nodes)
         {
-            if (node is not OrderByPropertyNode propNode)
-            {
-                throw new ODataException("Only direct property sorting is supported in $orderby.");
-            }
-
             if (!_sorts.TryGetValue(propNode.Property.Name, out var sort))
             {
                 throw new ODataException($"Property '{propNode.Property.Name}' is not orderable on {_entitySet}.");
@@ -69,6 +65,6 @@ public sealed class ODataOrdering<T>
             ordered = sort(source, ordered, propNode.Direction == OrderByDirection.Descending);
         }
 
-        return ordered is null ? _defaultOrder(source).ThenBy(_id) : ordered.ThenBy(_id);
+        return ordered is null ? _defaultOrder(source).ThenBy(_id) : (plan.SortsById ? ordered : ordered.ThenBy(_id));
     }
 }

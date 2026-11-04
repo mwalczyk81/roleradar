@@ -34,7 +34,7 @@ test.describe("Insights e2e isolation (fictional loopback stub only)", () => {
     expect(() => assertLoopbackStub("http://10.1.2.3:5002", harness.apiPort)).toThrow();
   });
 
-  test("the page only ever reaches the stub, and only for the two OData sets", async ({ page, context }) => {
+  test("the page only ever reaches the stub, and only for the two OData sets and the stats read", async ({ page, context }) => {
     await harness.signIn(context);
     await page.goto(`${harness.baseUrl}/insights?window=90d&asOf=2026-09-30`, { waitUntil: "networkidle" });
     await expect(page.getByRole("heading", { level: 1, name: "Insights" })).toBeVisible();
@@ -42,7 +42,7 @@ test.describe("Insights e2e isolation (fictional loopback stub only)", () => {
     expect(harness.requests.length).toBeGreaterThan(0);
     for (const request of harness.requests) {
       expect(request.method).toBe("GET");
-      expect(["/odata/Postings", "/odata/Applications"]).toContain(request.pathname);
+      expect(["/odata/Postings", "/odata/Applications", "/api/v1/insights/stats"]).toContain(request.pathname);
     }
     expect(harness.unexpectedFilters).toEqual([]);
 

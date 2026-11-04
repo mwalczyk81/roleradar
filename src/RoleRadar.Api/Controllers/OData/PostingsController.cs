@@ -76,13 +76,9 @@ public sealed class PostingsController : ODataController
 
         IOrderedQueryable<PostingReadModel>? ordered = null;
 
-        foreach (var node in orderBy.OrderByNodes)
+        var plan = ODataOrderPlan.From(orderBy);
+        foreach (var propNode in plan.Nodes)
         {
-            if (node is not OrderByPropertyNode propNode)
-            {
-                throw new ODataException("Only direct property sorting is supported in $orderby.");
-            }
-
             var isDesc = propNode.Direction == OrderByDirection.Descending;
             var prop = propNode.Property.Name;
 
@@ -149,6 +145,6 @@ public sealed class PostingsController : ODataController
 
         return ordered is null
             ? source.OrderBy(p => p.Id)
-            : ordered.ThenBy(p => p.Id);
+            : (plan.SortsById ? ordered : ordered.ThenBy(p => p.Id));
     }
 }

@@ -30,7 +30,7 @@ Findings that shaped this plan are in [research.md](./research.md); the entity a
 
 **Project Type**: monorepo: .NET Application/Infrastructure/Api plus the React Router web app.
 
-**Performance Goals**: Insights page ready within 2 seconds on a seed of at least 1,000 postings and 300 applications (SC-008). 20 OData counts at concurrency 6 plus 1 stats call.
+**Performance Goals**: Insights page ready within 2 seconds on a seed of at least 1,000 postings and 300 applications (SC-008). 22 OData counts in the 90 day view (20 in the all-time view) at concurrency 6, plus 1 stats call (23 and 21 in total).
 
 **Constraints**: read-only; no new write paths; owner-scoped through `IOwnerReadSeam`; `$top=0` is the count-only form (R1, fixed in 006's pipeline); no raw `$filter` from URLs; fictional data only; the real database is never read by tests or screenshots.
 
@@ -40,8 +40,10 @@ Findings that shaped this plan are in [research.md](./research.md); the entity a
 
 | Phase | OData `$count` requests | Stats requests | Total | Concurrency |
 | --- | --- | --- | --- | --- |
-| After Phase 2 | 20 (18 lens counts + 2 read-model coverage checks; unchanged by the two-funnel layout because `applied-to` is the existing application-rate numerator lens, renamed) | 0 | 20 | 6 |
-| After Phase 3 | 20 | 1 | 21 | 6 (stats runs first, alongside the first wave) |
+| Insights page, all-time view | 20 (18 lens counts + 2 read-model coverage checks) | 0 | 20 | 6 |
+| Insights page, 90 day view | 22 (the same 20 + the 2 all-time interview counts that FR-010 needs) | 0 | 22 | 6 |
+| With the stats request, all-time view | 20 | 1 | 21 | 6 (stats starts with the first wave) |
+| With the stats request, 90 day view | 22 | 1 | 23 | 6 (stats starts with the first wave) |
 
 Each request has a 5 second timeout; one failing request marks only the tiles that depend on it "unavailable".
 
@@ -183,7 +185,7 @@ Done when: a file-listing diff of `web/app/ds` matches the table (anything extra
 1. Vitest: lens module. Every lens and window yields the exact `$filter` in the snapshot; windows and cutoffs at 13/14/29/30/31 days and window edges; node count and depth within limits via the real `ValidateFilterExpression` rules mirrored in the test or the .NET snapshot test; count query is `$top=0&$count=true`; invalid `lens`, `window`, `asOf` ignored.
 2. Vitest: rates and sample flags: `x of y`, `< 10` is "small sample", `0` is "no data", never NaN; the coverage checks gate flag-dependent numbers and render "needs backfill" with the command.
 3. Vitest: list loaders (`postings._index`, `applications._index`): with `?lens=...` the `$filter` they send equals the dashboard's count `$filter` for the same lens (the structural parity test); the lens chip renders; lens for the wrong entity is ignored; a raw `$filter` param is ignored.
-4. Vitest route tests: Insights loader runs the 20 counts with the concurrency bound, one failing request degrades only its tiles; 401 re-login once, 403 to `/not-authorized`, 404 handling via `assertApiOk`.
+4. Vitest route tests: Insights loader runs the counts (22 in the 90 day view, 20 in the all-time view; 23 and 21 with the stats request) with the concurrency bound, one failing request degrades only its tiles; 401 re-login once, 403 to `/not-authorized`, 404 handling via `assertApiOk`.
 5. .NET integration `InsightsParity` (also covers nesting): for every snapshot lens and both windows, `@odata.count` over the real API equals the independent oracle, equals the snapshot's `expected`, and equals the list's `@odata.count` for the same filter; boundary rows agree with the displayed `ageInDays`.
 6. Playwright Chromium: both funnels and the tiles render with their cohort titles; each funnel bar and tile link lands on a list whose displayed total equals the number on the bar; the "offers without an interview" note links to the `offers` lens; keyboard operation; table view toggle on each funnel; axe clean in light and dark at 1280 and 360 px using the shared reduced-motion helper; no horizontal page scroll at 360 px.
 7. Nesting tests, both windows: (a) Vitest over the fictional fixture: for each funnel, each stage count is at most its predecessor and the view model refuses to render a funnel that violates this (shows an error state instead of an inverted bar); (b) the .NET oracle test asserts the same for the seed, including rows built to break a naive funnel (offer without interview, rejection with no interview, an application whose posting was first seen before the window).

@@ -86,6 +86,26 @@ public sealed partial class InsightsBoundaryTests(InsightsTodayFixture fixture) 
     }
 
     [Fact]
+    public async Task GhostRate_Boundary_At29_30_And31Days_IsPinned()
+    {
+        // FR-013 deliberately uses two cutoffs: the denominator is "30 days old or older" (ghost-eligible, lt asOf-29d)
+        // and the numerator is "older than 30 days" (ghosted, lt asOf-30d). An application exactly 30 days old is in the
+        // denominator and cannot be ghosted yet. Changing either cutoff must change this test on purpose.
+        var eligible = Ids(await ApplicationsAsync("ghost-eligible", last90Days: false));
+        var ghosted = Ids(await ApplicationsAsync("ghosted", last90Days: false));
+        var a29 = InsightsSeed.ApplicationId("age-29-silent");
+        var a30 = InsightsSeed.ApplicationId("age-30-silent");
+        var a31 = InsightsSeed.ApplicationId("age-31-silent");
+
+        Assert.False(eligible.Contains(a29), "29 days old: not in the ghost rate denominator");
+        Assert.False(ghosted.Contains(a29), "29 days old: not ghosted");
+        Assert.True(eligible.Contains(a30), "30 days old: in the ghost rate denominator");
+        Assert.False(ghosted.Contains(a30), "30 days old: in the denominator but not ghosted");
+        Assert.True(eligible.Contains(a31), "31 days old: in the ghost rate denominator");
+        Assert.True(ghosted.Contains(a31), "31 days old: ghosted");
+    }
+
+    [Fact]
     public async Task NinetyDayWindow_Applications_IncludeAsOfAndTheFirstWindowDay_AndExcludeTheDayBeforeAndTheFuture()
     {
         var all = await ApplicationsAsync("applied", last90Days: false);

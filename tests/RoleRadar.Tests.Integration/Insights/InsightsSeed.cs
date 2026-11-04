@@ -25,6 +25,9 @@ internal sealed record SeedPosting(
     public IReadOnlyList<SeedEvent> EventList => Events ?? [];
 }
 
+/// <summary>One fictional search run, <c>DaysBeforeAsOf</c> days before the seed's as-of date (noon UTC).</summary>
+internal sealed record SeedSearchRun(string Owner, int DaysBeforeAsOf, int NewPostings);
+
 /// <summary>
 /// Deterministic, entirely fictional seed for the Insights tests. Dates are expressed as days before a fixed
 /// as-of date, so the same shape can be built relative to a fixed date (snapshots) or to today (tests that
@@ -66,6 +69,23 @@ internal static class InsightsSeed
 
     /// <summary>Owner A has the full matrix; B must never leak into A; C is empty; D is tiny.</summary>
     public static IReadOnlyList<SeedPosting> Postings { get; } = BuildPostings();
+
+    /// <summary>
+    /// Search runs for the stats read (T067). Owner A: one run outside the 90 day window (95 days) and six inside it;
+    /// oldest first inside the window the yields are 4, 0, 12, 3, 9, 6. Owner B has two that must never leak.
+    /// </summary>
+    public static IReadOnlyList<SeedSearchRun> SearchRuns { get; } =
+    [
+        new(OwnerA, 95, 7),
+        new(OwnerA, 80, 4),
+        new(OwnerA, 66, 0),
+        new(OwnerA, 45, 12),
+        new(OwnerA, 31, 3),
+        new(OwnerA, 14, 9),
+        new(OwnerA, 2, 6),
+        new(OwnerB, 99, 21),
+        new(OwnerB, 50, 17)
+    ];
 
     private static List<SeedPosting> BuildPostings()
     {
@@ -241,6 +261,19 @@ internal static class InsightsSeed
 
             // Persist the outcome the events produced; the replace recomputes every milestone from the events.
             Ok(await applications.UpsertApplicationAsync(application));
+        }
+
+        await WriteSearchRunsAsync(client, database, asOf);
+    }
+
+    public static async Task WriteSearchRunsAsync(IMongoClient client, IMongoDatabase database, DateOnly asOf)
+    {
+        var repository = new MongoSearchRunRepository(client, database);
+        foreach (var run in SearchRuns)
+        {
+            var startedAt = Instant(asOf, run.DaysBeforeAsOf);
+            Ok(await repository.UpsertSearchRunAsync(SearchRun.Create(
+                run.Owner, startedAt, run.NewPostings, createdAt: startedAt, id: DeterministicGuid($"search-run:{run.Owner}:{run.DaysBeforeAsOf}"))));
         }
     }
 

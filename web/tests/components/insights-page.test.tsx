@@ -4,6 +4,7 @@ import { render, within } from "@testing-library/react";
 import { createRoutesStub } from "react-router";
 import Insights from "../../app/routes/insights.js";
 import { buildInsightsView, type InsightsCounts } from "../../app/lib/insights-view.js";
+import { buildStatsView } from "../../app/lib/insights-stats.js";
 import type { LensContext, LensKey } from "../../app/lib/insights-lenses.js";
 
 const CTX: LensContext = { window: "90d", asOf: "2026-09-30" };
@@ -37,12 +38,23 @@ function counts(overrides: Partial<Record<LensKey, number | null>> = {}, extra: 
   };
 }
 
+// The trend section has its own tests (insights-trends.test.tsx); here it just has to be healthy.
+const HEALTHY_STATS = buildStatsView({
+  asOf: "2026-09-30",
+  window: "last90Days",
+  windowStart: "2026-07-03",
+  responseTime: { medianDays: 10, sampleSize: 14 },
+  // No dated rows: the as-of date stays the only date this page shows besides the trend labels, which the trend tests cover.
+  weeklyApplications: [],
+  searchRunYield: { runs: [], truncated: false },
+});
+
 function renderPage(view: ReturnType<typeof buildInsightsView>) {
   const Stub = createRoutesStub([
     {
       path: "/insights",
       Component: Insights,
-      loader: () => ({ view, csrfToken: "dummy-csrf-token", userLabel: "fictional@example.com" }),
+      loader: () => ({ view, stats: HEALTHY_STATS, csrfToken: "dummy-csrf-token", userLabel: "fictional@example.com" }),
     },
   ]);
   return render(React.createElement(Stub, { initialEntries: ["/insights"] }));
@@ -150,6 +162,16 @@ describe("Insights page (T045)", () => {
     expect(text).toMatch(/reviewed.*not a lead or unscored|not a lead or unscored.*reviewed/i);
     expect(text).toMatch(/returned to lead/i);
     expect(text).toMatch(/applied to.*can (legitimately )?differ|can (legitimately )?differ.*applied to/i);
+  });
+
+  it("states the one-day difference between the ghost rate denominator and the ghosted numerator (A3)", async () => {
+    const { findByText, container } = renderPage(buildInsightsView(counts(), CTX));
+    await findByText("30 of 60");
+    const text = (container.textContent ?? "").replace(/\s+/g, " ");
+
+    expect(text).toMatch(
+      /an application exactly 30 days old is in the ghost rate denominator \(30 days or older\) but is not ghosted until it is older than 30 days/i
+    );
   });
 
   it("never shows a real-looking date or count that did not come from the view: the as-of date is the only date", async () => {

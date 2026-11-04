@@ -91,6 +91,11 @@ describe("Insights loader (T042)", () => {
     vi.restoreAllMocks();
     mockFetchOData.mockReset();
     vi.spyOn(apiClientModule, "fetchOData").mockImplementation(mockFetchOData);
+    // These tests are about the counts. The stats read has its own tests (insights.stats.test.ts); here it answers
+    // "unavailable" without any network, so it adds no count request.
+    vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
+      GET: vi.fn().mockResolvedValue({ data: undefined, error: { message: "not under test" }, response: { status: 500 } }),
+    } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
   });
 
   afterEach(() => {

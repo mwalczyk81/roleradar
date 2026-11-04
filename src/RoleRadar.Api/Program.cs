@@ -183,6 +183,7 @@ public partial class Program
         apiV1.MapCompaniesEndpoints();
         apiV1.MapApplicationsEndpoints();
         apiV1.MapAncillaryEndpoints();
+        apiV1.MapInsightsEndpoints();
 
         app.MapControllers();
 

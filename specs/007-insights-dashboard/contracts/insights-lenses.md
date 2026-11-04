@@ -38,6 +38,7 @@ Rules:
 - Value strings (dispositions, application statuses) are imported from `dispositions.ts` and `application-enums.ts`. No string literal for a Domain value is typed in the lens module.
 - Window clause: posting lenses on `firstSeenAt`, application lenses on `appliedAt`; `90d` is `ge <asOf-89d>T00:00:00Z and lt <asOf+1d>T00:00:00Z`; `all` keeps only the `lt <asOf+1d>` bound.
 - Cutoffs: `mature` `appliedAt lt <asOf-13d>`, `ghost-eligible` `appliedAt lt <asOf-29d>`, `ghosted` `appliedAt lt <asOf-30d>`, all at 00:00Z.
+- One-day difference, deliberate: the ghost rate denominator (`ghost-eligible`) is applications 30 days old **or older**, the numerator (`ghosted`) is applications **older than** 30 days. An application exactly 30 days old is in the denominator and can never count as ghosted until the next day. The page says so in "How these are calculated", and `InsightsBoundaryTests.GhostRate_Boundary_At29_30_And31Days_IsPinned` pins the 29, 30 and 31 day cases so any change is deliberate.
 
 ## URL contract on list pages
 

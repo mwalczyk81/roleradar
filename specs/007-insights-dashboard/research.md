@@ -24,7 +24,7 @@ Findings come from reading the 006 code on `main` (commit 229af9e) on 2026-11-04
 
 **Why**: the user-visible promise is "the number and the list always agree". If the count runs the same filter string the list runs, they agree by construction, and the parity test is a check on the module rather than on two parallel implementations. A server-side stats call would have to re-implement every filter in C#, and the two copies could drift.
 
-**Cost**: 20 OData requests per page load (18 lens counts plus 2 read-model sentinels, see R6), run with concurrency 6 and a 5 second per-request timeout. Each is an indexed count over a single owner's data. The stats call (Phase 3) adds one more, for 21.
+**Cost**: 20 OData requests per page load in the all-time view, 22 in the 90 day view (18 lens counts plus 2 read-model sentinels, see R6, plus the 2 all-time interview counts that the 90 day view needs), run with concurrency 6 and a 5 second per-request timeout. Each is an indexed count over a single owner's data. The stats call (Phase 3) adds one more, for 21 (all-time) and 23 (90 day).
 
 **Alternatives rejected**
 - One stats call returning every count: duplicates filter logic, drill-down could drift.

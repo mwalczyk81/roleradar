@@ -1,5 +1,7 @@
+using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
+using RoleRadar.Application.Insights;
 
 namespace RoleRadar.Api.OpenApi;
 
@@ -18,6 +20,12 @@ public static class ExplicitTypeSchemaTransformers
         options.AddSchemaTransformer((schema, context, cancellationToken) =>
         {
             NormalizeSchema(schema, context.JsonTypeInfo.Type);
+            if (context.JsonTypeInfo.Type == typeof(InsightsStatsDto) && schema.Properties is not null
+                && schema.Properties.TryGetValue("window", out var windowProperty) && windowProperty is OpenApiSchema windowSchema)
+            {
+                DeclareInsightsWindowEnum(windowSchema);
+            }
+
             return Task.CompletedTask;
         });
 
@@ -34,10 +42,54 @@ public static class ExplicitTypeSchemaTransformers
                 }
             }
 
+            if (context.Description.ActionDescriptor.EndpointMetadata.OfType<EndpointNameMetadata>().Any(m => m.EndpointName == "GetInsightsStats"))
+            {
+                DeclareInsightsStatsParameters(operation);
+            }
+
             return Task.CompletedTask;
         });
 
         return options;
+    }
+
+    /// <summary>
+    /// GET /api/v1/insights/stats: <c>window</c> is a required string enum and <c>asOf</c> a required string with
+    /// <c>format: date</c>. The handler parses both itself so that a bad value is answered with the ErrorEnvelope, which
+    /// is why they are bound as plain strings; the schema still tells clients the real contract.
+    /// </summary>
+    private static void DeclareInsightsStatsParameters(OpenApiOperation operation)
+    {
+        if (operation.Parameters is null)
+        {
+            return;
+        }
+
+        foreach (var parameter in operation.Parameters)
+        {
+            if (parameter is not OpenApiParameter concrete || parameter.Schema is not OpenApiSchema schema)
+            {
+                continue;
+            }
+
+            if (parameter.Name == "window")
+            {
+                concrete.Required = true;
+                DeclareInsightsWindowEnum(schema);
+            }
+            else if (parameter.Name == "asOf")
+            {
+                concrete.Required = true;
+                schema.Type = JsonSchemaType.String;
+                schema.Format = "date";
+            }
+        }
+    }
+
+    private static void DeclareInsightsWindowEnum(OpenApiSchema schema)
+    {
+        schema.Type = JsonSchemaType.String;
+        schema.Enum = [.. InsightsWindows.Names.Select(name => (JsonNode)JsonValue.Create(name)!)];
     }
 
     private static void NormalizeSchema(OpenApiSchema schema, Type clrType)

@@ -40,3 +40,24 @@ Chosen option 3.
 ### Confirmation
 
 Unit tests on the calculator (even/odd medians, empty, single, zero-day, clamped negative, week boundaries on Sunday/Monday UTC). Integration test over the seeded API. Architecture test: the handler depends on `IOwnerReadSeam` and not on any MongoDB type (Application already has no MongoDB reference).
+
+## Measured (T078, 2026-11-04)
+
+Measured on the fictional integration seed (Testcontainers MongoDB, owner A, all-time window, as-of 2026-09-30) and with a synthetic in-memory load. One machine, one run each; treat them as order of magnitude, not a benchmark.
+
+| What | Result |
+| --- | --- |
+| Rows projected on the seed, all-time | 27 applications (two date columns each) and 7 search runs (two columns each) |
+| Rows projected on the seed, last 90 days | 25 applications and 6 search runs |
+| Endpoint round trip on the seed (12 calls) | first call 278 ms (cold: connection, query translation, JIT), median of the next 11 calls 5.3 ms |
+| Calculation alone at the cap (50,000 applications and 50,000 runs, all-time) | 23.6 ms, giving 33,333 responses, 353 weekly buckets and 120 runs |
+
+The window is applied in the database query, so the 50,000-row cap bounds what is actually read, not only what is kept. The calculation is not the cost at any volume this ADR assumes; reading the rows would be.
+
+## As built
+
+- The handler is `GetInsightsStatsQueryHandler` over `GetInsightsStatsQuery`, registered with `AddQueryHandler` (logging decorator only, no transaction or audit). It depends on `IOwnerReadSeam` and `IUtcClock` only.
+- Over the cap, and an as-of date more than one day in the future, return `Result` failures with `ErrorCode.ValidationError`. The existing envelope mapping turns that into HTTP 400, not a distinct 422.
+- The endpoint binds `window` and `asOf` as plain strings and parses them exactly (`last90Days` or `allTime`, `yyyy-MM-dd`), so a bad value gets the standard `ErrorEnvelope`. A transformer declares the required string enum and `format: date` in the OpenAPI document and the generated client types.
+- All-time weekly buckets run from the week of the earliest application to the week of the as-of date, and are empty when there are no applications.
+- `responseTime.sampleSize` equals the `responded` lens count for the same window and as-of date; an integration test asserts it against the real API for both windows.

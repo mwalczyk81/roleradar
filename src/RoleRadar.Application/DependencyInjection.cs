@@ -50,6 +50,9 @@ public static class DependencyInjection
         services.AddQueryHandler<Tracking.Queries.GetContactQuery, Tracking.Queries.ContactDto?, Tracking.Queries.GetContactQueryHandler>();
         services.AddQueryHandler<Integrity.VerifyIntegrityQuery, Integrity.VerifyIntegrityResultDto, Integrity.VerifyIntegrityQueryHandler>();
 
+        // Feature 007: Insights stats read (a query: no transaction, no audit entry).
+        services.AddQueryHandler<Insights.GetInsightsStatsQuery, Insights.InsightsStatsDto, Insights.GetInsightsStatsQueryHandler>();
+
         // Feature 004: Tracker Import
         services.AddTransient<Tracking.Import.Pipeline.ITrackerImportPipelineFactory, Tracking.Import.Pipeline.TrackerImportPipelineFactory>();
         services.AddTransient<Tracking.Import.Commands.ITrackerImportCoordinator, Tracking.Import.Commands.TrackerImportCoordinator>();

@@ -1,7 +1,8 @@
 /**
  * Runs the Insights count requests: count-only OData queries (`$top=0&$count=true`) built by the shared lens module.
  *
- * At most MAX_IN_FLIGHT requests run at once, each is cut off after REQUEST_TIMEOUT_MS, and one failing request only
+ * At most MAX_IN_FLIGHT requests run at once (the limiter can be shared with the stats request, which then counts
+ * against the same bound), each is cut off after REQUEST_TIMEOUT_MS, and one failing request only
  * makes the numbers that depend on it "unavailable". A 401 or 403 from the API is handed to assertApiOk after all
  * requests have settled, so the owner is re-challenged once (never in a loop) or sent to /not-authorized.
  *
@@ -24,6 +25,7 @@ import {
   type LensKey,
 } from "./insights-lenses.js";
 import type { CountValue, InsightsCounts } from "./insights-view.js";
+import { createLimiter, type Limiter } from "./request-limiter.server.js";
 
 export const MAX_IN_FLIGHT = 6;
 export const REQUEST_TIMEOUT_MS = 5_000;
@@ -39,24 +41,14 @@ interface CountTask {
   assign: (count: CountValue) => void;
 }
 
-/** Runs the tasks with at most `limit` in flight; every task settles (a task never throws). */
-async function runBounded(tasks: Array<() => Promise<void>>, limit: number): Promise<void> {
-  let next = 0;
-  const worker = async () => {
-    while (next < tasks.length) {
-      const task = tasks[next++];
-      await task();
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, worker));
-}
-
 export async function loadInsightsCounts(args: {
   request: Request;
   session: { accessToken: string; sessionId: string };
   ctx: LensContext;
+  limiter?: Limiter;
 }): Promise<InsightsCounts> {
   const { request, session, ctx } = args;
+  const limiter = args.limiter ?? createLimiter(MAX_IN_FLIGHT);
   const counts: InsightsCounts = { lens: {}, coverage: {} };
   const tasks: CountTask[] = [];
 
@@ -104,7 +96,7 @@ export async function loadInsightsCounts(args: {
 
   let authFailure: { status: number } | undefined;
 
-  const runners = tasks.map((task) => async () => {
+  const runners = tasks.map((task) => limiter.run(async () => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<null>((resolve) => {
@@ -142,9 +134,9 @@ export async function loadInsightsCounts(args: {
         clearTimeout(timer);
       }
     }
-  });
+  }));
 
-  await runBounded(runners, MAX_IN_FLIGHT);
+  await Promise.all(runners);
 
   if (authFailure) {
     await assertApiOk(authFailure, request, session.sessionId);

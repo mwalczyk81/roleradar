@@ -14,7 +14,7 @@ import { assertLoopbackStub } from "./isolation.js";
 
 /**
  * A loopback stub API plus the real web server in front of it, for the Insights e2e specs. The stub answers only the
- * OData reads the Insights page and the two list pages make, from entirely fictional data: the counts come from
+ * OData reads the Insights page and the two list pages make, plus GET /api/v1/insights/stats, from entirely fictional data: the counts come from
  * contracts/insights-lenses.json (the oracle's counts over the fictional seed) and the rows are generated from
  * tests/fixtures/insights-fictional.json. No database, no developer stack, no network beyond 127.0.0.1.
  */
@@ -29,6 +29,9 @@ export interface RecordedRequest {
 
 export type CoverageMode = "ok" | "needs-backfill";
 
+/** What the stub answers for the stats request: normal data, a server error, no applications or runs, or a capped run series. */
+export type StatsMode = "ok" | "fail" | "empty" | "capped";
+
 export interface InsightsHarness {
   apiPort: number;
   baseUrl: string;
@@ -36,6 +39,7 @@ export interface InsightsHarness {
   /** Filters the stub did not recognise (a lens filter it was never given), so a spec can assert there were none. */
   unexpectedFilters: string[];
   setCoverageMode(mode: CoverageMode): void;
+  setStatsMode(mode: StatsMode): void;
   signIn(context: BrowserContext): Promise<void>;
   /** The count the stub answers for a filter on an entity set, for specs that compare numbers. */
   countFor(set: "Postings" | "Applications", filter: string): number | undefined;
@@ -64,6 +68,43 @@ const OWNER = "insights-owner-aaa";
 
 export const SNAPSHOT_PATH = path.resolve(process.cwd(), "..", "contracts", "insights-lenses.json");
 const FIXTURE_PATH = path.resolve(process.cwd(), "tests", "fixtures", "insights-fictional.json");
+const STATS_FIXTURE_PATH = path.resolve(process.cwd(), "tests", "fixtures", "insights-stats-fictional.json");
+
+interface StatsFixture {
+  asOf: string;
+  last90Days: StatsBody;
+  allTime: StatsBody;
+}
+
+interface StatsBody {
+  asOf: string;
+  window: string;
+  windowStart: string | null;
+  responseTime: { medianDays: number | null; sampleSize: number };
+  weeklyApplications: Array<{ weekStart: string; count: number }>;
+  searchRunYield: { runs: Array<{ startedAt: string; newPostings: number }>; truncated: boolean };
+}
+
+function statsBodyFor(fixture: StatsFixture, window: string, asOf: string, mode: StatsMode): StatsBody {
+  const base = window === "allTime" ? fixture.allTime : fixture.last90Days;
+  const body: StatsBody = { ...base, asOf };
+  if (mode === "empty") {
+    return {
+      ...body,
+      responseTime: { medianDays: null, sampleSize: 0 },
+      weeklyApplications: [],
+      searchRunYield: { runs: [], truncated: false },
+    };
+  }
+  if (mode === "capped") {
+    const runs = Array.from({ length: 120 }, (_, i) => ({
+      startedAt: new Date(Date.UTC(2026, 4, 1) + i * 86_400_000 + 43_200_000).toISOString(),
+      newPostings: (i * 7) % 13,
+    }));
+    return { ...body, searchRunYield: { runs, truncated: true } };
+  }
+  return body;
+}
 
 export function loadSnapshot(): Snapshot {
   return JSON.parse(fs.readFileSync(SNAPSHOT_PATH, "utf8")) as Snapshot;
@@ -118,6 +159,7 @@ function applicationRow(i: number, fixture: Fixture) {
 export async function startInsightsHarness(sessionId: string): Promise<InsightsHarness> {
   const snapshot = loadSnapshot();
   const fixture = JSON.parse(fs.readFileSync(FIXTURE_PATH, "utf8")) as Fixture;
+  const statsFixture = JSON.parse(fs.readFileSync(STATS_FIXTURE_PATH, "utf8")) as StatsFixture;
 
   const counts = new Map<string, number>();
   const coverageFilters = new Set<string>();
@@ -138,6 +180,7 @@ export async function startInsightsHarness(sessionId: string): Promise<InsightsH
   const requests: RecordedRequest[] = [];
   const unexpectedFilters: string[] = [];
   let coverageMode: CoverageMode = "ok";
+  let statsMode: StatsMode = "ok";
 
   const apiPort = await freePort();
   const apiServer = http.createServer((req, res) => {
@@ -151,6 +194,24 @@ export async function startInsightsHarness(sessionId: string): Promise<InsightsH
       top: url.searchParams.get("$top"),
       count: url.searchParams.get("$count"),
     });
+
+    if (url.pathname === "/api/v1/insights/stats" && req.method === "GET") {
+      const window = url.searchParams.get("window") ?? "";
+      const asOf = url.searchParams.get("asOf") ?? "";
+      if (statsMode === "fail") {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, errorCode: "internal_error", message: "Fictional stub failure." }));
+        return;
+      }
+      if ((window !== "last90Days" && window !== "allTime") || !/^\d{4}-\d{2}-\d{2}$/.test(asOf)) {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: false, errorCode: "validation_error", message: "Bad window or asOf." }));
+        return;
+      }
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(statsBodyFor(statsFixture, window, asOf, statsMode)));
+      return;
+    }
 
     if (!set || req.method !== "GET") {
       res.writeHead(404);
@@ -251,6 +312,9 @@ export async function startInsightsHarness(sessionId: string): Promise<InsightsH
     unexpectedFilters,
     setCoverageMode: (mode) => {
       coverageMode = mode;
+    },
+    setStatsMode: (mode) => {
+      statsMode = mode;
     },
     signIn: async (context) => {
       await context.addCookies([
