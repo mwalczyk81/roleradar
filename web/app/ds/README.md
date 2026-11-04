@@ -145,6 +145,8 @@ role applies.
 | `--ds-success-text` | green-700 | green-500 | success text on `--ds-success-subtle` | 4.8:1 / 6.8:1 |
 | `--ds-warning-text` | amber-700 | amber-500 | warning text on `--ds-warning-subtle` | 4.8:1 / 7.3:1 |
 | `--ds-danger-text` | red-700 | red-500 | danger text on `--ds-danger-subtle` | 5.9:1 / 4.7:1 |
+| `--ds-chart-primary` (+`-hover`) | blue-600 (blue-700) | blue-500 (blue-400) | data marks: bars, columns, sparkline end dot | 5.2:1 (6.7:1) / 4.9:1 (7.0:1) on surface |
+| `--ds-chart-muted` (+`-hover`) | neutral-450 (neutral-500) | neutral-500 (neutral-400) | de-emphasis marks: non-highlighted bars, sparkline line | 3.2:1 (4.8:1) / 3.8:1 (7.0:1) on surface |
 
 Components behavior: handlers you pass (`onFocus`, `onBlur`, `onMouseEnter`,
 `onMouseLeave`) run in addition to the built-in ones and never replace them;
@@ -193,7 +195,7 @@ locks page scroll; Tabs supports Left/Right/Home/End.
 - `feedback/` — **Card, Badge, Alert, Avatar, EmptyState, Skeleton, Toast, ToastRegion**
 - `navigation/` — **Tabs**
 - `overlay/` — **Modal, Menu, Tooltip**
-- `data/` — **DataTable, Toolbar**
+- `data/` — **DataTable, Toolbar, StatTile, BarChart, ColumnChart, Sparkline** (the charts share `chartParts.jsx`, which is not a component and has no .d.ts; import the four components, not it)
 - `layout/` — **AppShell**
 
 **Composites** (added 2026-10-31 for the RoleRadar management UI) are built from the same
@@ -203,6 +205,8 @@ imports an icon package or a router (icons arrive as nodes; `AppShell` and `Menu
 layout, hover and animation rules live in `components/bundle.css`, so link it after
 `tokens.css` as always. `DataTable` sorts only the page of rows it is given and says so;
 numbers go in `numeric` columns (monospace, right-aligned).
+
+**Chart components** (added 2026-11-01 for the RoleRadar insights dashboard): StatTile, BarChart (with a funnel mode), ColumnChart and Sparkline. They use one accent hue plus a de-emphasis gray (`--ds-chart-*`), 20 to 24px marks with 4px rounded data ends, hairline recessive gridlines, labels in text tokens (never the data colour), a hover and focus readout per mark, and a "Table view" button that swaps the plot for a native table. A denominator under 10 gets a visible "Small sample" note, and counts sit next to percentages.
 
 Each component ships `components/src/<group>/<Name>.jsx` + `components/<Name>/<Name>.d.ts`
 (props; all of them in `components/index.d.ts`) + `components/<Name>/README.md`

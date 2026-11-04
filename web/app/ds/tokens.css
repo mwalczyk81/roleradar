@@ -67,6 +67,10 @@
   --ds-warning-text: var(--ds-amber-700);
   --ds-danger-text: var(--ds-red-700);
   --ds-danger-solid: var(--ds-red-600);
+  --ds-chart-primary: var(--ds-blue-600);
+  --ds-chart-primary-hover: var(--ds-blue-700);
+  --ds-chart-muted: var(--ds-neutral-450);
+  --ds-chart-muted-hover: var(--ds-neutral-500);
   --ds-shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
   --ds-shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
   --ds-shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.1), 0 4px 6px -4px rgba(15, 23, 42, 0.05);
@@ -101,6 +105,10 @@
   --ds-warning-text: var(--ds-amber-500);
   --ds-danger-text: var(--ds-red-500);
   --ds-danger-solid: var(--ds-red-600);
+  --ds-chart-primary: var(--ds-blue-500);
+  --ds-chart-primary-hover: var(--ds-blue-400);
+  --ds-chart-muted: var(--ds-neutral-500);
+  --ds-chart-muted-hover: var(--ds-neutral-400);
 }
 :root {
   --ds-space-0: 0;
