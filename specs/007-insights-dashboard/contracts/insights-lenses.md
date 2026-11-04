@@ -5,14 +5,14 @@ A **lens** is a named filter. One TypeScript module, `web/app/lib/insights-lense
 ## Module API (shape, not code)
 
 ```text
-type LensKey      = one of the 18 keys in the catalog
+type LensKey      = one of the 19 keys in the catalog (18 counted, plus the drill-only offers-without-interview)
 type FunnelId     = "postings" | "applications"
 type LensWindow   = "90d" | "all"
 interface LensContext { window: LensWindow; asOf: string /* yyyy-MM-dd */ }
 
 lensEntity(key)                         -> "postings" | "applications"
 lensFilter(key, ctx)                    -> FilterExpression        // built with the typed odata-client builder
-lensCountQuery(key, ctx)                -> string                  // "$filter=...&$top=1&$select=id&$count=true"
+lensCountQuery(key, ctx)                -> string                  // "$filter=...&$top=0&$count=true"
 lensListHref(key, ctx)                  -> string                  // "/postings?lens=...&window=...&asOf=..." or "/applications?..."
 parseLensParams(url, entity)            -> { key, ctx } | undefined // validates; unknown/invalid -> undefined
 funnelStages(funnel)                    -> LensKey[]               // fixed order, see below
@@ -27,13 +27,13 @@ funnelStages(funnel)                    -> LensKey[]               // fixed orde
 
 Why two funnels: Leads and Reviewed are counted by first-seen date, applications by application date, so a single six-bar funnel would compare different cohorts and its bars could not nest. Within each funnel every stage is a subset of the one before it:
 - A: `applied-to` implies `reviewed` implies `leads`, because `reviewed` includes any posting with an application and every reviewed posting is a posting in the window.
-- B: an interview event and an offer event are both response events, so `interviewed` is a subset of `responded`, which is a subset of `applied`; the Offers bar is `offers-interviewed` so it is a subset of `interviewed`. Offers logged without an interview event are shown as a note computed as `offers` minus `offers-interviewed`, each with its own drill-down (`offers` lens), so they are visible, just not a funnel bar.
+- B: an interview event and an offer event are both response events, so `interviewed` is a subset of `responded`, which is a subset of `applied`; the Offers bar is `offers-interviewed` so it is a subset of `interviewed`. Offers logged without an interview event are shown as a note computed as `offers` minus `offers-interviewed`, with their own drill-down: the drill-only lens `offers-without-interview` (`hasOffer eq true and hasInterview eq false`). It costs no request, and its list is exactly the difference because the two lists partition `offers`; the parity tests assert that against the live API and the e2e drill-down test follows the link.
 
 The page never draws a bar from one funnel next to a bar from the other, and renders a one-line explanation that Funnel A's `applied-to` and Funnel B's `applied` can differ. `applied-to` is the same lens, and the same count, as the application-rate numerator.
 
 Rules:
 - `lensCountQuery` and the list loader both call `lensFilter`; neither builds a filter any other way. This is what makes the dashboard number and the list row count agree by construction.
-- Count requests use `$top=1&$select=id&$count=true` (research R1). The count is the response's `@odata.count`.
+- Count requests use `$top=0&$count=true` (research R1, ADR 0029): a count-only request, `value` is empty. The count is the response's `@odata.count`.
 - Date literals use the existing `toODataDateTime` helper (UTC `...Z` literals only).
 - Value strings (dispositions, application statuses) are imported from `dispositions.ts` and `application-enums.ts`. No string literal for a Domain value is typed in the lens module.
 - Window clause: posting lenses on `firstSeenAt`, application lenses on `appliedAt`; `90d` is `ge <asOf-89d>T00:00:00Z and lt <asOf+1d>T00:00:00Z`; `all` keeps only the `lt <asOf+1d>` bound.

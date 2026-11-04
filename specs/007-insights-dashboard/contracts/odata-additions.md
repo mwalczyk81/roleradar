@@ -36,7 +36,7 @@ Additions to the `/odata/Postings` and `/odata/Applications` entity types. Every
 
 - String `$filter` terms must still be `tolower()` over lowercase literals. The lenses use only `eq` on enum-like strings, which is allowed today (the rule applies to `contains`, `startswith`, `endswith`).
 - `MaxTop = 100`, `MaxNodeCount = 100`, filter depth 10. The deepest lens (`applied-to`, windowed) stays well under all three; a unit test asserts every lens filter passes `ValidateFilterExpression` and the node limits.
-- `$top` is never 0 from this feature (research R1).
+- `$top=0` is a valid count-only request on every set (fixed in this feature, research R1, ADR 0029): empty `value`, `@odata.count` when `$count=true`. `MaxTop` stays 100.
 - Heavy or private properties (`content`, `ruleText`) stay blocked; none of the new properties is heavy or private.
 
 ## Files that change with this surface

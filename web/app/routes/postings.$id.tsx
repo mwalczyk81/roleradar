@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "react-router";
+import { Brand } from "../components/Brand.js";
 import { useLoaderData, useFetcher, useRevalidator, Link, data } from "react-router";
 import React from "react";
 import { getNavItems } from "../lib/nav.js";
@@ -399,7 +400,7 @@ export default function PostingDetail() {
 
   return (
     <AppShell
-      brand="RoleRadar"
+      brand={<Brand />}
       title={posting.title}
       userLabel={loaderData.userLabel}
       signOut={signOutForm}
@@ -439,7 +440,7 @@ export default function PostingDetail() {
             }}
           >
             <div>
-              <h2 style={{ margin: "0 0 var(--ds-space-1) 0", fontSize: "var(--ds-text-xl)" }}>
+              <h2 className="page-heading" style={{ margin: "0 0 var(--ds-space-1) 0", fontSize: "var(--ds-text-xl)" }}>
                 {posting.title}
               </h2>
               <div
@@ -508,7 +509,7 @@ export default function PostingDetail() {
         >
           {/* Metadata Card */}
           <Card style={{ padding: "var(--ds-space-5)" }}>
-            <h3 style={{ margin: "0 0 var(--ds-space-3) 0", fontSize: "var(--ds-text-base)" }}>Details</h3>
+            <h3 className="page-heading" style={{ margin: "0 0 var(--ds-space-3) 0", fontSize: "var(--ds-text-base)" }}>Details</h3>
             <dl
               style={{
                 display: "grid",
@@ -554,7 +555,7 @@ export default function PostingDetail() {
 
           {/* Assessment Note Card */}
           <Card style={{ padding: "var(--ds-space-5)" }}>
-            <h3 style={{ margin: "0 0 var(--ds-space-3) 0", fontSize: "var(--ds-text-base)" }}>Assessment Note</h3>
+            <h3 className="page-heading" style={{ margin: "0 0 var(--ds-space-3) 0", fontSize: "var(--ds-text-base)" }}>Assessment Note</h3>
             {posting.assessmentNote ? (
               <div style={{ fontSize: "var(--ds-text-sm)" }}>
                 <p style={{ margin: "0 0 var(--ds-space-2) 0", whiteSpace: "pre-wrap" }}>
@@ -574,7 +575,7 @@ export default function PostingDetail() {
 
         {/* Signals Card */}
         <Card style={{ padding: "var(--ds-space-5)" }}>
-          <h3 style={{ margin: "0 0 var(--ds-space-3) 0", fontSize: "var(--ds-text-base)" }}>Opportunity Signals</h3>
+          <h3 className="page-heading" style={{ margin: "0 0 var(--ds-space-3) 0", fontSize: "var(--ds-text-base)" }}>Opportunity Signals</h3>
           {posting.signals && posting.signals.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-2)" }}>
               {posting.signals.map((sig, index) => (

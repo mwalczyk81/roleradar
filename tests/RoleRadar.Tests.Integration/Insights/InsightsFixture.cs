@@ -8,15 +8,17 @@ using Xunit;
 /// real repositories, with the real API host started over it. The seed guard runs before the first write.
 /// Nothing here reads configuration, user secrets or environment connection strings.
 /// </summary>
-public sealed class InsightsFixture : IAsyncLifetime
+public abstract class InsightsFixtureBase : IAsyncLifetime
 {
     private ODataTestHost? _host;
+
+    protected InsightsFixtureBase(DateOnly asOf) => AsOf = asOf;
 
     internal ODataTestHost Host => _host ?? throw new InvalidOperationException("Fixture not initialized.");
 
     public IMongoDatabase Database => Host.Database;
 
-    public DateOnly AsOf { get; } = InsightsSeed.FixedAsOf;
+    public DateOnly AsOf { get; }
 
     public string DatabaseName { get; } = InsightsSeedGuard.NewDatabaseName();
 
@@ -37,5 +39,26 @@ public sealed class InsightsFixture : IAsyncLifetime
         {
             await _host.DisposeAsync();
         }
+
+        GC.SuppressFinalize(this);
+    }
+}
+
+/// <summary>The seed built relative to the fixed fictional as-of date used by the committed snapshots.</summary>
+public sealed class InsightsFixture : InsightsFixtureBase
+{
+    public InsightsFixture() : base(InsightsSeed.FixedAsOf)
+    {
+    }
+}
+
+/// <summary>
+/// The same seed built relative to today (UTC), for tests that compare lens filters with the live <c>ageInDays</c>
+/// the API computes from the real clock.
+/// </summary>
+public sealed class InsightsTodayFixture : InsightsFixtureBase
+{
+    public InsightsTodayFixture() : base(DateOnly.FromDateTime(DateTime.UtcNow))
+    {
     }
 }

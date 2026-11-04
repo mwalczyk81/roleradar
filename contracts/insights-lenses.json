@@ -1,0 +1,532 @@
+{
+  "asOf": "2026-09-30",
+  "lenses": {
+    "leads": {
+      "entity": "postings",
+      "filters": {
+        "90d": "(firstSeenAt ge 2026-07-03T00:00:00Z) and (firstSeenAt lt 2026-10-01T00:00:00Z)",
+        "all": "firstSeenAt lt 2026-10-01T00:00:00Z"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 37,
+          "all": 50
+        },
+        "insights-owner-bbb": {
+          "90d": 6,
+          "all": 6
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 4,
+          "all": 4
+        }
+      }
+    },
+    "reviewed": {
+      "entity": "postings",
+      "filters": {
+        "90d": "((((disposition ne 'lead') and (disposition ne 'unscored')) or (hasApplication eq true)) and (firstSeenAt ge 2026-07-03T00:00:00Z)) and (firstSeenAt lt 2026-10-01T00:00:00Z)",
+        "all": "(((disposition ne 'lead') and (disposition ne 'unscored')) or (hasApplication eq true)) and (firstSeenAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 32,
+          "all": 42
+        },
+        "insights-owner-bbb": {
+          "90d": 5,
+          "all": 5
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 3,
+          "all": 3
+        }
+      }
+    },
+    "applied-to": {
+      "entity": "postings",
+      "filters": {
+        "90d": "(((((disposition ne 'lead') and (disposition ne 'unscored')) or (hasApplication eq true)) and (hasApplication eq true)) and (firstSeenAt ge 2026-07-03T00:00:00Z)) and (firstSeenAt lt 2026-10-01T00:00:00Z)",
+        "all": "((((disposition ne 'lead') and (disposition ne 'unscored')) or (hasApplication eq true)) and (hasApplication eq true)) and (firstSeenAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 22,
+          "all": 28
+        },
+        "insights-owner-bbb": {
+          "90d": 3,
+          "all": 3
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 2,
+          "all": 2
+        }
+      }
+    },
+    "screened-out": {
+      "entity": "postings",
+      "filters": {
+        "90d": "(((((disposition ne 'lead') and (disposition ne 'unscored')) or (hasApplication eq true)) and (disposition eq 'screened_out')) and (firstSeenAt ge 2026-07-03T00:00:00Z)) and (firstSeenAt lt 2026-10-01T00:00:00Z)",
+        "all": "((((disposition ne 'lead') and (disposition ne 'unscored')) or (hasApplication eq true)) and (disposition eq 'screened_out')) and (firstSeenAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 3,
+          "all": 4
+        },
+        "insights-owner-bbb": {
+          "90d": 1,
+          "all": 1
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 0,
+          "all": 0
+        }
+      }
+    },
+    "expired": {
+      "entity": "postings",
+      "filters": {
+        "90d": "(((disposition eq 'closed') and (hasApplication eq false)) and (firstSeenAt ge 2026-07-03T00:00:00Z)) and (firstSeenAt lt 2026-10-01T00:00:00Z)",
+        "all": "((disposition eq 'closed') and (hasApplication eq false)) and (firstSeenAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 2,
+          "all": 3
+        },
+        "insights-owner-bbb": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 0,
+          "all": 0
+        }
+      }
+    },
+    "applied": {
+      "entity": "applications",
+      "filters": {
+        "90d": "(appliedAt ge 2026-07-03T00:00:00Z) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "appliedAt lt 2026-10-01T00:00:00Z"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 25,
+          "all": 27
+        },
+        "insights-owner-bbb": {
+          "90d": 3,
+          "all": 3
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 2,
+          "all": 2
+        }
+      }
+    },
+    "responded": {
+      "entity": "applications",
+      "filters": {
+        "90d": "((firstResponseAt ne null) and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "(firstResponseAt ne null) and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 14,
+          "all": 15
+        },
+        "insights-owner-bbb": {
+          "90d": 2,
+          "all": 2
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 1,
+          "all": 1
+        }
+      }
+    },
+    "interviewed": {
+      "entity": "applications",
+      "filters": {
+        "90d": "((hasInterview eq true) and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "(hasInterview eq true) and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 10,
+          "all": 11
+        },
+        "insights-owner-bbb": {
+          "90d": 1,
+          "all": 1
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 1,
+          "all": 1
+        }
+      }
+    },
+    "offers": {
+      "entity": "applications",
+      "filters": {
+        "90d": "((hasOffer eq true) and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "(hasOffer eq true) and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 4,
+          "all": 4
+        },
+        "insights-owner-bbb": {
+          "90d": 1,
+          "all": 1
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 0,
+          "all": 0
+        }
+      }
+    },
+    "offers-interviewed": {
+      "entity": "applications",
+      "filters": {
+        "90d": "(((hasOffer eq true) and (hasInterview eq true)) and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "((hasOffer eq true) and (hasInterview eq true)) and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 2,
+          "all": 2
+        },
+        "insights-owner-bbb": {
+          "90d": 1,
+          "all": 1
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 0,
+          "all": 0
+        }
+      }
+    },
+    "mature": {
+      "entity": "applications",
+      "filters": {
+        "90d": "((appliedAt lt 2026-09-17T00:00:00Z) and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "(appliedAt lt 2026-09-17T00:00:00Z) and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 22,
+          "all": 24
+        },
+        "insights-owner-bbb": {
+          "90d": 3,
+          "all": 3
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 2,
+          "all": 2
+        }
+      }
+    },
+    "mature-interviewed": {
+      "entity": "applications",
+      "filters": {
+        "90d": "(((appliedAt lt 2026-09-17T00:00:00Z) and (hasInterview eq true)) and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "((appliedAt lt 2026-09-17T00:00:00Z) and (hasInterview eq true)) and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 9,
+          "all": 10
+        },
+        "insights-owner-bbb": {
+          "90d": 1,
+          "all": 1
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 1,
+          "all": 1
+        }
+      }
+    },
+    "rejected": {
+      "entity": "applications",
+      "filters": {
+        "90d": "((hasRejection eq true) and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "(hasRejection eq true) and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 6,
+          "all": 6
+        },
+        "insights-owner-bbb": {
+          "90d": 1,
+          "all": 1
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 0,
+          "all": 0
+        }
+      }
+    },
+    "rejected-before-interview": {
+      "entity": "applications",
+      "filters": {
+        "90d": "(((hasRejection eq true) and (rejectedBeforeInterview eq true)) and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "((hasRejection eq true) and (rejectedBeforeInterview eq true)) and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 4,
+          "all": 4
+        },
+        "insights-owner-bbb": {
+          "90d": 1,
+          "all": 1
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 0,
+          "all": 0
+        }
+      }
+    },
+    "rejected-after-interview": {
+      "entity": "applications",
+      "filters": {
+        "90d": "(((hasRejection eq true) and (rejectedBeforeInterview eq false)) and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "((hasRejection eq true) and (rejectedBeforeInterview eq false)) and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 2,
+          "all": 2
+        },
+        "insights-owner-bbb": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 0,
+          "all": 0
+        }
+      }
+    },
+    "ghost-eligible": {
+      "entity": "applications",
+      "filters": {
+        "90d": "((appliedAt lt 2026-09-01T00:00:00Z) and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "(appliedAt lt 2026-09-01T00:00:00Z) and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 18,
+          "all": 20
+        },
+        "insights-owner-bbb": {
+          "90d": 3,
+          "all": 3
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 1,
+          "all": 1
+        }
+      }
+    },
+    "ghosted": {
+      "entity": "applications",
+      "filters": {
+        "90d": "((((status eq 'applied') and (firstResponseAt eq null)) and (appliedAt lt 2026-08-31T00:00:00Z)) and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "(((status eq 'applied') and (firstResponseAt eq null)) and (appliedAt lt 2026-08-31T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 4,
+          "all": 5
+        },
+        "insights-owner-bbb": {
+          "90d": 1,
+          "all": 1
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 1,
+          "all": 1
+        }
+      }
+    },
+    "open": {
+      "entity": "applications",
+      "filters": {
+        "90d": "((status eq 'applied') and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "(status eq 'applied') and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 16,
+          "all": 18
+        },
+        "insights-owner-bbb": {
+          "90d": 2,
+          "all": 2
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 2,
+          "all": 2
+        }
+      }
+    },
+    "offers-without-interview": {
+      "entity": "applications",
+      "filters": {
+        "90d": "(((hasOffer eq true) and (hasInterview eq false)) and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "((hasOffer eq true) and (hasInterview eq false)) and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 2,
+          "all": 2
+        },
+        "insights-owner-bbb": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 0,
+          "all": 0
+        }
+      }
+    }
+  },
+  "coverage": {
+    "coverage-postings": {
+      "entity": "postings",
+      "filters": {
+        "90d": "(((hasApplication eq true) or (hasApplication eq false)) and (firstSeenAt ge 2026-07-03T00:00:00Z)) and (firstSeenAt lt 2026-10-01T00:00:00Z)",
+        "all": "((hasApplication eq true) or (hasApplication eq false)) and (firstSeenAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 37,
+          "all": 50
+        },
+        "insights-owner-bbb": {
+          "90d": 6,
+          "all": 6
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 4,
+          "all": 4
+        }
+      }
+    },
+    "coverage-applications": {
+      "entity": "applications",
+      "filters": {
+        "90d": "(((rejectedBeforeInterview eq true) or (rejectedBeforeInterview eq false)) and (appliedAt ge 2026-07-03T00:00:00Z)) and (appliedAt lt 2026-10-01T00:00:00Z)",
+        "all": "((rejectedBeforeInterview eq true) or (rejectedBeforeInterview eq false)) and (appliedAt lt 2026-10-01T00:00:00Z)"
+      },
+      "expected": {
+        "insights-owner-aaa": {
+          "90d": 25,
+          "all": 27
+        },
+        "insights-owner-bbb": {
+          "90d": 3,
+          "all": 3
+        },
+        "insights-owner-ccc": {
+          "90d": 0,
+          "all": 0
+        },
+        "insights-owner-ddd": {
+          "90d": 2,
+          "all": 2
+        }
+      }
+    }
+  }
+}

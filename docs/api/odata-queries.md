@@ -18,7 +18,7 @@ Entity sets: `Postings`, `Companies`, `Applications`, `Notes`, `Criteria`, `Sear
 ## Rules
 
 - Supported query options: `$filter`, `$orderby`, `$select`, `$count`, `$top`, `$skip`. Everything else (`$expand`, `$search`, `$apply`, ...) is rejected.
-- `$top`: default **25**, maximum **100**. `$skip` pages through the rest.
+- `$top`: default **25**, maximum **100**. `$skip` pages through the rest. `$top=0` is a valid count-only request: no rows are read, `value` is empty, and `@odata.count` is returned when `$count=true`.
 - `$filter`: at most **100** expression nodes and nesting depth **10**. Allowed operators: `eq ne gt ge lt le and or not`. Allowed functions: `tolower contains startswith endswith`. No arithmetic, no `any`/`all`.
 - String search must be lowercase on both sides: wrap the property in `tolower()` and give a lowercase literal, for example `contains(tolower(title),'engineer')`. A bare `contains(title,'x')`, or a literal with capitals, is rejected with 400.
 - `$orderby` accepts only the fields listed per set below, at most 5 of them. Rows without a value for a nullable field (`score`, `firstResponseAt`, `lastEventAt`, `effectiveTo`) sort last in both directions.
@@ -54,8 +54,8 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$orderby=score%
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$select=id,title,companyName,score"
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$count=true&\$top=5"
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$top=10&\$skip=20"
-curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$filter=hasApplication%20eq%20true&\$count=true&\$top=1&\$select=id"
-curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$filter=firstSeenAt%20ge%202026-01-01T00:00:00Z%20and%20firstSeenAt%20lt%202026-04-01T00:00:00Z&\$count=true&\$top=1&\$select=id"
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$filter=hasApplication%20eq%20true&\$count=true&\$top=0"
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$filter=firstSeenAt%20ge%202026-01-01T00:00:00Z%20and%20firstSeenAt%20lt%202026-04-01T00:00:00Z&\$count=true&\$top=0"
 ```
 
 ## Companies
@@ -80,8 +80,8 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$orderby=la
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$select=id,postingTitle,companyName,status,appliedAt"
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$count=true&\$top=5"
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$top=25&\$skip=25"
-curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$filter=hasOffer%20eq%20true&\$count=true&\$top=1&\$select=id"
-curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$filter=hasRejection%20eq%20true%20and%20rejectedBeforeInterview%20eq%20false&\$count=true&\$top=1&\$select=id"
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$filter=hasOffer%20eq%20true&\$count=true&\$top=0"
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$filter=hasRejection%20eq%20true%20and%20rejectedBeforeInterview%20eq%20false&\$count=true&\$top=0"
 ```
 
 ## Notes

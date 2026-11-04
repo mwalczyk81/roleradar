@@ -1077,8 +1077,8 @@ test.describe("Theme and Page Reset", () => {
     // Body margin 0
     expect(layout.bodyMargin).toBe("0px");
     // Body background equals shell background and matches dark token
-    expect(layout.bodyBg).toBe("rgb(2, 6, 23)");
-    expect(layout.shellBg).toBe("rgb(2, 6, 23)");
+    expect(layout.bodyBg).toBe("rgb(28, 25, 23)");
+    expect(layout.shellBg).toBe("rgb(28, 25, 23)");
     expect(layout.bodyBg).toBe(layout.shellBg);
     // No page scrollbars at 1280x800
     expect(layout.scrollHeight).toBeLessThanOrEqual(800);
@@ -1153,7 +1153,7 @@ test.describe("Theme and Page Reset", () => {
     const shellBg = await page.locator(".ds-appshell").evaluate((el) => {
       return window.getComputedStyle(el).backgroundColor;
     });
-    expect(shellBg).toBe("rgb(2, 6, 23)");
+    expect(shellBg).toBe("rgb(28, 25, 23)");
 
     // Click theme toggle button in AppShell
     const toggleButton = page.getByRole("button", { name: /switch to light theme/i });
@@ -1204,7 +1204,7 @@ test.describe("Theme and Page Reset", () => {
     const darkBg = await page.locator(".ds-appshell").evaluate((el) => {
       return window.getComputedStyle(el).backgroundColor;
     });
-    expect(darkBg).toBe("rgb(2, 6, 23)");
+    expect(darkBg).toBe("rgb(28, 25, 23)");
   });
 
   test("header label shows preferred username or Signed in, never raw sub GUID", async ({

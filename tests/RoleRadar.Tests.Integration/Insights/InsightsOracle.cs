@@ -12,7 +12,7 @@ internal static class InsightsOracle
     public static readonly string[] LensKeys =
     [
         "leads", "reviewed", "applied-to", "screened-out", "expired",
-        "applied", "responded", "interviewed", "offers", "offers-interviewed",
+        "applied", "responded", "interviewed", "offers", "offers-interviewed", "offers-without-interview",
         "mature", "mature-interviewed", "rejected", "rejected-before-interview", "rejected-after-interview",
         "ghost-eligible", "ghosted", "open"
     ];
@@ -98,6 +98,7 @@ internal static class InsightsOracle
             "interviewed" => apps.Count(a => a.HasInterview),
             "offers" => apps.Count(a => a.HasOffer),
             "offers-interviewed" => apps.Count(a => a.HasOffer && a.HasInterview),
+            "offers-without-interview" => apps.Count(a => a.HasOffer && !a.HasInterview),
             // At least 14 days old: a day offset of 14 or more.
             "mature" => apps.Count(a => a.AgeDays >= 14),
             "mature-interviewed" => apps.Count(a => a.AgeDays >= 14 && a.HasInterview),

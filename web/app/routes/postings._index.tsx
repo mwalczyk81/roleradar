@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { Brand } from "../components/Brand.js";
 import { useLoaderData, useNavigate, useSearchParams, Link } from "react-router";
 import React from "react";
 import { getNavItems } from "../lib/nav.js";
@@ -18,6 +19,7 @@ import {
 } from "../lib/dispositions.js";
 import { buildODataQuery, type FilterExpression, type OrderByClause } from "../lib/odata-client.js";
 import { fetchOData } from "../lib/api-client.server.js";
+import { lensChipLabel, lensFilter, parseLensParams } from "../lib/insights-lenses.js";
 
 export interface PostingODataModel {
   id: string;
@@ -75,6 +77,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const q = url.searchParams.get("q") || undefined;
 
+  // "Postings I applied to": hasApplication is a stored, derived flag (ADR 0031). Any other value is ignored.
+  const hasApplicationRaw = url.searchParams.get("hasApplication");
+  const hasApplication = hasApplicationRaw === "yes" || hasApplicationRaw === "no" ? hasApplicationRaw : null;
+
+  // An Insights drill-down: the same filter the dashboard counted with, from the shared lens module.
+  const lens = parseLensParams(url, "postings");
+
   const limitRaw = url.searchParams.get("limit");
   let limit = limitRaw ? Number(limitRaw) : 25;
   if (Number.isNaN(limit) || limit < 1) limit = 25;
@@ -90,6 +99,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Build filters using typed odata-client
   const filterParts: FilterExpression[] = [];
+
+  if (lens) {
+    filterParts.push(lensFilter(lens.key, lens.ctx));
+  }
+
+  if (hasApplication) {
+    filterParts.push({
+      type: "comparison",
+      operator: "eq",
+      field: "hasApplication",
+      value: hasApplication === "yes",
+    });
+  }
 
   if (disposition) {
     filterParts.push({
@@ -196,6 +218,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     offset,
     sort,
     direction,
+    hasApplication,
+    lens: lens ? { key: lens.key, label: lensChipLabel(lens), window: lens.ctx.window, asOf: lens.ctx.asOf } : null,
     csrfToken: session.csrfToken,
     userLabel: session.ownerUsername || "Signed in",
   };
@@ -212,6 +236,9 @@ export default function PostingsIndex() {
   const currentDisposition = searchParams.get("disposition") || "";
   const currentMinScore = searchParams.get("minScore") || "";
   const currentPolicy = searchParams.get("resurfacePolicy") || "";
+  const currentHasApplication = searchParams.get("hasApplication") === "yes" || searchParams.get("hasApplication") === "no"
+    ? (searchParams.get("hasApplication") as "yes" | "no")
+    : "";
 
   // Controlled min score input state
   const [minScoreInput, setMinScoreInput] = React.useState(currentMinScore);
@@ -222,6 +249,34 @@ export default function PostingsIndex() {
 
   // Build active filters list for Toolbar chips
   const activeFilters = [];
+  if (data.lens) {
+    activeFilters.push({
+      id: "lens",
+      label: "Insights",
+      value: data.lens.label,
+      onRemove: () => {
+        const next = new URLSearchParams(searchParams);
+        next.delete("lens");
+        next.delete("window");
+        next.delete("asOf");
+        next.set("offset", "0");
+        setSearchParams(next);
+      },
+    });
+  }
+  if (currentHasApplication) {
+    activeFilters.push({
+      id: "hasApplication",
+      label: "Has application",
+      value: currentHasApplication === "yes" ? "Yes" : "No",
+      onRemove: () => {
+        const next = new URLSearchParams(searchParams);
+        next.delete("hasApplication");
+        next.set("offset", "0");
+        setSearchParams(next);
+      },
+    });
+  }
   if (currentDisposition) {
     const dispLabel = DISPOSITION_METADATA[currentDisposition as PostingDisposition]?.label ?? currentDisposition;
     activeFilters.push({
@@ -347,7 +402,7 @@ export default function PostingsIndex() {
 
   return (
     <AppShell
-      brand="RoleRadar"
+      brand={<Brand />}
       title="Job Postings"
       userLabel={data.userLabel}
       signOut={signOutForm}
@@ -377,6 +432,10 @@ export default function PostingsIndex() {
             next.delete("disposition");
             next.delete("minScore");
             next.delete("resurfacePolicy");
+            next.delete("hasApplication");
+            next.delete("lens");
+            next.delete("window");
+            next.delete("asOf");
             next.set("offset", "0");
             setSearchParams(next);
           }}
@@ -424,6 +483,25 @@ export default function PostingsIndex() {
                   {RESURFACE_POLICY_LABELS[pol]} ({pol})
                 </option>
               ))}
+            </Select>
+
+            <Select
+              aria-label="Filter by application"
+              value={currentHasApplication}
+              onChange={(e) => {
+                const next = new URLSearchParams(searchParams);
+                if (e.target.value) {
+                  next.set("hasApplication", e.target.value);
+                } else {
+                  next.delete("hasApplication");
+                }
+                next.set("offset", "0");
+                setSearchParams(next);
+              }}
+            >
+              <option value="">Any application status</option>
+              <option value="yes">Applied to</option>
+              <option value="no">Not applied to</option>
             </Select>
 
             <Input

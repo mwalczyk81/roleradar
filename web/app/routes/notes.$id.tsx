@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
+import { Brand } from "../components/Brand.js";
 import { useLoaderData, Link } from "react-router";
 import { ArrowLeft } from "lucide-react";
 import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
@@ -59,7 +60,7 @@ export default function NoteDetail() {
 
   return (
     <AppShell
-      brand="RoleRadar"
+      brand={<Brand />}
       title={`Note: ${note.heading}`}
       userLabel={data.userLabel}
       signOut={signOutForm}
@@ -90,7 +91,7 @@ export default function NoteDetail() {
         {/* Note Card */}
         <Card style={{ padding: "var(--ds-space-6)" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-4)" }}>
-            <h2
+            <h2 className="page-heading"
               style={{
                 margin: 0,
                 fontSize: "var(--ds-text-2xl)",

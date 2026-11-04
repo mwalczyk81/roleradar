@@ -70,6 +70,12 @@ export interface ODataQueryParams {
   skip?: number;
   count?: boolean;
   select?: string[];
+  /**
+   * A count-only query: emits `$filter` (when given), `$top=0` and `$count=true`, and nothing else. The API answers
+   * an empty `value` array and `@odata.count`. This is the only way to send `$top=0`; list queries keep the
+   * 1..100 clamp on `top`.
+   */
+  countOnly?: boolean;
 }
 
 function assertDateTimeLiteral(literal: string): string {
@@ -111,6 +117,20 @@ export function formatFilterExpression(expr: FilterExpression): string {
 
 export function buildODataQuery(params: ODataQueryParams): string {
   const parts: string[] = [];
+
+  if (params.countOnly) {
+    const countFilter =
+      params.filter === undefined || params.filter === ""
+        ? ""
+        : typeof params.filter === "string"
+          ? params.filter
+          : formatFilterExpression(params.filter);
+    if (countFilter) {
+      parts.push(`$filter=${encodeURIComponent(countFilter)}`);
+    }
+    parts.push("$top=0", "$count=true");
+    return parts.join("&");
+  }
 
   if (params.filter) {
     const filterStr =

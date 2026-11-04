@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { Brand } from "../components/Brand.js";
 import { useLoaderData, useNavigate, useSearchParams, Link, Form } from "react-router";
 import { requireUserSession } from "../lib/auth-guard.server.js";
 import { useTheme } from "../lib/use-theme.js";
@@ -140,7 +141,7 @@ export default function NotesIndex() {
 
   return (
     <AppShell
-      brand="RoleRadar"
+      brand={<Brand />}
       title="Notes"
       userLabel={data.userLabel}
       signOut={signOutForm}

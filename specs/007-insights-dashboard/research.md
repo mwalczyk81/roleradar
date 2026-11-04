@@ -10,12 +10,12 @@ Findings come from reading the 006 code on `main` (commit 229af9e) on 2026-11-04
 - With `$top=0` the pipeline would run `Take(0)`, which the Mongo LINQ provider turns into `$limit: 0`. MongoDB rejects `$limit: 0` in aggregation ("the limit must be positive").
 - The web query builder clamps `top` to `1..100` (`Math.max(1, ...)` in [odata-client.ts](../../web/app/lib/odata-client.ts)), so `$top=0` cannot even be built without changing the builder.
 
-**Decision**: use `$top=1&$select=id&$count=true` for every count. No pipeline change, no builder change, one tiny row per request.
+**Outcome (2026-11-05)**: `$top=0` answered an empty-bodied HTTP 500 on all six entity sets. The captured exception is `System.ArgumentOutOfRangeException: Value is not greater than 0: 0. (Parameter 'limit')` from the MongoDB LINQ provider. That is a 006 defect (a 500 on client input), so the shared pipeline now treats `$top=0` as a valid count-only request and every set behaves the same.
 
-**Verify first** (Phase 1, task 1): an integration test sends `$top=0` and records the real response. Expected: validation accepts 0, Mongo rejects it. The result is written into ADR 0029 either way. If `$top=0` turns out to work end to end, we still keep `$top=1`: the saving is one row, and changing a shared pipeline is not worth it.
+**Decision**: use `$top=0&$count=true` for every count. `MaxTop` stays 100; the web query builder allows 0 only through a count-only option and keeps the 1..100 clamp for list pages.
 
 **Alternatives rejected**
-- Guard `Top == 0` inside `ExecuteQuery`: a shared-pipeline change for no measurable gain.
+- `$top=1&$select=id`: works without a pipeline change but reads a row per request and leaves a 500-on-input defect in place.
 - A dedicated `/odata/$count` path: not in the 006 route set, would need its own allowlist and tests.
 
 ## R2. Counts: parallel OData `$count` or one stats call?

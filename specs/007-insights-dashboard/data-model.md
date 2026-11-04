@@ -57,7 +57,7 @@ InsightsView (web, per page load)
   window: "90d" | "all"
   asOf: yyyy-MM-dd (UTC date, pinned in every link)
   windowStart: yyyy-MM-dd | null          // asOf - 89 days, null for all-time
-  counts: map<LensKey, int>               // 18 lens counts from OData $count
+  counts: map<LensKey, int>               // 18 counted lenses from OData $count (a 19th lens, offers-without-interview, is drill-only)
   funnels: { postings: [leads, reviewed, applied-to], applications: [applied, responded, interviewed, offers-interviewed] }
   coverage: { postings: bool, applications: bool }   // R6 sentinels
   rates: list<Rate>                        // see below
@@ -88,6 +88,7 @@ Window rules: posting lenses window on `firstSeenAt`; application lenses window 
 | `interviewed` | applications | `hasInterview eq true` | funnel B: Interviewed; offer-rate denominator |
 | `offers` | applications | `hasOffer eq true` | offers-over-applications rate numerator; note "offers without an interview" = `offers` minus `offers-interviewed` |
 | `offers-interviewed` | applications | `hasOffer eq true and hasInterview eq true` | funnel B: Offers; interview-conditioned offer rate numerator |
+| `offers-without-interview` | applications | `hasOffer eq true and hasInterview eq false` | drill-only: the page shows `offers` minus `offers-interviewed` as "n offers had no interview event" and links it here; never counted by its own request (the two lists partition `offers`, proven by a parity test) |
 | `mature` | applications | `appliedAt lt <asOf-13d>` | interview-rate denominator |
 | `mature-interviewed` | applications | mature `and hasInterview eq true` | interview-rate numerator |
 | `rejected` | applications | `hasRejection eq true` | rejection-rate numerator |

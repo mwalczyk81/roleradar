@@ -90,7 +90,8 @@ export function isODataPayload<T>(val: unknown): val is ODataPayload<T> {
 export async function fetchOData<T>(
   path: string,
   queryString: string,
-  accessToken?: string
+  accessToken?: string,
+  signal?: AbortSignal
 ): Promise<ODataFetchResult<T>> {
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${path}${queryString ? `?${queryString}` : ""}`;
@@ -105,6 +106,7 @@ export async function fetchOData<T>(
   const response = await fetch(url, {
     method: "GET",
     headers,
+    signal,
   });
 
   if (!response.ok) {

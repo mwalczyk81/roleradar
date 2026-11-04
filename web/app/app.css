@@ -14,3 +14,144 @@ body {
 [data-theme="dark"] {
   color-scheme: dark;
 }
+
+/* Shell brand: the app name in the display face with a small radar mark in the accent colour. */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  font-family: var(--ds-font-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.brand-mark {
+  color: var(--ds-primary);
+  flex: none;
+}
+
+.brand-name {
+  font-family: var(--ds-font-display);
+}
+
+/* Page and section titles use the display face. Body text, labels, table cells and numbers stay in Plex Sans or Plex Mono. */
+.page-heading {
+  font-family: var(--ds-font-display);
+  font-weight: 600;
+}
+
+.ds-appshell-title {
+  font-family: var(--ds-font-display);
+}
+
+/* Insights drill-down chip on the applications list. */
+.lens-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  align-self: flex-start;
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-primary-subtle);
+  color: var(--ds-primary-subtle-text);
+  font-size: var(--ds-text-sm);
+}
+
+.lens-chip-remove {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: var(--ds-text-base);
+  line-height: 1;
+  padding: 0 var(--ds-space-1);
+}
+
+/* Insights page (007). Classes only: the CSP forbids inline style attributes in new code. */
+.insights-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-6);
+  min-width: 0;
+}
+
+.insights-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  min-width: 0;
+}
+
+.insights-window {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+
+.insights-window-link {
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-full);
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  text-decoration: none;
+}
+
+.insights-window-link[aria-current="page"] {
+  border-color: var(--ds-primary);
+  background: var(--ds-primary-subtle);
+  color: var(--ds-primary-subtle-text);
+  font-weight: var(--ds-weight-medium);
+}
+
+.insights-basis {
+  margin: 0;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+}
+
+.insights-help {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-normal);
+}
+
+.insights-stage-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2) var(--ds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--ds-text-sm);
+}
+
+.insights-stage-links a,
+.insights-tile-links a,
+.insights-help a {
+  color: var(--ds-primary-subtle-text);
+}
+
+.insights-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: var(--ds-space-4);
+}
+
+.insights-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+
+.insights-tile-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+  margin: 0;
+  font-size: var(--ds-text-sm);
+}

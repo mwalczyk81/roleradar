@@ -58,27 +58,38 @@ public static class ODataQueryPipeline
             totalCount = filtered.Count();
         }
 
-        // 3. Sort
-        var ordered = applyOrdering(filtered, options.OrderBy);
-
-        // 4. Paging
-        var paged = ordered;
-        if (options.Skip is not null)
+        List<T> items;
+        if (options.Top is { Value: 0 })
         {
-            paged = (IQueryable<T>)options.Skip.ApplyTo(paged, querySettings);
-        }
-
-        if (options.Top is not null)
-        {
-            paged = (IQueryable<T>)options.Top.ApplyTo(paged, querySettings);
+            // $top=0 is a valid "count only" request: no page is read. The MongoDB LINQ provider throws
+            // ArgumentOutOfRangeException ("Value is not greater than 0", parameter 'limit') for Take(0), which used
+            // to surface as an empty-bodied HTTP 500 on every entity set.
+            items = [];
         }
         else
         {
-            paged = paged.Take(25);
-        }
+            // 3. Sort
+            var ordered = applyOrdering(filtered, options.OrderBy);
 
-        // 5. Materialize capped page
-        var items = paged.ToList();
+            // 4. Paging
+            var paged = ordered;
+            if (options.Skip is not null)
+            {
+                paged = (IQueryable<T>)options.Skip.ApplyTo(paged, querySettings);
+            }
+
+            if (options.Top is not null)
+            {
+                paged = (IQueryable<T>)options.Top.ApplyTo(paged, querySettings);
+            }
+            else
+            {
+                paged = paged.Take(25);
+            }
+
+            // 5. Materialize capped page
+            items = paged.ToList();
+        }
 
         // 6. Project if $select is present
         if (!string.IsNullOrWhiteSpace(options.SelectExpand?.RawSelect))

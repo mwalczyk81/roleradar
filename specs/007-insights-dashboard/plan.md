@@ -8,7 +8,7 @@
 
 A read-only `/insights` page showing the funnel, rates, trends and response time, plus Markdown rendering of note bodies as a separate story. Built on the 006 OData surface:
 
-- **Counts** are OData `$count` requests (`$top=1`), built by one shared lens module that also builds the drill-down link, so a number and its list agree by construction (ADR 0029). The page shows **two single-cohort funnels** (Postings first seen in window: leads, reviewed, applied-to; Applications applied in window: applied, responded, interviewed, offers), never one mixed funnel.
+- **Counts** are OData `$count` requests (`$top=0`, count only), built by one shared lens module that also builds the drill-down link, so a number and its list agree by construction (ADR 0029). The page shows **two single-cohort funnels** (Postings first seen in window: leads, reviewed, applied-to; Applications applied in window: applied, responded, interviewed, offers), never one mixed funnel.
 - **Median response time, weekly buckets and run yield** come from one small read-only endpoint over `IOwnerReadSeam`, computed in memory from date-only projections (ADR 0030).
 - **New list filters** come from five derived stored fields written only at the repository choke point and backfilled by `reconcile-read-models` (ADR 0031).
 - **Markdown** uses pinned `react-markdown` + `remark-gfm` + `remark-breaks` with an element allowlist and no HTML parsing (ADR 0032).
@@ -32,7 +32,7 @@ Findings that shaped this plan are in [research.md](./research.md); the entity a
 
 **Performance Goals**: Insights page ready within 2 seconds on a seed of at least 1,000 postings and 300 applications (SC-008). 20 OData counts at concurrency 6 plus 1 stats call.
 
-**Constraints**: read-only; no new write paths; owner-scoped through `IOwnerReadSeam`; `$top` never 0 (R1); no raw `$filter` from URLs; fictional data only; the real database is never read by tests or screenshots.
+**Constraints**: read-only; no new write paths; owner-scoped through `IOwnerReadSeam`; `$top=0` is the count-only form (R1, fixed in 006's pipeline); no raw `$filter` from URLs; fictional data only; the real database is never read by tests or screenshots.
 
 **Scale/Scope**: single owner; hundreds of applications, low thousands of postings and search runs. In-memory stats cap of 50,000 rows per source with a typed failure above it (ADR 0030).
 
@@ -180,7 +180,7 @@ Done when: a file-listing diff of `web/app/ds` matches the table (anything extra
 ## Phase 2: P1 web, funnel, rates and drill-down (needs Phase 0 for charts)
 
 **Red first**:
-1. Vitest: lens module. Every lens and window yields the exact `$filter` in the snapshot; windows and cutoffs at 13/14/29/30/31 days and window edges; node count and depth within limits via the real `ValidateFilterExpression` rules mirrored in the test or the .NET snapshot test; `$top=1`, never 0; invalid `lens`, `window`, `asOf` ignored.
+1. Vitest: lens module. Every lens and window yields the exact `$filter` in the snapshot; windows and cutoffs at 13/14/29/30/31 days and window edges; node count and depth within limits via the real `ValidateFilterExpression` rules mirrored in the test or the .NET snapshot test; count query is `$top=0&$count=true`; invalid `lens`, `window`, `asOf` ignored.
 2. Vitest: rates and sample flags: `x of y`, `< 10` is "small sample", `0` is "no data", never NaN; the coverage checks gate flag-dependent numbers and render "needs backfill" with the command.
 3. Vitest: list loaders (`postings._index`, `applications._index`): with `?lens=...` the `$filter` they send equals the dashboard's count `$filter` for the same lens (the structural parity test); the lens chip renders; lens for the wrong entity is ignored; a raw `$filter` param is ignored.
 4. Vitest route tests: Insights loader runs the 20 counts with the concurrency bound, one failing request degrades only its tiles; 401 re-login once, 403 to `/not-authorized`, 404 handling via `assertApiOk`.
