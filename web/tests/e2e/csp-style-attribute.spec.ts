@@ -2137,11 +2137,15 @@ test.describe("Company Management (Real Chromium)", () => {
       expect(await page.locator("script:has-text('tag-xss')").count()).toBe(0);
       expect(await page.locator('a[href^="javascript:"]').count()).toBe(0);
 
-      // Preserves whitespace via pre-wrap
+      // The body is rendered as Markdown (ADR 0032): raw HTML is visible text, line breaks survive, and the markup writes no style attribute
       const contentEl = page.getByTestId("note-content");
       await expect(contentEl).toBeVisible();
-      const style = await contentEl.getAttribute("style");
-      expect(style).toContain("pre-wrap");
+      expect(await contentEl.getAttribute("style")).toBeNull();
+      await expect(contentEl.locator(".markdown-body")).toBeVisible();
+      await expect(contentEl).toContainText("<script>alert('hostile-content')</script>");
+      await expect(contentEl.locator("script, a, img, iframe")).toHaveCount(0);
+      await expect(contentEl.locator("br")).not.toHaveCount(0);
+      await expect(contentEl.locator("[style]")).toHaveCount(0);
 
       // Linked entity route check
       const linkedPosting = page.getByRole("link", { name: /Job Opportunity/i });

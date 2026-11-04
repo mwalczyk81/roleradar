@@ -156,7 +156,25 @@ function applicationRow(i: number, fixture: Fixture) {
   };
 }
 
+export const NOTE_FIXTURE_PATH = path.resolve(process.cwd(), "tests", "fixtures", "notes-markdown-fictional.json");
+
+export interface NoteFixture {
+  id: string;
+  heading: string;
+  content: string;
+  tags: string[];
+  linkedEntityType: string | null;
+  linkedEntityId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function loadNoteFixture(): NoteFixture {
+  return JSON.parse(fs.readFileSync(NOTE_FIXTURE_PATH, "utf8")) as NoteFixture;
+}
+
 export async function startInsightsHarness(sessionId: string): Promise<InsightsHarness> {
+  const noteFixture = loadNoteFixture();
   const snapshot = loadSnapshot();
   const fixture = JSON.parse(fs.readFileSync(FIXTURE_PATH, "utf8")) as Fixture;
   const statsFixture = JSON.parse(fs.readFileSync(STATS_FIXTURE_PATH, "utf8")) as StatsFixture;
@@ -194,6 +212,13 @@ export async function startInsightsHarness(sessionId: string): Promise<InsightsH
       top: url.searchParams.get("$top"),
       count: url.searchParams.get("$count"),
     });
+
+    // Phase 5 (T083): the one fictional note the Markdown e2e renders. Nothing else under /api/v1/notes exists in the stub.
+    if (req.method === "GET" && url.pathname === `/api/v1/notes/${noteFixture.id}`) {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(noteFixture));
+      return;
+    }
 
     if (url.pathname === "/api/v1/insights/stats" && req.method === "GET") {
       const window = url.searchParams.get("window") ?? "";

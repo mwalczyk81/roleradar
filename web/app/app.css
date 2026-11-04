@@ -230,3 +230,206 @@ body {
 .insights-run-table td:last-child {
   text-align: right;
 }
+
+/* Note bodies rendered as Markdown (007 phase 5, ADR 0032). Classes only: the CSP forbids inline style attributes, and
+   MarkdownBody never writes one. Tokens only, no raw colours, so light and dark both follow the theme. */
+.note-content {
+  min-width: 0;
+  padding: var(--ds-space-4);
+  background: var(--ds-bg-subtle);
+  border: var(--ds-border-thin) solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+}
+
+.markdown-body {
+  min-width: 0;
+  max-width: 72ch;
+  color: var(--ds-text);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-base);
+  line-height: var(--ds-leading-relaxed);
+  overflow-wrap: anywhere;
+}
+
+.markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body blockquote,
+.markdown-body pre,
+.markdown-body hr {
+  margin: var(--ds-space-3) 0;
+}
+
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin: var(--ds-space-5) 0 var(--ds-space-2);
+  color: var(--ds-text);
+  font-family: var(--ds-font-display);
+  font-weight: var(--ds-weight-semibold);
+  line-height: var(--ds-leading-tight);
+}
+
+.markdown-body h3 {
+  font-size: var(--ds-text-xl);
+}
+
+.markdown-body h4 {
+  font-size: var(--ds-text-lg);
+}
+
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: var(--ds-text-base);
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: var(--ds-space-6);
+}
+
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin: var(--ds-space-1) 0;
+}
+
+.markdown-body .markdown-task-list,
+.markdown-body .markdown-task-item {
+  padding-left: 0;
+  list-style: none;
+}
+
+.markdown-body .markdown-task-checkbox {
+  margin: 0 var(--ds-space-2) 0 0;
+  vertical-align: middle;
+}
+
+.markdown-body a {
+  color: var(--ds-primary-subtle-text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.markdown-body a:focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
+
+.markdown-body del {
+  color: var(--ds-text-secondary);
+}
+
+.markdown-body blockquote {
+  padding-left: var(--ds-space-4);
+  border-left: var(--ds-border-thick) solid var(--ds-border-strong);
+  color: var(--ds-text-secondary);
+}
+
+.markdown-body hr {
+  border: 0;
+  border-top: var(--ds-border-thin) solid var(--ds-border);
+}
+
+.markdown-body code {
+  padding: 0 var(--ds-space-1);
+  background: var(--ds-surface);
+  border: var(--ds-border-thin) solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  font-family: var(--ds-font-mono);
+  font-size: 0.9em;
+}
+
+.markdown-body pre {
+  padding: var(--ds-space-3);
+  background: var(--ds-surface);
+  border: var(--ds-border-thin) solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-normal);
+  white-space: pre-wrap;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-size: inherit;
+}
+
+/* A table scrolls inside its own region, so the page never scrolls sideways. The region is focusable (tabindex 0) and
+   labelled, so a keyboard user can scroll it with the arrow keys. */
+.markdown-body .markdown-table-scroll {
+  max-width: 100%;
+  margin: var(--ds-space-3) 0;
+  overflow-x: auto;
+  border: var(--ds-border-thin) solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+}
+
+.markdown-body .markdown-table-scroll:focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
+
+.markdown-body table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ds-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.markdown-body th,
+.markdown-body td {
+  min-width: 6rem;
+  max-width: 24rem;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-bottom: var(--ds-border-thin) solid var(--ds-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.markdown-body th {
+  background: var(--ds-surface);
+  font-weight: var(--ds-weight-semibold);
+}
+
+.markdown-body tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.markdown-body .markdown-align-right {
+  text-align: right;
+}
+
+.markdown-body .markdown-align-center {
+  text-align: center;
+}
+
+/* The fallback for a body that is too large or too complex to format: the whole text, as text, with a notice. */
+.markdown-notice {
+  margin-bottom: var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  background: var(--ds-warning-subtle);
+  border-radius: var(--ds-radius-md);
+  color: var(--ds-warning-text);
+  font-size: var(--ds-text-sm);
+}
+
+.markdown-body .markdown-plain {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
