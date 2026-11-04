@@ -9,6 +9,7 @@
   /* Font names the components read; the stacks themselves are tokens.json type.families. */
   --ds-font-sans: var(--font-sans);
   --ds-font-mono: var(--font-mono);
+  --ds-font-display: var(--font-display);
 
   /* Motion. Animate opacity/transform only. */
   --ds-duration-fast: 120ms;  /* hovers, small state */
@@ -180,6 +181,7 @@
   border-right: var(--ds-border-thin) solid var(--ds-border);
 }
 .ds-appshell-brand {
+  font-family: var(--ds-font-display);
   padding: var(--ds-space-2) var(--ds-space-3) var(--ds-space-4);
   font-size: var(--ds-text-lg);
   font-weight: var(--ds-weight-semibold);
@@ -211,6 +213,7 @@
 .ds-appshell-link[aria-current="page"] {
   background: var(--ds-primary-subtle);
   color: var(--ds-primary-subtle-text);
+  box-shadow: inset 2px 0 0 var(--ds-primary);
 }
 .ds-appshell-icon {
   display: inline-flex;
@@ -247,6 +250,7 @@
   cursor: pointer;
 }
 .ds-appshell-title {
+  font-family: var(--ds-font-display);
   flex: 1;
   min-width: 0;
   margin: 0;

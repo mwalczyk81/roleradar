@@ -33,7 +33,7 @@ export function StatTile({ label, value, of, delta, trend, trendLabel, note, den
         <dt style={{ fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-medium)", color: "var(--ds-text-secondary)" }}>{label}</dt>
         <dd style={{ margin: 0, display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", columnGap: "var(--ds-space-4)", rowGap: "var(--ds-space-2)" }}>
           <span style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", columnGap: "var(--ds-space-2)", minWidth: 0 }}>
-            <span style={{ fontFamily: "var(--ds-font-sans)", fontSize: "var(--ds-text-3xl)", fontWeight: "var(--ds-weight-semibold)", lineHeight: "var(--ds-leading-tight)", fontVariantNumeric: "normal", color: "var(--ds-text)" }}>{shown}</span>
+            <span style={{ fontFamily: "var(--ds-font-display)", fontSize: "var(--ds-text-3xl)", fontWeight: "var(--ds-weight-semibold)", lineHeight: "var(--ds-leading-tight)", fontVariantNumeric: "normal", color: "var(--ds-text)" }}>{shown}</span>
             {of ? <span style={{ fontSize: "var(--ds-text-sm)", color: "var(--ds-text-secondary)" }}>{of}</span> : null}
           </span>
           {trend && trend.length > 0 ? <Sparkline values={trend} label={trendLabel} valueFormat={valueFormat} /> : null}

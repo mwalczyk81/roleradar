@@ -3,7 +3,7 @@
 Vendored copy of Matt's Design System. The vendored copy under `web/app/ds` is strictly copy-only and NEVER edited by hand. Any fixes, styling updates, or Part C additions must be published to the upstream design kit artifact first, and then brought into this repository via a clean re-sync.
 
 - Source: Design System artifact, <https://claude.ai/artifact/E2SU2aXqnLZ5r9tu5VE9Mm>
-- Kit version: 1793792015-d5b6 (v23, includes Part C and the chart components first published as v20)
+- Kit version: 1793794526-9ca9 (v25, includes Part C, the chart components first published as v20 and the identity pass)
 - Synced: 2026-11-04
 - Synced by: Claude (read of the published files, copied unmodified; `project/` prefix removed)
 - Namespace in the kit bundle: `MattSDesignSystem_522a7a` (not used here; the app imports the sources in `components/src`)
@@ -18,10 +18,10 @@ Vendored copy of Matt's Design System. The vendored copy under `web/app/ds` is s
 | `components/src/**` | `project/components/src/**` | Component sources (React, JSX). |
 | `components/<Name>/<Name>.d.ts`, `components/index.d.ts` | same | Prop types. |
 | `components/<Name>/README.md` | same | Usage notes. |
-| `fonts/*.woff2` | `project/fonts/*` | Inter and JetBrains Mono, referenced by `tokens.css`. |
+| `fonts/*.woff2` | `project/fonts/*` | IBM Plex Sans (variable), IBM Plex Serif (400, 500, 600) and IBM Plex Mono (400, 500), referenced by `tokens.css`. |
 | `README.md` | `project/README.md` | The kit's brand book. |
 
-Not vendored: `bundle.js` (the preview runtime), `preview.html` cards, `ui_kits/`, `templates/`, `archived/`.
+Not vendored: `bundle.js` (the preview runtime), `preview.html` cards, `ui_kits/`, `templates/`, `archived/`, and the font files `tokens.css` no longer references (the kit still holds Inter, JetBrains Mono and Fraunces; this copy does not).
 
 ## Status
 
@@ -31,13 +31,15 @@ Verified before publishing: 88 jsdom behaviour checks (sorting, paging, keyboard
 
 Chart components are in this sync (added for the insights dashboard): StatTile, BarChart (funnel mode), ColumnChart and Sparkline in `components/src/data/`, with `chartParts.jsx` beside them (shared internals, not a component, no `.d.ts`; import the four components, never `chartParts.jsx`). They read four tokens, `--ds-chart-primary`, `--ds-chart-primary-hover`, `--ds-chart-muted` and `--ds-chart-muted-hover`, defined in `tokens.json` and `tokens.css` (light and dark). The kit's published `tokens.css` had been missing those four tokens until kit version 23 added them, so a sync from an earlier version leaves the chart marks without a colour. `components/bundle.css` carries the chart hover, focus and forced-colours rules; `components/index.d.ts` exports the new props. Verified before publishing: 91 jsdom behaviour checks, axe clean in chart and table view, strict TypeScript on the declaration files, contrast pairs computed for both themes, and a real-browser pass in light and dark on the published preview cards.
 
+Identity pass (kit versions 24 and 25): the accent is the bronze ramp from the owner's personal site (`--ds-bronze-50` to `--ds-bronze-900`, replacing blue for primary, focus, subtle, and chart tokens), the neutrals are warm stone, the dark theme is layered (page `neutral-900`, zones `neutral-850`, cards `neutral-800`, hover and borders `neutral-700`), and the warning tone is yellow. Type is IBM Plex: Plex Serif is `--ds-font-display` and carries the AppShell brand and title, `.ds-hero`, `.ds-page-title` and the StatTile figure; Plex Sans is the body face and Plex Mono the code and number face. The info Alert is a neutral surface, and the current AppShell link carries a 2px accent rule. `components/src/feedback/Alert.jsx` and `components/src/data/StatTile.jsx` changed in this sync; all other component sources are unchanged. Verified before publishing: 86 contrast pairs (text, muted text, status text on tinted grounds, control borders, focus ring and chart marks, in both themes), all passing; the kit's `bundle.js` was patched in place for the two component changes and the unchanged blocks were left byte-identical.
+
 ## Re-sync
 
 Ask Claude to re-export from the kit. Update the version, date and hashes above, and review the diff like any other change.
 
 ## File hashes (sha256, as published)
 
-0815fda8ec351430a4a9b755ea82d7dfb4ce5a0592819aa78c6cbafd7a24c1b3  README.md
+3447e398a4abcda815c68a35d349ad89ec286d633268571b18277706f1455076  README.md
 f03c3f7e1c89a87a5c67139f80ec1f8bdfa8aea67f98fcd7e6a7c28706927f3a  components/Alert/Alert.d.ts
 d30c1553dec8a052133d702b544cc63ce611e45db838d114082ff8333affe815  components/Alert/README.md
 a8648be0fcecaf3633c8b2952a22674f83882354954d1bbf43753f3c967fb164  components/AppShell/AppShell.d.ts
@@ -90,16 +92,16 @@ d8707a15881dd16110e78f0d651447fba11e81d68cfb34863b0164eb5307b1c0  components/Toa
 fb4e796b9c14102892986802ee1e6371344ed3b225f04b38ca4f37edcf2f6223  components/Toolbar/Toolbar.d.ts
 b3de70fa3b0f3f86ab939d66dc87e00df87503df06b97581113b45cb7f567eb4  components/Tooltip/README.md
 726433458f49c1a5a2039ac5e99d591b3cfa88b3f2905b14d1bf068379ac9ed2  components/Tooltip/Tooltip.d.ts
-6c2a80ecc36f52f0f1d54a7eb80883aa08940f5f8c64c3a0954d0dd292765a31  components/bundle.css
+894df15ebd2832d61cce810a99d6a8be08b7ab786480153eac82c72d2c39eb03  components/bundle.css
 52ce3ae67c763eb85530c9dcad2454b0c2aa5587bce42b46ec7e6ff2e4b9ee9d  components/index.d.ts
 8a463b86242b6faf407620ad2b2ed7d8c74cdf60f61566709bc1989d30cea7de  components/src/data/BarChart.jsx
 b5f085796263fddf65eba75a1b649db0a8937a65b65c61077ee6c174146bc882  components/src/data/ColumnChart.jsx
 92912e9603486c5b11bd7cc0a24207b5e7e92155deeb863992615a254d204052  components/src/data/DataTable.jsx
 440d42be12e78ed2af2f8e08721eae29dfcc92a3e8bf9d575c594be811536ae0  components/src/data/Sparkline.jsx
-16212fbd7e384b143be162893f8a810526d581eb2e5bb880111598038e6de615  components/src/data/StatTile.jsx
+1d6d4a17d9069b7203f4b9c6912905660316c9608c5f4b41d2eeb196dcca2fda  components/src/data/StatTile.jsx
 c49b3329d0edc42823feb819e3ae34dc9690ca1eef35df52604bcbe6197c753f  components/src/data/Toolbar.jsx
 ef075557a143c6b73768f66a934daa99293039b4fb6261ac26cbd504a9ca3964  components/src/data/chartParts.jsx
-262e4944ee2372ce938ed452d71a5ef63d10c3ab84ceb1e295ec5e9c1896132b  components/src/feedback/Alert.jsx
+351af1476975f2b7f9b597ec6892d49562fc7a390e93e6b0d27c52af5472cc83  components/src/feedback/Alert.jsx
 b75efcfcb2c2fcf9d776da42daec9eae48aac69e3943bf6d62eb949b7032df43  components/src/feedback/Avatar.jsx
 d6e30d5c071084cf8c69672f5a9c711949c77317daeda250af204916bb8eb12b  components/src/feedback/Badge.jsx
 bad29af9c5aefd6ec05a1e2a71ae83f9a21b81e0e1356f6ea69071f321d159a1  components/src/feedback/Card.jsx
@@ -119,7 +121,11 @@ ec9791c40c3daeff8e26844c28e57eb2a51ee3464bfaee01add33a620906dfb0  components/src
 29e9805c03a0465ea00d36f0378830e044492ef0228d544511a7e4e0cc65e76f  components/src/overlay/Menu.jsx
 1cd4b963407539bd6de7e1ec2b9c8126e88bb868ad1adeb37442b90976c046b8  components/src/overlay/Modal.jsx
 95f1e8a58406012c1ddaebd059706b676ee8b2262e4a2816fc411057bf71d368  components/src/overlay/Tooltip.jsx
-3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62  fonts/inter-latin-wght-normal.woff2
-18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e  fonts/jetbrains-mono-latin-wght-normal.woff2
-fe154960ed270bf950c5419c8f83766656b9b764616ee14d29f5de19beb7ea8f  tokens.css
-460cfd9617be1e3942f0ba13ec21c395cfc27e9e1dd634538075434becedf594  tokens.json
+08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7  fonts/ibm-plex-mono-latin-400-normal.woff2
+01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22  fonts/ibm-plex-mono-latin-500-normal.woff2
+e2291e842cf5af167122a22881a740c7f2dda7716f1e8cd76680264f4a859470  fonts/ibm-plex-sans-latin-wght-normal.woff2
+cb2c5eee2c0a43ff30d2365407c7bc8b20e3bd90720a4a64102ba0b328022a02  fonts/ibm-plex-serif-latin-400-normal.woff2
+677082fc2e9ee60701b874fe5983c98ea9fb3b588cc1b02058ff9bf29ea783e4  fonts/ibm-plex-serif-latin-500-normal.woff2
+e279e4f8baa0d4634d98868092f2198ae0dcd9e142c935822c385b9843352a9b  fonts/ibm-plex-serif-latin-600-normal.woff2
+cf40a7c05062ef842822e77c87356ebcfa771388c670fec506620682046bd31d  tokens.css
+83f1d4ce2f8366c9e96f96db43e0a036412eef3dd6b199ce5f39b5612508e856  tokens.json
