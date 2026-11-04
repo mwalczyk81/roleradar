@@ -20,7 +20,9 @@ public sealed class ODataIndexStartupTests : IAsyncLifetime
 {
     private const string Owner = "index-startup-owner";
 
-    private readonly ODataTestHost _host = new("odata_index_startup_test_db", Owner);
+    // xUnit builds a new instance per Fact, and TrackingIndexInitializer remembers "ensured" per database name for the
+    // whole process. A shared name would let an earlier Fact make this one skip index creation on its fresh container.
+    private readonly ODataTestHost _host = new($"odata_index_startup_{Guid.NewGuid():N}", Owner);
 
     public async ValueTask InitializeAsync()
     {
@@ -91,7 +93,7 @@ public sealed class ODataIndexStartupTests : IAsyncLifetime
     public async Task ApiStartedWhileMongoWasDown_CreatesTheIndexesOnTheFirstODataRead()
     {
         // Own host: the API boots while its Mongo address refuses connections, so the startup attempt fails.
-        await using var host = new ODataTestHost("odata_index_retry_test_db", Owner);
+        await using var host = new ODataTestHost($"odata_index_retry_{Guid.NewGuid():N}", Owner);
         await host.StartDatabaseAsync();
 
         var listener = new TcpListener(IPAddress.Loopback, 0);

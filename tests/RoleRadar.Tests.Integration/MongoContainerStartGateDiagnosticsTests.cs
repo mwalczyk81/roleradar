@@ -12,7 +12,9 @@ public sealed class MongoContainerStartGateDiagnosticsTests
     [Fact]
     public async Task FailureDiagnostics_IncludeDockerState_LogTail_AndConcurrentStarts()
     {
-        await using var container = new MongoDbBuilder("mongo:8.0.34").Build();
+        await using var container = new MongoDbBuilder("mongo:8.0.34")
+            .WithEnvironment("GLIBC_TUNABLES", "glibc.pthread.rseq=1") // same kernel workaround as ODataTestHost; mongod 8.0 exits on Linux 6.19+ without it
+            .Build();
         await MongoContainerStartGate.StartAsync(container);
 
         var text = await MongoContainerStartGate.DescribeFailureAsync(container, new InvalidOperationException("simulated"));
