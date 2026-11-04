@@ -60,6 +60,13 @@ export interface DataTableProps<T = any> extends Omit<React.HTMLAttributes<HTMLD
   defaultSortDirection?: "asc" | "desc";
   /** Called when a sortable header is pressed. */
   onSortChange?: (column: string, direction: "asc" | "desc") => void;
+  /**
+   * Where sorting happens. "page" (default) reorders only the rows given and the footer says so. "all" means the
+   * API sorts the whole result: drive it with `sortColumn`, `sortDirection` and `onSortChange`, give each sortable
+   * column a no-op `sortValue`, and the footer note and header tooltip drop the page-only wording.
+   * @default "page"
+   */
+  sortScope?: "page" | "all";
   /** Shows the range and Previous/Next controls. */
   pagination?: DataTablePagination;
   /** Keep the header visible while the body scrolls (needs `maxHeight`). @default true */

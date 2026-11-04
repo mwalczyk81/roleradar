@@ -3,7 +3,7 @@
 Vendored copy of Matt's Design System. The vendored copy under `web/app/ds` is strictly copy-only and NEVER edited by hand. Any fixes, styling updates, or Part C additions must be published to the upstream design kit artifact first, and then brought into this repository via a clean re-sync.
 
 - Source: Design System artifact, <https://claude.ai/artifact/E2SU2aXqnLZ5r9tu5VE9Mm>
-- Kit version: 1793794526-9ca9 (v25, includes Part C, the chart components first published as v20 and the identity pass)
+- Kit version: 1793794809-c293 (v26, includes Part C, the chart components first published as v20, the identity pass and the DataTable sortScope prop)
 - Synced: 2026-11-04
 - Synced by: Claude (read of the published files, copied unmodified; `project/` prefix removed)
 - Namespace in the kit bundle: `MattSDesignSystem_522a7a` (not used here; the app imports the sources in `components/src`)
@@ -33,6 +33,8 @@ Chart components are in this sync (added for the insights dashboard): StatTile, 
 
 Identity pass (kit versions 24 and 25): the accent is the bronze ramp from the owner's personal site (`--ds-bronze-50` to `--ds-bronze-900`, replacing blue for primary, focus, subtle, and chart tokens), the neutrals are warm stone, the dark theme is layered (page `neutral-900`, zones `neutral-850`, cards `neutral-800`, hover and borders `neutral-700`), and the warning tone is yellow. Type is IBM Plex: Plex Serif is `--ds-font-display` and carries the AppShell brand and title, `.ds-hero`, `.ds-page-title` and the StatTile figure; Plex Sans is the body face and Plex Mono the code and number face. The info Alert is a neutral surface, and the current AppShell link carries a 2px accent rule. `components/src/feedback/Alert.jsx` and `components/src/data/StatTile.jsx` changed in this sync; all other component sources are unchanged. Verified before publishing: 86 contrast pairs (text, muted text, status text on tinted grounds, control borders, focus ring and chart marks, in both themes), all passing; the kit's `bundle.js` was patched in place for the two component changes and the unchanged blocks were left byte-identical.
 
+DataTable gained a `sortScope` prop in kit version 26: `"page"` (default, unchanged) says in the footer and the header tooltip that sorting applies to the rows on the page; `"all"` is for tables the API sorts, and removes both. `components/src/data/DataTable.jsx`, `components/DataTable/DataTable.d.ts`, `components/DataTable/README.md` and `components/index.d.ts` changed in that sync.
+
 ## Re-sync
 
 Ask Claude to re-export from the kit. Update the version, date and hashes above, and review the diff like any other change.
@@ -58,8 +60,8 @@ b3dec14da444c4535f24e2282c1806324c6ca17ce78c26df9ec173acd77943d2  components/But
 c701fb944fe5d2c125a23141a4f3a096071e1a90c745d824106103cf7f5478cd  components/Checkbox/README.md
 71300f01e5b41e33731ef9a7698ea250bd297fcf00fd8f8d04c47cdf5334fae9  components/ColumnChart/ColumnChart.d.ts
 064d0c45d83c8c9b544d1f66e8c410210b7673fd8d7fd81e374eba1325e093b0  components/ColumnChart/README.md
-570c846370e3218b58a1505c9fdad9c9aa71b7553d6127a662acb62f714fd9aa  components/DataTable/DataTable.d.ts
-53d78689f30947a2dd70f1d8cefa5ae907d1f6065584ff3055695c2f99076d29  components/DataTable/README.md
+b5a98ee63c76463363f1bb7e2a44d751148bfea0504b901f255f0003bcb0f7a9  components/DataTable/DataTable.d.ts
+e7ec6295115fa3f66a6981ac36c1f7036bee4760800598868a625e10d61226d0  components/DataTable/README.md
 aaca10374b6dbe0edf0b0cc74d76d3a5799be318b174baf2f610f659451757f5  components/EmptyState/EmptyState.d.ts
 4eb942bde3c7572591203d543f2e3e341cf708eef84a1a564cd38e98534b7849  components/EmptyState/README.md
 20b4065c839e50d2c55702a456c69038d86d44041527fa40ca8a96c1ee51fb64  components/Input/Input.d.ts
@@ -93,10 +95,10 @@ fb4e796b9c14102892986802ee1e6371344ed3b225f04b38ca4f37edcf2f6223  components/Too
 b3de70fa3b0f3f86ab939d66dc87e00df87503df06b97581113b45cb7f567eb4  components/Tooltip/README.md
 726433458f49c1a5a2039ac5e99d591b3cfa88b3f2905b14d1bf068379ac9ed2  components/Tooltip/Tooltip.d.ts
 894df15ebd2832d61cce810a99d6a8be08b7ab786480153eac82c72d2c39eb03  components/bundle.css
-52ce3ae67c763eb85530c9dcad2454b0c2aa5587bce42b46ec7e6ff2e4b9ee9d  components/index.d.ts
+351c4a30dd5c38b2b628cbd65512711366a6ae7d04d409ee5dcd3a13e4dec65b  components/index.d.ts
 8a463b86242b6faf407620ad2b2ed7d8c74cdf60f61566709bc1989d30cea7de  components/src/data/BarChart.jsx
 b5f085796263fddf65eba75a1b649db0a8937a65b65c61077ee6c174146bc882  components/src/data/ColumnChart.jsx
-92912e9603486c5b11bd7cc0a24207b5e7e92155deeb863992615a254d204052  components/src/data/DataTable.jsx
+221be65ab2dc3c6a4be96df3e6d1dd5bb87e9446610382d14c91b8628bd928c1  components/src/data/DataTable.jsx
 440d42be12e78ed2af2f8e08721eae29dfcc92a3e8bf9d575c594be811536ae0  components/src/data/Sparkline.jsx
 1d6d4a17d9069b7203f4b9c6912905660316c9608c5f4b41d2eeb196dcca2fda  components/src/data/StatTile.jsx
 c49b3329d0edc42823feb819e3ae34dc9690ca1eef35df52604bcbe6197c753f  components/src/data/Toolbar.jsx

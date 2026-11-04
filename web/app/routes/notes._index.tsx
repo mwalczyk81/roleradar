@@ -164,6 +164,7 @@ export default function NotesIndex() {
         </Form>
 
         <DataTable
+          sortScope="all"
           caption="Narrative Notes"
           columns={columns}
           data={data.items}

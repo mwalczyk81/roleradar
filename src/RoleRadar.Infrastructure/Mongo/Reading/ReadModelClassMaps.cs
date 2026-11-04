@@ -53,6 +53,8 @@ public static class ReadModelClassMaps
                 cm.MapProperty(p => p.Score).SetElementName("score");
                 cm.MapProperty(p => p.CreatedAt).SetElementName("created_at");
                 cm.MapProperty(p => p.UpdatedAt).SetElementName("updated_at");
+                cm.MapProperty(p => p.FirstSeenAt).SetElementName("first_seen_at");
+                cm.MapProperty(p => p.HasApplication).SetElementName("has_application");
                 cm.MapMember(p => p.OwnerId).SetElementName("owner_id");
                 cm.MapMember(p => p.DispositionRank).SetElementName("disposition_rank");
                 cm.MapMember(p => p.HasScore).SetElementName("has_score");
@@ -92,6 +94,9 @@ public static class ReadModelClassMaps
                 cm.MapProperty(p => p.HasInterview).SetElementName("has_interview");
                 cm.MapProperty(p => p.FirstResponseAt).SetElementName("first_response_at");
                 cm.MapProperty(p => p.LastEventAt).SetElementName("last_event_at");
+                cm.MapProperty(p => p.HasOffer).SetElementName("has_offer");
+                cm.MapProperty(p => p.HasRejection).SetElementName("has_rejection");
+                cm.MapProperty(p => p.RejectedBeforeInterview).SetElementName("rejected_before_interview");
                 cm.MapMember(p => p.OwnerId).SetElementName("owner_id");
                 cm.MapMember(p => p.HasFirstResponse).SetElementName("has_first_response");
                 cm.MapMember(p => p.HasLastEvent).SetElementName("has_last_event");

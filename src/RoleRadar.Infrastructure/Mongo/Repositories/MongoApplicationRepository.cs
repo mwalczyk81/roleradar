@@ -112,20 +112,35 @@ public sealed class MongoApplicationRepository : IApplicationRepository
             ? await _applicationEvents.Find(session, eventFilter).ToListAsync(cancellationToken)
             : await _applicationEvents.Find(eventFilter).ToListAsync(cancellationToken);
 
-        var (hasInterview, firstResponseAt, lastEventAt) = ComputeApplicationMilestones(events, application.CreatedAt.UtcDateTime);
+        var milestones = ComputeApplicationMilestones(events, application.CreatedAt.UtcDateTime);
 
         var doc = SerializeApplication(
             application,
             postingTitle,
             companyId,
             companyName,
-            hasInterview,
-            firstResponseAt,
-            lastEventAt);
+            milestones.HasInterview,
+            milestones.FirstResponseAt,
+            milestones.LastEventAt,
+            milestones.HasOffer,
+            milestones.HasRejection,
+            milestones.RejectedBeforeInterview);
 
         var result = session is not null
             ? await _applications.ReplaceOneAsync(session, filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken)
             : await _applications.ReplaceOneAsync(filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken);
+
+        // ADR 0031: the posting now has an application. Same session as the write above, so both land together.
+        // Applications are unique per posting and are never deleted, so this only ever moves false to true.
+        var markPosting = Builders<BsonDocument>.Update.Set(TrackingBsonFieldNames.Postings.HasApplication, true);
+        if (session is not null)
+        {
+            await postings.UpdateOneAsync(session, postFilter, markPosting, cancellationToken: cancellationToken);
+        }
+        else
+        {
+            await postings.UpdateOneAsync(postFilter, markPosting, cancellationToken: cancellationToken);
+        }
 
         return Result<bool>.Success(result.IsAcknowledged);
     }
@@ -167,16 +182,19 @@ public sealed class MongoApplicationRepository : IApplicationRepository
             ? appDoc["created_at"].ToUniversalTime()
             : appEvent.CreatedAt.UtcDateTime;
 
-        var (hasInterview, firstResponseAt, lastEventAt) = ComputeApplicationMilestones(allEvents, defaultCreated);
+        var milestones = ComputeApplicationMilestones(allEvents, defaultCreated);
 
-        BsonValue firstResponseBson = firstResponseAt.HasValue ? BsonDateTime.Create(firstResponseAt.Value) : BsonNull.Value;
-        BsonValue lastEventBson = lastEventAt.HasValue ? BsonDateTime.Create(lastEventAt.Value) : BsonNull.Value;
+        BsonValue firstResponseBson = milestones.FirstResponseAt.HasValue ? BsonDateTime.Create(milestones.FirstResponseAt.Value) : BsonNull.Value;
+        BsonValue lastEventBson = milestones.LastEventAt.HasValue ? BsonDateTime.Create(milestones.LastEventAt.Value) : BsonNull.Value;
         var update = Builders<BsonDocument>.Update
-            .Set("has_interview", hasInterview)
+            .Set("has_interview", milestones.HasInterview)
             .Set("first_response_at", firstResponseBson)
-            .Set("has_first_response", firstResponseAt.HasValue)
+            .Set("has_first_response", milestones.FirstResponseAt.HasValue)
             .Set("last_event_at", lastEventBson)
-            .Set("has_last_event", lastEventAt.HasValue);
+            .Set("has_last_event", milestones.LastEventAt.HasValue)
+            .Set(TrackingBsonFieldNames.Applications.HasOffer, milestones.HasOffer)
+            .Set(TrackingBsonFieldNames.Applications.HasRejection, milestones.HasRejection)
+            .Set(TrackingBsonFieldNames.Applications.RejectedBeforeInterview, milestones.RejectedBeforeInterview);
 
         if (session is not null)
         {
@@ -271,7 +289,10 @@ public sealed class MongoApplicationRepository : IApplicationRepository
         string companyName = "",
         bool hasInterview = false,
         DateTime? firstResponseAt = null,
-        DateTime? lastEventAt = null)
+        DateTime? lastEventAt = null,
+        bool hasOffer = false,
+        bool hasRejection = false,
+        bool rejectedBeforeInterview = false)
     {
         var desiredSalaryDoc = new BsonDocument
         {
@@ -301,6 +322,9 @@ public sealed class MongoApplicationRepository : IApplicationRepository
             ["last_event_at"] = lastEventAt.HasValue ? BsonDateTime.Create(lastEventAt.Value) : BsonNull.Value,
             ["has_first_response"] = hasFirstResponse,
             ["has_last_event"] = hasLastEvent,
+            [TrackingBsonFieldNames.Applications.HasOffer] = hasOffer,
+            [TrackingBsonFieldNames.Applications.HasRejection] = hasRejection,
+            [TrackingBsonFieldNames.Applications.RejectedBeforeInterview] = rejectedBeforeInterview,
             ["desired_salary"] = desiredSalaryDoc,
             ["target_start_date"] = application.TargetStartDate is not null ? new BsonString(application.TargetStartDate) : BsonNull.Value,
             ["resume_variant"] = application.ResumeVariant.ToSnakeCase(),
@@ -344,13 +368,16 @@ public sealed class MongoApplicationRepository : IApplicationRepository
             : createdAtUtc;
     }
 
-    internal static (bool HasInterview, DateTime? FirstResponseAt, DateTime? LastEventAt) ComputeApplicationMilestones(
+    internal static ApplicationMilestones ComputeApplicationMilestones(
         IEnumerable<BsonDocument> events,
         DateTime defaultCreatedAt)
     {
         bool hasInterview = false;
+        bool hasOffer = false;
         DateTime? firstResponseAt = null;
         DateTime? lastEventAt = null;
+        DateTime? earliestInterviewAt = null;
+        DateTime? earliestRejectionAt = null;
 
         // Only employer-originated events count as a "first response". follow_up and withdrawn are
         // the candidate's own actions, so they must not.
@@ -362,10 +389,6 @@ public sealed class MongoApplicationRepository : IApplicationRepository
         foreach (var ev in events)
         {
             var evType = ev.Contains("event_type") && ev["event_type"].IsString ? ev["event_type"].AsString : string.Empty;
-            if (string.Equals(evType, "interview", StringComparison.OrdinalIgnoreCase))
-            {
-                hasInterview = true;
-            }
 
             // The event's own date (UTC midnight) is authoritative so that backfilled events order by
             // when they happened, not when they were inserted. created_at is only a fallback.
@@ -384,6 +407,24 @@ public sealed class MongoApplicationRepository : IApplicationRepository
                 evTimestamp = defaultCreatedAt;
             }
 
+            if (string.Equals(evType, "interview", StringComparison.OrdinalIgnoreCase))
+            {
+                hasInterview = true;
+                if (earliestInterviewAt is null || evTimestamp < earliestInterviewAt.Value)
+                {
+                    earliestInterviewAt = evTimestamp;
+                }
+            }
+            else if (string.Equals(evType, "offer", StringComparison.OrdinalIgnoreCase))
+            {
+                hasOffer = true;
+            }
+            else if (string.Equals(evType, "rejected", StringComparison.OrdinalIgnoreCase)
+                     && (earliestRejectionAt is null || evTimestamp < earliestRejectionAt.Value))
+            {
+                earliestRejectionAt = evTimestamp;
+            }
+
             if (lastEventAt is null || evTimestamp > lastEventAt.Value)
             {
                 lastEventAt = evTimestamp;
@@ -398,7 +439,15 @@ public sealed class MongoApplicationRepository : IApplicationRepository
             }
         }
 
-        return (hasInterview, firstResponseAt, lastEventAt);
+        var hasRejection = earliestRejectionAt.HasValue;
+
+        // Before any interview: no interview event is dated on or before the earliest rejection. Events carry a
+        // date but no time, so a rejection on the same day as an interview is read as following it ("after").
+        // False without a rejection.
+        var rejectedBeforeInterview = hasRejection
+            && !(earliestInterviewAt.HasValue && earliestInterviewAt.Value <= earliestRejectionAt!.Value);
+
+        return new ApplicationMilestones(hasInterview, firstResponseAt, lastEventAt, hasOffer, hasRejection, rejectedBeforeInterview);
     }
 
     private static ApplicationEntity MapApplication(BsonDocument doc)
@@ -527,5 +576,26 @@ public sealed class MongoApplicationRepository : IApplicationRepository
             eventSource,
             notes,
             createdAt);
+    }
+}
+
+/// <summary>
+/// Everything derived from an application's events. The one implementation shared by
+/// <see cref="MongoApplicationRepository"/> (full replace and per-event update) and the reconcile service (ADR 0031).
+/// </summary>
+internal readonly record struct ApplicationMilestones(
+    bool HasInterview,
+    DateTime? FirstResponseAt,
+    DateTime? LastEventAt,
+    bool HasOffer,
+    bool HasRejection,
+    bool RejectedBeforeInterview)
+{
+    /// <summary>The original three milestones, for callers that need nothing else.</summary>
+    public void Deconstruct(out bool hasInterview, out DateTime? firstResponseAt, out DateTime? lastEventAt)
+    {
+        hasInterview = HasInterview;
+        firstResponseAt = FirstResponseAt;
+        lastEventAt = LastEventAt;
     }
 }

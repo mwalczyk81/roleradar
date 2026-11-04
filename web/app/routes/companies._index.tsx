@@ -172,6 +172,7 @@ export default function CompaniesIndex() {
         </Form>
 
         <DataTable
+          sortScope="all"
           caption="Tracked Companies"
           columns={columns}
           data={data.items}

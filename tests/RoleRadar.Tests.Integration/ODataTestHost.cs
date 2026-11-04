@@ -51,6 +51,12 @@ internal sealed class ODataTestHost : IAsyncDisposable
     /// <summary>When set, the API connects here instead of the container (used to start the API with Mongo unreachable).</summary>
     public string? ApiMongoConnectionString { get; set; }
 
+    /// <summary>The container's host name, for isolation guards that compare endpoints.</summary>
+    public string ContainerHost => _container.Hostname;
+
+    /// <summary>The container's mapped MongoDB port, for isolation guards that compare endpoints.</summary>
+    public int ContainerPort => _container.GetMappedPublicPort(27017);
+
     /// <summary>The container's connection string (credentials and mapped port included).</summary>
     public string ContainerConnectionString => _container.GetConnectionString();
 

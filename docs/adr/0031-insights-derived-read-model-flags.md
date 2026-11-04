@@ -19,7 +19,7 @@ Add five stored, derived, read-only fields.
 | postings | `has_application` | an application exists for the posting |
 | applications | `has_offer` | any `offer` event |
 | applications | `has_rejection` | any `rejected` event |
-| applications | `rejected_before_interview` | rejection exists and no `interview` event dated strictly before the earliest rejection |
+| applications | `rejected_before_interview` | rejection exists and no `interview` event dated on or before the earliest rejection (same day counts as after) |
 
 (`first_seen_at` on postings is already stored; it is only newly exposed and needs no backfill.)
 

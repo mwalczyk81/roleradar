@@ -104,6 +104,21 @@ public sealed partial class ODataDocsExamplesTests : IAsyncLifetime
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));
     }
 
+    private static readonly string[] InsightsProperties = ["hasApplication", "firstSeenAt", "hasOffer", "hasRejection", "rejectedBeforeInterview"];
+
+    [Fact]
+    public void EveryInsightsProperty_HasADocumentedExample()
+    {
+        // 007: each property the Insights drill-downs filter on needs a curl example (all examples are executed above).
+        var examples = LoadExamples();
+        var missing = InsightsProperties
+            .Where(property => !examples.Any(e => e.Url.Contains("$filter=", StringComparison.Ordinal) &&
+                                                  e.Url.Contains(property, StringComparison.Ordinal)))
+            .ToList();
+
+        Assert.True(missing.Count == 0, "docs/api/odata-queries.md has no $filter curl example for: " + string.Join(", ", missing));
+    }
+
     [Fact]
     public async Task DocumentedClaims_AboutMetadata_ServiceDocument_AndMissingToken_Hold()
     {

@@ -124,6 +124,7 @@ export default function SearchRunsIndex() {
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
         <DataTable
+          sortScope="all"
           caption="Automated Search Runs History"
           columns={columns}
           data={data.items}

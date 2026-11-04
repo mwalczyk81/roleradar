@@ -353,6 +353,7 @@ export default function ApplicationsIndex() {
 
         {/* Applications Data Table */}
         <DataTable
+          sortScope="all"
           caption="Tracked Job Applications"
           columns={columns}
           data={data.items}

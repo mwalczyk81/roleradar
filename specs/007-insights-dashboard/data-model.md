@@ -27,7 +27,7 @@ Index: `ix_postings_owner_has_application` = `{owner_id: 1, has_application: 1, 
 | --- | --- | --- | --- | --- |
 | `has_offer` | `HasOffer` (`hasOffer`) | bool | any event of type `offer` | yes |
 | `has_rejection` | `HasRejection` (`hasRejection`) | bool | any event of type `rejected` | yes |
-| `rejected_before_interview` | `RejectedBeforeInterview` (`rejectedBeforeInterview`) | bool | `has_rejection` and no `interview` event dated strictly before the earliest `rejected` event; false when `has_rejection` is false | yes |
+| `rejected_before_interview` | `RejectedBeforeInterview` (`rejectedBeforeInterview`) | bool | `has_rejection` and no `interview` event dated on or before the earliest `rejected` event; false when `has_rejection` is false | yes |
 
 Writers: `SerializeApplication` (full replace, values from events), `AppendEventAsync` (`$set` after each event), `ReconcileApplicationsAsync`. All three call the one extended `ComputeApplicationMilestones`, which returns a record `ApplicationMilestones(HasInterview, FirstResponseAt, LastEventAt, HasOffer, HasRejection, RejectedBeforeInterview)` instead of the current tuple.
 

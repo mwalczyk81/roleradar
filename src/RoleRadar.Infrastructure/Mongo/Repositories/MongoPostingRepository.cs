@@ -278,7 +278,17 @@ public sealed class MongoPostingRepository : IPostingRepository
             companyName = companyDoc["name"].AsString;
         }
 
-        var doc = SerializePosting(posting, companyName);
+        // ADR 0031: a full replace rewrites the whole document, so has_application is recomputed here from the
+        // applications collection (indexed on owner_id + posting_id) and can never be lost by a posting edit.
+        var applicationsForExistence = _database.GetCollection<BsonDocument>(TrackingMongoOptions.ApplicationsCollectionName);
+        var applicationFilter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("owner_id", posting.OwnerId),
+            Builders<BsonDocument>.Filter.Eq("posting_id", new BsonBinaryData(posting.Id, GuidRepresentation.Standard)));
+        var hasApplication = session is not null
+            ? await applicationsForExistence.Find(session, applicationFilter).Limit(1).AnyAsync(cancellationToken)
+            : await applicationsForExistence.Find(applicationFilter).Limit(1).AnyAsync(cancellationToken);
+
+        var doc = SerializePosting(posting, companyName, hasApplication);
         var result = session is not null
             ? await _postings.ReplaceOneAsync(session, filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken)
             : await _postings.ReplaceOneAsync(filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken);
@@ -423,7 +433,7 @@ public sealed class MongoPostingRepository : IPostingRepository
         _ => throw new ArgumentOutOfRangeException(nameof(disposition), disposition, $"Unknown posting disposition '{disposition}'.")
     };
 
-    internal static BsonDocument SerializePosting(Posting p, string? companyName = null)
+    internal static BsonDocument SerializePosting(Posting p, string? companyName = null, bool hasApplication = false)
     {
         var rank = MapDispositionRank(p.Disposition);
         var hasScore = p.Score.HasValue;
@@ -462,6 +472,7 @@ public sealed class MongoPostingRepository : IPostingRepository
             ["closed_date"] = p.ClosedDate is not null ? new BsonString(p.ClosedDate) : BsonNull.Value,
             ["score"] = p.Score.HasValue ? new BsonDecimal128(p.Score.Value) : BsonNull.Value,
             ["has_score"] = hasScore,
+            [TrackingBsonFieldNames.Postings.HasApplication] = hasApplication,
             ["culture_level"] = p.CultureLevel.ToSnakeCase(),
             ["culture_summary"] = p.CultureSummary is not null ? new BsonString(p.CultureSummary) : BsonNull.Value,
             ["disposition"] = p.Disposition.ToSnakeCase(),

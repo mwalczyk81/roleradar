@@ -46,7 +46,7 @@ curl -s -i -X DELETE -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings"
 
 ## Postings
 
-Orderable: `title`, `companyName`, `location`, `disposition`, `resurfacePolicy`, `score`, `createdAt`, `updatedAt`, `id`. All properties are filterable.
+Orderable: `title`, `companyName`, `location`, `disposition`, `resurfacePolicy`, `score`, `createdAt`, `updatedAt`, `id`. All properties are filterable, including `firstSeenAt` (when RoleRadar first recorded the posting; filter only, not sortable) and `hasApplication` (true when an application exists for the posting; filter only, not sortable). `hasApplication eq true` is the "postings I applied to" view.
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$filter=contains(tolower(title),'engineer')%20and%20disposition%20eq%20'applied'"
@@ -54,6 +54,8 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$orderby=score%
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$select=id,title,companyName,score"
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$count=true&\$top=5"
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$top=10&\$skip=20"
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$filter=hasApplication%20eq%20true&\$count=true&\$top=1&\$select=id"
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$filter=firstSeenAt%20ge%202026-01-01T00:00:00Z%20and%20firstSeenAt%20lt%202026-04-01T00:00:00Z&\$count=true&\$top=1&\$select=id"
 ```
 
 ## Companies
@@ -70,7 +72,7 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Companies?\$top=10&\$skip
 
 ## Applications
 
-Orderable: `postingTitle`, `companyName`, `status`, `appliedAt`, `hasInterview`, `firstResponseAt`, `lastEventAt`, `ageInDays`, `id`. Filterable: everything except `ageInDays`.
+Orderable: `postingTitle`, `companyName`, `status`, `appliedAt`, `hasInterview`, `firstResponseAt`, `lastEventAt`, `ageInDays`, `id`. Filterable: everything except `ageInDays`. The booleans `hasOffer` (any offer event), `hasRejection` (any rejected event) and `rejectedBeforeInterview` (a rejection with no interview on or before its date; false without a rejection) are filter only, not sortable. To select applications at least N days old, filter on `appliedAt` instead of `ageInDays`.
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$filter=hasInterview%20eq%20true%20and%20appliedAt%20ge%202026-01-01T00:00:00Z"
@@ -78,6 +80,8 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$orderby=la
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$select=id,postingTitle,companyName,status,appliedAt"
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$count=true&\$top=5"
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$top=25&\$skip=25"
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$filter=hasOffer%20eq%20true&\$count=true&\$top=1&\$select=id"
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$filter=hasRejection%20eq%20true%20and%20rejectedBeforeInterview%20eq%20false&\$count=true&\$top=1&\$select=id"
 ```
 
 ## Notes

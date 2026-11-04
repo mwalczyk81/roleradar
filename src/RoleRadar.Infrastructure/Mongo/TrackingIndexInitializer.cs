@@ -235,7 +235,14 @@ public static class TrackingIndexInitializer
                 {
                     Name = "ix_postings_owner_company_name_collation",
                     Collation = new Collation("en", strength: CollationStrength.Secondary)
-                })
+                }),
+            // 007 / ADR 0031: Insights counts and drill-downs. Owner first, like every other index.
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending(TrackingBsonFieldNames.Postings.HasApplication).Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_postings_owner_has_application" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending(TrackingBsonFieldNames.Postings.FirstSeenAt).Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_postings_owner_first_seen_at" })
         };
         await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }

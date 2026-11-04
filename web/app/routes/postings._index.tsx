@@ -450,6 +450,7 @@ export default function PostingsIndex() {
         </Toolbar>
 
         <DataTable<PostingODataModel>
+          sortScope="all"
           caption="Job Postings"
           columns={columns}
           data={data.items}

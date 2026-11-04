@@ -179,6 +179,7 @@ export default function CriteriaIndex() {
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
         <DataTable
+          sortScope="all"
           caption="Screening Evaluation Rules"
           columns={columns}
           data={data.items}

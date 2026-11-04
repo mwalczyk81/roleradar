@@ -47,6 +47,7 @@ export function DataTable({
   sortDirection,
   defaultSortDirection = "asc",
   onSortChange,
+  sortScope = "page",
   pagination,
   stickyHeader = true,
   maxHeight,
@@ -159,7 +160,7 @@ export function DataTable({
                         type="button"
                         className="ds-datatable-sort"
                         onClick={() => toggleSort(c.key)}
-                        title="Sorts the rows on this page"
+                        title={sortScope === "all" ? "Sorts all rows" : "Sorts the rows on this page"}
                         style={{
                           appearance: "none",
                           background: "none",
@@ -256,7 +257,7 @@ export function DataTable({
             color: "var(--ds-text-secondary)",
           }}
         >
-          <span>{hasSortable && !isLoading && rows.length > 1 ? "Sorting applies to the rows on this page only." : ""}</span>
+          <span>{hasSortable && sortScope !== "all" && !isLoading && rows.length > 1 ? "Sorting applies to the rows on this page only." : ""}</span>
           {pagination ? (
             <nav aria-label="Pagination" style={{ display: "flex", alignItems: "center", gap: "var(--ds-space-3)" }}>
               <span aria-live="polite" style={{ fontVariantNumeric: "tabular-nums" }}>

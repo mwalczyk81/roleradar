@@ -95,7 +95,7 @@ Spec metrics need facts that `status`, `hasInterview` and `firstResponseAt` cann
 
 All three are computed inside `ComputeApplicationMilestones` (extended to return a small record instead of a tuple) so `SerializeApplication`, `AppendEventAsync` and reconcile share one implementation, exactly like the 006 flags.
 
-`rejectedBeforeInterview` is true when there is a rejected event and no interview event dated strictly before the earliest rejected event. A rejection with no interview at all is "before". A rejection after at least one earlier interview is "after".
+`rejectedBeforeInterview` is true when there is a rejected event and no interview event dated on or before the earliest rejected event (events carry a date but no time, so a same-day interview is read as preceding the rejection). A rejection with no interview at all is "before". A rejection after at least one earlier or same-day interview is "after".
 
 ## R8. Date arithmetic must match `ageInDays` exactly
 

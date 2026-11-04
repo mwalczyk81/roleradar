@@ -43,6 +43,7 @@ public static class TrackingBsonFieldNames
         public const string CultureLevel = "culture_level";
         public const string CultureSummary = "culture_summary";
         public const string Disposition = "disposition";
+        public const string HasApplication = "has_application";
         public const string DispositionReason = "disposition_reason";
         public const string DispositionCriterionId = "disposition_criterion_id";
         public const string ResurfacePolicy = "resurface_policy";
@@ -83,6 +84,9 @@ public static class TrackingBsonFieldNames
         public const string ResumePointer = "resume_pointer";
         public const string ReferralContactId = "referral_contact_id";
         public const string ConfirmationCode = "confirmation_code";
+        public const string HasOffer = "has_offer";
+        public const string HasRejection = "has_rejection";
+        public const string RejectedBeforeInterview = "rejected_before_interview";
         public const string CurrentStage = "current_stage";
         public const string LastStageDate = "last_stage_date";
         public const string VersionToken = "version_token";
