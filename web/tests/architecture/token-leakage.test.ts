@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { execSync } from "node:child_process";
 import http from "node:http";
 import https from "node:https";
 import fs from "node:fs";
@@ -200,6 +201,13 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
     let context: BrowserContext;
 
     beforeAll(async () => {
+      // The real server imports build/server/index.js. Without it every request answers 500 and the leakage
+      // checks below would pass against error pages, so build it once when a fresh checkout has none.
+      const bundle = path.resolve(process.cwd(), "build/server/index.js");
+      if (!fs.existsSync(bundle)) {
+        execSync("pnpm run build", { cwd: path.resolve(process.cwd()), stdio: "pipe" });
+      }
+
       const mockOidcConfig = new client.Configuration(
         {
           issuer: "https://identity:5001",
@@ -301,7 +309,7 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
           return;
         }
 
-        if (url.pathname === "/odata/Criteria" || url.pathname === "/odata/Notes" || url.pathname === "/odata/SearchRuns") {
+        if (["/odata/Postings", "/odata/Applications", "/odata/Criteria", "/odata/Notes", "/odata/SearchRuns"].includes(url.pathname)) {
           res.writeHead(200);
           res.end(JSON.stringify({ "@odata.count": 0, value: [] }));
           return;
@@ -365,7 +373,7 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
           sameSite: "Lax",
         },
       ]);
-    }, 45_000);
+    }, 180_000);
 
     afterAll(async () => {
       try {
@@ -397,20 +405,22 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
       }
     });
 
-    const routesToVisit = [
-      "/postings",
-      "/postings/post-leak-1",
-      "/companies",
-      "/companies/comp-1",
-      "/applications",
-      "/criteria",
-      "/notes",
-      "/search-runs",
-      "/not-authorized",
-      "/service-unavailable",
+    // Every route must really render: the stubbed servers answer 200 for all of them, so a different status or
+    // the root error boundary means the page did not render and the canary checks below would prove nothing.
+    const routesToVisit: { route: string; status: number; heading: string }[] = [
+      { route: "/postings", status: 200, heading: "Job Postings" },
+      { route: "/postings/post-leak-1", status: 200, heading: "Security Engineer" },
+      { route: "/companies", status: 200, heading: "Companies" },
+      { route: "/companies/comp-1", status: 200, heading: "Safe Corp" },
+      { route: "/applications", status: 200, heading: "Applications" },
+      { route: "/criteria", status: 200, heading: "Screening Criteria" },
+      { route: "/notes", status: 200, heading: "Notes" },
+      { route: "/search-runs", status: 200, heading: "Search Runs" },
+      { route: "/not-authorized", status: 200, heading: "Not Authorized" },
+      { route: "/service-unavailable", status: 200, heading: "Service Unavailable" },
     ];
 
-    for (const route of routesToVisit) {
+    for (const { route, status, heading } of routesToVisit) {
       it(`asserts zero token leakage in DOM, body, headers, and storage on ${route}`, async () => {
         const page = await context.newPage();
         const interceptedBodies: string[] = [];
@@ -434,7 +444,21 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
         });
 
         const targetUrl = `${baseUrl}${route}`;
-        await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+        const navigation = await page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+
+        // 0. The page must have rendered: expected status, its own heading, and not the error boundary.
+        expect(navigation?.status(), `${route} answered with an unexpected status`).toBe(status);
+        const headingVisible = await page
+          .getByRole("heading", { name: heading })
+          .first()
+          .waitFor({ state: "visible", timeout: 10_000 })
+          .then(() => true, () => false);
+        expect(headingVisible, `${route} did not render its heading "${heading}"`).toBe(true);
+        expect(await page.title(), `${route} rendered the application error page`).not.toBe("Application Error");
+        expect(
+          await page.getByRole("heading", { name: "Application Error" }).count(),
+          `${route} rendered the application error boundary`
+        ).toBe(0);
 
         // 1. Assert response bodies
         for (const body of interceptedBodies) {

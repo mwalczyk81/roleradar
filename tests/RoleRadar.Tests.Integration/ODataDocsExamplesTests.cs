@@ -30,6 +30,20 @@ public sealed partial class ODataDocsExamplesTests : IAsyncLifetime
     public async Task EveryDocumentedExample_ReturnsTheStatusTheDocSays_AndTheEnvelopeItDescribes()
     {
         var examples = LoadExamples();
+
+        var missing = new List<string>();
+        foreach (var set in new[] { "Postings", "Companies", "Applications", "Notes", "Criteria", "SearchRuns" })
+        {
+            foreach (var option in new[] { "$filter", "$orderby", "$select", "$count", "$top", "$skip" })
+            {
+                if (!examples.Any(e => e.Url.StartsWith("/odata/" + set + "?", StringComparison.Ordinal) && e.Url.Contains(option, StringComparison.Ordinal)))
+                {
+                    missing.Add($"{set} {option}");
+                }
+            }
+        }
+
+        Assert.True(missing.Count == 0, "docs/api/odata-queries.md has no curl example for: " + string.Join(", ", missing));
         Assert.True(examples.Count >= 30, $"expected at least 30 curl examples, found {examples.Count}");
 
         var problems = new List<string>();
