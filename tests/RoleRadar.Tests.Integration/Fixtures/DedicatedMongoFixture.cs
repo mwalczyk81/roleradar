@@ -18,7 +18,7 @@ public sealed class DedicatedMongoFixture : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        await _container.StartAsync();
+        await RoleRadar.Tests.Integration.MongoContainerStartGate.StartAsync(_container);
     }
 
     public async Task StopAsync()

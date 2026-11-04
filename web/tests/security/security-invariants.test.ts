@@ -99,12 +99,6 @@ describe("Security Invariants", () => {
 
     vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
       GET: vi.fn().mockImplementation((path: string) => {
-        if (path === "/api/v1/postings") {
-          return Promise.resolve({
-            data: { items: [], totalCount: 0, limit: 25, offset: 0 },
-            response: { status: 200 } as Response,
-          });
-        }
         if (path === "/api/v1/postings/{id}") {
           return Promise.resolve({
             data: {
@@ -128,12 +122,14 @@ describe("Security Invariants", () => {
             response: { status: 200 } as Response,
           });
         }
-        if (path === "/api/v1/criteria") {
-          return Promise.resolve({ data: [], response: { status: 200 } as Response });
-        }
         return Promise.resolve({ data: undefined, response: { status: 404 } as Response });
       }),
     } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
+
+    vi.spyOn(apiClientModule, "fetchOData").mockResolvedValue({
+      data: { value: [], "@odata.count": 0 },
+      response: { status: 200 } as Response,
+    });
 
     const headers = { Cookie: `${SECURE_COOKIE_NAME}=${sessionId}` };
 

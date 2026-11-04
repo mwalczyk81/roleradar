@@ -14,7 +14,7 @@ public sealed class CompaniesEndpointsContractTests(SharedMongoFixture sharedMon
     private readonly SharedMongoFixture _sharedMongo = sharedMongo;
 
     [Fact]
-    public async Task ListAndGetCompany_AndPatchCompany_PreservesOmittedFields()
+    public async Task GetAndPatchCompany_PreservesOmittedFields()
     {
         await using var host = await ApiContractTestHost.StartAsync(_sharedMongo, "rrtest_api_companies");
         using var scope = host.Services.CreateScope();
@@ -40,13 +40,7 @@ public sealed class CompaniesEndpointsContractTests(SharedMongoFixture sharedMon
         Assert.True(created.IsSuccess);
         var companyId = created.Value!.Company.Id;
 
-        // 1. GET /api/v1/companies
-        var listResp = await host.Client.GetAsync("/api/v1/companies?limit=10&offset=0");
-        Assert.Equal(HttpStatusCode.OK, listResp.StatusCode);
-        var listJson = await listResp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.Equal(1, listJson.GetProperty("totalCount").GetInt32());
-
-        // 2. GET /api/v1/companies/{id}
+        // 1. GET /api/v1/companies/{id}
         var getResp = await host.Client.GetAsync($"/api/v1/companies/{companyId}");
         Assert.Equal(HttpStatusCode.OK, getResp.StatusCode);
         var detailJson = await getResp.Content.ReadFromJsonAsync<JsonElement>();
@@ -54,7 +48,7 @@ public sealed class CompaniesEndpointsContractTests(SharedMongoFixture sharedMon
         Assert.Equal("Real-time streaming platform", detailJson.GetProperty("description").GetString());
         Assert.Equal("Chicago, IL", detailJson.GetProperty("headquarters").GetString());
 
-        // 3. PATCH /api/v1/companies/{id} with only status updated; omitted fields must remain unchanged
+        // 2. PATCH /api/v1/companies/{id} with only status updated; omitted fields must remain unchanged
         var patchPayload = new
         {
             status = "target"

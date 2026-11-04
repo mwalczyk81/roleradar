@@ -28,6 +28,8 @@ public static class MongoBootstrapAndIndexes
         {
             // Already registered with GuidRepresentation.Standard in this AppDomain.
         }
+
+        Reading.ReadModelClassMaps.Register();
     }
 
     public static async Task EnsureIndexesAsync(

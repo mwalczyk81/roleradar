@@ -17,18 +17,13 @@ public sealed class ApiOpenApiContractSnapshotTests
     private static readonly string[] ExpectedPaths =
     [
         "/health",
-        "/api/v1/postings",
         "/api/v1/postings/{id}",
         "/api/v1/postings/{id}/transition",
-        "/api/v1/companies",
         "/api/v1/companies/{id}",
         "/api/v1/applications",
         "/api/v1/applications/{id}",
         "/api/v1/applications/{id}/events",
-        "/api/v1/criteria",
-        "/api/v1/notes",
-        "/api/v1/notes/{id}",
-        "/api/v1/search-runs"
+        "/api/v1/notes/{id}"
     ];
 
     [Fact]

@@ -180,6 +180,27 @@ public sealed class TrackingArchitectureTests
     }
 
     [Fact]
+    public void Infrastructure_AddRoleRadarInfrastructure_RegistersReadSeamAndReconciliationService()
+    {
+        var services = new ServiceCollection();
+        services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+        services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+        services.AddRoleRadarInfrastructure(opts =>
+        {
+            opts.ConnectionString = "mongodb://127.0.0.1:27017/?replicaSet=rs0";
+            opts.DatabaseName = "roleradar_arch_test";
+        });
+
+        using var provider = services.BuildServiceProvider();
+        using var scope = provider.CreateScope();
+
+        // The CLI resolves the concrete type, so check both the type and its interface.
+        Assert.NotNull(scope.ServiceProvider.GetService<RoleRadar.Application.Reading.IOwnerReadSeam>());
+        Assert.NotNull(scope.ServiceProvider.GetService<RoleRadar.Infrastructure.Mongo.Reconcile.ReadModelReconciliationService>());
+        Assert.NotNull(scope.ServiceProvider.GetService<RoleRadar.Infrastructure.Mongo.Reconcile.IReadModelReconciliationService>());
+    }
+
+    [Fact]
     public void McpTools_PostingTools_AreExposedOnServer()
     {
         var mcpAssembly = typeof(NoteMcpTools).Assembly;

@@ -85,7 +85,7 @@ public static class DependencyInjection
             var contacts = sp.GetRequiredService<IContactRepository>();
             var searchRuns = sp.GetRequiredService<ISearchRunRepository>();
             var auditLog = database.GetCollection<MongoDB.Bson.BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
-            return new Mongo.Repositories.MongoTrackingTransactionContext(companies, postings, criteria, applications, contacts, searchRuns, auditLog);
+            return new Mongo.Repositories.MongoTrackingTransactionContext(client, companies, postings, criteria, applications, contacts, searchRuns, auditLog);
         });
         services.AddOptions<Backup.BackupOptions>();
         services.TryAddScoped<IBackupArchiveService, Backup.SecretStreamBackupArchiveService>();
@@ -96,6 +96,26 @@ public static class DependencyInjection
             var database = client.GetDatabase(opts.DatabaseName);
             return new Mongo.Repositories.MongoIntegrityRepository(client, database);
         });
+
+        services.TryAddSingleton<Mongo.Reading.ReadIndexInitializer>();
+
+        services.TryAddScoped<RoleRadar.Application.Reading.IOwnerReadSeam>(sp =>
+        {
+            var client = sp.GetRequiredService<IMongoClient>();
+            var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
+            var database = client.GetDatabase(opts.DatabaseName);
+            return new Mongo.Reading.MongoOwnerReadSeam(database, sp.GetRequiredService<Mongo.Reading.ReadIndexInitializer>());
+        });
+
+        services.TryAddScoped<Mongo.Reconcile.ReadModelReconciliationService>(sp =>
+        {
+            var client = sp.GetRequiredService<IMongoClient>();
+            var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
+            var database = client.GetDatabase(opts.DatabaseName);
+            return new Mongo.Reconcile.ReadModelReconciliationService(database);
+        });
+        services.TryAddScoped<Mongo.Reconcile.IReadModelReconciliationService>(sp =>
+            sp.GetRequiredService<Mongo.Reconcile.ReadModelReconciliationService>());
 
         services.TryAddSingleton<MongoScratchDatabaseManager>();
         services.TryAddSingleton<ITrackerScratchManager>(sp => sp.GetRequiredService<MongoScratchDatabaseManager>());

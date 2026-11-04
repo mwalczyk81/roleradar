@@ -1,6 +1,6 @@
 # ADR 0018: REST API Style, Error Envelope, Paging, and Owner Mapping
 
-- **Status**: Accepted
+- **Status**: Accepted. Superseded in part by [ADR 0028](./0028-odata-read-seam-and-query-execution.md) (list endpoints retired in feature 006)
 - **Date**: 2026-10-25
 - **Feature**: `005a-api-and-login`
 

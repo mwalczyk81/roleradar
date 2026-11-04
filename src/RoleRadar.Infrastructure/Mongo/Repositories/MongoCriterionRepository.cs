@@ -125,6 +125,8 @@ public sealed class MongoCriterionRepository : ICriterionRepository
             ["value"] = c.Value,
             ["effective_from"] = BsonDateTime.Create(c.EffectiveFrom.UtcDateTime),
             ["effective_to"] = c.EffectiveTo.HasValue ? BsonDateTime.Create(c.EffectiveTo.Value.UtcDateTime) : BsonNull.Value,
+            // Stored flag so an open-ended criterion sorts last in both directions (see ReadModelReconciliationService).
+            ["has_effective_to"] = c.EffectiveTo.HasValue,
             ["provenance"] = c.Provenance.ToSnakeCase(),
             ["is_active"] = c.IsActive,
             ["version_token"] = new BsonBinaryData(c.VersionToken, GuidRepresentation.Standard),

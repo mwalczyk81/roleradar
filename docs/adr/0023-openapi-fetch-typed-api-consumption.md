@@ -1,6 +1,6 @@
 # ADR 0023: Strongly-Typed API Consumption via openapi-fetch and Committed OpenAPI Types
 
-- **Status**: Accepted
+- **Status**: Accepted. Superseded in part by [ADR 0028](./0028-odata-read-seam-and-query-execution.md) (list endpoints retired in feature 006)
 - **Date**: 2026-10-31
 - **Feature**: `005b-management-ui`
 

@@ -19,5 +19,8 @@
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
       <_Parameter1>RoleRadar.Tests.Contract</_Parameter1>
     </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>RoleRadar.Tests.Integration</_Parameter1>
+    </AssemblyAttribute>
   </ItemGroup>
 </Project>

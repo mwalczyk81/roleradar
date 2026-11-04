@@ -192,8 +192,8 @@
       },
       "Microsoft.Bcl.AsyncInterfaces": {
         "type": "Transitive",
-        "resolved": "6.0.0",
-        "contentHash": "UcSjPsst+DfAdJGVDsu346FX0ci0ah+lw3WRtn18NUwEqRt70HaOQ7lI72vy3+1LxtqI3T5GWwV39rQSrCzAeg=="
+        "resolved": "8.0.0",
+        "contentHash": "3WA9q9yVqJp222P3x1wYIGDAkpjAku0TMUaaQV22g6L67AI0LdOIrVS7Ht2vJfLHGSPVuqN94vIr15qn+HEkHw=="
       },
       "Microsoft.Bcl.Cryptography": {
         "type": "Transitive",
@@ -516,6 +516,11 @@
           "Microsoft.Extensions.Primitives": "10.0.14"
         }
       },
+      "Microsoft.Extensions.ObjectPool": {
+        "type": "Transitive",
+        "resolved": "6.0.3",
+        "contentHash": "IbQUEZr/LxxpPxkXDmKaemMeQNPjdHfk87HtTsI18a3RVgad0NOJSRaJ20hcesqL45PLcpQHR8xrPP7wZKbFQQ=="
+      },
       "Microsoft.Extensions.Options.ConfigurationExtensions": {
         "type": "Transitive",
         "resolved": "10.0.14",
@@ -598,10 +603,41 @@
           "Microsoft.IdentityModel.Tokens": "8.19.2"
         }
       },
+      "Microsoft.OData.Core": {
+        "type": "Transitive",
+        "resolved": "8.4.0",
+        "contentHash": "gt/iiI1AJ7HyI2OZkw84lJxSedUxBdRqPUUlVrkObwolX4T278EBoYQ6ZdXgeb9hDwpUjFlGBYOlHnxnlXmpwQ==",
+        "dependencies": {
+          "Microsoft.Bcl.AsyncInterfaces": "8.0.0",
+          "Microsoft.Extensions.ObjectPool": "6.0.3",
+          "Microsoft.OData.Edm": "[8.4.0]",
+          "Microsoft.Spatial": "[8.4.0]"
+        }
+      },
+      "Microsoft.OData.Edm": {
+        "type": "Transitive",
+        "resolved": "8.4.0",
+        "contentHash": "7tqryp5v/XQ/NIKck6lT6jZBAQonv/+N305Xc4uMdT6nQyq/J3hdvx/wvQAeaRe9RjA44MD3wRqN4wECfYTShA=="
+      },
+      "Microsoft.OData.ModelBuilder": {
+        "type": "Transitive",
+        "resolved": "2.0.0",
+        "contentHash": "QzySAMGhLCMyLNHSTIYKFjJXetoDeGkRS/7JEjm7eMJlyu1Qv4MfL1CXQFg2uijizNu2jQojT0mdCpawXbyv8Q==",
+        "dependencies": {
+          "Microsoft.OData.Edm": "[8.0.0, 9.0.0)",
+          "Microsoft.Spatial": "[8.0.0, 9.0.0)",
+          "System.ComponentModel.Annotations": "4.6.0"
+        }
+      },
       "Microsoft.OpenApi": {
         "type": "Transitive",
         "resolved": "2.12.2",
         "contentHash": "ZkT7qiJe0Kj0+DTZOZo+xrDy1kNmdsWFQVPIQLNx9ZJ0T9cB2LG7r+Bi60so8/+yg1nkS7QCPadrzsTG4VPKrA=="
+      },
+      "Microsoft.Spatial": {
+        "type": "Transitive",
+        "resolved": "8.4.0",
+        "contentHash": "F/n0Bd8SHmMtCCaBngmeaopeALr9YuZn3ocWBsSKqDMmcOb8W8P1paSy7WPq1IRYQSK0SRlPWUCxxcRVjTFF7g=="
       },
       "Microsoft.Testing.Extensions.Telemetry": {
         "type": "Transitive",
@@ -716,6 +752,11 @@
           "Microsoft.Extensions.Logging.Abstractions": "8.0.3"
         }
       },
+      "System.ComponentModel.Annotations": {
+        "type": "Transitive",
+        "resolved": "4.6.0",
+        "contentHash": "pOd+UhZ3X8xfwKDlgAzowUJNjp8VYVmOHZm++vCd0kq1HZ0zK3mNo2yRXjYgv7Ik/Xi43fmJfND2PLEsQSALCg=="
+      },
       "System.Diagnostics.EventLog": {
         "type": "Transitive",
         "resolved": "10.0.14",
@@ -824,6 +865,7 @@
         "type": "Project",
         "dependencies": {
           "Microsoft.AspNetCore.Authentication.JwtBearer": "[10.0.14, )",
+          "Microsoft.AspNetCore.OData": "[9.5.0, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.14, )",
           "RoleRadar.Application": "[1.0.0, )",
           "RoleRadar.Domain": "[1.0.0, )",
@@ -942,6 +984,18 @@
         "dependencies": {
           "Microsoft.EntityFrameworkCore.Relational": "10.0.14",
           "Microsoft.Extensions.Identity.Stores": "10.0.14"
+        }
+      },
+      "Microsoft.AspNetCore.OData": {
+        "type": "CentralTransitive",
+        "requested": "[9.5.0, )",
+        "resolved": "9.5.0",
+        "contentHash": "e2Ua+NRq8/8RXlCw6Jzf9XSBYH3cs6W6eykvNGc7zBRcTGcc1QvfbN3mQW9ft6ioFFOvsFnfl1OcluXVE2AtAw==",
+        "dependencies": {
+          "Microsoft.OData.Core": "[8.4.0, 9.0.0)",
+          "Microsoft.OData.Edm": "[8.4.0, 9.0.0)",
+          "Microsoft.OData.ModelBuilder": "[2.0.0, 3.0.0)",
+          "Microsoft.Spatial": "[8.4.0, 9.0.0)"
         }
       },
       "Microsoft.AspNetCore.OpenApi": {

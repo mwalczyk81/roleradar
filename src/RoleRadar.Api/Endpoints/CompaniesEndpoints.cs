@@ -18,9 +18,6 @@ public static class CompaniesEndpoints
         var writeGroup = group.MapGroup(string.Empty)
             .RequireAuthorization(Program.WritePolicyName);
 
-        readGroup.MapGet("/companies", ListCompaniesAsync)
-            .Produces<PagedResult<CompanyDetailDto>>(StatusCodes.Status200OK)
-            .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest);
         readGroup.MapGet("/companies/{id:guid}", GetCompanyByIdAsync)
             .Produces<CompanyDetailDto>(StatusCodes.Status200OK)
             .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
@@ -30,45 +27,6 @@ public static class CompaniesEndpoints
             .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound)
             .Produces<ErrorEnvelope>(StatusCodes.Status409Conflict);
         return group;
-    }
-
-    private static async Task<IResult> ListCompaniesAsync(
-        int? limit,
-        int? offset,
-        IOwnerIdProvider ownerIdProvider,
-        ICompanyRepository companyRepository,
-        CancellationToken cancellationToken)
-    {
-        var ownerId = ownerIdProvider.GetOwnerId().Value;
-        var clampedLimit = Math.Clamp(limit is null or <= 0 ? 50 : limit.Value, 1, 200);
-        var clampedOffset = Math.Max(0, offset ?? 0);
-
-        var listRes = await companyRepository.ListAsync(ownerId, status: null, cancellationToken);
-        if (!listRes.IsSuccess || listRes.Value is null)
-        {
-            return ErrorEnvelope.FromResultError(listRes.Error);
-        }
-
-        var allCompanies = listRes.Value;
-        var totalCount = allCompanies.Count;
-        var pageCompanies = allCompanies.Skip(clampedOffset).Take(clampedLimit).ToList();
-
-        var items = new List<CompanyDetailDto>(pageCompanies.Count);
-        foreach (var company in pageCompanies)
-        {
-            var sourcesRes = await companyRepository.GetCareerSourcesAsync(ownerId, company.Id, includeInactive: true, cancellationToken);
-            var sources = sourcesRes.IsSuccess && sourcesRes.Value is not null
-                ? sourcesRes.Value.Select(MapCareerSource).ToArray()
-                : [];
-
-            items.Add(MapCompanyDetail(company, sources));
-        }
-
-        return Results.Ok(new PagedResult<CompanyDetailDto>(
-            Items: items,
-            TotalCount: totalCount,
-            Limit: clampedLimit,
-            Offset: clampedOffset));
     }
 
     private static async Task<IResult> GetCompanyByIdAsync(
