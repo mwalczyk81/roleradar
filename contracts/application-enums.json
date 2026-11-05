@@ -12,7 +12,8 @@
     "offer_accepted",
     "offer_declined",
     "rejected",
-    "withdrawn"
+    "withdrawn",
+    "note"
   ],
   "resumeVariants": [
     "tailored",

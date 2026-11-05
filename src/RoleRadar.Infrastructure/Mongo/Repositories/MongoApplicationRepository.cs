@@ -368,6 +368,12 @@ public sealed class MongoApplicationRepository : IApplicationRepository
             : createdAtUtc;
     }
 
+    /// <summary>The event types that feed milestones and the last-event date. Everything else is ignored.</summary>
+    private static readonly HashSet<string> MilestoneEventTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "applied", "follow_up", "interview", "offer", "offer_accepted", "offer_declined", "rejected", "withdrawn"
+    };
+
     internal static ApplicationMilestones ComputeApplicationMilestones(
         IEnumerable<BsonDocument> events,
         DateTime defaultCreatedAt)
@@ -389,6 +395,13 @@ public sealed class MongoApplicationRepository : IApplicationRepository
         foreach (var ev in events)
         {
             var evType = ev.Contains("event_type") && ev["event_type"].IsString ? ev["event_type"].AsString : string.Empty;
+
+            // Allowlist, not "everything except note": only the named types feed any derived field. A note, and any
+            // type this code does not name, is inert, including for the last-event date.
+            if (!MilestoneEventTypes.Contains(evType))
+            {
+                continue;
+            }
 
             // The event's own date (UTC midnight) is authoritative so that backfilled events order by
             // when they happened, not when they were inserted. created_at is only a fallback.

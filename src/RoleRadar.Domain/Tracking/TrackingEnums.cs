@@ -103,7 +103,10 @@ public enum ApplicationEventType
     OfferAccepted,
     OfferDeclined,
     Rejected,
-    Withdrawn
+    Withdrawn,
+
+    /// <summary>A remark or correction. Never a response, a rejection or an interview, and never a status change.</summary>
+    Note
 }
 
 public enum SignalType
@@ -510,6 +513,7 @@ public static class TrackingEnumExtensions
         ApplicationEventType.OfferDeclined => "offer_declined",
         ApplicationEventType.Rejected => "rejected",
         ApplicationEventType.Withdrawn => "withdrawn",
+        ApplicationEventType.Note => "note",
         _ => eventType.ToString().ToLowerInvariant()
     };
 
@@ -535,6 +539,7 @@ public static class TrackingEnumExtensions
             case "offerdeclined": eventType = ApplicationEventType.OfferDeclined; return true;
             case "rejected": eventType = ApplicationEventType.Rejected; return true;
             case "withdrawn": eventType = ApplicationEventType.Withdrawn; return true;
+            case "note": eventType = ApplicationEventType.Note; return true;
             default: return false;
         }
     }

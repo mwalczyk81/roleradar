@@ -25,6 +25,7 @@ export const APPLICATION_EVENT_TYPE_VALUES = [
   "offer_declined",
   "rejected",
   "withdrawn",
+  "note",
 ] as const;
 
 export type ApplicationEventType = (typeof APPLICATION_EVENT_TYPE_VALUES)[number];
@@ -107,6 +108,11 @@ export const APPLICATION_EVENT_TYPE_METADATA: Record<ApplicationEventType, Event
     resultingStatusDescription: "Transitions status to 'closed'",
     terminal: true,
   },
+  note: {
+    label: "Note",
+    resultingStatusDescription: "Does not change the status",
+    terminal: false,
+  },
 };
 
 /**
@@ -121,6 +127,7 @@ export const APPENDABLE_EVENT_OPTIONS: readonly { value: ApplicationEventType; l
   { value: "rejected", label: "Rejected (Marks Application Rejected)" },
   { value: "withdrawn", label: "Withdrawn (Closes Application)" },
   { value: "applied", label: "Applied (Record submission note)" },
+  { value: "note", label: "Note" },
 ];
 
 export function isApplicationOutcome(val: unknown): val is ApplicationOutcome {

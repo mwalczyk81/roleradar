@@ -15,7 +15,7 @@ public sealed class TrackingDomainAndAuditTests
 
     private static readonly string[] ExpectedApplicationEventTypeNames =
     [
-        "Applied", "FollowUp", "Interview", "Offer", "OfferAccepted", "OfferDeclined", "Rejected", "Withdrawn"
+        "Applied", "FollowUp", "Interview", "Offer", "OfferAccepted", "OfferDeclined", "Rejected", "Withdrawn", "Note"
     ];
 
     private static readonly string[] ExpectedSignalTypeNames =
@@ -34,7 +34,7 @@ public sealed class TrackingDomainAndAuditTests
         // OwnershipType must contain PE, VC, mutual, subsidiary, nonprofit, etc.
         Assert.Equal(ExpectedOwnershipTypeNames, Enum.GetNames<OwnershipType>());
 
-        // ApplicationEventType must contain the 8 specified events
+        // ApplicationEventType must contain the 8 specified events plus the note type (feature 008)
         Assert.Equal(ExpectedApplicationEventTypeNames, Enum.GetNames<ApplicationEventType>());
 
         // SignalType must contain 6 kinds

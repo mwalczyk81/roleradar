@@ -39,6 +39,38 @@ describe("application-enums.ts contract drift guard", () => {
     expect([...RESUME_VARIANT_VALUES]).toEqual(json.resumeVariants);
   });
 
+  it("lists the nine event types with note last (feature 008)", () => {
+    const expected = [
+      "applied",
+      "follow_up",
+      "interview",
+      "offer",
+      "offer_accepted",
+      "offer_declined",
+      "rejected",
+      "withdrawn",
+      "note",
+    ];
+    const jsonPath = path.resolve(process.cwd(), "../contracts/application-enums.json");
+    const altPath = path.resolve(process.cwd(), "contracts/application-enums.json");
+    const json = JSON.parse(fs.readFileSync(fs.existsSync(jsonPath) ? jsonPath : altPath, "utf8")) as {
+      eventTypes: string[];
+    };
+
+    expect(json.eventTypes).toEqual(expected);
+    expect([...APPLICATION_EVENT_TYPE_VALUES]).toEqual(expected);
+    expect(isApplicationEventType("note")).toBe(true);
+  });
+
+  it("labels note as a non-terminal 'Note' and offers it when appending an event", () => {
+    const meta = (APPLICATION_EVENT_TYPE_METADATA as Record<string, { label: string; terminal: boolean } | undefined>)["note"];
+    expect(meta?.label).toBe("Note");
+    expect(meta?.terminal).toBe(false);
+
+    const option = APPENDABLE_EVENT_OPTIONS.find((o) => (o.value as string) === "note");
+    expect(option?.label).toBe("Note");
+  });
+
   it("provides options and metadata for all outcome and event types", () => {
     const outcomeOptionValues = APPLICATION_OUTCOME_OPTIONS.map((o) => o.value);
     for (const val of APPLICATION_OUTCOME_VALUES) {
