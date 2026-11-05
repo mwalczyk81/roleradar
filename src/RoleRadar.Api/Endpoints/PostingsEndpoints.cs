@@ -35,6 +35,7 @@ public static class PostingsEndpoints
         IPostingRepository postingRepository,
         ICompanyRepository companyRepository,
         INoteRepository noteRepository,
+        IApplicationRepository applicationRepository,
         CancellationToken cancellationToken)
     {
         var ownerId = ownerIdProvider.GetOwnerId().Value;
@@ -44,6 +45,7 @@ public static class PostingsEndpoints
             postingRepository,
             companyRepository,
             noteRepository,
+            applicationRepository,
             cancellationToken);
     }
 
@@ -55,6 +57,7 @@ public static class PostingsEndpoints
         IPostingRepository postingRepository,
         ICompanyRepository companyRepository,
         INoteRepository noteRepository,
+        IApplicationRepository applicationRepository,
         CancellationToken cancellationToken)
     {
         var ownerId = ownerIdProvider.GetOwnerId().Value;
@@ -93,6 +96,7 @@ public static class PostingsEndpoints
             postingRepository,
             companyRepository,
             noteRepository,
+            applicationRepository,
             cancellationToken,
             warnings);
     }
@@ -103,6 +107,7 @@ public static class PostingsEndpoints
         IPostingRepository postingRepository,
         ICompanyRepository companyRepository,
         INoteRepository noteRepository,
+        IApplicationRepository applicationRepository,
         CancellationToken cancellationToken,
         IReadOnlyList<PostingWarningDto>? warnings = null)
     {
@@ -140,6 +145,10 @@ public static class PostingsEndpoints
             }
         }
 
+        // One owner-scoped lookup. A failed lookup reads as "no application" rather than failing the read.
+        var applicationRes = await applicationRepository.GetByPostingIdAsync(ownerId, posting.Id, cancellationToken);
+        var applicationId = applicationRes.IsSuccess ? applicationRes.Value?.Id : null;
+
         var hasSalary = posting.Compensation.Min.HasValue ||
                         posting.Compensation.Max.HasValue ||
                         !string.IsNullOrWhiteSpace(posting.Compensation.Text);
@@ -165,7 +174,8 @@ public static class PostingsEndpoints
                 CompHighPriority: posting.CompHighPriority),
             Signals: signals,
             AssessmentNote: assessmentNote,
-            Warnings: warnings);
+            Warnings: warnings,
+            ApplicationId: applicationId);
 
         return Results.Ok(detail);
     }

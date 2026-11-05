@@ -90,7 +90,7 @@ src/RoleRadar.Infrastructure/Mongo/Repositories/
 └── MongoApplicationRepository.cs    # ComputeApplicationMilestones ignores note (incl. last_event_at)
 
 src/RoleRadar.Api/
-├── Models/ApiDtos.cs                # TransitionPostingRequestDto.EventDate; PostingDetailDto.Warnings; ApplicationEventDto.EventSource
+├── Models/ApiDtos.cs                # TransitionPostingRequestDto.EventDate; PostingDetailDto.Warnings and PostingDetailDto.ApplicationId; ApplicationEventDto.EventSource
 ├── Endpoints/PostingsEndpoints.cs   # pass EventDate; attach warnings to the response
 └── Endpoints/ApplicationsEndpoints.cs  # map EventSource into ApplicationEventDto
 

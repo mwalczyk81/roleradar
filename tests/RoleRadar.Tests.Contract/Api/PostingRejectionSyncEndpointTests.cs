@@ -111,6 +111,60 @@ public sealed class PostingRejectionSyncEndpointTests(SharedMongoFixture sharedM
     }
 
     [Fact]
+    public async Task GetPosting_ReturnsTheApplicationId_ForAPostingWithAnApplication_AndNullForOneWithout()
+    {
+        await using var host = await ApiContractTestHost.StartAsync(_sharedMongo, "rrtest_api_posting_app_id");
+        var (postingId, applicationId, _) = await SeedAppliedPostingAsync(host);
+        var bare = await SeedPostingWithoutApplicationAsync(host);
+
+        var withApplication = await host.Client.GetFromJsonAsync<JsonElement>($"/api/v1/postings/{postingId}");
+        Assert.Equal(applicationId, withApplication.GetProperty("applicationId").GetGuid());
+
+        var withoutApplication = await host.Client.GetFromJsonAsync<JsonElement>($"/api/v1/postings/{bare}");
+        Assert.True(withoutApplication.TryGetProperty("applicationId", out var none), "applicationId must be present.");
+        Assert.Equal(JsonValueKind.Null, none.ValueKind);
+    }
+
+    [Fact]
+    public async Task Transition_Response_CarriesTheSameApplicationId_AsTheDetailEndpoint()
+    {
+        await using var host = await ApiContractTestHost.StartAsync(_sharedMongo, "rrtest_api_transition_app_id");
+        var (postingId, applicationId, versionToken) = await SeedAppliedPostingAsync(host);
+
+        var response = await host.Client.PostAsJsonAsync($"/api/v1/postings/{postingId}/transition", new
+        {
+            toDisposition = "rejected",
+            reason = "Rejected by email",
+            versionToken = versionToken.ToString()
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var detail = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(applicationId, detail.GetProperty("applicationId").GetGuid());
+    }
+
+    [Fact]
+    public async Task Transition_Response_HasANullApplicationId_WhenThePostingHasNoApplication()
+    {
+        await using var host = await ApiContractTestHost.StartAsync(_sharedMongo, "rrtest_api_trans_no_appid");
+        // Another posting in the same store has an application; the lookup is per posting, so it must not leak.
+        _ = await SeedAppliedPostingAsync(host);
+        var bare = await SeedPostingWithoutApplicationAsync(host);
+        var current = await host.Client.GetFromJsonAsync<JsonElement>($"/api/v1/postings/{bare}");
+
+        var response = await host.Client.PostAsJsonAsync($"/api/v1/postings/{bare}/transition", new
+        {
+            toDisposition = "screened_out",
+            reason = "Not a fit",
+            versionToken = current.GetProperty("versionToken").GetString()
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var detail = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Null, detail.GetProperty("applicationId").ValueKind);
+    }
+
+    [Fact]
     public async Task Reopen_RejectedPostingWithRejectedApplication_ReturnsTheStillRejectedWarning_WithItsMessage()
     {
         await using var host = await ApiContractTestHost.StartAsync(_sharedMongo, "rrtest_api_reject_sync_reopen");
@@ -164,6 +218,23 @@ public sealed class PostingRejectionSyncEndpointTests(SharedMongoFixture sharedM
             app.GetProperty("events").EnumerateArray().ToList(),
             e => e.GetProperty("eventType").GetString() == "interview");
         Assert.Equal("web", interview.GetProperty("eventSource").GetString());
+    }
+
+    private static async Task<Guid> SeedPostingWithoutApplicationAsync(ApiContractTestHost host)
+    {
+        using var scope = host.Services.CreateScope();
+        var companyHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto>>();
+        var postingHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordPostingCommand, PostingRecordResultDto>>();
+
+        var company = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: $"Lantern Systems {Guid.NewGuid():N}"));
+        Assert.True(company.IsSuccess, company.Error?.Message);
+        var posting = await postingHandler.HandleAsync(new RecordPostingCommand(
+            CompanyId: company.Value!.Company.Id,
+            Title: "Platform Engineer",
+            RequisitionId: $"LAN-{Guid.NewGuid():N}"[..12],
+            AtsTenant: "lantern"));
+        Assert.True(posting.IsSuccess, posting.Error?.Message);
+        return posting.Value!.Posting!.Id;
     }
 
     private static async Task<(Guid PostingId, Guid ApplicationId, Guid VersionToken)> SeedAppliedPostingAsync(ApiContractTestHost host)

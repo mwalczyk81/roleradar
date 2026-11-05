@@ -593,6 +593,8 @@ export interface components {
             signals: components["schemas"]["PostingSignalDto"][];
             assessmentNote: null | components["schemas"]["AssessmentNoteSummaryDto"];
             warnings?: null | components["schemas"]["PostingWarningDto"][];
+            /** Format: uuid */
+            applicationId?: null | string;
         };
         PostingSignalDto: {
             signalType: string;

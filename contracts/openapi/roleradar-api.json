@@ -959,6 +959,13 @@
             "items": {
               "$ref": "#/components/schemas/PostingWarningDto"
             }
+          },
+          "applicationId": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "format": "uuid"
           }
         }
       },

@@ -31,7 +31,7 @@ No schema change. Behaviour change only in the handler: `applied -> rejected` no
 | --- | --- | --- |
 | `Warnings` | `IReadOnlyList<TransitionWarningDto>` | Empty when none. |
 
-`TransitionWarningDto`: `Code` (`application_still_rejected` or `application_closed`), `Message` (fixed string). The same two members appear in the API posting detail response as nullable `warnings`.
+`TransitionWarningDto`: `Code` (`application_still_rejected` or `application_closed`), `Message` (fixed string). The same two members appear in the API posting detail response as nullable `warnings`. The API posting detail response also gains nullable `applicationId` (`Guid?`, null when the posting has no application).
 
 ## State changes
 

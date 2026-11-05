@@ -35,6 +35,21 @@ public sealed class PostingRejectionSyncOpenApiTests
     }
 
     [Fact]
+    public async Task Snapshot_DeclaresApplicationId_OnPostingDetail_AsANullableUuid()
+    {
+        var root = FindRepoRoot();
+        using var doc = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(root, "contracts", "openapi", "roleradar-api.json")));
+        var detail = doc.RootElement.GetProperty("components").GetProperty("schemas")
+            .GetProperty("PostingDetailDto").GetProperty("properties");
+
+        Assert.True(detail.TryGetProperty("applicationId", out var applicationId), "PostingDetailDto.applicationId is missing.");
+        var text = applicationId.GetRawText();
+        Assert.Contains("\"string\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"uuid\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"null\"", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task GeneratedClientTypes_CarryTheSameMembers()
     {
         var root = FindRepoRoot();
@@ -43,6 +58,7 @@ public sealed class PostingRejectionSyncOpenApiTests
         Assert.Contains("PostingWarningDto", ts, StringComparison.Ordinal);
         Assert.Matches(@"TransitionPostingRequestDto:\s*\{[^}]*eventDate\??:", ts);
         Assert.Matches(@"PostingDetailDto:\s*\{[\s\S]*?warnings\??:\s*null \| components\[""schemas""\]\[""PostingWarningDto""\]\[\]", ts);
+        Assert.Matches(@"PostingDetailDto:\s*\{[\s\S]*?applicationId\??:\s*null \| string;", ts);
         Assert.Matches(@"ApplicationEventDto:\s*\{[^}]*eventSource\??:", ts);
     }
 

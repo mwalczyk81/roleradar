@@ -169,7 +169,7 @@ All Feature 002 MCP tools return standard JSON matching Feature 001 note tools:
 
 - **Purpose**: Executes valid state transitions on job postings, recording disposition reasons, referenced criteria, or explicit reopenings.
 - **Handler Mapping**: `ICommandHandler<TransitionPostingCommand, PostingTransitionResultDto>`
-- **Description**: `"Transitions a posting between dispositions (lead, scored, unscored, screened_out, closed, rejected) or reopens a decided posting, validating against the pure domain transition matrix. Note: target 'applied' is disallowed (applications must be created via application_record)."`
+- **Description**: `"Transitions a posting between dispositions (lead, scored, unscored, screened_out, closed, rejected) or reopens a decided posting, validating against the pure domain transition matrix. Note: target 'applied' is disallowed (applications must be created via application_record). Rejecting an applied posting also records a rejected event on its application."`
 - **Input Parameters**:
   - `postingId` (`Guid`, required): Unique identifier of the posting.
   - `targetDisposition` (`string`, required): Permitted values: `"lead"`, `"scored"`, `"unscored"`, `"screened_out"`, `"closed"`, or `"rejected"`. (`"applied"` is strictly forbidden and rejected with `InvalidTransition`).
@@ -177,6 +177,7 @@ All Feature 002 MCP tools return standard JSON matching Feature 001 note tools:
   - `criterionId` (`Guid`, optional): Associated screening criterion ID justifying the transition.
   - `resurfacePolicy` (`string`, optional, default `"never"`): Sets the resurface policy at decision time (`screened_out` or `closed`). Default is `"never"`.
   - `overrideReason` (`string`, optional, max 500 chars): Required reason if explicitly reopening a `rejected` posting.
+  - `eventDate` (`string`, optional, `yyyy-MM-dd`): Date recorded on the application when rejecting an applied posting. Defaults to today (UTC). Added by feature 008.
   - `versionToken` (`Guid`, required): Optimistic concurrency token.
 - **Behavior**:
   - Evaluates requested transition against pure domain transition matrix.

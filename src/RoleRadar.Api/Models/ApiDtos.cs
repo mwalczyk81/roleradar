@@ -34,7 +34,8 @@ public sealed record PostingDetailDto(
     PostingCompensationDto Compensation,
     IReadOnlyList<PostingSignalDto> Signals,
     AssessmentNoteSummaryDto? AssessmentNote,
-    IReadOnlyList<PostingWarningDto>? Warnings = null);
+    IReadOnlyList<PostingWarningDto>? Warnings = null,
+    Guid? ApplicationId = null);
 
 /// <summary>A notice returned by the transition endpoint. Clients show <c>Message</c> and never branch on <c>Code</c>.</summary>
 public sealed record PostingWarningDto(

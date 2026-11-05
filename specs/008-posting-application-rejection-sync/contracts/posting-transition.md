@@ -24,6 +24,8 @@ Request `TransitionPostingRequestDto` gains `eventDate: string | null` (optional
 
 Response `PostingDetailDto` gains `warnings: Array<{ code: string; message: string }> | null`. Set (possibly empty) by this endpoint, `null` on GET.
 
+Response `PostingDetailDto` also gains `applicationId: string (uuid) | null`: the id of the posting's application, `null` when the posting has none. Set by `GET /api/v1/postings/{id}` and by the transition response, which use the same builder (one owner-scoped lookup by posting id). The web page uses it to decide whether to show the application notice (FR-015).
+
 Errors unchanged: 400 for validation (including a bad `eventDate`, field name `eventDate`), 404, 409 stale version token, 401, 403.
 
 ## API: application events
