@@ -1,6 +1,6 @@
 # ADR 0033: Rejecting an Applied Posting Records the Rejection on Its Application
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-11-05
 - **Feature**: `008-posting-application-rejection-sync`
 

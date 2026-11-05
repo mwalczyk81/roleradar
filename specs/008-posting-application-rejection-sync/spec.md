@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-05
 
-**Status**: Draft
+**Status**: Implemented (all phases); ADR 0033 accepted
 
 **Input**: User description: "Posting and application rejection sync (008). Rejecting an applied posting must also record the rejection on its application, from every entry point, in one transaction. Add a note-only application event type so corrections stop being filed as rejections."
 
@@ -139,7 +139,7 @@ The owner reopens (rejected to lead, reason required) a posting whose applicatio
 - **FR-012**: A new note-only application event type MUST exist. It MUST NOT count as a response, a rejection or an interview in milestones, Insights or the ghost rules, MUST NOT change the posting's disposition, and MUST NOT affect any derived application field, including the last-event date used to order applications.
 - **FR-013**: Insights definitions MUST NOT change. The Insights oracle and the web/API parity tests MUST demonstrate that note events leave every figure unchanged.
 - **FR-014**: The application event type list is a shared contract. The contract snapshot, the .NET drift test and the web equality test MUST be updated together.
-- **FR-015**: The posting page MUST state, when rejecting an applied posting that has an application, that the rejection is also recorded on the application, and MUST NOT state it otherwise.
+- **FR-015**: The posting page MUST state, when rejecting an applied posting that has an application, that the rejection is also recorded on the application, and MUST NOT state it otherwise. The page learns whether the posting has an application from the nullable `applicationId` field of the posting detail response.
 - **FR-016**: The application page MUST display the note event type with a clear label.
 - **FR-017**: Nothing is hard-deleted by any part of this feature, and every write records an append-only audit entry.
 - **FR-018**: A read-only consistency check that lists postings and applications disagreeing about rejection SHOULD be provided only if it is cheap to add. It MUST NOT modify data.

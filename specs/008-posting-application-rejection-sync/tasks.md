@@ -83,6 +83,14 @@ Use the fake `ITrackingTransactionContext` pattern already in `tests/RoleRadar.T
 - [X] T033 Run `dotnet build RoleRadar.sln -c Release -v q --nologo -warnaserror`, `pwsh ./scripts/test-fast.ps1`, and `dotnet test tests/RoleRadar.Tests.Integration -c Release --filter "FullyQualifiedName~PostingRejectionSync|FullyQualifiedName~ApiMcpParity"`; paste counts
 - [X] T034 **Boundary: Phase 2.** Report red output (T028), green counts (T033), generated files touched. Wait for "go"
 
+**Addendum (decided before Phase 4):** the posting detail did not expose whether a posting has an application, which FR-015 needs. Decision: add nullable `applicationId` to `PostingDetailDto` (contract change, additive). Spec files updated first (`contracts/posting-transition.md`, `data-model.md`, `plan.md`, FR-015).
+
+- [X] A1 [P] Tests first: OpenAPI snapshot and `api-types.ts` declare `PostingDetailDto.applicationId` as a nullable uuid (`PostingRejectionSyncOpenApiTests.cs`); endpoint tests in `PostingRejectionSyncEndpointTests.cs` (GET returns the id for a posting with an application and null for one without; the transition response returns the same; real Mongo, equals the application's id)
+- [X] A2 Run A1 and paste the failing output
+- [X] A3 `ApiDtos.cs`: `Guid? ApplicationId` on `PostingDetailDto`; `PostingsEndpoints.cs` `BuildPostingDetailResultAsync`: one owner-scoped `GetByPostingIdAsync` lookup, failure follows existing handling and never throws. No other endpoint changes
+- [X] A4 Regenerate `contracts/openapi/roleradar-api.json` (`dotnet build src/RoleRadar.Api -c Release`) and `contracts/client/api-types.ts` (pinned `openapi-typescript` from `contracts/`)
+- [X] A5 Gate: `dotnet build RoleRadar.sln -c Release -v q --nologo -warnaserror`, `pwsh ./scripts/test-fast.ps1`, integration filters `PostingRejection|ApiMcpParity`, `pnpm --filter web run typecheck`
+
 **Checkpoint**: US1, US2 and US5 hold end to end through API and MCP on real Mongo.
 
 ---
@@ -119,21 +127,21 @@ Use the fake `ITrackingTransactionContext` pattern already in `tests/RoleRadar.T
 
 ### Tests first (run red, paste failing output)
 
-- [ ] T047 [P] [US4] Component tests in `web/tests/routes/postings.detail.test.tsx` (and the dialog's component test file if one exists): for a posting with disposition `applied` and target `rejected` the dialog shows "This also records the rejection on the application."; for any other disposition or target it does not; an optional date field defaults to today's UTC date and posts as `eventDate`
-- [ ] T048 [P] [US5] Same files: when the action returns `posting.warnings`, the page shows each returned `message` as text (React text node, no `dangerouslySetInnerHTML`) and does not branch on `code` (test with an unknown code and assert the message still renders)
-- [ ] T049 [P] [US3] `web/tests/routes/applications.component.test.tsx`: an event with type `note` renders with the label "Note" in the event list and is offered in the append form; every event shows its `eventSource` when present (so a `posting_transition` rejection is distinguishable from a manual one, SC-006) and nothing extra when it is null
-- [ ] T050 [P] [US4] Action tests in `web/tests/routes/applications.action.test.ts` style for the postings transition action: `eventDate` is forwarded; a 400 `eventDate` field error shows inline; 409 shows the Toast with Reload; success revalidates; bad CSRF is rejected
-- [ ] T051 [P] [US4] Playwright e2e in `web/tests/e2e/posting-rejection-sync.spec.ts` against the isolated test stack and fictional seed: reject an applied posting (success shows the application as rejected with a "posting_transition" source), 400 for a bad date, 409 stale version, bad CSRF, 401 re-login; reopen a rejected posting whose application is rejected and see the warning; axe checks for the dialog and warning in light and dark with the shared reduced-motion helper
-- [ ] T052 Run T047 to T051 and paste the failing output (e2e may be shown as the spec failing to find the new UI)
+- [X] T047 [P] [US4] Component tests in `web/tests/routes/postings.detail.test.tsx` (and the dialog's component test file if one exists): for a posting with disposition `applied` and target `rejected` the dialog shows "This also records the rejection on the application."; for any other disposition or target it does not; an optional date field defaults to today's UTC date and posts as `eventDate`
+- [X] T048 [P] [US5] Same files: when the action returns `posting.warnings`, the page shows each returned `message` as text (React text node, no `dangerouslySetInnerHTML`) and does not branch on `code` (test with an unknown code and assert the message still renders)
+- [X] T049 [P] [US3] `web/tests/routes/applications.component.test.tsx`: an event with type `note` renders with the label "Note" in the event list and is offered in the append form; every event shows its `eventSource` when present (so a `posting_transition` rejection is distinguishable from a manual one, SC-006) and nothing extra when it is null
+- [X] T050 [P] [US4] Action tests in `web/tests/routes/applications.action.test.ts` style for the postings transition action: `eventDate` is forwarded; a 400 `eventDate` field error shows inline; 409 shows the Toast with Reload; success revalidates; bad CSRF is rejected
+- [X] T051 [P] [US4] Playwright e2e in `web/tests/e2e/posting-rejection-sync.spec.ts` against the isolated test stack and fictional seed: reject an applied posting (success shows the application as rejected with a "posting_transition" source), 400 for a bad date, 409 stale version, bad CSRF, 401 re-login; reopen a rejected posting whose application is rejected and see the warning; axe checks for the dialog and warning in light and dark with the shared reduced-motion helper
+- [X] T052 Run T047 to T051 and paste the failing output (e2e may be shown as the spec failing to find the new UI)
 
 ### Implementation (make the tests pass)
 
-- [ ] T053 [US4] `web/app/components/TransitionPostingDialog.tsx`: add the application notice and the optional date field for `applied -> rejected`; import components only through `web/app/ui.ts`; use `formatDate` for display. Make T047 pass
-- [ ] T054 [US5] `web/app/routes/postings.$id.tsx`: forward `eventDate` in the transition action, and render `posting.warnings[].message` after a successful transition. Keep the existing CSRF, `assertApiOk`, `data()` and Toast handling. Make T048 and T050 pass
-- [ ] T055 [US3] `web/app/routes/applications.$id.tsx`: show `note` events with the label from `APPLICATION_EVENT_TYPE_METADATA`, and show each event's `eventSource` as plain text next to its date (React text node). Make T049 pass
-- [ ] T056 Make T051 pass; fix only what the e2e proves broken
-- [ ] T057 Run `pnpm --filter web run typecheck`, `lint`, `test`, `build`, `test:e2e`, then `bash scripts/linux-web-check.sh` from Git Bash; paste counts and say what could not run
-- [ ] T058 **Boundary: Phase 4.** Report red output (T052), green counts (T057). Wait for "go"
+- [X] T053 [US4] `web/app/components/TransitionPostingDialog.tsx`: add the application notice and the optional date field for `applied -> rejected`; import components only through `web/app/ui.ts`; use `formatDate` for display. Make T047 pass
+- [X] T054 [US5] `web/app/routes/postings.$id.tsx`: forward `eventDate` in the transition action, and render `posting.warnings[].message` after a successful transition. Keep the existing CSRF, `assertApiOk`, `data()` and Toast handling. Make T048 and T050 pass
+- [X] T055 [US3] `web/app/routes/applications.$id.tsx`: show `note` events with the label from `APPLICATION_EVENT_TYPE_METADATA`, and show each event's `eventSource` as plain text next to its date (React text node). Make T049 pass
+- [X] T056 Make T051 pass; fix only what the e2e proves broken
+- [X] T057 Run `pnpm --filter web run typecheck`, `lint`, `test`, `build`, `test:e2e`, then `bash scripts/linux-web-check.sh` from Git Bash; paste counts and say what could not run
+- [X] T058 **Boundary: Phase 4.** Report red output (T052), green counts (T057). Wait for "go"
 
 **Checkpoint**: US4 and the web side of US3 and US5 hold.
 
@@ -143,12 +151,12 @@ Use the fake `ITrackingTransactionContext` pattern already in `tests/RoleRadar.T
 
 **Purpose**: prove the whole feature agrees with itself and with the spec.
 
-- [ ] T059 Walk the spec: for each FR-001 to FR-019 and SC-001 to SC-008, name the test or task that proves it (a table in the phase report). Anything unproven is a finding, not a pass. FR-018 is recorded as deferred
-- [ ] T060 Run `pwsh ./scripts/test-fast.ps1`, `pre-commit run --all-files`, and `pwsh ./scripts/review-gate.ps1`; report numbers from output only
-- [ ] T061 Confirm the unchanged behaviour: the existing posting transition and application event tests ran unmodified (list any test edited outside this feature's files and why), and a posting without an application plus every `closed` transition show zero behaviour change (SC-005)
-- [ ] T062 Check the docs agree: `plan.md`, `research.md`, `data-model.md`, `contracts/*` and ADR 0033 match what shipped (event source string, warning codes and messages, `correlation_id`, `eventDate` name); fix drift in the spec files, not the code, unless the code is wrong
-- [ ] T063 [Matt] Review the working tree and decide on commit and PR. Agents do not commit or push
-- [ ] T017 [Matt] Review and accept ADR 0033 (drafted at T016): change its status from Proposed to Accepted in the ADR file and in `docs/adr/README.md`. Not a blocker for any earlier phase; it must be done before the feature is called finished
+- [X] T059 Walk the spec: for each FR-001 to FR-019 and SC-001 to SC-008, name the test or task that proves it (a table in the phase report). Anything unproven is a finding, not a pass. FR-018 is recorded as deferred
+- [X] T060 Run `pwsh ./scripts/test-fast.ps1`, `pre-commit run --all-files`, and `pwsh ./scripts/review-gate.ps1`; report numbers from output only
+- [X] T061 Confirm the unchanged behaviour: the existing posting transition and application event tests ran unmodified (list any test edited outside this feature's files and why), and a posting without an application plus every `closed` transition show zero behaviour change (SC-005)
+- [X] T062 Check the docs agree: `plan.md`, `research.md`, `data-model.md`, `contracts/*` and ADR 0033 match what shipped (event source string, warning codes and messages, `correlation_id`, `eventDate` name); fix drift in the spec files, not the code, unless the code is wrong
+- [X] T063 [Matt] Review the working tree and decide on commit and PR. Agents do not commit or push
+- [X] T017 [Matt] Review and accept ADR 0033 (drafted at T016): change its status from Proposed to Accepted in the ADR file and in `docs/adr/README.md`. Not a blocker for any earlier phase; it must be done before the feature is called finished
 
 ---
 
