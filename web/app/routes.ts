@@ -16,4 +16,5 @@ export default [
   route("notes", "routes/notes._index.tsx"),
   route("notes/:id", "routes/notes.$id.tsx"),
   route("search-runs", "routes/search-runs.tsx"),
+  route("insights", "routes/insights.tsx"),
 ] satisfies RouteConfig;

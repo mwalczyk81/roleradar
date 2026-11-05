@@ -1,4 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
+import { Brand } from "../components/Brand.js";
+import { MarkdownBody } from "../components/MarkdownBody.js";
 import { useLoaderData, Link } from "react-router";
 import { ArrowLeft } from "lucide-react";
 import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
@@ -59,7 +61,7 @@ export default function NoteDetail() {
 
   return (
     <AppShell
-      brand="RoleRadar"
+      brand={<Brand />}
       title={`Note: ${note.heading}`}
       userLabel={data.userLabel}
       signOut={signOutForm}
@@ -90,7 +92,7 @@ export default function NoteDetail() {
         {/* Note Card */}
         <Card style={{ padding: "var(--ds-space-6)" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-4)" }}>
-            <h2
+            <h2 className="page-heading"
               style={{
                 margin: 0,
                 fontSize: "var(--ds-text-2xl)",
@@ -147,22 +149,9 @@ export default function NoteDetail() {
               </div>
             ) : null}
 
-            {/* Note Content: preserved whitespace, rendered as React text node only */}
-            <div
-              data-testid="note-content"
-              style={{
-                whiteSpace: "pre-wrap",
-                fontFamily: "var(--ds-font-sans)",
-                fontSize: "var(--ds-text-base)",
-                lineHeight: 1.6,
-                color: "var(--ds-text)",
-                backgroundColor: "var(--ds-surface-sunken)",
-                padding: "var(--ds-space-4)",
-                borderRadius: "var(--ds-radius-md)",
-                border: "var(--ds-border-thin) solid var(--ds-border-subtle)",
-              }}
-            >
-              {note.content}
+            {/* Note body: untrusted Markdown, rendered by the locked-down MarkdownBody (ADR 0032). Classes only, no style attribute. */}
+            <div data-testid="note-content" className="note-content">
+              <MarkdownBody content={note.content} />
             </div>
           </div>
         </Card>

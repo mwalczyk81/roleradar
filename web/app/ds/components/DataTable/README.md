@@ -14,10 +14,10 @@
 />
 ```
 
-Sorting reorders only the rows it is given and the footer says so ("Sorting applies to the rows on this page only"). If the API sorts, sort upstream and leave `sortable` off. Empty values sort last in both directions and show an em dash.
+Sorting reorders only the rows it is given and the footer says so ("Sorting applies to the rows on this page only"). If the API sorts the whole result, set `sortScope="all"`, drive `sortColumn`, `sortDirection` and `onSortChange` from the request, and give each sortable column a no-op `sortValue` (`() => 0`) so the table keeps the server order; the footer note and the header tooltip then stop saying "this page only". Empty values sort last in both directions and show an em dash.
 
 Put numbers, scores and money in `numeric` columns: monospace, right-aligned, tabular figures. Headers are typed in sentence case and shown uppercase.
 
 Give the table a `caption` (visually hidden) or `ariaLabel`. With `onRowClick`, rows are focusable and respond to Enter and Space; links and buttons inside a row keep their own behaviour, so put the real navigation in a link and treat the row click as a convenience. `isLoading` shows pulse rows and marks the table `aria-busy`; `emptyMessage` and `emptyAction` fill the no-results state. For a scrolling body set `maxHeight`; the header stays put and the scroll area is keyboard-focusable.
 
-Props: `columns`, `data`, `keyField`, `caption`, `ariaLabel`, `onRowClick`, `isLoading`, `loadingRows`, `emptyMessage`, `emptyAction`, `sortColumn`, `defaultSortColumn`, `sortDirection`, `defaultSortDirection`, `onSortChange`, `pagination`, `stickyHeader`, `maxHeight`.
+Props: `columns`, `data`, `keyField`, `caption`, `ariaLabel`, `onRowClick`, `isLoading`, `loadingRows`, `emptyMessage`, `emptyAction`, `sortColumn`, `defaultSortColumn`, `sortDirection`, `defaultSortDirection`, `onSortChange`, `sortScope`, `pagination`, `stickyHeader`, `maxHeight`.

@@ -41,6 +41,21 @@ public sealed class ReadModelReconciliationService : IReadModelReconciliationSer
             c => c["_id"].AsGuid,
             c => c.Contains("name") ? c["name"].AsString : string.Empty);
 
+        // ADR 0031: has_application is true exactly when an application exists for (owner, posting).
+        var applicationsCollection = _database.GetCollection<BsonDocument>(TrackingMongoOptions.ApplicationsCollectionName);
+        var applicationLinks = await applicationsCollection
+            .Find(FilterDefinition<BsonDocument>.Empty)
+            .Project(Builders<BsonDocument>.Projection.Include("owner_id").Include("posting_id"))
+            .ToListAsync(cancellationToken);
+        var postingsWithApplication = new HashSet<(string Owner, Guid PostingId)>();
+        foreach (var link in applicationLinks)
+        {
+            if (link.Contains("owner_id") && link["owner_id"].IsString && link.Contains("posting_id") && link["posting_id"].IsGuid)
+            {
+                postingsWithApplication.Add((link["owner_id"].AsString, link["posting_id"].AsGuid));
+            }
+        }
+
         int examined = allPostings.Count;
         int updated = 0;
 
@@ -59,9 +74,16 @@ public sealed class ReadModelReconciliationService : IReadModelReconciliationSer
             var currentHasScore = doc.Contains("has_score") ? doc["has_score"].AsBoolean : (bool?)null;
             var currentCompanyName = doc.Contains("company_name") ? doc["company_name"].AsString : null;
 
+            var ownerId = doc.Contains("owner_id") && doc["owner_id"].IsString ? doc["owner_id"].AsString : string.Empty;
+            var expectedHasApplication = postingsWithApplication.Contains((ownerId, id));
+            var currentHasApplication = doc.Contains(TrackingBsonFieldNames.Postings.HasApplication) && doc[TrackingBsonFieldNames.Postings.HasApplication].IsBoolean
+                ? doc[TrackingBsonFieldNames.Postings.HasApplication].AsBoolean
+                : (bool?)null;
+
             bool needsUpdate = currentRank != expectedRank ||
                                currentHasScore != hasScoreExpected ||
-                               currentCompanyName != expectedCompanyName;
+                               currentCompanyName != expectedCompanyName ||
+                               currentHasApplication != expectedHasApplication;
 
             if (needsUpdate)
             {
@@ -71,7 +93,8 @@ public sealed class ReadModelReconciliationService : IReadModelReconciliationSer
                     var update = Builders<BsonDocument>.Update
                         .Set("disposition_rank", expectedRank)
                         .Set("has_score", hasScoreExpected)
-                        .Set("company_name", expectedCompanyName);
+                        .Set("company_name", expectedCompanyName)
+                        .Set(TrackingBsonFieldNames.Postings.HasApplication, expectedHasApplication);
 
                     await postings.UpdateOneAsync(
                         Builders<BsonDocument>.Filter.Eq("_id", doc["_id"]),
@@ -144,7 +167,10 @@ public sealed class ReadModelReconciliationService : IReadModelReconciliationSer
                 ? doc["created_at"].ToUniversalTime()
                 : (doc.Contains("applied_at") && !doc["applied_at"].IsBsonNull ? doc["applied_at"].ToUniversalTime() : DateTime.UtcNow);
 
-            var (hasInterview, firstResponseAt, lastEventAt) = MongoApplicationRepository.ComputeApplicationMilestones(appEventsList, defaultCreated);
+            var milestones = MongoApplicationRepository.ComputeApplicationMilestones(appEventsList, defaultCreated);
+            var hasInterview = milestones.HasInterview;
+            var firstResponseAt = milestones.FirstResponseAt;
+            var lastEventAt = milestones.LastEventAt;
 
             // Legacy documents only carry outcome and submitted_date; derive status and applied_at with the
             // same helpers SerializeApplication uses so the two code paths cannot drift.
@@ -161,6 +187,9 @@ public sealed class ReadModelReconciliationService : IReadModelReconciliationSer
             var currentHasInterview = doc.Contains("has_interview") && !doc["has_interview"].IsBsonNull ? doc["has_interview"].AsBoolean : (bool?)null;
             var currentHasFirstResponse = doc.Contains("has_first_response") && !doc["has_first_response"].IsBsonNull ? doc["has_first_response"].AsBoolean : (bool?)null;
             var currentHasLastEvent = doc.Contains("has_last_event") && !doc["has_last_event"].IsBsonNull ? doc["has_last_event"].AsBoolean : (bool?)null;
+            var currentHasOffer = ReadFlag(doc, TrackingBsonFieldNames.Applications.HasOffer);
+            var currentHasRejection = ReadFlag(doc, TrackingBsonFieldNames.Applications.HasRejection);
+            var currentRejectedBeforeInterview = ReadFlag(doc, TrackingBsonFieldNames.Applications.RejectedBeforeInterview);
 
             bool firstResponseMatches = (!firstResponseAt.HasValue && (!doc.Contains("first_response_at") || doc["first_response_at"].IsBsonNull))
                 || (firstResponseAt.HasValue && doc.Contains("first_response_at") && !doc["first_response_at"].IsBsonNull && Math.Abs((doc["first_response_at"].ToUniversalTime() - firstResponseAt.Value).TotalMilliseconds) < 1000);
@@ -181,6 +210,9 @@ public sealed class ReadModelReconciliationService : IReadModelReconciliationSer
                 || currentHasInterview != hasInterview
                 || currentHasFirstResponse != hasFirstResponse
                 || currentHasLastEvent != hasLastEvent
+                || currentHasOffer != milestones.HasOffer
+                || currentHasRejection != milestones.HasRejection
+                || currentRejectedBeforeInterview != milestones.RejectedBeforeInterview
                 || !firstResponseMatches
                 || !lastEventMatches;
 
@@ -201,7 +233,10 @@ public sealed class ReadModelReconciliationService : IReadModelReconciliationSer
                         .Set("has_first_response", hasFirstResponse)
                         .Set("has_last_event", hasLastEvent)
                         .Set("first_response_at", firstRespVal)
-                        .Set("last_event_at", lastEventVal);
+                        .Set("last_event_at", lastEventVal)
+                        .Set(TrackingBsonFieldNames.Applications.HasOffer, milestones.HasOffer)
+                        .Set(TrackingBsonFieldNames.Applications.HasRejection, milestones.HasRejection)
+                        .Set(TrackingBsonFieldNames.Applications.RejectedBeforeInterview, milestones.RejectedBeforeInterview);
 
                     if (expectedCompanyId != Guid.Empty)
                     {
@@ -251,6 +286,9 @@ public sealed class ReadModelReconciliationService : IReadModelReconciliationSer
 
         return new ReconcileResult(0, 0, 0, 0, dryRun, all.Count, updated);
     }
+
+    private static bool? ReadFlag(BsonDocument doc, string name) =>
+        doc.Contains(name) && doc[name].IsBoolean ? doc[name].AsBoolean : null;
 
     public static int MapDispositionRank(string disposition)
     {

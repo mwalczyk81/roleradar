@@ -14,3 +14,422 @@ body {
 [data-theme="dark"] {
   color-scheme: dark;
 }
+
+/* Shell brand: the app name in the display face with a small radar mark in the accent colour. */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  font-family: var(--ds-font-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.brand-mark {
+  color: var(--ds-primary);
+  flex: none;
+}
+
+.brand-name {
+  font-family: var(--ds-font-display);
+}
+
+/* Page and section titles use the display face. Body text, labels, table cells and numbers stay in Plex Sans or Plex Mono. */
+.page-heading {
+  font-family: var(--ds-font-display);
+  font-weight: 600;
+}
+
+.ds-appshell-title {
+  font-family: var(--ds-font-display);
+}
+
+/* Insights drill-down chip on the applications list. */
+.lens-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  align-self: flex-start;
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-primary-subtle);
+  color: var(--ds-primary-subtle-text);
+  font-size: var(--ds-text-sm);
+}
+
+.lens-chip-remove {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: var(--ds-text-base);
+  line-height: 1;
+  padding: 0 var(--ds-space-1);
+}
+
+/* Insights page (007). Classes only: the CSP forbids inline style attributes in new code. */
+.insights-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-6);
+  min-width: 0;
+}
+
+.insights-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  min-width: 0;
+}
+
+.insights-window {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2);
+}
+
+.insights-window-link {
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-full);
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  text-decoration: none;
+}
+
+.insights-window-link[aria-current="page"] {
+  border-color: var(--ds-primary);
+  background: var(--ds-primary-subtle);
+  color: var(--ds-primary-subtle-text);
+  font-weight: var(--ds-weight-medium);
+}
+
+.insights-basis {
+  margin: 0;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+}
+
+.insights-help {
+  margin: 0;
+  max-width: 70ch;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-normal);
+}
+
+.insights-stage-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-2) var(--ds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--ds-text-sm);
+}
+
+.insights-stage-links a,
+.insights-tile-links a,
+.insights-help a {
+  color: var(--ds-primary-subtle-text);
+}
+
+.insights-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: var(--ds-space-4);
+}
+
+.insights-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+
+.insights-tile-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+  margin: 0;
+  font-size: var(--ds-text-sm);
+}
+
+/* Insights trends (007 phase 4). The charts come from the kit; these are only the wrappers the page writes itself and
+   the search-run table view. Tokens only, no raw colours. */
+.insights-trend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  min-width: 0;
+}
+
+.insights-trend-title {
+  margin: 0;
+  font-size: var(--ds-text-lg);
+}
+
+.insights-trend-note {
+  margin: 0;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+}
+
+.insights-sparkline {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.insights-run-toggle {
+  align-self: flex-start;
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border: 1px solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  color: var(--ds-text);
+  font-family: inherit;
+  font-size: var(--ds-text-sm);
+  cursor: pointer;
+}
+
+.insights-run-toggle[aria-pressed="true"] {
+  border-color: var(--ds-primary);
+  background: var(--ds-primary-subtle);
+  color: var(--ds-primary-subtle-text);
+}
+
+.insights-run-toggle:focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
+
+.insights-run-table {
+  width: 100%;
+  max-width: 28rem;
+  border-collapse: collapse;
+  font-size: var(--ds-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.insights-run-table caption {
+  padding-bottom: var(--ds-space-2);
+  color: var(--ds-text-secondary);
+  text-align: left;
+}
+
+.insights-run-table th,
+.insights-run-table td {
+  padding: var(--ds-space-1) var(--ds-space-3);
+  border-bottom: 1px solid var(--ds-border);
+  text-align: left;
+}
+
+.insights-run-table th:last-child,
+.insights-run-table td:last-child {
+  text-align: right;
+}
+
+/* Note bodies rendered as Markdown (007 phase 5, ADR 0032). Classes only: the CSP forbids inline style attributes, and
+   MarkdownBody never writes one. Tokens only, no raw colours, so light and dark both follow the theme. */
+.note-content {
+  min-width: 0;
+  padding: var(--ds-space-4);
+  background: var(--ds-bg-subtle);
+  border: var(--ds-border-thin) solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+}
+
+.markdown-body {
+  min-width: 0;
+  max-width: 72ch;
+  color: var(--ds-text);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-base);
+  line-height: var(--ds-leading-relaxed);
+  overflow-wrap: anywhere;
+}
+
+.markdown-body > :first-child {
+  margin-top: 0;
+}
+
+.markdown-body > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body blockquote,
+.markdown-body pre,
+.markdown-body hr {
+  margin: var(--ds-space-3) 0;
+}
+
+.markdown-body h3,
+.markdown-body h4,
+.markdown-body h5,
+.markdown-body h6 {
+  margin: var(--ds-space-5) 0 var(--ds-space-2);
+  color: var(--ds-text);
+  font-family: var(--ds-font-display);
+  font-weight: var(--ds-weight-semibold);
+  line-height: var(--ds-leading-tight);
+}
+
+.markdown-body h3 {
+  font-size: var(--ds-text-xl);
+}
+
+.markdown-body h4 {
+  font-size: var(--ds-text-lg);
+}
+
+.markdown-body h5,
+.markdown-body h6 {
+  font-size: var(--ds-text-base);
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: var(--ds-space-6);
+}
+
+.markdown-body li > ul,
+.markdown-body li > ol {
+  margin: var(--ds-space-1) 0;
+}
+
+.markdown-body .markdown-task-list,
+.markdown-body .markdown-task-item {
+  padding-left: 0;
+  list-style: none;
+}
+
+.markdown-body .markdown-task-checkbox {
+  margin: 0 var(--ds-space-2) 0 0;
+  vertical-align: middle;
+}
+
+.markdown-body a {
+  color: var(--ds-primary-subtle-text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.markdown-body a:focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
+
+.markdown-body del {
+  color: var(--ds-text-secondary);
+}
+
+.markdown-body blockquote {
+  padding-left: var(--ds-space-4);
+  border-left: var(--ds-border-thick) solid var(--ds-border-strong);
+  color: var(--ds-text-secondary);
+}
+
+.markdown-body hr {
+  border: 0;
+  border-top: var(--ds-border-thin) solid var(--ds-border);
+}
+
+.markdown-body code {
+  padding: 0 var(--ds-space-1);
+  background: var(--ds-surface);
+  border: var(--ds-border-thin) solid var(--ds-border);
+  border-radius: var(--ds-radius-sm);
+  font-family: var(--ds-font-mono);
+  font-size: 0.9em;
+}
+
+.markdown-body pre {
+  padding: var(--ds-space-3);
+  background: var(--ds-surface);
+  border: var(--ds-border-thin) solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-normal);
+  white-space: pre-wrap;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-size: inherit;
+}
+
+/* A table scrolls inside its own region, so the page never scrolls sideways. The region is focusable (tabindex 0) and
+   labelled, so a keyboard user can scroll it with the arrow keys. */
+.markdown-body .markdown-table-scroll {
+  max-width: 100%;
+  margin: var(--ds-space-3) 0;
+  overflow-x: auto;
+  border: var(--ds-border-thin) solid var(--ds-border);
+  border-radius: var(--ds-radius-md);
+}
+
+.markdown-body .markdown-table-scroll:focus-visible {
+  outline: 2px solid var(--ds-focus-ring);
+  outline-offset: 2px;
+}
+
+.markdown-body table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: var(--ds-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.markdown-body th,
+.markdown-body td {
+  min-width: 6rem;
+  max-width: 24rem;
+  padding: var(--ds-space-2) var(--ds-space-3);
+  border-bottom: var(--ds-border-thin) solid var(--ds-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: break-word;
+}
+
+.markdown-body th {
+  background: var(--ds-surface);
+  font-weight: var(--ds-weight-semibold);
+}
+
+.markdown-body tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.markdown-body .markdown-align-right {
+  text-align: right;
+}
+
+.markdown-body .markdown-align-center {
+  text-align: center;
+}
+
+/* The fallback for a body that is too large or too complex to format: the whole text, as text, with a notice. */
+.markdown-notice {
+  margin-bottom: var(--ds-space-3);
+  padding: var(--ds-space-2) var(--ds-space-3);
+  background: var(--ds-warning-subtle);
+  border-radius: var(--ds-radius-md);
+  color: var(--ds-warning-text);
+  font-size: var(--ds-text-sm);
+}
+
+.markdown-body .markdown-plain {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+}

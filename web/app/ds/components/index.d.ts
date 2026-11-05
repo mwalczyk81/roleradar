@@ -230,6 +230,13 @@ export interface DataTableProps<T = any> extends Omit<React.HTMLAttributes<HTMLD
   defaultSortDirection?: "asc" | "desc";
   /** Called when a sortable header is pressed. */
   onSortChange?: (column: string, direction: "asc" | "desc") => void;
+  /**
+   * Where sorting happens. "page" (default) reorders only the rows given and the footer says so. "all" means the
+   * API sorts the whole result: drive it with `sortColumn`, `sortDirection` and `onSortChange`, give each sortable
+   * column a no-op `sortValue`, and the footer note and header tooltip drop the page-only wording.
+   * @default "page"
+   */
+  sortScope?: "page" | "all";
   /** Shows the range and Previous/Next controls. */
   pagination?: DataTablePagination;
   /** Keep the header visible while the body scrolls (needs `maxHeight`). @default true */
@@ -417,6 +424,129 @@ export interface TooltipProps extends Omit<React.HTMLAttributes<HTMLSpanElement>
 /** Short hint for one control, shown on hover and keyboard focus. */
 export function Tooltip(props: TooltipProps): JSX.Element;
 
+export interface SparklineProps extends Omit<React.SVGAttributes<SVGSVGElement>, "values" | "width" | "height"> {
+  /** The points, oldest first. The last one is drawn as the accent dot. */
+  values: number[];
+  /** @default 96 */
+  width?: number;
+  /** @default 28 */
+  height?: number;
+  /** What the line is, read before the range summary: "Applications per week". */
+  label?: string;
+  /** Formats numbers in the accessible name. @default formatCount (1,284 / 12.9K) */
+  valueFormat?: (value: number) => string;
+  /** Colour of the 2px ring around the end dot; match the ground it sits on. @default "var(--ds-surface)" */
+  surface?: string;
+}
+
+/** Tiny trend line with no axes: de-emphasis gray line, accent end dot. */
+export function Sparkline(props: SparklineProps): JSX.Element | null;
+
+export interface StatTileDelta {
+  /** The signed change, such as "+3" or "-12%". */
+  value: string;
+  /** Which way it went; picks the arrow. @default "flat" */
+  direction?: "up" | "down" | "flat";
+  /** Whether the change is good news: true is green, false is red, omitted is neutral. */
+  good?: boolean;
+  /** The period compared with, such as "vs previous 30 days". */
+  period?: string;
+}
+
+export interface StatTileProps extends Omit<React.HTMLAttributes<HTMLDivElement>, "children"> {
+  /** What is measured, in sentence case with no trailing colon. */
+  label: string;
+  /** The figure. Numbers are formatted with `valueFormat`; strings are shown as given ("22%"). */
+  value: number | string;
+  /** Keeps the count next to a percentage: "4 of 18". */
+  of?: string;
+  delta?: StatTileDelta;
+  /** Points for a Sparkline beside the value, oldest first. */
+  trend?: number[];
+  /** What the trend is, for its accessible name. */
+  trendLabel?: string;
+  /** Your own note under the value, shown instead of the automatic small-sample note. */
+  note?: string;
+  /** The count the figure is out of. Under `smallSampleBelow` the tile shows "Small sample". */
+  denominator?: number;
+  /** @default 10 */
+  smallSampleBelow?: number;
+  /** Formats a numeric `value` and the trend summary. @default formatCount (1,284 / 12.9K) */
+  valueFormat?: (value: number) => string;
+}
+
+/** One headline number with its denominator, change and trend. */
+export function StatTile(props: StatTileProps): JSX.Element;
+
+export interface BarChartItem {
+  label: string;
+  value: number;
+  /** Make this bar the point: the others turn gray. */
+  highlight?: boolean;
+  /** The count this value is out of. Under `smallSampleBelow` the bar gets a small-sample note. Funnels use the previous stage. */
+  denominator?: number;
+}
+
+export interface BarChartProps extends Omit<React.HTMLAttributes<HTMLElement>, "title"> {
+  /** Names the chart; it is the figure's caption. */
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  /** In display order. */
+  data: BarChartItem[];
+  /** Stages that narrow: adds "% of previous stage" to every stage after the first. @default false */
+  funnel?: boolean;
+  /** Formats values at the bar tips, in the tooltip and in the table. @default formatCount (1,284 / 12.9K) */
+  valueFormat?: (value: number) => string;
+  /** Heading of the label column in the table view. @default "Category" */
+  labelHeader?: string;
+  /** Heading of the value column in the table view. @default "Count" */
+  valueHeader?: string;
+  /** A denominator under this gets a small-sample note. @default 10 */
+  smallSampleBelow?: number;
+  /** Draw the card surface around the chart. @default true */
+  framed?: boolean;
+  /** Keep the current render, dimmed, while data reloads. @default false */
+  isLoading?: boolean;
+  /** @default "No data for this period." */
+  emptyMessage?: React.ReactNode;
+}
+
+/** Horizontal bars with the value at the tip, an optional funnel mode, tooltips and a table view. */
+export function BarChart(props: BarChartProps): JSX.Element;
+
+export interface ColumnChartItem {
+  /** Short x-axis label, such as "Oct 5". */
+  label: string;
+  value: number;
+  /** Long form for the tooltip, table and screen readers, such as "Week of Oct 5". */
+  fullLabel?: string;
+}
+
+export interface ColumnChartProps extends Omit<React.HTMLAttributes<HTMLElement>, "title"> {
+  /** Names the chart; it is the figure's caption. */
+  title: React.ReactNode;
+  subtitle?: React.ReactNode;
+  /** Time buckets, oldest first. */
+  data: ColumnChartItem[];
+  /** Plot height in px, not counting the value and axis labels. @default 180 */
+  height?: number;
+  /** Formats values in the tooltip and the table. @default formatCount (1,284 / 12.9K) */
+  valueFormat?: (value: number) => string;
+  /** Heading of the label column in the table view. @default "Period" */
+  labelHeader?: string;
+  /** Heading of the value column in the table view. @default "Count" */
+  valueHeader?: string;
+  /** Draw the card surface around the chart. @default true */
+  framed?: boolean;
+  /** Keep the current render, dimmed, while data reloads. @default false */
+  isLoading?: boolean;
+  /** @default "No data for this period." */
+  emptyMessage?: React.ReactNode;
+}
+
+/** Vertical columns for counts over time, with clean y ticks, tooltips and a table view. */
+export function ColumnChart(props: ColumnChartProps): JSX.Element;
+
 declare global {
   interface Window {
     MattSDesignSystem_522a7a: {
@@ -442,6 +572,10 @@ declare global {
       ToastRegion: typeof ToastRegion;
       Menu: typeof Menu;
       Tooltip: typeof Tooltip;
+      Sparkline: typeof Sparkline;
+      StatTile: typeof StatTile;
+      BarChart: typeof BarChart;
+      ColumnChart: typeof ColumnChart;
     };
   }
 }

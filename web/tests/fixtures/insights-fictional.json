@@ -1,0 +1,6 @@
+{
+  "note": "Entirely fictional. Row templates for the loopback stub API used by the Insights e2e specs. Counts come from contracts/insights-lenses.json.",
+  "companies": ["Northwind Examples", "Contoso Samples", "Fabrikam Mocks", "Tailspin Demo", "Wingtip Fixtures", "Litware Placeholders"],
+  "postingTitles": ["Fictional Platform Lead", "Fictional Data Director", "Fictional Staff Engineer", "Fictional Engineering Manager"],
+  "unfilteredTotals": { "Postings": 61, "Applications": 28 }
+}

@@ -11,6 +11,11 @@ export const APPLICATION_OUTCOME_VALUES = [
 
 export type ApplicationOutcome = (typeof APPLICATION_OUTCOME_VALUES)[number];
 
+/** Named access to the application status the Insights lenses filter on, typed against the Domain list above. */
+export const APPLICATION_STATUS = {
+  Applied: "applied",
+} as const satisfies Record<string, ApplicationOutcome>;
+
 export const APPLICATION_EVENT_TYPE_VALUES = [
   "applied",
   "follow_up",

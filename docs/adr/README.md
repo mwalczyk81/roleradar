@@ -32,3 +32,7 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0026](./0026-strict-csp-nonce-and-theme-initialization.md) | Strict CSP with Nonce, Zero-FOUC Theme Initialization, and Untrusted Plain-Text Rendering | Accepted | `005b-management-ui` |
 | [ADR-0027](./0027-web-test-pyramid-and-e2e-strategy.md) | Web Test Pyramid and Verification Strategy | Accepted | `005b-management-ui` |
 | [ADR-0028](./0028-odata-read-seam-and-query-execution.md) | OData Read Seam and Query Execution Architecture | Accepted | `006-odata-reads` |
+| [ADR-0029](./0029-insights-counts-via-shared-lens-module.md) | Insights Counts via OData `$count` and One Shared Lens Module | Accepted | `007-insights-dashboard` |
+| [ADR-0030](./0030-insights-stats-read-in-memory.md) | Insights Stats Read Computed In Memory Through `IOwnerReadSeam` | Accepted | `007-insights-dashboard` |
+| [ADR-0031](./0031-insights-derived-read-model-flags.md) | Derived Read-Model Flags for Insights, Written Only at the Repository Choke Point | Accepted | `007-insights-dashboard` |
+| [ADR-0032](./0032-markdown-rendering-of-notes.md) | Markdown Rendering of Note Bodies | Accepted | `007-insights-dashboard` |

@@ -10,6 +10,17 @@ export const DISPOSITION_VALUES = [
 
 export type PostingDisposition = (typeof DISPOSITION_VALUES)[number];
 
+/**
+ * Named access to the dispositions the Insights lenses filter on. Typed against the Domain list above, so a rename
+ * in the Domain enum (and its contract snapshot) breaks the build here instead of silently changing a filter.
+ */
+export const DISPOSITION = {
+  Lead: "lead",
+  Unscored: "unscored",
+  ScreenedOut: "screened_out",
+  Closed: "closed",
+} as const satisfies Record<string, PostingDisposition>;
+
 export const RESURFACE_POLICY_VALUES = ["never", "if_reopened"] as const;
 
 export type ResurfacePolicy = (typeof RESURFACE_POLICY_VALUES)[number];

@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { Brand } from "../components/Brand.js";
 import { useLoaderData, useSearchParams, Link } from "react-router";
 import { requireUserSession } from "../lib/auth-guard.server.js";
 import { useTheme } from "../lib/use-theme.js";
@@ -113,7 +114,7 @@ export default function SearchRunsIndex() {
 
   return (
     <AppShell
-      brand="RoleRadar"
+      brand={<Brand />}
       title="Search Runs"
       userLabel={data.userLabel}
       signOut={signOutForm}
@@ -124,6 +125,7 @@ export default function SearchRunsIndex() {
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
         <DataTable
+          sortScope="all"
           caption="Automated Search Runs History"
           columns={columns}
           data={data.items}

@@ -339,10 +339,14 @@ describe("Operational Views (T054: Criteria, Notes, Search Runs)", () => {
       expect(container.textContent).toContain("<script>alert('body-xss')</script>");
       expect(container.textContent).toContain("<script>alert('heading-xss')</script>");
 
-      // Preserves whitespace via pre-wrap
+      // The body is rendered as Markdown (ADR 0032): a class, no inline style, raw HTML shown as text, a single newline is a line break
       const contentEl = container.querySelector('[data-testid="note-content"]');
       expect(contentEl).not.toBeNull();
-      expect(contentEl?.getAttribute("style") ?? "").toContain("pre-wrap");
+      expect(contentEl?.hasAttribute("style")).toBe(false);
+      expect(contentEl?.querySelector(".markdown-body")).not.toBeNull();
+      expect(contentEl?.querySelectorAll("script, a, img, iframe").length).toBe(0);
+      expect(contentEl?.querySelectorAll("br").length).toBeGreaterThan(0);
+      expect(contentEl?.textContent).toContain("<a href='javascript:alert(1)'>Click</a>");
 
       // Zero mutation controls (no POST forms outside signOut)
       const forms = Array.from(container.querySelectorAll("form")).filter(

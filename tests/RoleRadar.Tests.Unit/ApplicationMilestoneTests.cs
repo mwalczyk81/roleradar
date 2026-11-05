@@ -185,4 +185,121 @@ public sealed class ApplicationMilestoneTests
 
         Assert.Equal(created, MongoApplicationRepository.DeriveAppliedAt(submittedDate, created));
     }
+
+    // ---- 007 insights flags: HasOffer, HasRejection, RejectedBeforeInterview ----
+
+    private static ApplicationMilestones Compute(params BsonDocument[] events) =>
+        MongoApplicationRepository.ComputeApplicationMilestones(events, DefaultCreated);
+
+    [Fact]
+    public void NoEvents_AllInsightsFlagsFalse()
+    {
+        var m = Compute();
+
+        Assert.False(m.HasOffer);
+        Assert.False(m.HasRejection);
+        Assert.False(m.RejectedBeforeInterview);
+    }
+
+    [Fact]
+    public void OfferOnly_SetsHasOffer_Only()
+    {
+        var m = Compute(Event("offer", "2026-03-03"));
+
+        Assert.True(m.HasOffer);
+        Assert.False(m.HasRejection);
+        Assert.False(m.RejectedBeforeInterview);
+        Assert.False(m.HasInterview);
+    }
+
+    [Theory]
+    [InlineData("offer_accepted")]
+    [InlineData("offer_declined")]
+    public void OfferAcceptedOrDeclined_IsNotAnOfferEvent(string eventType)
+    {
+        Assert.False(Compute(Event(eventType, "2026-03-03")).HasOffer);
+    }
+
+    [Fact]
+    public void RejectionWithNoInterview_IsBeforeInterview()
+    {
+        var m = Compute(Event("rejected", "2026-03-03"));
+
+        Assert.True(m.HasRejection);
+        Assert.True(m.RejectedBeforeInterview);
+    }
+
+    [Fact]
+    public void InterviewOnAnEarlierDay_ThenRejected_IsAfterInterview()
+    {
+        var m = Compute(Event("interview", "2026-03-01"), Event("rejected", "2026-03-05"));
+
+        Assert.True(m.HasRejection);
+        Assert.False(m.RejectedBeforeInterview);
+    }
+
+    [Fact]
+    public void RejectedAndInterviewOnTheSameDay_CountsAsAfterInterview()
+    {
+        var m = Compute(Event("rejected", "2026-03-05"), Event("interview", "2026-03-05"));
+
+        Assert.True(m.HasRejection);
+        Assert.False(m.RejectedBeforeInterview);
+    }
+
+    [Fact]
+    public void InterviewDatedAfterTheRejection_IsStillBeforeInterview()
+    {
+        var m = Compute(Event("rejected", "2026-03-01"), Event("interview", "2026-03-09"));
+
+        Assert.True(m.HasRejection);
+        Assert.True(m.HasInterview);
+        Assert.True(m.RejectedBeforeInterview);
+    }
+
+    [Fact]
+    public void TwoRejections_EarliestRejectionDecidesBeforeOrAfter()
+    {
+        // Interview on 03-03; rejected on 03-01 (before) and again on 03-09 (after). The earliest wins.
+        var m = Compute(
+            Event("rejected", "2026-03-09"),
+            Event("interview", "2026-03-03"),
+            Event("rejected", "2026-03-01"));
+
+        Assert.True(m.HasRejection);
+        Assert.True(m.RejectedBeforeInterview);
+    }
+
+    [Fact]
+    public void FollowUpAndWithdrawnOnly_LeaveAllInsightsFlagsFalse()
+    {
+        var m = Compute(Event("follow_up", "2026-03-01"), Event("withdrawn", "2026-03-02"));
+
+        Assert.False(m.HasOffer);
+        Assert.False(m.HasRejection);
+        Assert.False(m.RejectedBeforeInterview);
+    }
+
+    [Fact]
+    public void EventDate_MissingFallsBackToCreatedAt_ForTheBeforeAfterOrdering()
+    {
+        // No event_date: created_at orders the events. Interview created first, rejection second => after.
+        var m = Compute(
+            Event("interview", null, new DateTime(2026, 4, 1, 9, 0, 0, DateTimeKind.Utc)),
+            Event("rejected", null, new DateTime(2026, 4, 2, 9, 0, 0, DateTimeKind.Utc)));
+
+        Assert.True(m.HasRejection);
+        Assert.False(m.RejectedBeforeInterview);
+    }
+
+    [Fact]
+    public void ExistingMilestoneValues_AreUnchangedByTheNewFlags()
+    {
+        var m = Compute(Event("interview", "2026-03-01"), Event("offer", "2026-03-04"));
+
+        Assert.True(m.HasInterview);
+        Assert.Equal(Utc(2026, 3, 1), m.FirstResponseAt);
+        Assert.Equal(Utc(2026, 3, 4), m.LastEventAt);
+        Assert.True(m.HasOffer);
+    }
 }

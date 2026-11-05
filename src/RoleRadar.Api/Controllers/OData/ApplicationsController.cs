@@ -82,13 +82,9 @@ public sealed class ApplicationsController : ODataController
 
         IOrderedQueryable<ApplicationReadModel>? ordered = null;
 
-        foreach (var node in orderBy.OrderByNodes)
+        var plan = ODataOrderPlan.From(orderBy, n => string.Equals(n, "ageInDays", StringComparison.OrdinalIgnoreCase) ? "appliedAt" : n);
+        foreach (var propNode in plan.Nodes)
         {
-            if (node is not OrderByPropertyNode propNode)
-            {
-                throw new ODataException("Only direct property sorting is supported in $orderby.");
-            }
-
             var isDesc = propNode.Direction == OrderByDirection.Descending;
             var prop = propNode.Property.Name;
 
@@ -157,6 +153,6 @@ public sealed class ApplicationsController : ODataController
 
         return ordered is null
             ? source.OrderBy(a => a.Id)
-            : ordered.ThenBy(a => a.Id);
+            : (plan.SortsById ? ordered : ordered.ThenBy(a => a.Id));
     }
 }

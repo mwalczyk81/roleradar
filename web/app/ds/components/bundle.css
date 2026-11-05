@@ -9,6 +9,7 @@
   /* Font names the components read; the stacks themselves are tokens.json type.families. */
   --ds-font-sans: var(--font-sans);
   --ds-font-mono: var(--font-mono);
+  --ds-font-display: var(--font-display);
 
   /* Motion. Animate opacity/transform only. */
   --ds-duration-fast: 120ms;  /* hovers, small state */
@@ -180,6 +181,7 @@
   border-right: var(--ds-border-thin) solid var(--ds-border);
 }
 .ds-appshell-brand {
+  font-family: var(--ds-font-display);
   padding: var(--ds-space-2) var(--ds-space-3) var(--ds-space-4);
   font-size: var(--ds-text-lg);
   font-weight: var(--ds-weight-semibold);
@@ -211,6 +213,7 @@
 .ds-appshell-link[aria-current="page"] {
   background: var(--ds-primary-subtle);
   color: var(--ds-primary-subtle-text);
+  box-shadow: inset 2px 0 0 var(--ds-primary);
 }
 .ds-appshell-icon {
   display: inline-flex;
@@ -247,6 +250,7 @@
   cursor: pointer;
 }
 .ds-appshell-title {
+  font-family: var(--ds-font-display);
   flex: 1;
   min-width: 0;
   margin: 0;
@@ -312,5 +316,51 @@
   }
   .ds-appshell-user {
     display: none;
+  }
+}
+
+/* Charts (StatTile, BarChart, ColumnChart, Sparkline). Marks carry inline colours so they
+   still draw without this file; the hover and focus states need it. */
+.ds-chart-toggle:hover {
+  background: var(--ds-surface-hover) !important;
+}
+.ds-chart-toggle[aria-pressed="true"] {
+  background: var(--ds-primary-subtle) !important;
+  color: var(--ds-primary-subtle-text) !important;
+}
+.ds-chart-row:hover,
+.ds-chart-row:focus-visible {
+  background: var(--ds-surface-hover);
+}
+.ds-chart-row:focus-visible,
+.ds-chart-slot:focus-visible {
+  outline-offset: -2px;
+}
+.ds-chart-row:hover .ds-chart-bar,
+.ds-chart-row:focus-visible .ds-chart-bar,
+.ds-chart-slot:hover .ds-chart-bar,
+.ds-chart-slot:focus-visible .ds-chart-bar {
+  background: var(--ds-chart-primary-hover) !important;
+}
+.ds-chart-row:hover .ds-chart-bar[data-muted],
+.ds-chart-row:focus-visible .ds-chart-bar[data-muted] {
+  background: var(--ds-chart-muted-hover) !important;
+}
+
+/* Forced colours drop background and fill colours, so marks are redrawn with system colours. */
+@media (forced-colors: active) {
+  .ds-chart-bar {
+    background: Highlight !important;
+    forced-color-adjust: none;
+  }
+  .ds-chart-bar[data-muted] {
+    background: GrayText !important;
+  }
+  .ds-chart-line {
+    stroke: GrayText !important;
+  }
+  .ds-chart-dot {
+    fill: Highlight !important;
+    forced-color-adjust: none;
   }
 }

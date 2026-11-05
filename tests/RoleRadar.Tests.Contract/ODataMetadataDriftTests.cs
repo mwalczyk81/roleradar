@@ -23,9 +23,6 @@ public sealed class ODataMetadataDriftTests(SharedMongoFixture sharedMongo)
     public void Running_EdmModel_Matches_Committed_Metadata_Xml_Snapshot()
     {
         var model = Program.GetEdmModel();
-        Assert.True(File.Exists(SnapshotPath), $"Committed metadata snapshot does not exist at {SnapshotPath}");
-
-        var committedXml = File.ReadAllText(SnapshotPath);
 
         using var stringWriter = new StringWriter();
         using (var xmlWriter = XmlWriter.Create(stringWriter, new XmlWriterSettings { Indent = true, Encoding = System.Text.Encoding.UTF8 }))
@@ -36,6 +33,15 @@ public sealed class ODataMetadataDriftTests(SharedMongoFixture sharedMongo)
         }
 
         var runningXml = stringWriter.ToString();
+
+        // Regenerate the committed snapshot from the model (never hand-edit it): UPDATE_SNAPSHOTS=1 dotnet test ...
+        if (Environment.GetEnvironmentVariable("UPDATE_SNAPSHOTS") == "1")
+        {
+            File.WriteAllText(SnapshotPath, runningXml.Replace("\r\n", "\n").TrimEnd() + "\n");
+        }
+
+        Assert.True(File.Exists(SnapshotPath), $"Committed metadata snapshot does not exist at {SnapshotPath}");
+        var committedXml = File.ReadAllText(SnapshotPath);
 
         // Normalize line endings
         var normalizedCommitted = committedXml.Replace("\r\n", "\n").Trim();

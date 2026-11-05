@@ -1,6 +1,6 @@
 # Matt's Design System
 
-A small, clean & modern design system: **neutral slate grays, one confident blue
+A small, clean & modern design system: **warm stone grays, one bronze
 accent, generous spacing, subtle shadows, light + dark mode.** Think Linear /
 Stripe / Vercel — calm, professional, content-first. It is product-agnostic: the
 same tokens and components dress any web UI (and map to native platforms).
@@ -19,9 +19,9 @@ codebase (`design-system/`), containing:
 - `design-system.md` — the written rulebook (color roles, component patterns, do/don't).
 - `cards/*.html`, `preview.html` — specimen pages.
 
-No brand logos or product codebase or Figma file were provided. Two brand
-**webfonts** are self-hosted from `fonts/` — **Inter** (sans) and **JetBrains
-Mono** (mono), both variable-weight. The fictional "Meridian" billing app in `ui_kits/console/` is an original demo built
+No brand logos or product codebase or Figma file were provided. Three brand
+**webfonts** are self-hosted from `fonts/` — **IBM Plex Sans** (sans), **IBM Plex Serif** (display serif) and **IBM Plex
+Mono** (mono). The fictional "Meridian" billing app in `ui_kits/console/` is an original demo built
 to exercise the components, not a real product.
 
 ---
@@ -57,18 +57,18 @@ How copy reads in this system — UI text, labels, and microcopy.
 
 ## VISUAL FOUNDATIONS
 
-- **Color vibe:** cool and neutral. Structure is carried entirely by **slate
-  grays** (12-step neutral ramp, `#f8fafc`→`#020617`); **one blue accent**
-  (`--ds-primary` = blue-600 light / blue-500 dark) for primary actions, links,
-  active state, focus, and selection. Green / amber / red appear **only** as
+- **Color vibe:** warm stone neutrals with one bronze accent. Structure is carried entirely by **stone
+  grays** (12-step neutral ramp, `#fafaf9`→`#0c0a09`); **one bronze accent** (the ramp from mattwalczyk.com)
+  (`--ds-primary` = bronze-600 light / bronze-400 dark) for primary actions, links,
+  active state, focus, and selection. Green / yellow / red appear **only** as
   status (success / warning / danger) — never decoration. No second brand color,
   no gradients.
 - **Backgrounds:** flat solid fills. Page = `--ds-bg` (white / near-black);
   subtle zones and table headers = `--ds-bg-subtle`. **No** images, textures,
   patterns, or gradient washes. Depth comes from borders + a faint shadow, not
   color.
-- **Type:** **Inter** (variable, self-hosted) for everything; **JetBrains Mono**
-  (variable, self-hosted) for code / IDs / table numbers. System stacks
+- **Type:** **IBM Plex Sans** (variable, self-hosted) for body and UI, **IBM Plex Serif** (400, 500, 600, self-hosted) for page titles, the app name and hero numbers; **IBM Plex Mono**
+  (400, 500, self-hosted) for code / IDs / table numbers. System stacks
   (`system-ui`, `ui-monospace`) remain as fallbacks behind each. Scale ~1.25 ratio (12 → 36px). Weights: 400 body,
   500 labels/buttons, 600 headings, 700 hero/numbers. Tight leading (1.25) on
   headings, 1.5 on body, 1.7 on long prose. Line length capped ~65ch.
@@ -92,7 +92,7 @@ How copy reads in this system — UI text, labels, and microcopy.
   `space-6` padding. Interactive cards lift to `shadow-md` on hover.
 - **Hover states:** surfaces / list items / ghost buttons → `--ds-surface-hover`
   (a step up the neutral ramp). Primary button → `--ds-primary-solid-hover`
-  (blue-700 in both themes). Danger → slight `brightness(0.95)`. No scale on
+  (bronze-700 in both themes). Danger → slight `brightness(0.95)`. No scale on
   hover.
 - **Press / active:** color shift only (the `-hover` token), no shrink/scale.
   Active nav item = `--ds-primary-subtle` background + `--ds-primary` text.
@@ -137,14 +137,16 @@ role applies.
 
 | Token | Light | Dark | Use | Contrast |
 |---|---|---|---|---|
-| `--ds-text-secondary` | neutral-600 | neutral-300 | muted text on tinted grounds, neutral Badge | 6.9:1 / 9.9:1 |
-| `--ds-border-control` | neutral-450 `#8190a6` | neutral-550 `#58687d` | outline of any form control, switch off track | 3.2:1 on white, 3.1:1 on dark surface |
-| `--ds-primary-solid` (+`-hover`) | blue-600 (blue-700) | blue-600 (blue-700) | filled primary button behind white text | 5.2:1 (6.7:1) |
+| `--ds-text-secondary` | neutral-600 | neutral-300 | muted text on tinted grounds, neutral Badge, info Alert | 7.6:1 / 10.2:1 |
+| `--ds-border-control` | neutral-450 `#908985` | neutral-500 `#78716c` | outline of any form control, switch off track | 3.4:1 on white, 3.2:1 on dark surface |
+| `--ds-primary-solid` (+`-hover`) | bronze-600 (bronze-700) | bronze-600 (bronze-700) | filled primary button behind white text | 5.2:1 (8.0:1) |
 | `--ds-danger-solid` | red-600 | red-600 | filled danger button behind white text | 4.8:1 |
-| `--ds-primary-subtle-text` | blue-700 | blue-300 | accent text on `--ds-primary-subtle` (Badge, Alert info, Avatar) | 6.2:1 / 5.7:1 |
+| `--ds-primary-subtle-text` | bronze-700 | bronze-300 | accent text on `--ds-primary-subtle` (Badge, Avatar) | 7.5:1 / 8.8:1 |
 | `--ds-success-text` | green-700 | green-500 | success text on `--ds-success-subtle` | 4.8:1 / 6.8:1 |
-| `--ds-warning-text` | amber-700 | amber-500 | warning text on `--ds-warning-subtle` | 4.8:1 / 7.3:1 |
+| `--ds-warning-text` | yellow-700 | yellow-500 | warning text on `--ds-warning-subtle` | 4.8:1 / 8.1:1 |
 | `--ds-danger-text` | red-700 | red-500 | danger text on `--ds-danger-subtle` | 5.9:1 / 4.7:1 |
+| `--ds-chart-primary` (+`-hover`) | bronze-600 (bronze-700) | bronze-500 (bronze-400) | data marks: bars, columns, sparkline end dot | 5.2:1 (8.0:1) / 4.2:1 (6.0:1) on surface |
+| `--ds-chart-muted` (+`-hover`) | neutral-450 (neutral-500) | neutral-500 (neutral-400) | de-emphasis marks: non-highlighted bars, sparkline line | 3.4:1 (4.8:1) / 3.2:1 (6.0:1) on surface |
 
 Components behavior: handlers you pass (`onFocus`, `onBlur`, `onMouseEnter`,
 `onMouseLeave`) run in addition to the built-in ones and never replace them;
@@ -193,7 +195,7 @@ locks page scroll; Tabs supports Left/Right/Home/End.
 - `feedback/` — **Card, Badge, Alert, Avatar, EmptyState, Skeleton, Toast, ToastRegion**
 - `navigation/` — **Tabs**
 - `overlay/` — **Modal, Menu, Tooltip**
-- `data/` — **DataTable, Toolbar**
+- `data/` — **DataTable, Toolbar, StatTile, BarChart, ColumnChart, Sparkline** (the charts share `chartParts.jsx`, which is not a component and has no .d.ts; import the four components, not it)
 - `layout/` — **AppShell**
 
 **Composites** (added 2026-10-31 for the RoleRadar management UI) are built from the same
@@ -203,6 +205,8 @@ imports an icon package or a router (icons arrive as nodes; `AppShell` and `Menu
 layout, hover and animation rules live in `components/bundle.css`, so link it after
 `tokens.css` as always. `DataTable` sorts only the page of rows it is given and says so;
 numbers go in `numeric` columns (monospace, right-aligned).
+
+**Chart components** (added 2026-11-01 for the RoleRadar insights dashboard): StatTile, BarChart (with a funnel mode), ColumnChart and Sparkline. They use one accent hue plus a de-emphasis gray (`--ds-chart-*`), 20 to 24px marks with 4px rounded data ends, hairline recessive gridlines, labels in text tokens (never the data colour), a hover and focus readout per mark, and a "Table view" button that swaps the plot for a native table. A denominator under 10 gets a visible "Small sample" note, and counts sit next to percentages.
 
 Each component ships `components/src/<group>/<Name>.jsx` + `components/<Name>/<Name>.d.ts`
 (props; all of them in `components/index.d.ts`) + `components/<Name>/README.md`
@@ -223,3 +227,5 @@ Each component ships `components/src/<group>/<Name>.jsx` + `components/<Name>/<N
 **Meta**
 - `assets/notes/SKILL.from-standalone.md` — makes this folder usable as a downloadable Claude skill.
 - `README.md` — this file.
+
+**Identity pass (kit version 25):** the accent ramp follows the owner's personal site (mattwalczyk.com): `--ds-bronze-50` to `--ds-bronze-900` replace blue as the accent. The neutrals are warm stone (Tailwind's stone ramp with 450, 550 and 850 half steps), the dark theme is layered one step lighter than the first dark draft (page `neutral-900`, zones `neutral-850`, cards `neutral-800`, hover and borders `neutral-700`), and the warning tone is yellow so it stays apart from the bronze accent; every status keeps an icon and a label. Type is the IBM Plex family: Plex Serif is `--ds-font-display` (used by `.ds-hero`, `.ds-page-title`, the AppShell brand and title, and the StatTile figure), Plex Sans is the body face and Plex Mono the code and number face. The info Alert and the AppShell current-page marker no longer use the accent as a wash: info is a neutral surface, and the current page carries a 2px accent rule at its left edge.

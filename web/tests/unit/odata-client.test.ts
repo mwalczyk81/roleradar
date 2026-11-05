@@ -152,3 +152,35 @@ describe("odata-client date-time literals", () => {
     ).toThrow(/Invalid OData date-time literal/);
   });
 });
+
+describe("odata-client count-only queries ($top=0)", () => {
+  it("emits $top=0&$count=true with the filter and nothing else for a count-only query", () => {
+    const qs = buildODataQuery({
+      filter: { type: "comparison", operator: "eq", field: "hasOffer", value: true },
+      countOnly: true,
+    });
+    expect(decodeURIComponent(qs)).toBe("$filter=hasOffer eq true&$top=0&$count=true");
+  });
+
+  it("emits just $top=0&$count=true when a count-only query has no filter", () => {
+    expect(buildODataQuery({ countOnly: true })).toBe("$top=0&$count=true");
+  });
+
+  it("ignores paging, ordering and projection options on a count-only query", () => {
+    const qs = buildODataQuery({
+      countOnly: true,
+      top: 50,
+      skip: 10,
+      count: false,
+      orderBy: [{ field: "id", direction: "asc" }],
+      select: ["id"],
+    });
+    expect(qs).toBe("$top=0&$count=true");
+  });
+
+  it("keeps the list-page clamp: top 0 without countOnly is still raised to 1", () => {
+    expect(buildODataQuery({ top: 0 })).toBe("$top=1");
+    expect(buildODataQuery({ top: 500 })).toBe("$top=100");
+    expect(buildODataQuery({ top: -3 })).toBe("$top=1");
+  });
+});

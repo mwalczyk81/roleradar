@@ -12,6 +12,15 @@ public sealed class ApplicationReadModel
     public bool HasInterview { get; init; }
     public DateTimeOffset? FirstResponseAt { get; init; }
     public DateTimeOffset? LastEventAt { get; init; }
+
+    /// <summary>Any offer event. Derived at the repository choke point (ADR 0031).</summary>
+    public bool HasOffer { get; init; }
+
+    /// <summary>Any rejected event. Derived at the repository choke point (ADR 0031).</summary>
+    public bool HasRejection { get; init; }
+
+    /// <summary>A rejection with no interview dated strictly before it; false without a rejection (ADR 0031).</summary>
+    public bool RejectedBeforeInterview { get; init; }
     public int AgeInDays
     {
         get => AppliedAt == default ? 0 : Math.Max(0, (int)(DateTimeOffset.UtcNow.Date - AppliedAt.UtcDateTime.Date).TotalDays);

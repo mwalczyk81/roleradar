@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { Brand } from "../components/Brand.js";
 import { useLoaderData, useSearchParams, Link } from "react-router";
 import { requireUserSession } from "../lib/auth-guard.server.js";
 import { useTheme } from "../lib/use-theme.js";
@@ -168,7 +169,7 @@ export default function CriteriaIndex() {
 
   return (
     <AppShell
-      brand="RoleRadar"
+      brand={<Brand />}
       title="Screening Criteria"
       userLabel={data.userLabel}
       signOut={signOutForm}
@@ -179,6 +180,7 @@ export default function CriteriaIndex() {
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
         <DataTable
+          sortScope="all"
           caption="Screening Evaluation Rules"
           columns={columns}
           data={data.items}

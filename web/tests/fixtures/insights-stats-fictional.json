@@ -1,0 +1,72 @@
+{
+  "note": "Entirely fictional. The stats the loopback stub answers for GET /api/v1/insights/stats. The values are the hand-computed ones from tests/RoleRadar.Tests.Integration/Insights/InsightsStatsTests.cs (fictional seed, as-of 2026-09-30).",
+  "asOf": "2026-09-30",
+  "last90Days": {
+    "asOf": "2026-09-30",
+    "window": "last90Days",
+    "windowStart": "2026-07-03",
+    "responseTime": { "medianDays": 10, "sampleSize": 14 },
+    "weeklyApplications": [
+      { "weekStart": "2026-06-29", "count": 1 },
+      { "weekStart": "2026-07-06", "count": 2 },
+      { "weekStart": "2026-07-13", "count": 0 },
+      { "weekStart": "2026-07-20", "count": 1 },
+      { "weekStart": "2026-07-27", "count": 3 },
+      { "weekStart": "2026-08-03", "count": 0 },
+      { "weekStart": "2026-08-10", "count": 5 },
+      { "weekStart": "2026-08-17", "count": 2 },
+      { "weekStart": "2026-08-24", "count": 2 },
+      { "weekStart": "2026-08-31", "count": 3 },
+      { "weekStart": "2026-09-07", "count": 2 },
+      { "weekStart": "2026-09-14", "count": 2 },
+      { "weekStart": "2026-09-21", "count": 1 },
+      { "weekStart": "2026-09-28", "count": 1 }
+    ],
+    "searchRunYield": {
+      "runs": [
+        { "startedAt": "2026-07-12T12:00:00Z", "newPostings": 4 },
+        { "startedAt": "2026-07-26T12:00:00Z", "newPostings": 0 },
+        { "startedAt": "2026-08-16T12:00:00Z", "newPostings": 12 },
+        { "startedAt": "2026-08-30T12:00:00Z", "newPostings": 3 },
+        { "startedAt": "2026-09-16T12:00:00Z", "newPostings": 9 },
+        { "startedAt": "2026-09-28T12:00:00Z", "newPostings": 6 }
+      ],
+      "truncated": false
+    }
+  },
+  "allTime": {
+    "asOf": "2026-09-30",
+    "window": "allTime",
+    "windowStart": null,
+    "responseTime": { "medianDays": 10, "sampleSize": 15 },
+    "weeklyApplications": [
+      { "weekStart": "2026-06-22", "count": 1 },
+      { "weekStart": "2026-06-29", "count": 2 },
+      { "weekStart": "2026-07-06", "count": 2 },
+      { "weekStart": "2026-07-13", "count": 0 },
+      { "weekStart": "2026-07-20", "count": 1 },
+      { "weekStart": "2026-07-27", "count": 3 },
+      { "weekStart": "2026-08-03", "count": 0 },
+      { "weekStart": "2026-08-10", "count": 5 },
+      { "weekStart": "2026-08-17", "count": 2 },
+      { "weekStart": "2026-08-24", "count": 2 },
+      { "weekStart": "2026-08-31", "count": 3 },
+      { "weekStart": "2026-09-07", "count": 2 },
+      { "weekStart": "2026-09-14", "count": 2 },
+      { "weekStart": "2026-09-21", "count": 1 },
+      { "weekStart": "2026-09-28", "count": 1 }
+    ],
+    "searchRunYield": {
+      "runs": [
+        { "startedAt": "2026-06-27T12:00:00Z", "newPostings": 7 },
+        { "startedAt": "2026-07-12T12:00:00Z", "newPostings": 4 },
+        { "startedAt": "2026-07-26T12:00:00Z", "newPostings": 0 },
+        { "startedAt": "2026-08-16T12:00:00Z", "newPostings": 12 },
+        { "startedAt": "2026-08-30T12:00:00Z", "newPostings": 3 },
+        { "startedAt": "2026-09-16T12:00:00Z", "newPostings": 9 },
+        { "startedAt": "2026-09-28T12:00:00Z", "newPostings": 6 }
+      ],
+      "truncated": false
+    }
+  }
+}

@@ -2,7 +2,7 @@ import React from "react";
 
 // Foreground uses the -text tokens so title text clears 4.5:1 on each subtle ground in both themes.
 const variants = {
-  info: { bg: "var(--ds-primary-subtle)", fg: "var(--ds-primary-subtle-text)" },
+  info: { bg: "var(--ds-surface-hover)", fg: "var(--ds-text-secondary)" },
   success: { bg: "var(--ds-success-subtle)", fg: "var(--ds-success-text)" },
   warning: { bg: "var(--ds-warning-subtle)", fg: "var(--ds-warning-text)" },
   danger: { bg: "var(--ds-danger-subtle)", fg: "var(--ds-danger-text)" },

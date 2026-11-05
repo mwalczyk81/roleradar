@@ -3,8 +3,8 @@
 Vendored copy of Matt's Design System. The vendored copy under `web/app/ds` is strictly copy-only and NEVER edited by hand. Any fixes, styling updates, or Part C additions must be published to the upstream design kit artifact first, and then brought into this repository via a clean re-sync.
 
 - Source: Design System artifact, <https://claude.ai/artifact/E2SU2aXqnLZ5r9tu5VE9Mm>
-- Kit version: 1793458161-0e77 (v17, includes Part C)
-- Synced: 2026-10-31
+- Kit version: 1793794809-c293 (v26, includes Part C, the chart components first published as v20, the identity pass and the DataTable sortScope prop)
+- Synced: 2026-11-04
 - Synced by: Claude (read of the published files, copied unmodified; `project/` prefix removed)
 - Namespace in the kit bundle: `MattSDesignSystem_522a7a` (not used here; the app imports the sources in `components/src`)
 
@@ -18,10 +18,10 @@ Vendored copy of Matt's Design System. The vendored copy under `web/app/ds` is s
 | `components/src/**` | `project/components/src/**` | Component sources (React, JSX). |
 | `components/<Name>/<Name>.d.ts`, `components/index.d.ts` | same | Prop types. |
 | `components/<Name>/README.md` | same | Usage notes. |
-| `fonts/*.woff2` | `project/fonts/*` | Inter and JetBrains Mono, referenced by `tokens.css`. |
+| `fonts/*.woff2` | `project/fonts/*` | IBM Plex Sans (variable), IBM Plex Serif (400, 500, 600) and IBM Plex Mono (400, 500), referenced by `tokens.css`. |
 | `README.md` | `project/README.md` | The kit's brand book. |
 
-Not vendored: `bundle.js` (the preview runtime), `preview.html` cards, `ui_kits/`, `templates/`, `archived/`.
+Not vendored: `bundle.js` (the preview runtime), `preview.html` cards, `ui_kits/`, `templates/`, `archived/`, and the font files `tokens.css` no longer references (the kit still holds Inter, JetBrains Mono and Fraunces; this copy does not).
 
 ## Status
 
@@ -29,13 +29,19 @@ Part C composites are in this sync: DataTable, Toolbar (`components/src/data/`),
 The kit also corrected the prop types of Alert, Input and Select and the stale `base.css` comments in Checkbox, Radio and Switch.
 Verified before publishing: 88 jsdom behaviour checks (sorting, paging, keyboard, focus, timers), axe with no violations on a composed page, WCAG AA contrast for every new colour pair in both themes, and the declaration files type-check under strict TypeScript. Also checked by eye in a browser, in light and dark themes: DataTable, Toolbar, AppShell, EmptyState, Skeleton, Toast, Menu (keyboard and focus return) and Tooltip. That check found and fixed a clipped tooltip, a wrapping Badge and the AppShell mobile layout gap.
 
+Chart components are in this sync (added for the insights dashboard): StatTile, BarChart (funnel mode), ColumnChart and Sparkline in `components/src/data/`, with `chartParts.jsx` beside them (shared internals, not a component, no `.d.ts`; import the four components, never `chartParts.jsx`). They read four tokens, `--ds-chart-primary`, `--ds-chart-primary-hover`, `--ds-chart-muted` and `--ds-chart-muted-hover`, defined in `tokens.json` and `tokens.css` (light and dark). The kit's published `tokens.css` had been missing those four tokens until kit version 23 added them, so a sync from an earlier version leaves the chart marks without a colour. `components/bundle.css` carries the chart hover, focus and forced-colours rules; `components/index.d.ts` exports the new props. Verified before publishing: 91 jsdom behaviour checks, axe clean in chart and table view, strict TypeScript on the declaration files, contrast pairs computed for both themes, and a real-browser pass in light and dark on the published preview cards.
+
+Identity pass (kit versions 24 and 25): the accent is the bronze ramp from the owner's personal site (`--ds-bronze-50` to `--ds-bronze-900`, replacing blue for primary, focus, subtle, and chart tokens), the neutrals are warm stone, the dark theme is layered (page `neutral-900`, zones `neutral-850`, cards `neutral-800`, hover and borders `neutral-700`), and the warning tone is yellow. Type is IBM Plex: Plex Serif is `--ds-font-display` and carries the AppShell brand and title, `.ds-hero`, `.ds-page-title` and the StatTile figure; Plex Sans is the body face and Plex Mono the code and number face. The info Alert is a neutral surface, and the current AppShell link carries a 2px accent rule. `components/src/feedback/Alert.jsx` and `components/src/data/StatTile.jsx` changed in this sync; all other component sources are unchanged. Verified before publishing: 86 contrast pairs (text, muted text, status text on tinted grounds, control borders, focus ring and chart marks, in both themes), all passing; the kit's `bundle.js` was patched in place for the two component changes and the unchanged blocks were left byte-identical.
+
+DataTable gained a `sortScope` prop in kit version 26: `"page"` (default, unchanged) says in the footer and the header tooltip that sorting applies to the rows on the page; `"all"` is for tables the API sorts, and removes both. `components/src/data/DataTable.jsx`, `components/DataTable/DataTable.d.ts`, `components/DataTable/README.md` and `components/index.d.ts` changed in that sync.
+
 ## Re-sync
 
 Ask Claude to re-export from the kit. Update the version, date and hashes above, and review the diff like any other change.
 
 ## File hashes (sha256, as published)
 
-91def45822782c82e3dc4cce23e3241f2a7546639762f001fceab2ecb60cbba6  README.md
+3447e398a4abcda815c68a35d349ad89ec286d633268571b18277706f1455076  README.md
 f03c3f7e1c89a87a5c67139f80ec1f8bdfa8aea67f98fcd7e6a7c28706927f3a  components/Alert/Alert.d.ts
 d30c1553dec8a052133d702b544cc63ce611e45db838d114082ff8333affe815  components/Alert/README.md
 a8648be0fcecaf3633c8b2952a22674f83882354954d1bbf43753f3c967fb164  components/AppShell/AppShell.d.ts
@@ -44,14 +50,18 @@ f9462f787019e2c3989bf9c85fd19df1c89d4a433ff6aedf2aae8c7db2a10eda  components/Ava
 08c995656433c0a4e9f4e115bd72d16a0313e8fe5dd4b6c5eb2190a77690423c  components/Avatar/README.md
 55dfda0d05b69162e328958242c95a8f65a15f8fabdbb0b6472b0628d63b4c3e  components/Badge/Badge.d.ts
 a8abf2d5e374af99d5e8402d40f2f449701aff213e5f148b62ae01fdd062d4f6  components/Badge/README.md
+cc7e6aca97383646e60d33bee7fcef1657e86f0cb628208386565bb117ed6f06  components/BarChart/BarChart.d.ts
+00cf8e759f68de0aa05eadd32e593d92ba0148b4118c2dd1e96494afa22148ea  components/BarChart/README.md
 b3dec14da444c4535f24e2282c1806324c6ca17ce78c26df9ec173acd77943d2  components/Button/Button.d.ts
 64e5d3612c7f7a255ae0fe1f7a19400e65ae803117969edab2473fcd65fc3bb1  components/Button/README.md
 4665ed563eea8d883b584a386335e9327f338ad8391b67be0f40fce94bc4a7de  components/Card/Card.d.ts
 2ef1733ee62e885421561b8ebf023c42f7c954a487bc3da1dbe52463947f9754  components/Card/README.md
 406a141f91cef020507b24a87760c899fba32304142d814682564a54e4a7addc  components/Checkbox/Checkbox.d.ts
 c701fb944fe5d2c125a23141a4f3a096071e1a90c745d824106103cf7f5478cd  components/Checkbox/README.md
-570c846370e3218b58a1505c9fdad9c9aa71b7553d6127a662acb62f714fd9aa  components/DataTable/DataTable.d.ts
-53d78689f30947a2dd70f1d8cefa5ae907d1f6065584ff3055695c2f99076d29  components/DataTable/README.md
+71300f01e5b41e33731ef9a7698ea250bd297fcf00fd8f8d04c47cdf5334fae9  components/ColumnChart/ColumnChart.d.ts
+064d0c45d83c8c9b544d1f66e8c410210b7673fd8d7fd81e374eba1325e093b0  components/ColumnChart/README.md
+b5a98ee63c76463363f1bb7e2a44d751148bfea0504b901f255f0003bcb0f7a9  components/DataTable/DataTable.d.ts
+e7ec6295115fa3f66a6981ac36c1f7036bee4760800598868a625e10d61226d0  components/DataTable/README.md
 aaca10374b6dbe0edf0b0cc74d76d3a5799be318b174baf2f610f659451757f5  components/EmptyState/EmptyState.d.ts
 4eb942bde3c7572591203d543f2e3e341cf708eef84a1a564cd38e98534b7849  components/EmptyState/README.md
 20b4065c839e50d2c55702a456c69038d86d44041527fa40ca8a96c1ee51fb64  components/Input/Input.d.ts
@@ -66,6 +76,10 @@ f41bb1bf9d32b0a17a4fd6f2099c7952374d239806d236fab3638a6eae9b6f76  components/Sel
 333c89eda09ecedefb10f17ab531ae7389b55d7cbeceed3f7938d4b78e03e85e  components/Select/Select.d.ts
 1e4cfe147b0d3bba317af70486427e6f00134a8ee9ab65fa88e109a600212843  components/Skeleton/README.md
 331cce77db5d6bf7f022d4b0bccc4b0b20ec7f56ea8b959f5a42ab9d70885b71  components/Skeleton/Skeleton.d.ts
+62605b86ea95714de7fd6cbe324e4134d1bc45684f7632ac775729a4d8d7821e  components/Sparkline/README.md
+6b5ab9e72a1032537d6de1d0e6b9be975edb44b2c39e0a04a56a818acd185040  components/Sparkline/Sparkline.d.ts
+de3d833ee7be44c1214ee1679d070b893e9d2b32c4ebd1f8a500ad1664bfb864  components/StatTile/README.md
+593c01aa0b67b4ceaca4bde75eac2ed3dc3037f7bf80200fdcbb0643bf9f2669  components/StatTile/StatTile.d.ts
 2185b4aa5d4b8c5aa1d00cd0b1afb67711ef237415575ced9d48872f646172ae  components/Switch/README.md
 7a587628e68c9e393de8f59fc1df0071ba220ac38e1acb0d892881b3f6ee240a  components/Switch/Switch.d.ts
 f4f42198ef155fc6d85555df291da05f1ac9290f0dbd62dc8cd05cb2a494a5a3  components/Tabs/README.md
@@ -80,11 +94,16 @@ d8707a15881dd16110e78f0d651447fba11e81d68cfb34863b0164eb5307b1c0  components/Toa
 fb4e796b9c14102892986802ee1e6371344ed3b225f04b38ca4f37edcf2f6223  components/Toolbar/Toolbar.d.ts
 b3de70fa3b0f3f86ab939d66dc87e00df87503df06b97581113b45cb7f567eb4  components/Tooltip/README.md
 726433458f49c1a5a2039ac5e99d591b3cfa88b3f2905b14d1bf068379ac9ed2  components/Tooltip/Tooltip.d.ts
-49708c300d9bfbc3a30b8362dfca28fbb49be2bb1b2d2ec8cecf768c666c82dd  components/bundle.css
-fe551749ee94299d0d8566024b7c4b829b117ee2e33e290ff3de275aea128941  components/index.d.ts
-92912e9603486c5b11bd7cc0a24207b5e7e92155deeb863992615a254d204052  components/src/data/DataTable.jsx
+894df15ebd2832d61cce810a99d6a8be08b7ab786480153eac82c72d2c39eb03  components/bundle.css
+351c4a30dd5c38b2b628cbd65512711366a6ae7d04d409ee5dcd3a13e4dec65b  components/index.d.ts
+8a463b86242b6faf407620ad2b2ed7d8c74cdf60f61566709bc1989d30cea7de  components/src/data/BarChart.jsx
+b5f085796263fddf65eba75a1b649db0a8937a65b65c61077ee6c174146bc882  components/src/data/ColumnChart.jsx
+221be65ab2dc3c6a4be96df3e6d1dd5bb87e9446610382d14c91b8628bd928c1  components/src/data/DataTable.jsx
+440d42be12e78ed2af2f8e08721eae29dfcc92a3e8bf9d575c594be811536ae0  components/src/data/Sparkline.jsx
+1d6d4a17d9069b7203f4b9c6912905660316c9608c5f4b41d2eeb196dcca2fda  components/src/data/StatTile.jsx
 c49b3329d0edc42823feb819e3ae34dc9690ca1eef35df52604bcbe6197c753f  components/src/data/Toolbar.jsx
-262e4944ee2372ce938ed452d71a5ef63d10c3ab84ceb1e295ec5e9c1896132b  components/src/feedback/Alert.jsx
+ef075557a143c6b73768f66a934daa99293039b4fb6261ac26cbd504a9ca3964  components/src/data/chartParts.jsx
+351af1476975f2b7f9b597ec6892d49562fc7a390e93e6b0d27c52af5472cc83  components/src/feedback/Alert.jsx
 b75efcfcb2c2fcf9d776da42daec9eae48aac69e3943bf6d62eb949b7032df43  components/src/feedback/Avatar.jsx
 d6e30d5c071084cf8c69672f5a9c711949c77317daeda250af204916bb8eb12b  components/src/feedback/Badge.jsx
 bad29af9c5aefd6ec05a1e2a71ae83f9a21b81e0e1356f6ea69071f321d159a1  components/src/feedback/Card.jsx
@@ -104,7 +123,11 @@ ec9791c40c3daeff8e26844c28e57eb2a51ee3464bfaee01add33a620906dfb0  components/src
 29e9805c03a0465ea00d36f0378830e044492ef0228d544511a7e4e0cc65e76f  components/src/overlay/Menu.jsx
 1cd4b963407539bd6de7e1ec2b9c8126e88bb868ad1adeb37442b90976c046b8  components/src/overlay/Modal.jsx
 95f1e8a58406012c1ddaebd059706b676ee8b2262e4a2816fc411057bf71d368  components/src/overlay/Tooltip.jsx
-3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62  fonts/inter-latin-wght-normal.woff2
-18be452724bfdc236c074ca94a249a7f41a86752c7d04ab258ce9ed5651f6a7e  fonts/jetbrains-mono-latin-wght-normal.woff2
-9d9e26b0e8b3a68ef2e219a86504e0fbed673b76befd73cbca73013a48c70fbc  tokens.css
-455cbdd7cde3a78c74ac331bef3b35b68b825f838d665333f454b01f820b6a4b  tokens.json
+08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7  fonts/ibm-plex-mono-latin-400-normal.woff2
+01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22  fonts/ibm-plex-mono-latin-500-normal.woff2
+e2291e842cf5af167122a22881a740c7f2dda7716f1e8cd76680264f4a859470  fonts/ibm-plex-sans-latin-wght-normal.woff2
+cb2c5eee2c0a43ff30d2365407c7bc8b20e3bd90720a4a64102ba0b328022a02  fonts/ibm-plex-serif-latin-400-normal.woff2
+677082fc2e9ee60701b874fe5983c98ea9fb3b588cc1b02058ff9bf29ea783e4  fonts/ibm-plex-serif-latin-500-normal.woff2
+e279e4f8baa0d4634d98868092f2198ae0dcd9e142c935822c385b9843352a9b  fonts/ibm-plex-serif-latin-600-normal.woff2
+cf40a7c05062ef842822e77c87356ebcfa771388c670fec506620682046bd31d  tokens.css
+83f1d4ce2f8366c9e96f96db43e0a036412eef3dd6b199ce5f39b5612508e856  tokens.json

@@ -16,6 +16,8 @@
         <Property Name="resurfacePolicy" Type="Edm.String" Nullable="false" />
         <Property Name="score" Type="Edm.Decimal" Scale="variable" />
         <Property Name="createdAt" Type="Edm.DateTimeOffset" Nullable="false" />
+        <Property Name="firstSeenAt" Type="Edm.DateTimeOffset" Nullable="false" />
+        <Property Name="hasApplication" Type="Edm.Boolean" Nullable="false" />
         <Property Name="updatedAt" Type="Edm.DateTimeOffset" Nullable="false" />
       </EntityType>
       <EntityType Name="CompanyReadModel">
@@ -44,6 +46,9 @@
         <Property Name="hasInterview" Type="Edm.Boolean" Nullable="false" />
         <Property Name="firstResponseAt" Type="Edm.DateTimeOffset" />
         <Property Name="lastEventAt" Type="Edm.DateTimeOffset" />
+        <Property Name="hasOffer" Type="Edm.Boolean" Nullable="false" />
+        <Property Name="hasRejection" Type="Edm.Boolean" Nullable="false" />
+        <Property Name="rejectedBeforeInterview" Type="Edm.Boolean" Nullable="false" />
         <Property Name="ageInDays" Type="Edm.Int32" Nullable="false" />
       </EntityType>
       <EntityType Name="NoteReadModel">

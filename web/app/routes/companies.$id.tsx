@@ -1,4 +1,5 @@
 import * as React from "react";
+import { Brand } from "../components/Brand.js";
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router";
 import { useLoaderData, useFetcher, useRevalidator, Link, data } from "react-router";
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
@@ -313,7 +314,7 @@ export default function CompanyDetail() {
 
   return (
     <AppShell
-      brand="RoleRadar"
+      brand={<Brand />}
       title={company.name}
       userLabel={loaderData.userLabel}
       signOut={signOutForm}
@@ -353,7 +354,7 @@ export default function CompanyDetail() {
             }}
           >
             <div>
-              <h2 style={{ margin: 0, fontSize: "var(--ds-text-2xl)", fontWeight: 700 }}>
+              <h2 className="page-heading" style={{ margin: 0, fontSize: "var(--ds-text-2xl)", fontWeight: 700 }}>
                 {company.name}
               </h2>
               <div
@@ -394,7 +395,7 @@ export default function CompanyDetail() {
             <input type="hidden" name="categoryTags" value={JSON.stringify(categoryTags)} />
             <input type="hidden" name="careerSources" value={JSON.stringify(careerSources)} />
 
-            <h2 style={{ margin: 0, fontSize: "var(--ds-text-lg)", fontWeight: 600 }}>
+            <h2 className="page-heading" style={{ margin: 0, fontSize: "var(--ds-text-lg)", fontWeight: 600 }}>
               Edit Company Profile
             </h2>
 

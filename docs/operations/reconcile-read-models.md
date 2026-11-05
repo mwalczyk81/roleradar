@@ -2,17 +2,32 @@
 
 ## Overview
 
-Read models in RoleRadar maintain denormalized, queryable, and pre-indexed fields in MongoDB collections to support fast server-side OData queries (e.g. `disposition_rank`, `company_name`, `has_score` on postings; `status`, `applied_at`, `company_id`, `posting_title`, `company_name`, `has_interview`, `first_response_at`, `last_event_at`, `has_first_response`, `has_last_event` on applications; `has_effective_to` on criteria).
+Read models in RoleRadar maintain denormalized, queryable, and pre-indexed fields in MongoDB collections to support fast server-side OData queries (e.g. `disposition_rank`, `company_name`, `has_score`, `has_application` on postings; `status`, `applied_at`, `company_id`, `posting_title`, `company_name`, `has_interview`, `first_response_at`, `last_event_at`, `has_first_response`, `has_last_event`, `has_offer`, `has_rejection`, `rejected_before_interview` on applications; `has_effective_to` on criteria).
 
 When schema versions change, migrations occur, or data is restored from legacy snapshots, read models must be reconciled to backfill or re-sync these computed fields.
 
 ## Semantics & Boundaries
 
-- **Derived Fields Only**: Reconciliation only writes derived/denormalized fields (`disposition_rank`, `company_name`, `has_score` for postings; `status`, `applied_at`, `company_id`, `posting_title`, `company_name`, `has_interview`, `first_response_at`, `last_event_at`, `has_first_response`, `has_last_event` for applications; `has_effective_to` for criteria). It does **not** modify `updated_at` timestamps on documents.
+- **Derived Fields Only**: Reconciliation only writes derived/denormalized fields (`disposition_rank`, `company_name`, `has_score`, `has_application` for postings; `status`, `applied_at`, `company_id`, `posting_title`, `company_name`, `has_interview`, `first_response_at`, `last_event_at`, `has_first_response`, `has_last_event`, `has_offer`, `has_rejection`, `rejected_before_interview` for applications; `has_effective_to` for criteria). It does **not** modify `updated_at` timestamps on documents.
 - **Collections Covered**: postings, applications and criteria. Companies, notes and search runs add no derived fields (their OData read models read the stored fields directly), so they need no backfill.
 - **No Audit Entries**: Reconciliation is an operational backfill/maintenance procedure, not a domain action; it does **not** record audit trail entries.
 - **Global Scope (Not Owner-Scoped)**: Reconciliation runs across all documents across all owners in the database to align read models globally.
 - **Transactional Cascades**: Company renames and posting title changes automatically cascade transactionally across postings and applications at runtime. Reconciliation serves as the safe backfill mechanism for data imported before cascades were active or restored from legacy snapshots.
+
+## Insights fields (feature 007)
+
+The Insights dashboard and its drill-down filters rely on four derived fields added by feature 007. They are written only at the repository choke point (and here), and they are not user-editable:
+
+| Collection | Field | Meaning |
+| --- | --- | --- |
+| postings | `has_application` | an application exists for the posting |
+| applications | `has_offer` | any `offer` event |
+| applications | `has_rejection` | any `rejected` event |
+| applications | `rejected_before_interview` | a rejection with no `interview` event dated on or before the earliest rejection; false without a rejection |
+
+(`first_seen_at` on postings is stored already and needs no backfill.)
+
+Documents written before feature 007 lack these fields. Run the procedure below after deploying the feature. Until it has run, the Insights page shows "needs backfill" instead of numbers that depend on them, because a MongoDB filter such as `{ field: false }` does not match a document that lacks the field. The first dry run is expected to report every posting and every application as needing an update; the dry run after the confirmed run must report zero.
 
 ## Operational Rules & Safety
 

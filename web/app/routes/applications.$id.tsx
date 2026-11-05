@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs, ActionFunctionArgs, MetaFunction } from "react-router";
+import { Brand } from "../components/Brand.js";
 import { useLoaderData, useFetcher, useRevalidator, Link, data } from "react-router";
 import React from "react";
 import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
@@ -307,7 +308,7 @@ export default function ApplicationDetail() {
 
   return (
     <AppShell
-      brand="RoleRadar"
+      brand={<Brand />}
       title={`Application: ${loaderData.posting.title}`}
       userLabel={loaderData.userLabel}
       signOut={signOutForm}
@@ -347,7 +348,7 @@ export default function ApplicationDetail() {
             }}
           >
             <div>
-              <h2 style={{ margin: "0 0 var(--ds-space-1) 0", fontSize: "var(--ds-text-xl)" }}>
+              <h2 className="page-heading" style={{ margin: "0 0 var(--ds-space-1) 0", fontSize: "var(--ds-text-xl)" }}>
                 {loaderData.posting.title}
               </h2>
               <div
@@ -404,7 +405,7 @@ export default function ApplicationDetail() {
               marginBottom: "var(--ds-space-4)",
             }}
           >
-            <h3 style={{ margin: 0, fontSize: "var(--ds-text-base)" }}>
+            <h3 className="page-heading" style={{ margin: 0, fontSize: "var(--ds-text-base)" }}>
               Application History & Timeline ({application.events.length} event{application.events.length === 1 ? "" : "s"})
             </h3>
           </div>

@@ -12,5 +12,6 @@ export function getNavItems(pathname: string): AppShellNavItem[] {
     { label: "Criteria", href: "/criteria", active: pathname.startsWith("/criteria") },
     { label: "Notes", href: "/notes", active: pathname.startsWith("/notes") },
     { label: "Search Runs", href: "/search-runs", active: pathname.startsWith("/search-runs") },
+    { label: "Insights", href: "/insights", active: pathname.startsWith("/insights") },
   ];
 }

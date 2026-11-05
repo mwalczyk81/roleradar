@@ -18,10 +18,11 @@ Entity sets: `Postings`, `Companies`, `Applications`, `Notes`, `Criteria`, `Sear
 ## Rules
 
 - Supported query options: `$filter`, `$orderby`, `$select`, `$count`, `$top`, `$skip`. Everything else (`$expand`, `$search`, `$apply`, ...) is rejected.
-- `$top`: default **25**, maximum **100**. `$skip` pages through the rest.
+- `$top`: default **25**, maximum **100**. `$skip` pages through the rest. `$top=0` is a valid count-only request: no rows are read, `value` is empty, and `@odata.count` is returned when `$count=true`.
 - `$filter`: at most **100** expression nodes and nesting depth **10**. Allowed operators: `eq ne gt ge lt le and or not`. Allowed functions: `tolower contains startswith endswith`. No arithmetic, no `any`/`all`.
 - String search must be lowercase on both sides: wrap the property in `tolower()` and give a lowercase literal, for example `contains(tolower(title),'engineer')`. A bare `contains(title,'x')`, or a literal with capitals, is rejected with 400.
 - `$orderby` accepts only the fields listed per set below, at most 5 of them. Rows without a value for a nullable field (`score`, `firstResponseAt`, `lastEventAt`, `effectiveTo`) sort last in both directions.
+- A repeated `$orderby` key is ignored: the **first occurrence wins**, including its direction (`$orderby=title desc,title` sorts by `title desc`), and it still counts toward the 5-key limit. Properties that sort on the same stored field are the same key (`ageInDays` and `appliedAt` on Applications). Naming `id` is allowed; the stable `id` tiebreaker is then not added a second time. The 400s for properties outside the allowlist are unchanged.
 - Without `$orderby` the order is stable: companies and criteria by name, notes by `updatedAt` descending, search runs by `runDate` descending, postings and applications by `id`.
 - Responses use the standard OData envelope: `{ "value": [ ... ] }`, plus `"@odata.count": <n>` when `$count=true`. The count is the number of rows matching `$filter`, ignoring `$top` and `$skip`.
 - Notes return metadata only. The note body (`content`, up to 8 MiB) is never in a list response unless you name it in `$select`, and it cannot be filtered or sorted on.
@@ -46,7 +47,7 @@ curl -s -i -X DELETE -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings"
 
 ## Postings
 
-Orderable: `title`, `companyName`, `location`, `disposition`, `resurfacePolicy`, `score`, `createdAt`, `updatedAt`, `id`. All properties are filterable.
+Orderable: `title`, `companyName`, `location`, `disposition`, `resurfacePolicy`, `score`, `createdAt`, `updatedAt`, `id`. All properties are filterable, including `firstSeenAt` (when RoleRadar first recorded the posting; filter only, not sortable) and `hasApplication` (true when an application exists for the posting; filter only, not sortable). `hasApplication eq true` is the "postings I applied to" view.
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$filter=contains(tolower(title),'engineer')%20and%20disposition%20eq%20'applied'"
@@ -54,6 +55,8 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$orderby=score%
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$select=id,title,companyName,score"
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$count=true&\$top=5"
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$top=10&\$skip=20"
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$filter=hasApplication%20eq%20true&\$count=true&\$top=0"
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Postings?\$filter=firstSeenAt%20ge%202026-01-01T00:00:00Z%20and%20firstSeenAt%20lt%202026-04-01T00:00:00Z&\$count=true&\$top=0"
 ```
 
 ## Companies
@@ -70,7 +73,7 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Companies?\$top=10&\$skip
 
 ## Applications
 
-Orderable: `postingTitle`, `companyName`, `status`, `appliedAt`, `hasInterview`, `firstResponseAt`, `lastEventAt`, `ageInDays`, `id`. Filterable: everything except `ageInDays`.
+Orderable: `postingTitle`, `companyName`, `status`, `appliedAt`, `hasInterview`, `firstResponseAt`, `lastEventAt`, `ageInDays`, `id`. Filterable: everything except `ageInDays`. The booleans `hasOffer` (any offer event), `hasRejection` (any rejected event) and `rejectedBeforeInterview` (a rejection with no interview on or before its date; false without a rejection) are filter only, not sortable. To select applications at least N days old, filter on `appliedAt` instead of `ageInDays`.
 
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$filter=hasInterview%20eq%20true%20and%20appliedAt%20ge%202026-01-01T00:00:00Z"
@@ -78,6 +81,8 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$orderby=la
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$select=id,postingTitle,companyName,status,appliedAt"
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$count=true&\$top=5"
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$top=25&\$skip=25"
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$filter=hasOffer%20eq%20true&\$count=true&\$top=0"
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE/odata/Applications?\$filter=hasRejection%20eq%20true%20and%20rejectedBeforeInterview%20eq%20false&\$count=true&\$top=0"
 ```
 
 ## Notes

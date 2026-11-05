@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { Brand } from "../components/Brand.js";
 import { useLoaderData, useNavigate, useSearchParams, Link } from "react-router";
 import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
 import { fetchOData } from "../lib/api-client.server.js";
@@ -11,6 +12,7 @@ import {
   isApplicationOutcome,
 } from "../lib/application-enums.js";
 import { buildODataQuery, type FilterExpression, type OrderByClause } from "../lib/odata-client.js";
+import { lensChipLabel, lensFilter, parseLensParams } from "../lib/insights-lenses.js";
 import {
   AppShell,
   DataTable,
@@ -74,6 +76,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const direction: "asc" | "desc" = url.searchParams.get("direction") === "asc" ? "asc" : "desc";
 
   const filterParts: FilterExpression[] = [];
+
+  // An Insights drill-down: the same filter the dashboard counted with, from the shared lens module.
+  const lens = parseLensParams(url, "applications");
+  if (lens) {
+    filterParts.push(lensFilter(lens.key, lens.ctx));
+  }
 
   if (statusFilter) {
     filterParts.push({
@@ -155,6 +163,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     sort,
     direction,
     statusFilter: statusFilter || "",
+    lens: lens ? { key: lens.key, label: lensChipLabel(lens), window: lens.ctx.window, asOf: lens.ctx.asOf } : null,
     csrfToken: session.csrfToken,
     userLabel: session.ownerUsername || "Signed in",
   };
@@ -294,7 +303,7 @@ export default function ApplicationsIndex() {
 
   return (
     <AppShell
-      brand="RoleRadar"
+      brand={<Brand />}
       title="Applications"
       userLabel={data.userLabel}
       signOut={signOutForm}
@@ -304,6 +313,27 @@ export default function ApplicationsIndex() {
       onThemeToggle={toggleTheme}
     >
       <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+        {data.lens ? (
+          <div className="lens-chip" role="group" aria-label="Insights filter">
+            <span className="lens-chip-text">Insights: {data.lens.label}</span>
+            <button
+              type="button"
+              className="lens-chip-remove"
+              aria-label={`Remove filter Insights: ${data.lens.label}`}
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.delete("lens");
+                next.delete("window");
+                next.delete("asOf");
+                next.set("offset", "0");
+                setSearchParams(next);
+              }}
+            >
+              ×
+            </button>
+          </div>
+        ) : null}
+
         {/* Status Filter Bar */}
         <div
           style={{
@@ -353,6 +383,7 @@ export default function ApplicationsIndex() {
 
         {/* Applications Data Table */}
         <DataTable
+          sortScope="all"
           caption="Tracked Job Applications"
           columns={columns}
           data={data.items}

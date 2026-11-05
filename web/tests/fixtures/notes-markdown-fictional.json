@@ -1,0 +1,10 @@
+{
+  "id": "0d6f2c1e-6b1a-4c1d-9c35-7a1f0e2b4d10",
+  "heading": "Fictional hostile markdown note",
+  "content": "# Top level heading\n\nOpening paragraph with **bold**, ~~struck~~ text, a [safe link](https://example.com/safe) and a bare https://example.com/bare link.\nThis line follows a single newline.\n\n<script>window.__pwned = 'script'</script>\n\n<img src=\"https://evil.example/pixel.png\" onerror=\"window.__pwned = 'onerror'\">\n\n<iframe src=\"https://evil.example/frame\"></iframe>\n\n<style>body { display: none }</style>\n\n[js](javascript:window.__pwned='js') [data](data:text/html,<script>window.__pwned='data'</script>) [vb](vbscript:msgbox(1)) [mixed](JaVaScRiPt:window.__pwned='mixed') [tab](java&#x09;script:window.__pwned='tab') [space]( javascript:window.__pwned='space') [proto](//evil.example/track) [relative](/postings/1) [mail](mailto:person@example.com)\n\n![tracker](https://evil.example/tracker.gif)\n\n[![logo](https://evil.example/logo.png)](https://example.com/home)\n\nVisit www.example.com or write person@example.com.\n\n## Wide table\n\n| Column A | Column B | Column C | Column D | Column E | Column F | Column G | Column H | Column I | Column J |\n| :--- | ---: | --- | --- | --- | --- | --- | --- | --- | --- |\n| Alpha quarterly planning value | Beta quarterly planning value | Gamma quarterly planning value | Delta quarterly planning value | Epsilon quarterly planning value | Zeta quarterly planning value | Eta quarterly planning value | Theta quarterly planning value | Iota quarterly planning value | Kappa quarterly planning value |\n| 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |\n\n## Checklist\n\n- [x] done item\n- [ ] open item\n\nA footnote reference[^1] sits here.\n\n[^1]: The footnote body.\n\n```text\ncode <b>not bold</b> stays literal\n```\n\n> A quoted line.\n",
+  "tags": ["fictional", "markdown"],
+  "linkedEntityType": null,
+  "linkedEntityId": null,
+  "createdAt": "2026-09-01T09:00:00Z",
+  "updatedAt": "2026-09-02T10:30:00Z"
+}
