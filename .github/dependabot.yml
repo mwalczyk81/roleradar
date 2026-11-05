@@ -31,6 +31,10 @@ updates:
       docker:
         patterns:
           - "*"
+    ignore:
+      # AGENTS.md pins Node 22 (LTS); 25 is not an LTS line. Moving the Node major is a deliberate change with its own PR.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -60,11 +64,11 @@ updates:
         patterns:
           - "*"
 
-  # pnpm workspace: root (Nx, scripts) and web/. Dependabot reads pnpm-lock.yaml through the npm ecosystem.
+  # pnpm workspace: one root pnpm-lock.yaml covers the root package and web/. Dependabot reads it through the npm
+  # ecosystem from "/" only. Listing "/web" as well opened every bump twice, and the "/web" copies edited
+  # web/package.json without the lockfile, so they could never pass CI.
   - package-ecosystem: "npm"
-    directories:
-      - "/"
-      - "/web"
+    directory: "/"
     schedule:
       interval: "weekly"
     cooldown:
@@ -76,9 +80,31 @@ updates:
         update-types:
           - "minor"
           - "patch"
+      # The lint, test and build tooling majors move together, so they arrive as one PR instead of one per package.
+      npm-tooling-major:
+        patterns:
+          - "eslint"
+          - "@eslint/*"
+          - "typescript-eslint"
+          - "jsdom"
+          - "vite"
+          - "vitest"
+          - "@vitest/*"
+        update-types:
+          - "major"
     ignore:
+      # Types track the Node 22 runtime (AGENTS.md); 26.x types would describe APIs that do not exist there.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
       # 005b stays on React Router v7 (spec FR-001) although 8.x exists; revisit with its own spec.
       - dependency-name: "react-router"
         update-types: ["version-update:semver-major"]
       - dependency-name: "@react-router/*"
+        update-types: ["version-update:semver-major"]
+      # Parked majors (see "Tooling majors parked" on the RoleRadar board). Remove an entry when its upgrade is scheduled.
+      # TypeScript 7 is a different toolchain and typescript-eslint does not support it yet.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # cookie 2 changes session and auth handling; it needs code changes and its own tests, not a version bump.
+      - dependency-name: "cookie"
         update-types: ["version-update:semver-major"]
