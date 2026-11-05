@@ -24,7 +24,8 @@ repos:
         args: ["--markdown-linebreak-ext=md"]
         exclude: (^|/)fixtures/
       - id: end-of-file-fixer
-        exclude: (^|/)fixtures/|^contracts/openapi/|(^|/)packages\.lock\.json$
+        # Dependabot rewrites packages.lock.json and the dotnet tool manifest without a trailing newline.
+        exclude: (^|/)fixtures/|^contracts/openapi/|(^|/)packages\.lock\.json$|^\.config/dotnet-tools\.json$
       - id: mixed-line-ending
         exclude: (^|/)fixtures/
 
