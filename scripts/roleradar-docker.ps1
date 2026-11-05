@@ -56,6 +56,13 @@ $dockerArgs.Add('ALL')
 $dockerArgs.Add('--security-opt')
 $dockerArgs.Add('no-new-privileges')
 
+# Optional: join an existing Docker network (for example the compose network, deploy_default, so that the hostname
+# "mongo" resolves). Unset or blank keeps the default: no --network option, exactly as before.
+if (-not [string]::IsNullOrWhiteSpace($env:ROLERADAR_DOCKER_NETWORK)) {
+    $dockerArgs.Add('--network')
+    $dockerArgs.Add($env:ROLERADAR_DOCKER_NETWORK.Trim())
+}
+
 $envVarsToPass = @(
     'ROLERADAR_MONGO_CONNECTION_STRING',
     'ROLERADAR_MONGO_DATABASE',

@@ -24,7 +24,8 @@ repos:
         args: ["--markdown-linebreak-ext=md"]
         exclude: (^|/)fixtures/
       - id: end-of-file-fixer
-        exclude: (^|/)fixtures/|^contracts/openapi/|(^|/)packages\.lock\.json$
+        # Dependabot rewrites packages.lock.json and the dotnet tool manifest without a trailing newline.
+        exclude: (^|/)fixtures/|^contracts/openapi/|(^|/)packages\.lock\.json$|^\.config/dotnet-tools\.json$
       - id: mixed-line-ending
         exclude: (^|/)fixtures/
 
@@ -32,7 +33,7 @@ repos:
     rev: v0.24.0
     hooks:
       - id: markdownlint-cli2
-        exclude: (^|/)fixtures/|^\.specify/|^\.agents/|^specs/|^web/app/ds/
+        exclude: (^|/)fixtures/|^\.specify/|^\.agents/|^\.claude/|^specs/|^web/app/ds/
 
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
     rev: v1.31.1

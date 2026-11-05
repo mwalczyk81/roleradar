@@ -7,4 +7,12 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
+
+  <!-- RoleRadar.Infrastructure requires access to internal read-model properties (e.g. OwnerId, DispositionRank, HasScore)
+       for BsonClassMap registration and MongoDB driver expression mapping without exposing them publicly or in OData $metadata. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleTo">
+      <_Parameter1>RoleRadar.Infrastructure</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>

@@ -1,7 +1,6 @@
-import type { LoaderFunctionArgs } from "react-router";
-import { useLoaderData, Link } from "react-router";
-import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
-import { createApiClient } from "../lib/api-client.server.js";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { useLoaderData, useSearchParams, Link } from "react-router";
+import { requireUserSession } from "../lib/auth-guard.server.js";
 import { useTheme } from "../lib/use-theme.js";
 import { getNavItems } from "../lib/nav.js";
 import { formatDate } from "../lib/format-date.js";
@@ -9,36 +8,74 @@ import {
   CRITERION_CATEGORY_METADATA,
   isCriterionCategory,
 } from "../lib/operational-enums.js";
+import { buildODataQuery, toODataDateTime, type FilterExpression, type ODataDateTime } from "../lib/odata-client.js";
+import { loadODataList, parsePaging, parseSort } from "../lib/odata-list.server.js";
 import { AppShell, DataTable, Badge, Button, type DataTableColumn } from "../ui.js";
-import type { components } from "../../../contracts/client/api-types.js";
 
-type CriterionDto = components["schemas"]["CriterionDto"];
+export interface CriterionODataModel {
+  id: string;
+  name: string;
+  category: string;
+  ruleText: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  isActive: boolean;
+}
+
+export const ALLOWED_SORT_FIELDS = ["name", "category", "effectiveFrom", "effectiveTo", "isActive"] as const;
+
+export const meta: MetaFunction = () => [{ title: "Screening Criteria - RoleRadar" }];
+
+/** Criteria in force on a date: started on or before it, and either open-ended or ending after it (end date exclusive, like Criterion.IsEffectiveAt). */
+function effectiveOnFilter(date: ODataDateTime): FilterExpression {
+  return {
+    type: "binary",
+    operator: "and",
+    left: { type: "comparison", operator: "le", field: "effectiveFrom", value: date },
+    right: {
+      type: "binary",
+      operator: "or",
+      left: { type: "comparison", operator: "eq", field: "effectiveTo", value: null },
+      right: { type: "comparison", operator: "gt", field: "effectiveTo", value: date },
+    },
+  };
+}
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const session = await requireUserSession(request);
   const url = new URL(request.url);
 
-  const effectiveDate = url.searchParams.get("effectiveDate") || undefined;
+  const { limit, offset } = parsePaging(url);
+  const { sort, direction } = parseSort(url, ALLOWED_SORT_FIELDS, { field: "name", direction: "asc" });
 
-  const client = createApiClient(session.accessToken);
-  const { data, response, error } = await client.GET("/api/v1/criteria", {
-    params: {
-      query: {
-        effectiveDate,
-      },
-    },
+  // An unparseable effectiveDate is dropped rather than forwarded to the API.
+  const rawEffectiveDate = (url.searchParams.get("effectiveDate") ?? "").trim();
+  const effectiveOn = toODataDateTime(rawEffectiveDate);
+
+  const queryString = buildODataQuery({
+    filter: effectiveOn ? effectiveOnFilter(effectiveOn) : undefined,
+    orderBy: [{ field: sort, direction }],
+    top: limit,
+    skip: offset,
+    count: true,
   });
 
-  await assertApiOk(response, request, session.sessionId);
-
-  if (error || !data) {
-    throw new Response(error?.message || "Failed to load screening criteria", {
-      status: response.status || 500,
-    });
-  }
+  const { items, totalCount } = await loadODataList<CriterionODataModel>({
+    path: "/odata/Criteria",
+    queryString,
+    request,
+    session,
+    failureMessage: "Failed to load screening criteria",
+  });
 
   return {
-    items: data,
+    items,
+    totalCount,
+    limit,
+    offset,
+    sort,
+    direction,
+    effectiveDate: effectiveOn ? rawEffectiveDate : "",
     csrfToken: session.csrfToken,
     userLabel: session.ownerUsername || "Signed in",
   };
@@ -46,6 +83,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function CriteriaIndex() {
   const data = useLoaderData<typeof loader>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { theme, toggleTheme } = useTheme();
 
   const navItems = getNavItems("/criteria");
@@ -59,10 +97,12 @@ export default function CriteriaIndex() {
     </form>
   );
 
-  const columns: DataTableColumn<CriterionDto>[] = [
+  const columns: DataTableColumn<CriterionODataModel>[] = [
     {
       key: "name",
       header: "Rule Name",
+      sortable: true,
+      sortValue: () => 0,
       render: (row) => (
         <span style={{ fontWeight: "var(--ds-weight-medium)", color: "var(--ds-text)" }}>
           {row.name}
@@ -70,12 +110,14 @@ export default function CriteriaIndex() {
       ),
     },
     {
-      key: "weight",
+      key: "category",
       header: "Category / Weight",
+      sortable: true,
+      sortValue: () => 0,
       render: (row) => {
-        const meta = isCriterionCategory(row.weight)
-          ? CRITERION_CATEGORY_METADATA[row.weight]
-          : { label: row.weight, tone: "neutral" as const };
+        const meta = isCriterionCategory(row.category)
+          ? CRITERION_CATEGORY_METADATA[row.category]
+          : { label: row.category, tone: "neutral" as const };
         return <Badge tone={meta.tone}>{meta.label}</Badge>;
       },
     },
@@ -98,16 +140,24 @@ export default function CriteriaIndex() {
     {
       key: "effectiveFrom",
       header: "Effective From",
-      render: (row) => <span>{formatDate(row.effectiveFrom)}</span>,
+      sortable: true,
+      sortValue: () => 0,
+      render: (row) => <span style={{ whiteSpace: "nowrap" }}>{formatDate(row.effectiveFrom)}</span>,
     },
     {
       key: "effectiveTo",
       header: "Effective To",
-      render: (row) => <span>{row.effectiveTo ? formatDate(row.effectiveTo) : "Present"}</span>,
+      sortable: true,
+      sortValue: () => 0,
+      render: (row) => (
+        <span style={{ whiteSpace: "nowrap" }}>{row.effectiveTo ? formatDate(row.effectiveTo) : "Present"}</span>
+      ),
     },
     {
       key: "isActive",
       header: "Status",
+      sortable: true,
+      sortValue: () => 0,
       render: (row) => (
         <Badge tone={row.isActive ? "success" : "neutral"}>
           {row.isActive ? "Active" : "Inactive"}
@@ -133,6 +183,25 @@ export default function CriteriaIndex() {
           columns={columns}
           data={data.items}
           keyField="id"
+          sortColumn={data.sort}
+          sortDirection={data.direction}
+          onSortChange={(col, dir) => {
+            const next = new URLSearchParams(searchParams);
+            next.set("sort", col);
+            next.set("direction", dir);
+            next.set("offset", "0");
+            setSearchParams(next);
+          }}
+          pagination={{
+            total: data.totalCount,
+            limit: data.limit,
+            offset: data.offset,
+            onPageChange: (newOffset) => {
+              const next = new URLSearchParams(searchParams);
+              next.set("offset", String(newOffset));
+              setSearchParams(next);
+            },
+          }}
           emptyMessage="No criteria found."
         />
       </div>

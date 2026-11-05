@@ -263,11 +263,49 @@ public sealed class MongoPostingRepository : IPostingRepository
             Builders<BsonDocument>.Filter.Eq("owner_id", posting.OwnerId),
             Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(posting.Id, GuidRepresentation.Standard)));
 
-        var doc = SerializePosting(posting);
+        var companyName = string.Empty;
+        var companies = _database.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName);
+        var companyFilter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("owner_id", posting.OwnerId),
+            Builders<BsonDocument>.Filter.Eq("_id", new BsonBinaryData(posting.CompanyId, GuidRepresentation.Standard)));
         var session = MongoNoteRepository.CurrentSession;
+        var companyDoc = session is not null
+            ? await companies.Find(session, companyFilter).FirstOrDefaultAsync(cancellationToken)
+            : await companies.Find(companyFilter).FirstOrDefaultAsync(cancellationToken);
+
+        if (companyDoc is not null && companyDoc.Contains("name") && !companyDoc["name"].IsBsonNull)
+        {
+            companyName = companyDoc["name"].AsString;
+        }
+
+        var doc = SerializePosting(posting, companyName);
         var result = session is not null
             ? await _postings.ReplaceOneAsync(session, filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken)
             : await _postings.ReplaceOneAsync(filter, doc, new ReplaceOptions { IsUpsert = true }, cancellationToken);
+
+        // Transactional rename cascade to applications
+        var appsCollection = _database.GetCollection<BsonDocument>(TrackingMongoOptions.ApplicationsCollectionName);
+        var postFilter = Builders<BsonDocument>.Filter.And(
+            Builders<BsonDocument>.Filter.Eq("owner_id", posting.OwnerId),
+            Builders<BsonDocument>.Filter.Eq("posting_id", new BsonBinaryData(posting.Id, GuidRepresentation.Standard)));
+
+        var postTitleUpdate = Builders<BsonDocument>.Update
+            .Set("posting_title", posting.Title);
+
+        if (!string.IsNullOrWhiteSpace(companyName))
+        {
+            postTitleUpdate = postTitleUpdate.Set("company_name", companyName);
+        }
+
+        if (session is not null)
+        {
+            await appsCollection.UpdateManyAsync(session, postFilter, postTitleUpdate, cancellationToken: cancellationToken);
+        }
+        else
+        {
+            await appsCollection.UpdateManyAsync(postFilter, postTitleUpdate, cancellationToken: cancellationToken);
+        }
+
         return Result<bool>.Success(result.IsAcknowledged);
     }
 
@@ -373,8 +411,23 @@ public sealed class MongoPostingRepository : IPostingRepository
         return Result<ILookup<Guid, PostingSignal>>.Success(list.ToLookup(s => s.PostingId));
     }
 
-    private static BsonDocument SerializePosting(Posting p)
+    public static int MapDispositionRank(PostingDisposition disposition) => disposition switch
     {
+        PostingDisposition.Unscored => 0,
+        PostingDisposition.Lead => 1,
+        PostingDisposition.Scored => 2,
+        PostingDisposition.Applied => 3,
+        PostingDisposition.Rejected => 4,
+        PostingDisposition.ScreenedOut => 5,
+        PostingDisposition.Closed => 6,
+        _ => throw new ArgumentOutOfRangeException(nameof(disposition), disposition, $"Unknown posting disposition '{disposition}'.")
+    };
+
+    internal static BsonDocument SerializePosting(Posting p, string? companyName = null)
+    {
+        var rank = MapDispositionRank(p.Disposition);
+        var hasScore = p.Score.HasValue;
+
         var comp = new BsonDocument
         {
             ["min"] = p.Compensation.Min.HasValue ? new BsonDecimal128(p.Compensation.Min.Value) : BsonNull.Value,
@@ -388,6 +441,7 @@ public sealed class MongoPostingRepository : IPostingRepository
             ["_id"] = new BsonBinaryData(p.Id, GuidRepresentation.Standard),
             ["owner_id"] = p.OwnerId,
             ["company_id"] = new BsonBinaryData(p.CompanyId, GuidRepresentation.Standard),
+            ["company_name"] = companyName ?? string.Empty,
             ["title"] = p.Title,
             ["normalized_title"] = p.NormalizedTitle,
             ["original_url"] = p.OriginalUrl is not null ? new BsonString(p.OriginalUrl) : BsonNull.Value,
@@ -407,9 +461,11 @@ public sealed class MongoPostingRepository : IPostingRepository
             ["last_verified_at"] = new BsonDateTime(p.LastVerifiedAt.UtcDateTime),
             ["closed_date"] = p.ClosedDate is not null ? new BsonString(p.ClosedDate) : BsonNull.Value,
             ["score"] = p.Score.HasValue ? new BsonDecimal128(p.Score.Value) : BsonNull.Value,
+            ["has_score"] = hasScore,
             ["culture_level"] = p.CultureLevel.ToSnakeCase(),
             ["culture_summary"] = p.CultureSummary is not null ? new BsonString(p.CultureSummary) : BsonNull.Value,
             ["disposition"] = p.Disposition.ToSnakeCase(),
+            ["disposition_rank"] = rank,
             ["disposition_reason"] = p.DispositionReason is not null ? new BsonString(p.DispositionReason) : BsonNull.Value,
             ["disposition_criterion_id"] = p.DispositionCriterionId.HasValue
                 ? new BsonBinaryData(p.DispositionCriterionId.Value, GuidRepresentation.Standard)

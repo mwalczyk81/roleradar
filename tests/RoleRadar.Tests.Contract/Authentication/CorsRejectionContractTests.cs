@@ -68,7 +68,7 @@ public sealed class CorsRejectionContractTests : IAsyncLifetime
     [Fact]
     public async Task PreflightOptionsRequestWithOriginHeader_ReceivesZeroAccessControlAllowOriginHeaders()
     {
-        using var request = new HttpRequestMessage(HttpMethod.Options, "/api/v1/criteria");
+        using var request = new HttpRequestMessage(HttpMethod.Options, "/odata/Criteria");
         request.Headers.Add("Origin", "https://browser-app.example.com");
         request.Headers.Add("Access-Control-Request-Method", "GET");
 

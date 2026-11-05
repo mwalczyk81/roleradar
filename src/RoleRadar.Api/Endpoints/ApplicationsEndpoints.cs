@@ -19,9 +19,6 @@ public static class ApplicationsEndpoints
         var writeGroup = group.MapGroup(string.Empty)
             .RequireAuthorization(Program.WritePolicyName);
 
-        readGroup.MapGet("/applications", ListApplicationsAsync)
-            .Produces<PagedResult<ApplicationDetailDto>>(StatusCodes.Status200OK)
-            .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest);
         readGroup.MapGet("/applications/{id:guid}", GetApplicationByIdAsync)
             .Produces<ApplicationDetailDto>(StatusCodes.Status200OK)
             .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
@@ -34,49 +31,6 @@ public static class ApplicationsEndpoints
             .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest)
             .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
         return group;
-    }
-
-    private static async Task<IResult> ListApplicationsAsync(
-        string? status,
-        int? limit,
-        int? offset,
-        IOwnerIdProvider ownerIdProvider,
-        IApplicationRepository applicationRepository,
-        IPostingRepository postingRepository,
-        CancellationToken cancellationToken)
-    {
-        var ownerId = ownerIdProvider.GetOwnerId().Value;
-        var clampedLimit = Math.Clamp(limit is null or <= 0 ? 50 : limit.Value, 1, 200);
-        var clampedOffset = Math.Max(0, offset ?? 0);
-
-        var listRes = await applicationRepository.ListApplicationsAsync(
-            ownerId,
-            outcome: string.IsNullOrWhiteSpace(status) ? null : status.Trim(),
-            page: 1,
-            pageSize: 1000,
-            cancellationToken);
-
-        if (!listRes.IsSuccess || listRes.Value is null)
-        {
-            return ErrorEnvelope.FromResultError(listRes.Error);
-        }
-
-        var allApps = listRes.Value;
-        var totalCount = allApps.Count;
-        var pagedApps = allApps.Skip(clampedOffset).Take(clampedLimit).ToList();
-
-        var items = new List<ApplicationDetailDto>(pagedApps.Count);
-        foreach (var app in pagedApps)
-        {
-            var dto = await BuildApplicationDtoAsync(ownerId, app, applicationRepository, postingRepository, cancellationToken);
-            items.Add(dto);
-        }
-
-        return Results.Ok(new PagedResult<ApplicationDetailDto>(
-            Items: items,
-            TotalCount: totalCount,
-            Limit: clampedLimit,
-            Offset: clampedOffset));
     }
 
     private static async Task<IResult> GetApplicationByIdAsync(

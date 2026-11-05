@@ -201,6 +201,24 @@ Creates a compressed, streaming passphrase-encrypted archive (`.rrbak`) of the d
 > CLI arguments like `--passphrase <value>` are explicitly forbidden for security.
 > **Backup Consistency Note**: Backups are guaranteed consistent only when no writes occur during the dump because MongoDB's `--oplog` flag cannot be replayed together with namespace filtering (`--nsInclude`).
 
+### `roleradar reconcile-read-models`
+
+Backfills the derived, denormalised fields the OData read models rely on (postings, applications, criteria). It is a dry run unless `--confirm RECONCILE-READ-MODELS` is passed. Only the owner runs it on real data, in the order given in [docs/operations/reconcile-read-models.md](docs/operations/reconcile-read-models.md); automated agents and CI never do.
+
+### Running on the real stack (Windows)
+
+The bare `roleradar ...` commands above assume the CLI is on your path and can reach Mongo. On the Docker Compose stack use these forms from PowerShell at the repository root, after rebuilding the image (`docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.apps.yml --profile apps build cli`):
+
+```powershell
+# Backup: runs the built Release CLI on the host, which dumps through `docker compose exec mongo mongodump`.
+pwsh ./scripts/backup.ps1 <destination>
+
+# Reconcile: runs in the CLI image on the compose network, where the hostname "mongo" resolves.
+docker run --rm --network deploy_default -e "ROLERADAR_MONGO_CONNECTION_STRING=mongodb://mongo:27017/?directConnection=true" -e ROLERADAR_MONGO_DATABASE=roleradar roleradar-cli:local reconcile-read-models [--confirm RECONCILE-READ-MODELS]
+```
+
+`scripts/roleradar-docker.ps1` builds the same container command. It adds `--network <name>` only when `ROLERADAR_DOCKER_NETWORK` is set (for example `deploy_default`), and uses `ROLERADAR_CLI_IMAGE` for the image (default `roleradar-cli:test`). Full run order and safety rules: [docs/operations/reconcile-read-models.md](docs/operations/reconcile-read-models.md).
+
 ### `roleradar restore <archive-path>`
 
 Performs a strict two-pass verification and restore of an encrypted archive. Pass 1 validates the header, authentication tags, and archive magic numbers. Pass 2 restores data to MongoDB.

@@ -19,6 +19,11 @@ public static class ContainerTestHarness
     public const string DefaultCliImage = "roleradar-cli:test";
     public const string DefaultMcpImage = "roleradar-mcp:test";
 
+    // A `docker run` of a small image takes about a second on an idle daemon but 30+ seconds when dozens of other
+    // containers are starting. 30 s was a flake (ContainerImageMetadataTests timed out at 32 s); this is generous
+    // enough for a loaded daemon, and a genuine hang still fails.
+    public const int DefaultRunTimeoutSeconds = 120;
+
     private static readonly SemaphoreSlim BuildLock = new(1, 1);
     private static bool _imagesBuilt;
 
@@ -215,7 +220,7 @@ public static class ContainerTestHarness
         string[] arguments,
         IDictionary<string, string>? environment = null,
         string? stdinInput = null,
-        int timeoutSeconds = 30,
+        int timeoutSeconds = DefaultRunTimeoutSeconds,
         IEnumerable<string>? volumes = null,
         string? network = null)
     {
@@ -226,7 +231,7 @@ public static class ContainerTestHarness
     public static async Task<ContainerExecutionResult> RunMcpAsync(
         string? inputJsonRpc = null,
         IDictionary<string, string>? environment = null,
-        int timeoutSeconds = 30)
+        int timeoutSeconds = DefaultRunTimeoutSeconds)
     {
         await EnsureImagesBuiltAsync();
         return await RunRawAsync(ResolveMcpImage(), [], environment, inputJsonRpc, timeoutSeconds);
@@ -237,7 +242,7 @@ public static class ContainerTestHarness
         string[] arguments,
         IDictionary<string, string>? environment = null,
         string? stdinInput = null,
-        int timeoutSeconds = 30,
+        int timeoutSeconds = DefaultRunTimeoutSeconds,
         string? entrypoint = null,
         IEnumerable<string>? volumes = null,
         string? network = null)

@@ -18,6 +18,7 @@ import {
 describe("GET /postings/:id (T031)", () => {
   const dummyKey = crypto.randomBytes(32);
   const mockApiGet = vi.fn();
+  const mockFetchOData = vi.fn();
   const mockOidcConfig = new client.Configuration(
     {
       issuer: "https://identity:5001",
@@ -33,6 +34,13 @@ describe("GET /postings/:id (T031)", () => {
     setSessionEncryptionKeyForTesting(dummyKey);
     setOidcConfigForTesting(mockOidcConfig);
     vi.restoreAllMocks();
+    mockFetchOData.mockReset();
+    mockFetchOData.mockResolvedValue({
+      data: { value: [], "@odata.count": 0 },
+      error: undefined,
+      response: { status: 200 } as Response,
+    });
+    vi.spyOn(apiClientModule, "fetchOData").mockImplementation(mockFetchOData);
     vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
       GET: mockApiGet,
     } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
@@ -110,14 +118,12 @@ describe("GET /postings/:id (T031)", () => {
           response: { status: 200 } as Response,
         });
       }
-      if (endpoint === "/api/v1/criteria") {
-        return Promise.resolve({
-          data: sampleCriteria,
-          error: undefined,
-          response: { status: 200 } as Response,
-        });
-      }
       return Promise.resolve({ data: undefined, response: { status: 404 } as Response });
+    });
+    mockFetchOData.mockResolvedValue({
+      data: { value: sampleCriteria.map(({ id, name }) => ({ id, name })), "@odata.count": sampleCriteria.length },
+      error: undefined,
+      response: { status: 200 } as Response,
     });
 
     const request = new Request("https://localhost:5003/postings/post-1", {
@@ -129,7 +135,18 @@ describe("GET /postings/:id (T031)", () => {
     const result = await callLoader(postingDetailLoader, request, { id: "post-1" });
 
     expect(result.posting).toEqual(samplePosting);
-    expect(result.criteria).toEqual(sampleCriteria);
+    expect(result.criteria).toEqual(sampleCriteria.map(({ id, name }) => ({ id, name })));
+
+    // The criteria list comes from the OData Criteria set (id and name only), never the retired list endpoint.
+    expect(mockApiGet).not.toHaveBeenCalledWith("/api/v1/criteria", expect.anything());
+    expect(mockFetchOData).toHaveBeenCalledTimes(1);
+    const [path, query] = mockFetchOData.mock.calls[0] as [string, string, string];
+    expect(path).toBe("/odata/Criteria");
+    const decoded = decodeURIComponent(query);
+    expect(decoded).toContain("$select=id,name");
+    expect(decoded).toContain("$orderby=name asc");
+    expect(decoded).toContain("$top=100");
+    expect(mockFetchOData.mock.calls[0][2]).toBe("mock-access-token-111");
     expect(result.csrfToken).toBe("mock-csrf-token-444");
     expect(result.userLabel).toBe("Signed in");
 

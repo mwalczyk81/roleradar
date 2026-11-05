@@ -137,7 +137,17 @@ public static class TrackingIndexInitializer
                 new CreateIndexOptions { Name = "ux_companies_owner_normalized_name", Unique = true }),
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("status"),
-                new CreateIndexOptions { Name = "ix_companies_owner_status" })
+                new CreateIndexOptions { Name = "ix_companies_owner_status" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("name").Ascending("_id"),
+                new CreateIndexOptions
+                {
+                    Name = "ix_companies_owner_name_collation",
+                    Collation = new Collation("en", strength: CollationStrength.Secondary)
+                }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("ownership_type").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_companies_owner_ownership_type" })
         };
         await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
@@ -202,7 +212,30 @@ public static class TrackingIndexInitializer
                 new CreateIndexOptions { Name = "ix_postings_owner_disposition_resurface" }),
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("company_id").Ascending("disposition"),
-                new CreateIndexOptions { Name = "ix_postings_owner_company_disposition" })
+                new CreateIndexOptions { Name = "ix_postings_owner_company_disposition" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("disposition_rank").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_postings_owner_disposition_rank" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Descending("has_score").Ascending("score").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_postings_owner_score_asc_nulls_last" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Descending("has_score").Descending("score").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_postings_owner_score_desc_nulls_last" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("title").Ascending("_id"),
+                new CreateIndexOptions
+                {
+                    Name = "ix_postings_owner_title_collation",
+                    Collation = new Collation("en", strength: CollationStrength.Secondary)
+                }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("company_name").Ascending("_id"),
+                new CreateIndexOptions
+                {
+                    Name = "ix_postings_owner_company_name_collation",
+                    Collation = new Collation("en", strength: CollationStrength.Secondary)
+                })
         };
         await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
@@ -234,7 +267,26 @@ public static class TrackingIndexInitializer
                 }),
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("effective_from").Ascending("effective_to"),
-                new CreateIndexOptions { Name = "ix_criteria_owner_effective" })
+                new CreateIndexOptions { Name = "ix_criteria_owner_effective" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("key").Ascending("_id"),
+                new CreateIndexOptions
+                {
+                    Name = "ix_criteria_owner_key_collation",
+                    Collation = new Collation("en", strength: CollationStrength.Secondary)
+                }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("category").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_criteria_owner_category" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("is_active").Ascending("effective_from").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_criteria_owner_is_active_from" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Descending("has_effective_to").Ascending("effective_to").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_criteria_owner_effective_to_asc_nulls_last" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Descending("has_effective_to").Descending("effective_to").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_criteria_owner_effective_to_desc_nulls_last" })
         };
         await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
@@ -249,7 +301,39 @@ public static class TrackingIndexInitializer
                 new CreateIndexOptions { Name = "ux_applications_owner_posting", Unique = true }),
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("outcome"),
-                new CreateIndexOptions { Name = "ix_applications_owner_outcome" })
+                new CreateIndexOptions { Name = "ix_applications_owner_outcome" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("status").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_applications_owner_status" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Descending("applied_at").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_applications_owner_applied_at_desc" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Descending("has_first_response").Ascending("first_response_at").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_applications_owner_first_response_asc_nulls_last" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Descending("has_first_response").Descending("first_response_at").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_applications_owner_first_response_desc_nulls_last" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Descending("has_last_event").Ascending("last_event_at").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_applications_owner_last_event_asc_nulls_last" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Descending("has_last_event").Descending("last_event_at").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_applications_owner_last_event_desc_nulls_last" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("posting_title").Ascending("_id"),
+                new CreateIndexOptions
+                {
+                    Name = "ix_applications_owner_posting_title_collation",
+                    Collation = new Collation("en", strength: CollationStrength.Secondary)
+                }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("company_name").Ascending("_id"),
+                new CreateIndexOptions
+                {
+                    Name = "ix_applications_owner_company_name_collation",
+                    Collation = new Collation("en", strength: CollationStrength.Secondary)
+                })
         };
         await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
@@ -285,7 +369,10 @@ public static class TrackingIndexInitializer
         {
             new CreateIndexModel<BsonDocument>(
                 Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("started_at"),
-                new CreateIndexOptions { Name = "ux_search_runs_owner_started", Unique = true })
+                new CreateIndexOptions { Name = "ux_search_runs_owner_started", Unique = true }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("new_postings_count").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_search_runs_owner_new_postings" })
         };
         await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }
@@ -315,7 +402,23 @@ public static class TrackingIndexInitializer
                 {
                     Name = "ix_notes_owner_application_partial",
                     PartialFilterExpression = Builders<BsonDocument>.Filter.Type("application_id", BsonType.Binary)
-                })
+                }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Descending("updated_at").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_notes_owner_updated_at" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Descending("created_at").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_notes_owner_created_at" }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("title").Ascending("_id"),
+                new CreateIndexOptions
+                {
+                    Name = "ix_notes_owner_title_collation",
+                    Collation = new Collation("en", strength: CollationStrength.Secondary)
+                }),
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys.Ascending("owner_id").Ascending("area").Ascending("_id"),
+                new CreateIndexOptions { Name = "ix_notes_owner_area" })
         };
         await CreateIndexesSafeAsync(collection, models, cancellationToken);
     }

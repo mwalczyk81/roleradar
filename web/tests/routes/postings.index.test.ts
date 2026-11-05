@@ -12,9 +12,9 @@ import {
   type UserSession,
 } from "../../app/lib/session.server.js";
 
-describe("GET /postings loader (T028)", () => {
+describe("GET /postings loader (OData Migration T032)", () => {
   const dummyKey = crypto.randomBytes(32);
-  const mockApiGet = vi.fn();
+  const mockFetchOData = vi.fn();
   const mockOidcConfig = new client.Configuration(
     {
       issuer: "https://identity:5001",
@@ -30,9 +30,7 @@ describe("GET /postings loader (T028)", () => {
     setSessionEncryptionKeyForTesting(dummyKey);
     setOidcConfigForTesting(mockOidcConfig);
     vi.restoreAllMocks();
-    vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
-      GET: mockApiGet,
-    } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
+    vi.spyOn(apiClientModule, "fetchOData").mockImplementation(mockFetchOData);
   });
 
   function createTestSession(): { sessionId: string; session: UserSession } {
@@ -51,12 +49,12 @@ describe("GET /postings loader (T028)", () => {
     return { sessionId, session };
   }
 
-  it("passes exact filter parameters (disposition, companyId, resurfacePolicy, minScore, q, limit, offset) to GET /api/v1/postings", async () => {
+  it("passes exact filter parameters and server sorting to /odata/Postings", async () => {
     const { sessionId } = createTestSession();
 
-    mockApiGet.mockResolvedValueOnce({
+    mockFetchOData.mockResolvedValueOnce({
       data: {
-        items: [
+        value: [
           {
             id: "post-1",
             companyId: "comp-1",
@@ -67,14 +65,11 @@ describe("GET /postings loader (T028)", () => {
             disposition: "scored",
             resurfacePolicy: "if_reopened",
             score: 85,
-            versionToken: crypto.randomUUID(),
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           },
         ],
-        totalCount: 1,
-        limit: 25,
-        offset: 0,
+        "@odata.count": 1,
       },
       error: undefined,
       response: { status: 200 } as Response,
@@ -89,30 +84,31 @@ describe("GET /postings loader (T028)", () => {
 
     const result = await callLoader(postingsLoader, request);
 
-    expect(mockApiGet).toHaveBeenCalledTimes(1);
-    const [endpoint, options] = mockApiGet.mock.calls[0];
-    expect(endpoint).toBe("/api/v1/postings");
+    expect(mockFetchOData).toHaveBeenCalledTimes(1);
+    const [path, queryString, token] = mockFetchOData.mock.calls[0];
+    expect(path).toBe("/odata/Postings");
+    expect(token).toBe("mock-access-token-999");
 
-    // Exact query parameters sent to API
-    expect(options.params.query).toEqual({
-      disposition: "scored",
-      companyId: "comp-1",
-      resurfacePolicy: "if_reopened",
-      minScore: 80,
-      q: "engineer",
-      limit: 25,
-      offset: 0,
-    });
-
-    // Invariant: Sorting is page-local only; do NOT pass sort parameters to the API
-    expect(options.params.query.sort).toBeUndefined();
-    expect(options.params.query.direction).toBeUndefined();
+    // Query string assertions
+    const decodedQuery = decodeURIComponent(queryString);
+    expect(queryString).toContain("$filter=");
+    expect(decodedQuery).toContain("disposition eq 'scored'");
+    expect(decodedQuery).toContain("companyId eq 'comp-1'");
+    expect(decodedQuery).toContain("resurfacePolicy eq 'if_reopened'");
+    expect(decodedQuery).toContain("score ge 80");
+    expect(decodedQuery).toContain("contains(tolower(title),'engineer')");
+    expect(decodedQuery).toContain("$orderby=score desc");
+    expect(queryString).toContain("$top=25");
+    expect(queryString).toContain("$skip=0");
+    expect(queryString).toContain("$count=true");
 
     // Loader return data structure
     expect(result.items).toHaveLength(1);
     expect(result.items[0].title).toBe("Staff Engineer");
     expect(result.totalCount).toBe(1);
     expect(result.csrfToken).toBe("mock-csrf-token-555");
+    expect(result.sort).toBe("score");
+    expect(result.direction).toBe("desc");
 
     // Invariant: Never return tokens to browser
     const serialized = JSON.stringify(result);
@@ -124,8 +120,8 @@ describe("GET /postings loader (T028)", () => {
   it("clamps limit to 1..100, offset to >= 0, and ignores NaN minScore", async () => {
     const { sessionId } = createTestSession();
 
-    mockApiGet.mockResolvedValueOnce({
-      data: { items: [], totalCount: 0, limit: 100, offset: 0 },
+    mockFetchOData.mockResolvedValueOnce({
+      data: { value: [], "@odata.count": 0 },
       error: undefined,
       response: { status: 200 } as Response,
     });
@@ -139,18 +135,19 @@ describe("GET /postings loader (T028)", () => {
 
     await callLoader(postingsLoader, request);
 
-    const [, options] = mockApiGet.mock.calls[0];
-    expect(options.params.query.limit).toBe(100); // clamped from 200
-    expect(options.params.query.offset).toBe(0); // clamped from -10
-    expect(options.params.query.minScore).toBeUndefined(); // NaN ignored
+    expect(mockFetchOData).toHaveBeenCalledTimes(1);
+    const [, queryString] = mockFetchOData.mock.calls[0];
+    expect(queryString).toContain("$top=100");
+    expect(queryString).toContain("$skip=0");
+    expect(queryString).not.toContain("score ge");
   });
 
   it("handles 403 Forbidden from API by throwing a redirect to /not-authorized without looping", async () => {
     const { sessionId } = createTestSession();
 
-    mockApiGet.mockResolvedValueOnce({
+    mockFetchOData.mockResolvedValueOnce({
       data: undefined,
-      error: { ok: false, errorCode: "FORBIDDEN", message: "Forbidden" },
+      error: { message: "Forbidden", status: 403 },
       response: { status: 403 } as Response,
     });
 
@@ -163,8 +160,10 @@ describe("GET /postings loader (T028)", () => {
     let thrown: Response | null = null;
     try {
       await callLoader(postingsLoader, request);
-    } catch (err: unknown) {
-      if (err instanceof Response) thrown = err;
+    } catch (e) {
+      if (e instanceof Response) {
+        thrown = e;
+      }
     }
 
     expect(thrown).not.toBeNull();
@@ -175,13 +174,13 @@ describe("GET /postings loader (T028)", () => {
   it("handles 401 Unauthorized from API by destroying session and redirecting to login with returnTo", async () => {
     const { sessionId } = createTestSession();
 
-    mockApiGet.mockResolvedValueOnce({
+    mockFetchOData.mockResolvedValueOnce({
       data: undefined,
-      error: { ok: false, errorCode: "UNAUTHORIZED", message: "Token expired" },
+      error: { message: "Unauthorized", status: 401 },
       response: { status: 401 } as Response,
     });
 
-    const request = new Request("https://localhost:5003/postings?q=test", {
+    const request = new Request("https://localhost:5003/postings", {
       headers: {
         Cookie: `${SECURE_COOKIE_NAME}=${sessionId}`,
       },
@@ -190,35 +189,26 @@ describe("GET /postings loader (T028)", () => {
     let thrown: Response | null = null;
     try {
       await callLoader(postingsLoader, request);
-    } catch (err: unknown) {
-      if (err instanceof Response) thrown = err;
+    } catch (e) {
+      if (e instanceof Response) {
+        thrown = e;
+      }
     }
 
     expect(thrown).not.toBeNull();
     expect(thrown?.status).toBe(302);
-    const location = thrown?.headers.get("Location");
-    expect(location).toContain("/auth");
-    // Verify session cookie was cleared in response header
-    const setCookie = thrown?.headers.get("Set-Cookie");
-    expect(setCookie).toBeDefined();
+    expect(thrown?.headers.get("Location")).toContain("/connect/authorize");
+    expect(thrown?.headers.get("Set-Cookie")).toBeDefined();
   });
 
   it("sets userLabel to preferred_username when available in session", async () => {
-    const sessionId = crypto.randomUUID();
-    const session: UserSession = {
-      sessionId,
-      ownerSub: "018d9633-9111-7395-88a2-f81d113426e2",
-      ownerUsername: "matt",
-      accessToken: "mock-access-token",
-      refreshToken: "mock-refresh-token",
-      expiresAt: Date.now() + 600_000,
-      createdAt: Date.now(),
-      csrfToken: "mock-csrf-token",
-    };
+    const { sessionId, session } = createTestSession();
+    session.ownerUsername = "matt-engineer";
     saveSession(session);
 
-    mockApiGet.mockResolvedValueOnce({
-      data: { items: [], totalCount: 0, limit: 25, offset: 0 },
+    mockFetchOData.mockResolvedValueOnce({
+      data: { value: [], "@odata.count": 0 },
+      error: undefined,
       response: { status: 200 } as Response,
     });
 
@@ -229,26 +219,17 @@ describe("GET /postings loader (T028)", () => {
     });
 
     const result = await callLoader(postingsLoader, request);
-    expect(result.userLabel).toBe("matt");
-    expect(result.userLabel).not.toBe(session.ownerSub);
+    expect(result.userLabel).toBe("matt-engineer");
   });
 
   it("falls back to text 'Signed in' and never reveals sub GUID when preferred_username is absent", async () => {
-    const sessionId = crypto.randomUUID();
-    const session: UserSession = {
-      sessionId,
-      ownerSub: "018d9633-9111-7395-88a2-f81d113426e2",
-      // ownerUsername undefined
-      accessToken: "mock-access-token",
-      refreshToken: "mock-refresh-token",
-      expiresAt: Date.now() + 600_000,
-      createdAt: Date.now(),
-      csrfToken: "mock-csrf-token",
-    };
+    const { sessionId, session } = createTestSession();
+    delete session.ownerUsername;
     saveSession(session);
 
-    mockApiGet.mockResolvedValueOnce({
-      data: { items: [], totalCount: 0, limit: 25, offset: 0 },
+    mockFetchOData.mockResolvedValueOnce({
+      data: { value: [], "@odata.count": 0 },
+      error: undefined,
       response: { status: 200 } as Response,
     });
 
@@ -260,6 +241,74 @@ describe("GET /postings loader (T028)", () => {
 
     const result = await callLoader(postingsLoader, request);
     expect(result.userLabel).toBe("Signed in");
-    expect(result.userLabel).not.toBe(session.ownerSub);
+  });
+
+  it("defaults to score desc ordering when no sort parameter is provided", async () => {
+    const { sessionId } = createTestSession();
+
+    mockFetchOData.mockResolvedValueOnce({
+      data: { value: [], "@odata.count": 0 },
+      error: undefined,
+      response: { status: 200 } as Response,
+    });
+
+    const request = new Request("https://localhost:5003/postings", {
+      headers: {
+        Cookie: `${SECURE_COOKIE_NAME}=${sessionId}`,
+      },
+    });
+
+    const result = await callLoader(postingsLoader, request);
+    expect(result.sort).toBeUndefined();
+
+    expect(mockFetchOData).toHaveBeenCalledTimes(1);
+    const [, queryString] = mockFetchOData.mock.calls[0];
+    expect(decodeURIComponent(queryString)).toContain("$orderby=score desc");
+  });
+
+  it("falls back to default score desc ordering when unallowlisted sort is provided", async () => {
+    const { sessionId } = createTestSession();
+
+    mockFetchOData.mockResolvedValueOnce({
+      data: { value: [], "@odata.count": 0 },
+      error: undefined,
+      response: { status: 200 } as Response,
+    });
+
+    const request = new Request("https://localhost:5003/postings?sort=unallowlisted_column", {
+      headers: {
+        Cookie: `${SECURE_COOKIE_NAME}=${sessionId}`,
+      },
+    });
+
+    const result = await callLoader(postingsLoader, request);
+    expect(result.sort).toBeUndefined();
+
+    expect(mockFetchOData).toHaveBeenCalledTimes(1);
+    const [, queryString] = mockFetchOData.mock.calls[0];
+    expect(decodeURIComponent(queryString)).toContain("$orderby=score desc");
+  });
+
+  it("ignores invalid disposition and resurfacePolicy parameters with type guards", async () => {
+    const { sessionId } = createTestSession();
+
+    mockFetchOData.mockResolvedValueOnce({
+      data: { value: [], "@odata.count": 0 },
+      error: undefined,
+      response: { status: 200 } as Response,
+    });
+
+    const request = new Request("https://localhost:5003/postings?disposition=hacked_disp&resurfacePolicy=bad_policy", {
+      headers: {
+        Cookie: `${SECURE_COOKIE_NAME}=${sessionId}`,
+      },
+    });
+
+    await callLoader(postingsLoader, request);
+
+    expect(mockFetchOData).toHaveBeenCalledTimes(1);
+    const [, queryString] = mockFetchOData.mock.calls[0];
+    expect(decodeURIComponent(queryString)).not.toContain("disposition eq");
+    expect(decodeURIComponent(queryString)).not.toContain("resurfacePolicy eq");
   });
 });

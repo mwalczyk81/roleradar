@@ -1,63 +1,62 @@
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useNavigate, useSearchParams, Link, Form } from "react-router";
-import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
-import { createApiClient } from "../lib/api-client.server.js";
+import { requireUserSession } from "../lib/auth-guard.server.js";
 import { useTheme } from "../lib/use-theme.js";
 import { getNavItems } from "../lib/nav.js";
 import { formatDate } from "../lib/format-date.js";
-import { getEntityRoute } from "../lib/operational-enums.js";
+import { buildODataQuery } from "../lib/odata-client.js";
+import { containsAny, loadODataList, parsePaging, parseSort } from "../lib/odata-list.server.js";
 import { AppShell, DataTable, Badge, Button, Input, type DataTableColumn } from "../ui.js";
-import type { components } from "../../../contracts/client/api-types.js";
 
-type NoteDto = components["schemas"]["NoteDto"];
+// The list never carries the note body: the API projects `content` away in the database query unless a
+// $select asks for it, and this route never does.
+export interface NoteODataModel {
+  id: string;
+  heading: string;
+  tags: string[];
+  linkedEntityType: string;
+  linkedEntityId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const ALLOWED_SORT_FIELDS = ["heading", "createdAt", "updatedAt"] as const;
+
+export const meta: MetaFunction = () => [{ title: "Notes - RoleRadar" }];
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const session = await requireUserSession(request);
   const url = new URL(request.url);
 
+  const { limit, offset } = parsePaging(url);
+  // Most recently updated first, so the page is useful before anyone types a search term.
+  const { sort, direction } = parseSort(url, ALLOWED_SORT_FIELDS, { field: "updatedAt", direction: "desc" });
+
   const q = (url.searchParams.get("q") ?? "").trim();
-  const rawLimit = Number(url.searchParams.get("limit"));
-  const rawOffset = Number(url.searchParams.get("offset"));
 
-  const limit = Number.isNaN(rawLimit) || rawLimit <= 0 ? 25 : Math.min(100, Math.max(1, Math.floor(rawLimit)));
-  const offset = Number.isNaN(rawOffset) || rawOffset < 0 ? 0 : Math.max(0, Math.floor(rawOffset));
-
-  if (!q) {
-    return {
-      items: [] as NoteDto[],
-      totalCount: 0,
-      limit,
-      offset,
-      q: "",
-      csrfToken: session.csrfToken,
-      userLabel: session.ownerUsername || "Signed in",
-    };
-  }
-
-  const client = createApiClient(session.accessToken);
-  const { data, response, error } = await client.GET("/api/v1/notes", {
-    params: {
-      query: {
-        q,
-        limit,
-        offset,
-      },
-    },
+  const queryString = buildODataQuery({
+    filter: containsAny(["heading"], q),
+    orderBy: [{ field: sort, direction }],
+    top: limit,
+    skip: offset,
+    count: true,
   });
 
-  await assertApiOk(response, request, session.sessionId);
-
-  if (error || !data) {
-    throw new Response(error?.message || "Failed to search notes", {
-      status: response.status || 500,
-    });
-  }
+  const { items, totalCount } = await loadODataList<NoteODataModel>({
+    path: "/odata/Notes",
+    queryString,
+    request,
+    session,
+    failureMessage: "Failed to load notes",
+  });
 
   return {
-    items: data.items,
-    totalCount: data.totalCount,
-    limit: data.limit,
-    offset: data.offset,
+    items,
+    totalCount,
+    limit,
+    offset,
+    sort,
+    direction,
     q,
     csrfToken: session.csrfToken,
     userLabel: session.ownerUsername || "Signed in",
@@ -81,10 +80,12 @@ export default function NotesIndex() {
     </form>
   );
 
-  const columns: DataTableColumn<NoteDto>[] = [
+  const columns: DataTableColumn<NoteODataModel>[] = [
     {
       key: "heading",
       header: "Heading",
+      sortable: true,
+      sortValue: () => 0,
       render: (row) => (
         <Link
           to={`/notes/${row.id}`}
@@ -96,24 +97,6 @@ export default function NotesIndex() {
         >
           {row.heading}
         </Link>
-      ),
-    },
-    {
-      key: "content",
-      header: "Preview",
-      render: (row) => (
-        <span
-          style={{
-            whiteSpace: "pre-wrap",
-            display: "inline-block",
-            color: "var(--ds-text-secondary)",
-            maxWidth: "22.5rem",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-          }}
-        >
-          {row.content}
-        </span>
       ),
     },
     {
@@ -135,36 +118,23 @@ export default function NotesIndex() {
     },
     {
       key: "linkedEntityType",
-      header: "Linked Entity",
-      render: (row) => {
-        const route = getEntityRoute(row.linkedEntityType, row.linkedEntityId);
-        if (route && row.linkedEntityId) {
-          const label = `${row.linkedEntityType ? row.linkedEntityType.charAt(0).toUpperCase() + row.linkedEntityType.slice(1) : "Entity"} (${row.linkedEntityId.slice(0, 8)}...)`;
-          return (
-            <Link
-              to={route}
-              style={{
-                color: "var(--ds-primary)",
-                textDecoration: "none",
-                fontWeight: "var(--ds-weight-medium)",
-              }}
-            >
-              {label}
-            </Link>
-          );
-        }
-
-        if (row.linkedEntityType) {
-          return <span>{row.linkedEntityType}</span>;
-        }
-
-        return <span>—</span>;
-      },
+      header: "Area",
+      // Plain text: the area is free text from the owner, never a route or a link.
+      render: (row) => <span>{row.linkedEntityType || "—"}</span>,
+    },
+    {
+      key: "createdAt",
+      header: "Created",
+      sortable: true,
+      sortValue: () => 0,
+      render: (row) => <span style={{ whiteSpace: "nowrap" }}>{formatDate(row.createdAt)}</span>,
     },
     {
       key: "updatedAt",
       header: "Updated",
-      render: (row) => <span>{formatDate(row.updatedAt)}</span>,
+      sortable: true,
+      sortValue: () => 0,
+      render: (row) => <span style={{ whiteSpace: "nowrap" }}>{formatDate(row.updatedAt)}</span>,
     },
   ];
 
@@ -185,7 +155,7 @@ export default function NotesIndex() {
           <Input
             name="q"
             defaultValue={data.q}
-            placeholder="Search notes by query..."
+            placeholder="Search notes by heading..."
             aria-label="Search notes"
           />
           <Button type="submit" variant="secondary">
@@ -198,6 +168,15 @@ export default function NotesIndex() {
           columns={columns}
           data={data.items}
           keyField="id"
+          sortColumn={data.sort}
+          sortDirection={data.direction}
+          onSortChange={(col, dir) => {
+            const next = new URLSearchParams(searchParams);
+            next.set("sort", col);
+            next.set("direction", dir);
+            next.set("offset", "0");
+            setSearchParams(next);
+          }}
           onRowClick={(row) => {
             navigate(`/notes/${row.id}`);
           }}

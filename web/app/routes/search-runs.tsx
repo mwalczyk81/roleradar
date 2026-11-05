@@ -1,48 +1,54 @@
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useSearchParams, Link } from "react-router";
-import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
-import { createApiClient } from "../lib/api-client.server.js";
+import { requireUserSession } from "../lib/auth-guard.server.js";
 import { useTheme } from "../lib/use-theme.js";
 import { getNavItems } from "../lib/nav.js";
 import { formatDate } from "../lib/format-date.js";
+import { buildODataQuery } from "../lib/odata-client.js";
+import { loadODataList, parsePaging, parseSort } from "../lib/odata-list.server.js";
 import { AppShell, DataTable, Badge, Button, type DataTableColumn } from "../ui.js";
-import type { components } from "../../../contracts/client/api-types.js";
 
-type SearchRunDto = components["schemas"]["SearchRunDto"];
+export interface SearchRunODataModel {
+  id: string;
+  runDate: string;
+  newPostings: number;
+  summary: string | null;
+}
+
+// Only stored columns are sortable; the summary is free text and is displayed only.
+export const ALLOWED_SORT_FIELDS = ["runDate", "newPostings"] as const;
+
+export const meta: MetaFunction = () => [{ title: "Search Runs - RoleRadar" }];
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const session = await requireUserSession(request);
   const url = new URL(request.url);
 
-  const rawLimit = Number(url.searchParams.get("limit"));
-  const rawOffset = Number(url.searchParams.get("offset"));
+  const { limit, offset } = parsePaging(url);
+  const { sort, direction } = parseSort(url, ALLOWED_SORT_FIELDS, { field: "runDate", direction: "desc" });
 
-  const limit = Number.isNaN(rawLimit) || rawLimit <= 0 ? 25 : Math.min(100, Math.max(1, Math.floor(rawLimit)));
-  const offset = Number.isNaN(rawOffset) || rawOffset < 0 ? 0 : Math.max(0, Math.floor(rawOffset));
-
-  const client = createApiClient(session.accessToken);
-  const { data, response, error } = await client.GET("/api/v1/search-runs", {
-    params: {
-      query: {
-        limit,
-        offset,
-      },
-    },
+  const queryString = buildODataQuery({
+    orderBy: [{ field: sort, direction }],
+    top: limit,
+    skip: offset,
+    count: true,
   });
 
-  await assertApiOk(response, request, session.sessionId);
-
-  if (error || !data) {
-    throw new Response(error?.message || "Failed to load search runs", {
-      status: response.status || 500,
-    });
-  }
+  const { items, totalCount } = await loadODataList<SearchRunODataModel>({
+    path: "/odata/SearchRuns",
+    queryString,
+    request,
+    session,
+    failureMessage: "Failed to load search runs",
+  });
 
   return {
-    items: data.items,
-    totalCount: data.totalCount,
-    limit: data.limit,
-    offset: data.offset,
+    items,
+    totalCount,
+    limit,
+    offset,
+    sort,
+    direction,
     csrfToken: session.csrfToken,
     userLabel: session.ownerUsername || "Signed in",
   };
@@ -64,41 +70,26 @@ export default function SearchRunsIndex() {
     </form>
   );
 
-  const columns: DataTableColumn<SearchRunDto>[] = [
+  const columns: DataTableColumn<SearchRunODataModel>[] = [
     {
       key: "runDate",
       header: "Run Date",
+      sortable: true,
+      sortValue: () => 0,
       render: (row) => (
-        <span style={{ fontWeight: "var(--ds-weight-medium)", color: "var(--ds-text)" }}>
+        <span style={{ fontWeight: "var(--ds-weight-medium)", color: "var(--ds-text)", whiteSpace: "nowrap" }}>
           {formatDate(row.runDate)}
         </span>
       ),
     },
     {
-      key: "companiesSearched",
-      header: "Companies Searched",
-      render: (row) => <span>{row.companiesSearched}</span>,
-    },
-    {
-      key: "postingsFound",
-      header: "Postings Found",
-      render: (row) => <span>{row.postingsFound}</span>,
-    },
-    {
       key: "newPostings",
       header: "New Postings",
+      sortable: true,
+      sortValue: () => 0,
       render: (row) => (
         <Badge tone={row.newPostings > 0 ? "success" : "neutral"}>
           {row.newPostings} new
-        </Badge>
-      ),
-    },
-    {
-      key: "errorsCount",
-      header: "Errors",
-      render: (row) => (
-        <Badge tone={row.errorsCount > 0 ? "danger" : "neutral"}>
-          {row.errorsCount}
         </Badge>
       ),
     },
@@ -137,6 +128,15 @@ export default function SearchRunsIndex() {
           columns={columns}
           data={data.items}
           keyField="id"
+          sortColumn={data.sort}
+          sortDirection={data.direction}
+          onSortChange={(col, dir) => {
+            const next = new URLSearchParams(searchParams);
+            next.set("sort", col);
+            next.set("direction", dir);
+            next.set("offset", "0");
+            setSearchParams(next);
+          }}
           pagination={{
             total: data.totalCount,
             limit: data.limit,

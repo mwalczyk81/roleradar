@@ -14,6 +14,14 @@ export const RESURFACE_POLICY_VALUES = ["never", "if_reopened"] as const;
 
 export type ResurfacePolicy = (typeof RESURFACE_POLICY_VALUES)[number];
 
+export function isPostingDisposition(val: unknown): val is PostingDisposition {
+  return typeof val === "string" && (DISPOSITION_VALUES as readonly string[]).includes(val);
+}
+
+export function isResurfacePolicy(val: unknown): val is ResurfacePolicy {
+  return typeof val === "string" && (RESURFACE_POLICY_VALUES as readonly string[]).includes(val);
+}
+
 export interface DispositionMeta {
   value: PostingDisposition;
   label: string;

@@ -111,7 +111,7 @@ public sealed class TokenValidationMatrixContractTests : IAsyncLifetime
     [Fact]
     public async Task MissingToken_Returns401Unauthorized()
     {
-        var response = await _httpClient!.GetAsync("/api/v1/criteria");
+        var response = await _httpClient!.GetAsync("/odata/Criteria");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
@@ -124,7 +124,7 @@ public sealed class TokenValidationMatrixContractTests : IAsyncLifetime
             subject: AllowedSubject,
             expiresUtc: DateTime.UtcNow.AddMinutes(10));
 
-        using var request = CreateAuthenticatedGet("/api/v1/criteria", token);
+        using var request = CreateAuthenticatedGet("/odata/Criteria", token);
         var response = await _httpClient!.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -139,7 +139,7 @@ public sealed class TokenValidationMatrixContractTests : IAsyncLifetime
             subject: AllowedSubject,
             expiresUtc: DateTime.UtcNow.AddMinutes(10));
 
-        using var request = CreateAuthenticatedGet("/api/v1/criteria", token);
+        using var request = CreateAuthenticatedGet("/odata/Criteria", token);
         var response = await _httpClient!.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -164,7 +164,7 @@ public sealed class TokenValidationMatrixContractTests : IAsyncLifetime
         var handler = new JwtSecurityTokenHandler();
         var token = handler.CreateEncodedJwt(descriptor);
 
-        using var request = CreateAuthenticatedGet("/api/v1/criteria", token);
+        using var request = CreateAuthenticatedGet("/odata/Criteria", token);
         var response = await _httpClient!.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -180,7 +180,7 @@ public sealed class TokenValidationMatrixContractTests : IAsyncLifetime
             notBeforeUtc: DateTime.UtcNow.AddMinutes(-20),
             expiresUtc: DateTime.UtcNow.AddMinutes(-5));
 
-        using var request = CreateAuthenticatedGet("/api/v1/criteria", token);
+        using var request = CreateAuthenticatedGet("/odata/Criteria", token);
         var response = await _httpClient!.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -195,7 +195,7 @@ public sealed class TokenValidationMatrixContractTests : IAsyncLifetime
             subject: IntruderSubject,
             expiresUtc: DateTime.UtcNow.AddMinutes(10));
 
-        using var request = CreateAuthenticatedGet("/api/v1/criteria", token);
+        using var request = CreateAuthenticatedGet("/odata/Criteria", token);
         var response = await _httpClient!.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
@@ -210,7 +210,7 @@ public sealed class TokenValidationMatrixContractTests : IAsyncLifetime
             subject: AllowedSubject,
             expiresUtc: DateTime.UtcNow.AddMinutes(10));
 
-        using var request = CreateAuthenticatedGet("/api/v1/criteria", token);
+        using var request = CreateAuthenticatedGet("/odata/Criteria", token);
         var response = await _httpClient!.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -237,7 +237,7 @@ public sealed class TokenValidationMatrixContractTests : IAsyncLifetime
         var handler = new JwtSecurityTokenHandler();
         var token = handler.CreateEncodedJwt(descriptor);
 
-        using var request = CreateAuthenticatedGet("/api/v1/criteria", token);
+        using var request = CreateAuthenticatedGet("/odata/Criteria", token);
         var response = await _httpClient!.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -254,7 +254,7 @@ public sealed class TokenValidationMatrixContractTests : IAsyncLifetime
             expiresUtc: DateTime.UtcNow.AddMinutes(10),
             scopes: ["openid profile roleradar.api.read"]);
 
-        using var req1 = CreateAuthenticatedGet("/api/v1/companies", singleClaimToken);
+        using var req1 = CreateAuthenticatedGet("/odata/Companies", singleClaimToken);
         var resp1 = await _httpClient!.SendAsync(req1);
         Assert.Equal(HttpStatusCode.OK, resp1.StatusCode);
 
@@ -266,7 +266,7 @@ public sealed class TokenValidationMatrixContractTests : IAsyncLifetime
             expiresUtc: DateTime.UtcNow.AddMinutes(10),
             scopes: MultipleReadScopes);
 
-        using var req2 = CreateAuthenticatedGet("/api/v1/criteria", multiClaimToken);
+        using var req2 = CreateAuthenticatedGet("/odata/Criteria", multiClaimToken);
         var resp2 = await _httpClient!.SendAsync(req2);
         Assert.Equal(HttpStatusCode.OK, resp2.StatusCode);
     }
@@ -334,7 +334,7 @@ public sealed class TokenValidationMatrixContractTests : IAsyncLifetime
             expiresUtc: DateTime.UtcNow.AddMinutes(10),
             scopes: []);
 
-        using var getReq = CreateAuthenticatedGet("/api/v1/companies", noScopeToken);
+        using var getReq = CreateAuthenticatedGet("/odata/Companies", noScopeToken);
         var getResp = await _httpClient!.SendAsync(getReq);
         Assert.Equal(HttpStatusCode.Forbidden, getResp.StatusCode);
 
