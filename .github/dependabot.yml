@@ -101,3 +101,10 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@react-router/*"
         update-types: ["version-update:semver-major"]
+      # Parked majors (see "Tooling majors parked" on the RoleRadar board). Remove an entry when its upgrade is scheduled.
+      # TypeScript 7 is a different toolchain and typescript-eslint does not support it yet.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # cookie 2 changes session and auth handling; it needs code changes and its own tests, not a version bump.
+      - dependency-name: "cookie"
+        update-types: ["version-update:semver-major"]
