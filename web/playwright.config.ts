@@ -13,6 +13,9 @@ export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
   workers: 1,
+  // GitHub runners occasionally drop the network interface mid-run (net::ERR_NETWORK_CHANGED on loopback goto).
+  // One CI retry absorbs that; a real failure still fails twice.
+  retries: process.env.CI ? 1 : 0,
   timeout: 30_000,
   expect: {
     timeout: 5_000,
