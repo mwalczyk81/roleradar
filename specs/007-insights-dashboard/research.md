@@ -114,7 +114,7 @@ List pages build their filter from their own URL params (`q`, `status`, ...). Ac
 
 ## R10. Kit v20 chart components
 
-The vendored design system is at kit v17 ([SYNC.md](../../web/app/ds/SYNC.md)). Chart components and the four `--ds-chart-*` tokens are published in the kit at v20 and need an export that only Claude, with Matt signed in to claude.ai, can do (agy cannot reach it). See the plan, Phase 0, for the file list and the gate. Nothing in `web/app/ds` is edited by hand.
+The vendored design system was at kit v17 when this was written, and has since been synced (the version is recorded in [SYNC.md](../../web/app/ds/SYNC.md)). Chart components and the four `--ds-chart-*` tokens are published in the kit at v20 and need an export that only Claude, with Matt signed in to claude.ai, can do (agy cannot reach it). See the plan, Phase 0, for the file list and the gate. Nothing in `web/app/ds` is edited by hand.
 
 ## R11. Markdown packages (checked against the npm registry on 2026-11-04)
 

@@ -60,7 +60,7 @@ description: "Task list for 007-insights-dashboard"
 
 - [X] T016 [P] `Insights/InsightsFlagsTests.cs`: seeded through the real repositories, assert stored `has_application`, `has_offer`, `has_rejection`, `rejected_before_interview` equal the oracle for every seeded row; assert `has_application` is false for postings without an application
 - [X] T017 [P] `Insights/InsightsFlagSurvivalTests.cs`: after an application exists, editing the posting (title, score, transition to every disposition) keeps `has_application = true`; every application status and event change (all eight event types) leaves it unchanged; there is no code path that sets it back to false
-- [X] T018 [P] `Insights/InsightsReconcileTests.cs`: load the legacy variant; dry run reports the expected updated counts and writes nothing; confirmed run writes the five fields; a second dry run reports `Postings Updated: 0` and `Applications Updated: 0`; run against the Testcontainers database only
+- [X] T018 [P] `Insights/InsightsReconcileTests.cs`: load the legacy variant; dry run reports the expected updated counts and writes nothing; confirmed run writes the four derived fields; a second dry run reports `Postings Updated: 0` and `Applications Updated: 0`; run against the Testcontainers database only
 - [X] T019 [P] `Insights/InsightsODataFilterTests.cs`: `$filter` cases for `hasApplication`, `firstSeenAt` (both edges), `hasOffer`, `hasRejection`, `rejectedBeforeInterview`, `firstResponseAt ne null`, `appliedAt lt <cutoff>`, and a combined lens-shaped filter; owner isolation for owners A and B; assert `ageInDays` is still rejected in `$filter` (400)
 - [X] T020 [P] `Insights/InsightsIndexTests.cs` (extend `ODataIndexStartupTests` pattern): `ix_postings_owner_has_application` = `{owner_id, has_application, _id}` and `ix_postings_owner_first_seen_at` = `{owner_id, first_seen_at, _id}` exist after start-up, owner first
 - [X] T021 [P] Extend `tests/RoleRadar.Tests.Integration/ODataDocsExamplesTests.cs` expectations: one executed example per new property in `docs/api/odata-queries.md` (fails until T031)
@@ -77,7 +77,7 @@ description: "Task list for 007-insights-dashboard"
 - [X] T029 `src/RoleRadar.Infrastructure/Mongo/TrackingIndexInitializer.cs`: create `ix_postings_owner_has_application` `{owner_id: 1, has_application: 1, _id: 1}` and `ix_postings_owner_first_seen_at` `{owner_id: 1, first_seen_at: 1, _id: 1}`, owner first (make T020 pass)
 - [X] T030 `src/RoleRadar.Infrastructure/Mongo/Reconcile/ReadModelReconciliationService.cs`: `ReconcilePostingsAsync` recomputes `has_application` from the applications collection; `ReconcileApplicationsAsync` recomputes the three flags via `ComputeApplicationMilestones`; counts keep their current names, no new CLI flags, dry run still writes nothing (make T018 pass)
 - [X] T031 Regenerate `contracts/odata/metadata.xml` and update `docs/api/odata-queries.md` with one example per new property (make T011, T021 pass)
-- [X] T032 [P] Update `docs/operations/reconcile-read-models.md` field lists and expected dry-run output for the five fields; keep the run order deploy, backup, dry run, confirm, dry run reports 0, and the rule that only Matt runs it on real data
+- [X] T032 [P] Update `docs/operations/reconcile-read-models.md` field lists and expected dry-run output for the four derived fields; keep the run order deploy, backup, dry run, confirm, dry run reports 0, and the rule that only Matt runs it on real data
 - [X] T033 Make T009, T010, T019 pass; if T019 shows a lens-shaped filter exceeding node or depth limits, report it instead of widening limits
 - [X] T034 Update ADR 0029 with the recorded `$top=0` result from T006 and confirm ADR 0031 matches what was built (status stays Proposed; Matt moves it)
 - [X] T035 **Boundary (Phase 2)**: run `dotnet build RoleRadar.sln -c Release -v q --nologo -warnaserror`, `pwsh ./scripts/test-fast.ps1`, `dotnet test tests/RoleRadar.Tests.Integration -c Release --filter "FullyQualifiedName~Insights|FullyQualifiedName~OData"`, then `pwsh ./scripts/review-gate.ps1`. Report counts from output, list anything not run, and stop
@@ -190,11 +190,11 @@ description: "Task list for 007-insights-dashboard"
 
 ## Phase 6: Polish and cross-cutting
 
-- [ ] T090 [P] Run the quickstart sections for every shipped phase and report each expected outcome as met or not, from command output
-- [ ] T091 [P] Review every fixture, test name, screenshot and report for real names or data; run `pre-commit run --all-files` and `pwsh ./scripts/denylist-check.ps1`
-- [ ] T092 [P] Performance check on the seed with at least 1,000 postings and 300 applications: Insights ready within 2 seconds (SC-008); if not met, report the slowest requests rather than changing ADR 0029
-- [ ] T093 [P] Verify SC-001 to SC-009 each against evidence from a named test or command in a short table in the final report
-- [ ] T094 Final `pwsh ./scripts/review-gate.ps1`; report numbers from its output; leave all changes uncommitted in the working tree for review
+- [X] T090 [P] Run the quickstart sections for every shipped phase and report each expected outcome as met or not, from command output
+- [X] T091 [P] Review every fixture, test name, screenshot and report for real names or data; run `pre-commit run --all-files` and `pwsh ./scripts/denylist-check.ps1`
+- [X] T092 [P] Performance check on the seed with at least 1,000 postings and 300 applications: Insights ready within 2 seconds (SC-008); if not met, report the slowest requests rather than changing ADR 0029
+- [X] T093 [P] Verify SC-001 to SC-009 each against evidence from a named test or command in a short table in the final report
+- [X] T094 Final `pwsh ./scripts/review-gate.ps1`; report numbers from its output; leave all changes uncommitted in the working tree for review
 - [ ] T095 [Matt] Review ADRs 0029 to 0032 and move each from Proposed to Accepted when satisfied; run the T036 operator step on the real database before trusting the dashboard
 
 ---

@@ -10,7 +10,7 @@ A read-only `/insights` page showing the funnel, rates, trends and response time
 
 - **Counts** are OData `$count` requests (`$top=0`, count only), built by one shared lens module that also builds the drill-down link, so a number and its list agree by construction (ADR 0029). The page shows **two single-cohort funnels** (Postings first seen in window: leads, reviewed, applied-to; Applications applied in window: applied, responded, interviewed, offers), never one mixed funnel.
 - **Median response time, weekly buckets and run yield** come from one small read-only endpoint over `IOwnerReadSeam`, computed in memory from date-only projections (ADR 0030).
-- **New list filters** come from five derived stored fields written only at the repository choke point and backfilled by `reconcile-read-models` (ADR 0031).
+- **New list filters** come from four derived stored fields (plus the already stored `first_seen_at`, newly exposed) written only at the repository choke point and backfilled by `reconcile-read-models` (ADR 0031).
 - **Markdown** uses pinned `react-markdown` + `remark-gfm` + `remark-breaks` with an element allowlist and no HTML parsing (ADR 0032).
 - Work is phased so each priority ends at a reviewable boundary, tests first with the failing output shown.
 
@@ -96,7 +96,7 @@ src/RoleRadar.Application/
 src/RoleRadar.Infrastructure/Mongo/
   Repositories/MongoApplicationRepository.cs    # ApplicationMilestones record; set has_application (P1)
   Repositories/MongoPostingRepository.cs        # compute has_application before serialize     (P1)
-  Reconcile/ReadModelReconciliationService.cs   # backfill the five fields                     (P1)
+  Reconcile/ReadModelReconciliationService.cs   # backfill the four fields                      (P1)
   Reading/ReadModelClassMaps.cs                 # map new element names                        (P1)
   TrackingIndexInitializer.cs                   # two new postings indexes                     (P1)
   TrackingBsonFieldNames.cs                     # field-name constants for the allowlist test  (P1)
@@ -167,10 +167,10 @@ Done when: a file-listing diff of `web/app/ds` matches the table (anything extra
 **Red first** (run, capture failing output, then implement):
 1. Integration: `$top=0` against Postings and Applications; record the actual result into ADR 0029.
 2. Unit: `ComputeApplicationMilestones` returns `HasOffer`, `HasRejection`, `RejectedBeforeInterview` for: no events; offer only; rejection with no interview; interview then rejection on a later day; rejection and interview same day (counts as after); interview after rejection; multiple rejections (earliest wins); follow-up and withdrawn only.
-3. Integration (Testcontainers): seeded through the real repositories, assert the five stored fields; posting edit after an application exists keeps `has_application`; status and event changes never change it; legacy documents without the fields get them from reconcile (dry run reports the count, confirmed run fixes, second dry run reports 0).
+3. Integration (Testcontainers): seeded through the real repositories, assert the four derived stored fields; posting edit after an application exists keeps `has_application`; status and event changes never change it; legacy documents without the fields get them from reconcile (dry run reports the count, confirmed run fixes, second dry run reports 0).
 4. Integration: OData filter cases for each new property and for `firstSeenAt` edges, owner isolation for both owners; docs examples executed by `ODataDocsExamplesTests`.
 5. Contract: `ODataMetadataDriftTests` fails until `contracts/odata/metadata.xml` is regenerated.
-6. Architecture: the field-name constants for the five fields appear only in the allowlisted writer, mapper, reconcile and index files; fails on any other reference.
+6. Architecture: the field-name constants for the four derived fields appear only in the allowlisted writer, mapper, reconcile and index files; fails on any other reference.
 7. Integration: index start-up test lists `ix_postings_owner_has_application` and `ix_postings_owner_first_seen_at`.
 
 **Then**: implement per data-model.md; extend reconcile (examined/updated counts keep their current names, no new CLI flags); update `docs/api/odata-queries.md` and `docs/operations/reconcile-read-models.md`; regenerate `contracts/odata/metadata.xml`; move ADR 0031 and the `$top` result in ADR 0029 to the recorded outcome.
@@ -255,7 +255,7 @@ Done when: a file-listing diff of `web/app/ds` matches the table (anything extra
 | Real imported postings have a meaningless `first_seen_at` | Cannot be checked by agy; Matt eyeballs the first dry run and the all-time leads count. Fall back is switching the posting window field to `createdAt` in one place (the lens module) with a snapshot update |
 | ESM-only markdown packages vs SSR build | Phase 4 verify-first build task |
 | Date-boundary drift between lenses and displayed `ageInDays` | One cutoff helper, boundary tests compare with displayed `ageInDays` |
-| 20 requests per load too slow | Bounded concurrency, indexed counts, SC-008 benchmark in Phase 2; revisit ADR 0029 only if it misses |
+| 22 requests per load (90 day view) too slow | Bounded concurrency, indexed counts, SC-008 measured in tasks Phase 6 (T092); revisit ADR 0029 only if it misses |
 | Kit v20 export differs from the expected file list | Phase 0 stop-and-ask rule on any extra or missing file |
 
 ## Complexity Tracking

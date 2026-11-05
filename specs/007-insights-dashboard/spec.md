@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-04
 
-**Status**: Draft
+**Status**: Implemented (tasks Phases 1 to 5); ADRs 0029 to 0032 await acceptance (T095)
 
 **Input**: User description: "A read-only Insights page showing the job-search funnel and rates, built on the 006 read model, plus Markdown rendering of note bodies as a separate small story."
 
@@ -12,7 +12,7 @@
 
 ### User Story 1 - Funnel and rates (Priority: P1)
 
-The owner opens the Insights page and sees how the search is going: two funnels, each over one cohort (postings first seen in the window: leads, reviewed, applied-to; applications applied in the window: applied, responded, interviewed, offers), plus stat tiles for application rate, screen-out rate, interview rate, rejection rate, offer rate, ghost rate and the open count. The default window is the last 90 days by application date, with a toggle for all time. Every percentage is shown with its numerator and denominator ("x of y"), and a denominator under 10 is labeled "small sample".
+The owner opens the Insights page and sees how the search is going: two funnels, each over one cohort (postings first seen in the window: leads, reviewed, applied-to; applications applied in the window: applied, responded, interviewed, offers), plus stat tiles for application rate, screen-out rate, interview rate, rejection rate, offer rate, ghost rate and the open count. The default window is the last 90 days (90 whole UTC days ending on and including the as-of date, so today), by application date for applications and by first-seen date for postings, with a toggle for all time. Every percentage is shown with its numerator and denominator ("x of y"), and a denominator under 10 is labeled "small sample".
 
 **Why this priority**: This is the reason the feature exists. Without trustworthy, explained numbers the owner falls back to a spreadsheet.
 
@@ -103,7 +103,7 @@ On the note detail page, the note body is displayed as formatted Markdown (headi
 - A brand-new database with no postings or applications: every tile reads "no data", charts show an empty state, and nothing errors.
 - Only one application exists: ratios are computed and flagged "small sample"; the median equals that single value.
 - An application with an applied date in the future or missing: excluded from window and trend calculations and not counted as an error.
-- Applications exactly 14 or 30 days old: the boundary is inclusive ("at least 14 days old", "older than 30 days" per the definitions) and covered by a test.
+- Applications exactly 14 or 30 days old: "at least 14 days old" includes an application exactly 14 days old. The ghost-rate denominator ("at least 30 days old") includes one exactly 30 days old, but the ghosted numerator ("older than 30 days") does not, so on day 30 an application is in the denominator and cannot yet count as ghosted. This one-day difference is deliberate, stated in the page's "How these are calculated" text and in `contracts/insights-lenses.md`, and pinned by boundary tests at 29, 30 and 31 days.
 - Posting disposition was overwritten (for example, applied then rejected from an application event): post-apply stages are derived from applications and their events, never from posting disposition.
 - An application with a rejection recorded before any interview versus after: split into the two buckets, and the two buckets sum to the total rejected.
 - An application with both a rejected event and an offer event: it is counted in each rate it qualifies for, and the page does not double count it within a single funnel stage.
@@ -137,7 +137,7 @@ On the note detail page, the note body is displayed as formatted Markdown (headi
 - **FR-010**: Interview rate = applications with at least one interview event / applications at least 14 days old (the mature cohort). An all-time version MUST also be shown, visually marked as lower-confidence.
 - **FR-011**: Rejection rate = applications with a rejected event / all applications, split into rejected before any interview and rejected after an interview.
 - **FR-012**: Offer rate is shown two ways: applications with an offer event / applications with an interview, and offers / all applications.
-- **FR-013**: Ghosted = status still applied, no response event, and older than 30 days. The 30-day threshold MUST be a single named, configurable constant. Ghost rate = ghosted / applications at least 30 days old.
+- **FR-013**: Ghosted = status still applied, no response event, and older than 30 days. The 30-day threshold MUST be a single named, configurable constant. Ghost rate = ghosted / applications at least 30 days old (an application exactly 30 days old is in the denominator but is not yet ghosted; see Edge Cases).
 - **FR-014**: Open applications = applications with no terminal event (rejected, withdrawn, offer accepted, offer declined).
 - **FR-015**: Every percentage MUST be displayed with its numerator and denominator as "x of y". A denominator under 10 MUST also display "small sample". A zero denominator MUST display "no data" and never a percentage.
 

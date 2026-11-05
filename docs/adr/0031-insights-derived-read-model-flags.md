@@ -12,7 +12,7 @@ A subtle hazard: `MongoPostingRepository.UpsertPostingAsync` replaces the whole 
 
 ## Decision Outcome
 
-Add five stored, derived, read-only fields.
+Add four stored, derived, read-only fields. A fifth read-model property, `first_seen_at`, was already stored and is only newly exposed.
 
 | Collection | Field | Rule |
 | --- | --- | --- |
@@ -21,7 +21,7 @@ Add five stored, derived, read-only fields.
 | applications | `has_rejection` | any `rejected` event |
 | applications | `rejected_before_interview` | rejection exists and no `interview` event dated on or before the earliest rejection (same day counts as after) |
 
-(`first_seen_at` on postings is already stored; it is only newly exposed and needs no backfill.)
+(`first_seen_at` on postings is already stored; it is only newly exposed and needs no backfill. The five OData properties are these four plus `firstSeenAt`.)
 
 Write rules:
 
@@ -30,7 +30,7 @@ Write rules:
 - Applications are unique per posting and cannot be deleted (ADR 0010), so `has_application` only moves false to true. A test pins that no status or event change alters it.
 - Indexes: `ix_postings_owner_has_application` `{owner_id, has_application, _id}` and `ix_postings_owner_first_seen_at` `{owner_id, first_seen_at, _id}`, both owner first. No new application indexes until a benchmark shows a need.
 - Architecture test: a source scan allows the field-name constants only in the writer, mapper, reconcile and index files; any other reference (Api, Mcp, Cli, Application handlers) fails the build.
-- OData: the five properties are public on the read models, filterable, not sortable (no allowlist widening). `contracts/odata/metadata.xml` and `docs/api/odata-queries.md` are updated and the drift tests gate it.
+- OData: the five properties (the four derived fields and `firstSeenAt`) are public on the read models, filterable, not sortable (no allowlist widening). `contracts/odata/metadata.xml` and `docs/api/odata-queries.md` are updated and the drift tests gate it.
 - Reconcile gains the new fields in the existing run order: deploy, backup, dry run, confirm, dry run reports 0. Matt runs it on the real database; agy and CI never do.
 
 ### Consequences
