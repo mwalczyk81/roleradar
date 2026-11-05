@@ -27,8 +27,8 @@ importers:
         specifier: 7.18.5
         version: 7.18.5(react-router@7.18.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(typescript@5.9.3)
       cookie:
-        specifier: 1.0.2
-        version: 1.0.2
+        specifier: 1.1.1
+        version: 1.1.1
       isbot:
         specifier: 5.2.2
         version: 5.2.2
@@ -68,7 +68,7 @@ importers:
         version: 1.64.1
       '@react-router/dev':
         specifier: 7.18.5
-        version: 7.18.5(@react-router/serve@7.18.5(react-router@7.18.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(typescript@5.9.3))(@types/node@22.13.4)(babel-plugin-macros@3.1.0)(react-router@7.18.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(typescript@5.9.3)(vite@6.4.5(@types/node@22.13.4)(yaml@2.9.0))(yaml@2.9.0)
+        version: 7.18.5(@react-router/serve@7.18.5(react-router@7.18.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(typescript@5.9.3))(@types/node@22.20.5)(babel-plugin-macros@3.1.0)(react-router@7.18.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(typescript@5.9.3)(vite@6.4.5(@types/node@22.20.5)(yaml@2.9.0))(yaml@2.9.0)
       '@testing-library/dom':
         specifier: 10.4.2
         version: 10.4.2
@@ -76,8 +76,8 @@ importers:
         specifier: 16.3.3
         version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@types/node':
-        specifier: 22.13.4
-        version: 22.13.4
+        specifier: 22.20.5
+        version: 22.20.5
       '@types/react':
         specifier: 19.3.0
         version: 19.3.0
@@ -113,10 +113,10 @@ importers:
         version: 8.72.1(eslint@9.20.1)(typescript@5.9.3)
       vite:
         specifier: 6.4.5
-        version: 6.4.5(@types/node@22.13.4)(yaml@2.9.0)
+        version: 6.4.5(@types/node@22.20.5)(yaml@2.9.0)
       vitest:
         specifier: 5.0.5
-        version: 5.0.5(@types/node@22.13.4)(@vitest/coverage-v8@5.0.5)(jsdom@26.0.0)(vite@6.4.5(@types/node@22.13.4)(yaml@2.9.0))
+        version: 5.0.5(@types/node@22.20.5)(@vitest/coverage-v8@5.0.5)(jsdom@26.0.0)(vite@6.4.5(@types/node@22.20.5)(yaml@2.9.0))
 
 packages:
 
@@ -1326,8 +1326,8 @@ packages:
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
 
-  '@types/node@22.13.4':
-    resolution: {integrity: sha512-ywP2X0DYtX3y08eFVx5fNIw7/uIv8hYUKgXoK8oayJlLnKcRfEYCxWMVE1XagUdVtCJlZT1AU4LXEABW+L1Peg==}
+  '@types/node@22.20.5':
+    resolution: {integrity: sha512-U2+DNr+wSjpsTS/wZGYHq7GcwfuSmKiKvoPvK22zwTlRhU91yOniN4qRR5KhIjvif7ysw/dz/hKmfDH0Ris4aA==}
 
   '@types/parse-json@4.0.2':
     resolution: {integrity: sha512-dISoDXWWQwUquiKsyZ4Ng+HX2KsPL7LyHKHQwgGFEA3IaKac4Obd+h2a/a6waisAoepJlBcx9paWqjA8/HVjCw==}
@@ -1765,8 +1765,8 @@ packages:
     resolution: {integrity: sha512-yki5XnKuf750l50uGTllt6kKILY4nQ1eNIQatoXEByZ5dWgnKqbnqmTrBE5B4N7lrMJKQ2ytWMiTO2o0v6Ew/w==}
     engines: {node: '>= 0.6'}
 
-  cookie@1.0.2:
-    resolution: {integrity: sha512-9Kr/j4O16ISv8zBBhJoi4bXOYNTkFLOqSL3UDB0njXxCXNezjeyVrJyGOWtgfs/q2km1gwBcfH8q1yEGoMYunA==}
+  cookie@1.1.1:
+    resolution: {integrity: sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==}
     engines: {node: '>=18'}
 
   core-js-compat@3.51.0:
@@ -3420,8 +3420,8 @@ packages:
     resolution: {integrity: sha512-nWJ91DjeOkej/TA8pXQ3myruKpKEYgqvpw9lz4OPHj/NWFNluYrjbz9j01CJ8yKQd2g4jFoOkINCTW2I5LEEyw==}
     engines: {node: '>= 0.4'}
 
-  undici-types@6.20.0:
-    resolution: {integrity: sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg==}
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
 
   undici@7.30.1:
     resolution: {integrity: sha512-03KrMbjIFDWQR5RNPrSw3bd1r12JpyFQl9/yxjUbJtqkjmllqC5lFjZh6ujeuJCKr8EOQvRW872Oy/az+nLYxg==}
@@ -4850,7 +4850,7 @@ snapshots:
     dependencies:
       playwright: 1.64.1
 
-  '@react-router/dev@7.18.5(@react-router/serve@7.18.5(react-router@7.18.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(typescript@5.9.3))(@types/node@22.13.4)(babel-plugin-macros@3.1.0)(react-router@7.18.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(typescript@5.9.3)(vite@6.4.5(@types/node@22.13.4)(yaml@2.9.0))(yaml@2.9.0)':
+  '@react-router/dev@7.18.5(@react-router/serve@7.18.5(react-router@7.18.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(typescript@5.9.3))(@types/node@22.20.5)(babel-plugin-macros@3.1.0)(react-router@7.18.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(typescript@5.9.3)(vite@6.4.5(@types/node@22.20.5)(yaml@2.9.0))(yaml@2.9.0)':
     dependencies:
       '@babel/core': 7.29.7
       '@babel/generator': 7.29.12
@@ -4880,8 +4880,8 @@ snapshots:
       semver: 7.8.5
       tinyglobby: 0.2.17
       valibot: 1.5.0(typescript@5.9.3)
-      vite: 6.4.5(@types/node@22.13.4)(yaml@2.9.0)
-      vite-node: 3.2.4(@types/node@22.13.4)(yaml@2.9.0)
+      vite: 6.4.5(@types/node@22.20.5)(yaml@2.9.0)
+      vite-node: 3.2.4(@types/node@22.20.5)(yaml@2.9.0)
     optionalDependencies:
       '@react-router/serve': 7.18.5(react-router@7.18.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(typescript@5.9.3)
       typescript: 5.9.3
@@ -5066,9 +5066,9 @@ snapshots:
 
   '@types/ms@2.1.0': {}
 
-  '@types/node@22.13.4':
+  '@types/node@22.20.5':
     dependencies:
-      undici-types: 6.20.0
+      undici-types: 6.21.0
 
   '@types/parse-json@4.0.2': {}
 
@@ -5191,7 +5191,7 @@ snapshots:
       obug: 3.0.0
       std-env: 4.3.0
       tinyrainbow: 3.2.0
-      vitest: 5.0.5(@types/node@22.13.4)(@vitest/coverage-v8@5.0.5)(jsdom@26.0.0)(vite@6.4.5(@types/node@22.13.4)(yaml@2.9.0))
+      vitest: 5.0.5(@types/node@22.20.5)(@vitest/coverage-v8@5.0.5)(jsdom@26.0.0)(vite@6.4.5(@types/node@22.20.5)(yaml@2.9.0))
 
   '@vitest/istanbul-lib-coverage@1.0.2': {}
 
@@ -5199,14 +5199,14 @@ snapshots:
     dependencies:
       '@vitest/istanbul-lib-coverage': 1.0.2
 
-  '@vitest/mocker@5.0.5(vite@6.4.5(@types/node@22.13.4)(yaml@2.9.0))':
+  '@vitest/mocker@5.0.5(vite@6.4.5(@types/node@22.20.5)(yaml@2.9.0))':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.31
       '@vitest/spy': 5.0.5
       estree-walker: 3.0.3
       magic-string: 1.4.5
     optionalDependencies:
-      vite: 6.4.5(@types/node@22.13.4)(yaml@2.9.0)
+      vite: 6.4.5(@types/node@22.20.5)(yaml@2.9.0)
 
   '@vitest/spy@5.0.5': {}
 
@@ -5573,7 +5573,7 @@ snapshots:
 
   cookie@0.7.2: {}
 
-  cookie@1.0.2: {}
+  cookie@1.1.1: {}
 
   core-js-compat@3.51.0:
     dependencies:
@@ -7304,7 +7304,7 @@ snapshots:
 
   react-router@7.18.5(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
-      cookie: 1.0.2
+      cookie: 1.1.1
       react: 19.3.1
       set-cookie-parser: 2.7.3
     optionalDependencies:
@@ -7825,7 +7825,7 @@ snapshots:
       has-symbols: 1.1.0
       which-boxed-primitive: 1.1.1
 
-  undici-types@6.20.0: {}
+  undici-types@6.21.0: {}
 
   undici@7.30.1: {}
 
@@ -7905,13 +7905,13 @@ snapshots:
       '@types/unist': 3.0.3
       vfile-message: 4.0.3
 
-  vite-node@3.2.4(@types/node@22.13.4)(yaml@2.9.0):
+  vite-node@3.2.4(@types/node@22.20.5)(yaml@2.9.0):
     dependencies:
       cac: 6.7.14
       debug: 4.4.3
       es-module-lexer: 1.7.0
       pathe: 2.0.3
-      vite: 6.4.5(@types/node@22.13.4)(yaml@2.9.0)
+      vite: 6.4.5(@types/node@22.20.5)(yaml@2.9.0)
     transitivePeerDependencies:
       - '@types/node'
       - jiti
@@ -7926,7 +7926,7 @@ snapshots:
       - tsx
       - yaml
 
-  vite@6.4.5(@types/node@22.13.4)(yaml@2.9.0):
+  vite@6.4.5(@types/node@22.20.5)(yaml@2.9.0):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.7)
@@ -7935,14 +7935,14 @@ snapshots:
       rollup: 4.67.2
       tinyglobby: 0.2.17
     optionalDependencies:
-      '@types/node': 22.13.4
+      '@types/node': 22.20.5
       fsevents: 2.3.3
       yaml: 2.9.0
 
-  vitest@5.0.5(@types/node@22.13.4)(@vitest/coverage-v8@5.0.5)(jsdom@26.0.0)(vite@6.4.5(@types/node@22.13.4)(yaml@2.9.0)):
+  vitest@5.0.5(@types/node@22.20.5)(@vitest/coverage-v8@5.0.5)(jsdom@26.0.0)(vite@6.4.5(@types/node@22.20.5)(yaml@2.9.0)):
     dependencies:
       '@types/chai': 5.2.3
-      '@vitest/mocker': 5.0.5(vite@6.4.5(@types/node@22.13.4)(yaml@2.9.0))
+      '@vitest/mocker': 5.0.5(vite@6.4.5(@types/node@22.20.5)(yaml@2.9.0))
       chai: 6.3.0
       es-module-lexer: 2.3.2
       expect-type: 1.4.0
@@ -7953,10 +7953,10 @@ snapshots:
       tinybench: 6.2.2
       tinyexec: 1.3.1
       tinyglobby: 0.2.17
-      vite: 6.4.5(@types/node@22.13.4)(yaml@2.9.0)
+      vite: 6.4.5(@types/node@22.20.5)(yaml@2.9.0)
       why-is-node-running: 3.2.1
     optionalDependencies:
-      '@types/node': 22.13.4
+      '@types/node': 22.20.5
       '@vitest/coverage-v8': 5.0.5(vitest@5.0.5)
       jsdom: 26.0.0
     transitivePeerDependencies:
