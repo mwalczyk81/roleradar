@@ -15,6 +15,7 @@ RoleRadar is a single-owner, local-first job-search tracker. A stdio MCP server 
 - Build quietly: `dotnet build RoleRadar.sln -c Release -v q --nologo -warnaserror`
 - Fast tests (Architecture + Unit + Contract): `pwsh ./scripts/test-fast.ps1`
 - Web typecheck: `pnpm --filter web run typecheck`
+- Linux web gate (typecheck, lint, tests, build, e2e in node:22): `bash scripts/linux-web-check.sh` from Git Bash. Windows runs alone are not enough before a web phase boundary: the Linux CI image is stricter.
 - One project or test: `dotnet test tests/RoleRadar.Tests.Unit -c Release --filter "FullyQualifiedName~Name"`
 - Use the fast loop while working. Run `pwsh ./scripts/review-gate.ps1` (includes Integration) once at the end of a feature phase or when asked, and report numbers from its output, never remembered ones.
 - Never run anything against the developer's running Mongo, `docker compose down -v`, `wipe`, or `restore --force-overwrite`.

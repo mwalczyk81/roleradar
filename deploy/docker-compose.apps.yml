@@ -35,7 +35,8 @@ services:
       - DOTNET_gcServer=0
     volumes:
       - ./data/backup:/data/backup:rw
-    network_mode: default
+    # No network_mode here: like mongo, api and web, the service joins the compose project network (deploy_default), so the
+    # hostname "mongo" in the connection string resolves. network_mode: default put it on Docker's plain bridge instead.
 
   mcp:
     profiles: ["apps"]
