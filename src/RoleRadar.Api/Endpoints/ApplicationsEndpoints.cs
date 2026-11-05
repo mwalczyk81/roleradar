@@ -158,7 +158,8 @@ public static class ApplicationsEndpoints
             ? eventsRes.Value.Select(e => new ApplicationEventDto(
                 EventType: e.EventType.ToSnakeCase(),
                 EventDate: e.EventDate,
-                Notes: e.Notes)).ToArray()
+                Notes: e.Notes,
+                EventSource: e.EventSource)).ToArray()
             : [];
 
         return new ApplicationDetailDto(

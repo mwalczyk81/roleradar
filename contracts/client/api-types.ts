@@ -498,6 +498,7 @@ export interface components {
             eventType: string;
             eventDate: string;
             notes: null | string;
+            eventSource?: null | string;
         };
         AssessmentNoteSummaryDto: {
             /** Format: uuid */
@@ -591,12 +592,19 @@ export interface components {
             compensation: components["schemas"]["PostingCompensationDto"];
             signals: components["schemas"]["PostingSignalDto"][];
             assessmentNote: null | components["schemas"]["AssessmentNoteSummaryDto"];
+            warnings?: null | components["schemas"]["PostingWarningDto"][];
+            /** Format: uuid */
+            applicationId?: null | string;
         };
         PostingSignalDto: {
             signalType: string;
             evidence: string;
             /** Format: date-time */
             detectedAt: string;
+        };
+        PostingWarningDto: {
+            code: string;
+            message: string;
         };
         RecordApplicationRequestDto: {
             /** Format: uuid */
@@ -641,6 +649,7 @@ export interface components {
             versionToken: string;
             resurfacePolicy?: null | string;
             overrideReason?: null | string;
+            eventDate?: null | string;
         };
         UpdateCareerSourceRequestDto: {
             /** Format: uuid */

@@ -9,7 +9,7 @@ import { createApiClient, mapApiError } from "../lib/api-client.server.js";
 import { buildODataQuery } from "../lib/odata-client.js";
 import { loadODataList } from "../lib/odata-list.server.js";
 import { validateCsrfToken } from "../lib/csrf.server.js";
-import { AppShell, Badge, Card, Button, Toast, ToastRegion } from "../ui.js";
+import { Alert, AppShell, Badge, Card, Button, Toast, ToastRegion } from "../ui.js";
 import { TransitionPostingDialog } from "../components/TransitionPostingDialog.jsx";
 import { CreateApplicationDialog } from "../components/CreateApplicationDialog.jsx";
 import { ArrowLeft } from "lucide-react";
@@ -276,6 +276,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
       ? overrideReasonRaw.trim()
       : undefined;
 
+  const eventDateRaw = formData.get("eventDate");
+  const eventDate: string | undefined =
+    typeof eventDateRaw === "string" && eventDateRaw.trim().length > 0 ? eventDateRaw.trim() : undefined;
+
   // Invariant: Target applied is NEVER reachable through disposition matrix
   if (toDisposition.toLowerCase() === "applied") {
     return data<TransitionActionError>(
@@ -310,10 +314,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
       versionToken,
       resurfacePolicy,
       overrideReason,
+      eventDate,
     },
   });
 
-  await assertApiOk(transitionRes.response, request, session.sessionId);
+  await assertApiOk(transitionRes.response, request, session.sessionId, { notFoundMessage: "Posting Not Found" });
 
   if (transitionRes.response.status === 409) {
     return data<TransitionActionError>(
@@ -378,6 +383,9 @@ export default function PostingDetail() {
     fetcher.data?.ok === false && fetcher.data?.isConflict && !conflictToastDismissed
   );
 
+  // Notices come back with a successful transition. Their text is the API's; the page never looks at the code.
+  const warnings = fetcher.data?.ok && fetcher.data.intent !== "create_application" ? fetcher.data.posting.warnings ?? [] : [];
+
   const dispMeta = DISPOSITION_METADATA[posting.disposition as PostingDisposition] ?? {
     label: posting.disposition,
     tone: "neutral",
@@ -427,6 +435,16 @@ export default function PostingDetail() {
             <span>Back to Job Postings</span>
           </Link>
         </div>
+
+        {warnings.length > 0 ? (
+          <Alert variant="warning" title="Heads up">
+            <div className="posting-warnings">
+              {warnings.map((warning, index) => (
+                <p key={index}>{warning.message}</p>
+              ))}
+            </div>
+          </Alert>
+        ) : null}
 
         {/* Top Summary Card */}
         <Card style={{ padding: "var(--ds-space-5)" }}>
@@ -622,6 +640,7 @@ export default function PostingDetail() {
           currentDisposition={posting.disposition}
           currentResurfacePolicy={posting.resurfacePolicy}
           versionToken={posting.versionToken}
+          applicationId={posting.applicationId}
           csrfToken={loaderData.csrfToken}
           criteria={loaderData.criteria}
           fetcher={fetcher}

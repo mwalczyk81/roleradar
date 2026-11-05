@@ -28,6 +28,17 @@ public sealed record ErrorEnvelope(
             return Results.BadRequest(Validation("The request payload failed validation."));
         }
 
+        if (error.Value.Code == RoleRadar.Application.Abstractions.ErrorCode.ValidationError
+            && error.Value.Metadata is not null
+            && error.Value.Metadata.TryGetValue("field", out var field)
+            && field is string fieldName
+            && !string.IsNullOrWhiteSpace(fieldName))
+        {
+            return Results.BadRequest(Validation(
+                error.Value.Message,
+                [new ErrorFieldDetail(fieldName, error.Value.Message)]));
+        }
+
         return error.Value.Code switch
         {
             RoleRadar.Application.Abstractions.ErrorCode.NotFound =>

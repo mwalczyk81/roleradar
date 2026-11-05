@@ -340,6 +340,10 @@ public sealed class RecordApplicationCommandHandler : ICommandHandler<RecordAppl
                     // Non-terminal; posting stays in applied
                     break;
 
+                case ApplicationEventType.Note:
+                    // A remark or correction: never reaches the posting.
+                    break;
+
                 case ApplicationEventType.Rejected:
                     posting.SynchronizeFromApplicationEvent(PostingDisposition.Rejected, command.Event.Notes, now);
                     break;

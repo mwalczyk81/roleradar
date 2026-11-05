@@ -31,7 +31,8 @@ export async function checkAxeInThemes(page: Page) {
 
     await page.evaluate(async () => {
       const animations = document.getAnimations();
-      await Promise.all(animations.map((a) => a.finished));
+      // A cancelled animation (for example a dialog exit that was cut short) rejects `finished`; it has settled either way.
+      await Promise.all(animations.map((a) => a.finished.catch(() => undefined)));
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     });
 

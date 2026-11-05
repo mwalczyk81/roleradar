@@ -39,6 +39,7 @@ Standing rules for every web phase. A phase prompt only adds scope and contract 
 
 - Never commit or push. Leave changes in the working tree for review.
 - Never touch `bin/`, `obj/`, `dist/`.
+- Write every file with LF line endings (`.gitattributes` and `.editorconfig` say so; only `*.cmd` and `*.bat` use CRLF, and fixtures keep their exact bytes). Never write CRLF. If a tool or editor produced CRLF, convert the file before you report.
 - Expected failures return `Result<T>`; never throw them.
 - Every `ICommandHandler` is wrapped by `TransactionAndAuditCommandDecorator`.
 - No hard-delete tools or endpoints. Every write records an append-only audit entry.

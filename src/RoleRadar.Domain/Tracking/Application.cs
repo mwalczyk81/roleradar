@@ -186,6 +186,7 @@ public sealed class Application
             case ApplicationEventType.Applied:
             case ApplicationEventType.FollowUp:
             case ApplicationEventType.Interview:
+            case ApplicationEventType.Note:
                 // Non-terminal events: outcome remains unchanged
                 break;
 

@@ -70,6 +70,9 @@ internal static class InsightsSeed
     /// <summary>Owner A has the full matrix; B must never leak into A; C is empty; D is tiny.</summary>
     public static IReadOnlyList<SeedPosting> Postings { get; } = BuildPostings();
 
+    /// <summary>How many note events the seed carries (feature 008). The twin database carries none.</summary>
+    public static int NoteEventCount { get; } = Postings.Sum(p => p.EventList.Count(e => e.Type == ApplicationEventType.Note));
+
     /// <summary>
     /// Search runs for the stats read (T067). Owner A: one run outside the 90 day window (95 days) and six inside it;
     /// oldest first inside the window the yields are 4, 0, 12, 3, 9, 6. Owner B has two that must never leak.
@@ -98,14 +101,15 @@ internal static class InsightsSeed
             // ---- postings with an application (owner A) ----
             // Ages around the 14 and 30 day cutoffs, no events.
             A("age-00-edge", Applied, 12, 0),
-            A("age-05", Applied, 12, 5),
+            A("age-05", Applied, 12, 5, E(ApplicationEventType.Note, 2)),
             A("age-13-interview", Applied, 20, 13, E(ApplicationEventType.Interview, 8)),
             A("age-14-interview", Applied, 20, 14, E(ApplicationEventType.Interview, 8)),
             A("age-29-silent", Applied, 40, 29),
             A("age-30-silent", Applied, 40, 30),
             A("age-31-silent", Applied, 40, 31),
             A("age-44-follow-up-only", Applied, 60, 44, E(ApplicationEventType.FollowUp, 40)),
-            A("age-50-silent", Applied, 60, 50),
+            // Feature 008: this old, silent application carries a note and must stay ghosted.
+            A("age-50-silent", Applied, 60, 50, E(ApplicationEventType.Note, 45)),
             // Window edges (90 day window is asOf-89 .. asOf).
             A("window-first-instant", Applied, 100, 89),
             A("window-just-outside", Applied, 100, 90),
@@ -113,7 +117,8 @@ internal static class InsightsSeed
             // First seen before the window, applied inside it.
             A("seen-before-window", Applied, 150, 20),
             // Rejections.
-            A("rej-no-interview", Rejected, 70, 60, E(ApplicationEventType.Rejected, 55)),
+            // Feature 008: a correction note after the rejection is not a second rejection.
+            A("rej-no-interview", Rejected, 70, 60, E(ApplicationEventType.Rejected, 55), E(ApplicationEventType.Note, 50)),
             A("rej-after-interview", Rejected, 70, 60, E(ApplicationEventType.Interview, 50), E(ApplicationEventType.Rejected, 40)),
             A("rej-same-day-as-interview", Rejected, 70, 60, E(ApplicationEventType.Interview, 45), E(ApplicationEventType.Rejected, 45)),
             A("rej-then-interview-dated-later", Rejected, 80, 70, E(ApplicationEventType.Rejected, 65), E(ApplicationEventType.Interview, 60)),
@@ -121,13 +126,13 @@ internal static class InsightsSeed
             A("rej-recent", Rejected, 30, 20, E(ApplicationEventType.Rejected, 10)),
             // Offers.
             A("offer-after-interview", Applied, 60, 50, E(ApplicationEventType.Interview, 40), E(ApplicationEventType.Offer, 30)),
-            A("offer-no-interview", Applied, 60, 50, E(ApplicationEventType.Offer, 30)),
+            A("offer-no-interview", Applied, 60, 50, E(ApplicationEventType.Offer, 30), E(ApplicationEventType.Note, 20)),
             A("offer-accepted", Applied, 90, 80, E(ApplicationEventType.Interview, 70), E(ApplicationEventType.Offer, 60), E(ApplicationEventType.OfferAccepted, 55)),
             A("offer-declined", Applied, 90, 80, E(ApplicationEventType.Offer, 60), E(ApplicationEventType.OfferDeclined, 50)),
             // Candidate-side terminal event.
             A("withdrawn", Applied, 60, 45, E(ApplicationEventType.FollowUp, 40), E(ApplicationEventType.Withdrawn, 35)),
             // Interviews at various stages.
-            A("interview-mid", Applied, 50, 40, E(ApplicationEventType.Interview, 30)),
+            A("interview-mid", Applied, 50, 40, E(ApplicationEventType.Interview, 30), E(ApplicationEventType.Note, 25)),
             A("interview-two-rounds", Applied, 50, 35, E(ApplicationEventType.Interview, 28), E(ApplicationEventType.Interview, 20)),
             A("interview-then-silent-old", Applied, 120, 100, E(ApplicationEventType.Interview, 90)),
             // Applied to a posting whose disposition later became closed (still has an application).
@@ -200,7 +205,7 @@ internal static class InsightsSeed
     /// Writes the seed through the real repositories (company, posting, application, events), exactly in the order
     /// the import and the handlers do: application row, "applied" event, further events, outcome via the domain.
     /// </summary>
-    public static async Task WriteAsync(IMongoClient client, IMongoDatabase database, DateOnly asOf)
+    public static async Task WriteAsync(IMongoClient client, IMongoDatabase database, DateOnly asOf, bool includeNotes = true)
     {
         var companies = new MongoCompanyRepository(client, database);
         var postings = new MongoPostingRepository(client, database);
@@ -251,7 +256,8 @@ internal static class InsightsSeed
             Ok(await applications.AppendEventAsync(ApplicationEvent.Create(
                 seed.Owner, application.Id, DateText(asOf, seed.AppliedDaysBeforeAsOf.Value), ApplicationEventType.Applied, now: appliedAt)));
 
-            foreach (var ev in seed.EventList)
+            // The twin database (feature 008) is written without the note events to prove they are inert.
+            foreach (var ev in seed.EventList.Where(e => includeNotes || e.Type != ApplicationEventType.Note))
             {
                 var when = Instant(asOf, ev.DaysBeforeAsOf);
                 Ok(await applications.AppendEventAsync(ApplicationEvent.Create(

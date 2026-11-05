@@ -1,7 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import crypto from "node:crypto";
+import * as client from "openid-client";
 import { action as postingDetailAction } from "../../app/routes/postings.$id.js";
 import * as apiClientModule from "../../app/lib/api-client.server.js";
+import { setOidcConfigForTesting } from "../../app/lib/oidc.server.js";
 import { callAction } from "../test-helpers.js";
 import {
   saveSession,
@@ -16,7 +18,20 @@ describe("POST /postings/:id action (T035)", () => {
 
   beforeEach(() => {
     setSessionEncryptionKeyForTesting(dummyKey);
+    setOidcConfigForTesting(
+      new client.Configuration(
+        {
+          issuer: "https://identity:5001",
+          authorization_endpoint: "https://identity:5001/connect/authorize",
+          token_endpoint: "https://identity:5001/connect/token",
+          end_session_endpoint: "https://identity:5001/connect/endsession",
+        },
+        "roleradar-web",
+        "test-secret"
+      )
+    );
     vi.restoreAllMocks();
+    mockApiPost.mockReset();
     vi.spyOn(apiClientModule, "createApiClient").mockReturnValue({
       POST: mockApiPost,
     } as unknown as ReturnType<typeof apiClientModule.createApiClient>);
@@ -277,5 +292,168 @@ describe("POST /postings/:id action (T035)", () => {
     expect(status).toBe(500);
     expect(data.ok).toBe(false);
     expect(String(data.message)).toContain("Database connection failed");
+  });
+
+  // ---- 008 phase 4 (T050): eventDate, warnings, status handling ----
+
+  function transitionRequest(sessionId: string, csrf: string, fields: Record<string, string>, postingId = "post-1") {
+    const formData = new FormData();
+    formData.set("_csrf", csrf);
+    for (const [k, v] of Object.entries(fields)) formData.set(k, v);
+    return new Request(`https://localhost:5003/postings/${postingId}`, {
+      method: "POST",
+      headers: { Cookie: `${SECURE_COOKIE_NAME}=${sessionId}` },
+      body: formData,
+    });
+  }
+
+  const baseFields = { toDisposition: "rejected", reason: "Rejected by email", versionToken: "ver-1" };
+
+  async function thrownFrom(run: () => Promise<unknown>): Promise<Response | null> {
+    try {
+      await run();
+    } catch (err: unknown) {
+      if (err instanceof Response) return err;
+    }
+    return null;
+  }
+
+  it("forwards a submitted eventDate to the API, trimmed", async () => {
+    const { sessionId, session } = createTestSession();
+    mockApiPost.mockResolvedValueOnce({
+      data: { id: "post-1", disposition: "rejected", warnings: [], applicationId: "app-1" },
+      error: undefined,
+      response: { status: 200 } as Response,
+    });
+
+    const request = transitionRequest(sessionId, session.csrfToken, { ...baseFields, eventDate: " 2026-09-15 " });
+    const result = await callAction(postingDetailAction, request, { id: "post-1" });
+
+    expect(unwrapActionResult(result).status).toBe(200);
+    const [, options] = mockApiPost.mock.calls[0];
+    expect(options.body.eventDate).toBe("2026-09-15");
+  });
+
+  it("sends no eventDate when the field is blank or absent", async () => {
+    const { sessionId, session } = createTestSession();
+    mockApiPost.mockResolvedValue({
+      data: { id: "post-1", disposition: "rejected" },
+      error: undefined,
+      response: { status: 200 } as Response,
+    });
+
+    await callAction(postingDetailAction, transitionRequest(sessionId, session.csrfToken, { ...baseFields, eventDate: "  " }), { id: "post-1" });
+    await callAction(postingDetailAction, transitionRequest(sessionId, session.csrfToken, baseFields), { id: "post-1" });
+
+    for (const [, options] of mockApiPost.mock.calls) {
+      expect(options.body.eventDate ?? null).toBeNull();
+    }
+  });
+
+  it("returns the API posting with its warnings untouched, as typed action data", async () => {
+    const { sessionId, session } = createTestSession();
+    const posting = {
+      id: "post-1",
+      disposition: "lead",
+      applicationId: "app-1",
+      warnings: [{ code: "any_code_at_all", message: "Fictional warning text." }],
+    };
+    mockApiPost.mockResolvedValueOnce({ data: posting, error: undefined, response: { status: 200 } as Response });
+
+    const result = await callAction(
+      postingDetailAction,
+      transitionRequest(sessionId, session.csrfToken, { toDisposition: "lead", reason: "Reopened", versionToken: "ver-1", overrideReason: "Recruiter reopened" }),
+      { id: "post-1" }
+    );
+
+    const { status, data } = unwrapActionResult(result);
+    expect(status).toBe(200);
+    expect(data.ok).toBe(true);
+    expect(data.posting).toEqual(posting);
+  });
+
+  it("maps a 400 with an eventDate detail into an inline field error", async () => {
+    const { sessionId, session } = createTestSession();
+    mockApiPost.mockResolvedValueOnce({
+      data: undefined,
+      error: {
+        ok: false,
+        errorCode: "validation_error",
+        message: "Validation failed.",
+        details: [{ field: "eventDate", message: "Event date must be a valid date in yyyy-MM-dd format." }],
+      },
+      response: { status: 400 } as Response,
+    });
+
+    const result = await callAction(
+      postingDetailAction,
+      transitionRequest(sessionId, session.csrfToken, { ...baseFields, eventDate: "09/15/2026" }),
+      { id: "post-1" }
+    );
+
+    const { status, data } = unwrapActionResult(result);
+    expect(status).toBe(400);
+    expect(data.ok).toBe(false);
+    expect((data.fieldErrors as Record<string, string>).eventDate).toBe("Event date must be a valid date in yyyy-MM-dd format.");
+  });
+
+  it("does not call the API when the CSRF token is wrong", async () => {
+    const { sessionId } = createTestSession();
+    const result = await callAction(
+      postingDetailAction,
+      transitionRequest(sessionId, "not-the-token", { ...baseFields, eventDate: "2026-09-15" }),
+      { id: "post-1" }
+    );
+
+    expect(unwrapActionResult(result).status).toBe(403);
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it("redirects to /not-authorized when the API answers 403", async () => {
+    const { sessionId, session } = createTestSession();
+    mockApiPost.mockResolvedValueOnce({
+      data: undefined,
+      error: { ok: false, errorCode: "FORBIDDEN", message: "Forbidden" },
+      response: { status: 403 } as Response,
+    });
+
+    const thrown = await thrownFrom(() =>
+      callAction(postingDetailAction, transitionRequest(sessionId, session.csrfToken, baseFields), { id: "post-1" })
+    );
+
+    expect(thrown?.status).toBe(302);
+    expect(thrown?.headers.get("Location")).toBe("/not-authorized");
+  });
+
+  it("throws a 404 response when the API cannot find the posting", async () => {
+    const { sessionId, session } = createTestSession();
+    mockApiPost.mockResolvedValueOnce({
+      data: undefined,
+      error: { ok: false, errorCode: "NOT_FOUND", message: "Posting not found." },
+      response: { status: 404 } as Response,
+    });
+
+    const thrown = await thrownFrom(() =>
+      callAction(postingDetailAction, transitionRequest(sessionId, session.csrfToken, baseFields), { id: "post-1" })
+    );
+
+    expect(thrown?.status).toBe(404);
+  });
+
+  it("redirects into the login flow once when the API answers 401", async () => {
+    const { sessionId, session } = createTestSession();
+    mockApiPost.mockResolvedValueOnce({
+      data: undefined,
+      error: { ok: false, errorCode: "UNAUTHORIZED", message: "Token expired" },
+      response: { status: 401 } as Response,
+    });
+
+    const thrown = await thrownFrom(() =>
+      callAction(postingDetailAction, transitionRequest(sessionId, session.csrfToken, baseFields), { id: "post-1" })
+    );
+
+    expect(thrown?.status).toBe(302);
+    expect(thrown?.headers.get("Location")).toContain("/auth");
+    expect(mockApiPost).toHaveBeenCalledTimes(1);
   });
 });

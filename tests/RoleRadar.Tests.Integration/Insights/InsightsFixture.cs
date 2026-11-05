@@ -22,6 +22,9 @@ public abstract class InsightsFixtureBase : IAsyncLifetime
 
     public string DatabaseName { get; } = InsightsSeedGuard.NewDatabaseName();
 
+    /// <summary>Whether the seed's note events are written (feature 008). The twin fixture turns this off.</summary>
+    protected virtual bool IncludeNotes => true;
+
     public async ValueTask InitializeAsync()
     {
         _host = new ODataTestHost(DatabaseName, InsightsSeed.AllOwners);
@@ -29,7 +32,7 @@ public abstract class InsightsFixtureBase : IAsyncLifetime
 
         InsightsSeedGuard.AssertIsolated(_host.ContainerConnectionString, DatabaseName, _host.ContainerHost, _host.ContainerPort);
 
-        await InsightsSeed.WriteAsync(_host.Database.Client, _host.Database, AsOf);
+        await InsightsSeed.WriteAsync(_host.Database.Client, _host.Database, AsOf, IncludeNotes);
         await _host.StartApiAsync();
     }
 
@@ -50,6 +53,18 @@ public sealed class InsightsFixture : InsightsFixtureBase
     public InsightsFixture() : base(InsightsSeed.FixedAsOf)
     {
     }
+}
+
+/// <summary>
+/// The fixed-date seed written without its note events: the twin that the figures with notes are compared with.
+/// </summary>
+public sealed class InsightsNoNotesFixture : InsightsFixtureBase
+{
+    public InsightsNoNotesFixture() : base(InsightsSeed.FixedAsOf)
+    {
+    }
+
+    protected override bool IncludeNotes => false;
 }
 
 /// <summary>

@@ -4,6 +4,7 @@ import { useLoaderData, useFetcher, useRevalidator, Link, data } from "react-rou
 import React from "react";
 import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
 import { useTheme } from "../lib/use-theme.js";
+import { useCloseOnSubmitSuccess } from "../lib/use-close-on-submit-success.js";
 import { createApiClient, mapApiError } from "../lib/api-client.server.js";
 import { validateCsrfToken } from "../lib/csrf.server.js";
 import { getNavItems } from "../lib/nav.js";
@@ -260,12 +261,11 @@ export default function ApplicationDetail() {
     }
   }, [isDialogOpen]);
 
-  React.useEffect(() => {
-    if (isDialogOpen && fetcher.data?.ok === true && fetcher.state === "idle") {
-      setIsDialogOpen(false);
-      revalidator.revalidate();
-    }
-  }, [isDialogOpen, fetcher.data, fetcher.state, revalidator]);
+  const closeAfterAppend = React.useCallback(() => {
+    setIsDialogOpen(false);
+    revalidator.revalidate();
+  }, [revalidator]);
+  useCloseOnSubmitSuccess(isDialogOpen, fetcher, closeAfterAppend);
 
   const navItems = getNavItems("/applications");
 
@@ -431,6 +431,7 @@ export default function ApplicationDetail() {
                 return (
                   <div
                     key={`${ev.eventType}-${ev.eventDate}-${index}`}
+                    data-testid="timeline-event"
                     style={{
                       display: "flex",
                       flexDirection: "column",
@@ -464,6 +465,12 @@ export default function ApplicationDetail() {
                         {formatDate(ev.eventDate)}
                       </span>
                     </div>
+
+                    {ev.eventSource ? (
+                      <span className="event-source" data-testid="event-source">
+                        Source: {ev.eventSource}
+                      </span>
+                    ) : null}
 
                     {ev.notes ? (
                       <p

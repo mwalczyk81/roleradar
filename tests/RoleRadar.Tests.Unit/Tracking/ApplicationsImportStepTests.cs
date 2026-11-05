@@ -108,6 +108,52 @@ public sealed class ApplicationsImportStepTests
     }
 
     [Fact]
+    public async Task ApplicationsStep_NeverCreatesANoteEvent_AStandaloneNoteRowBecomesANoteEntityOnly()
+    {
+        // Feature 008: the importer reads no event-type column. It writes only applied and rejected events, and a
+        // standalone_note row is a vault Note, never an application event of type note.
+        var tempDir = CreateTempDir();
+        try
+        {
+            var csv = """
+                kind,company,title,req,applied_on,rejected,rejected_date_md,desired_salary,referral,fit,resume_variant,people_detected,review_flags,raw,decision,corrected_notes
+                application,Acme Corp,Software Architect,REQ-101,2026-03-10,true,2026-04-01,215000,true,strong_fit,tailored,,,Applied via referral,,Correction: the rejection arrived on 2026-04-02
+                standalone_note,Globex,General Inquiry,,2026-03-08,,,,,,,,,Informational interview notes,,
+                """;
+            File.WriteAllText(Path.Combine(tempDir, "applications.csv"), csv);
+
+            var inMemoryCtx = new InMemoryApplicationContext();
+            var existingPosting = Posting.Create(
+                ownerId: TestOwnerId,
+                companyId: Guid.NewGuid(),
+                title: "Software Architect",
+                sourceKind: SourceKind.Aggregator,
+                requisitionId: "REQ-101",
+                disposition: PostingDisposition.Scored);
+            inMemoryCtx.SavedPostings.Add(existingPosting);
+
+            var step = new ApplicationsStep(new Rfc4180CsvParser(), inMemoryCtx);
+            var context = new TrackerImportContext { OwnerId = TestOwnerId, BundleDirectory = tempDir, DefaultDate = TestDefaultDate };
+            context.IndexPosting(existingPosting, "Acme Corp");
+
+            var result = await step.ExecuteAsync(context);
+
+            Assert.True(result.IsSuccess);
+            Assert.Equal(1, context.Summary.StandaloneNotesCreated);
+            Assert.NotEmpty(inMemoryCtx.SavedEvents);
+            Assert.DoesNotContain(inMemoryCtx.SavedEvents, e => e.EventType == ApplicationEventType.Note);
+            Assert.All(inMemoryCtx.SavedEvents, e => Assert.True(
+                e.EventType is ApplicationEventType.Applied or ApplicationEventType.Rejected,
+                $"unexpected imported event type {e.EventType}"));
+            Assert.Single(inMemoryCtx.SavedNotes);
+        }
+        finally
+        {
+            Directory.Delete(tempDir, true);
+        }
+    }
+
+    [Fact]
     public async Task ApplicationsStep_ThreeBlankTitleNoteRows_CreateThreeDistinctNotes_AndSecondRunIsIdempotent()
     {
         var tempDir = CreateTempDir();
