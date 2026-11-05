@@ -4,7 +4,7 @@
 
 **Created**: 2026-11-04
 
-**Status**: Implemented (tasks Phases 1 to 5); ADRs 0029 to 0032 await acceptance (T095)
+**Status**: Implemented (all phases); ADRs 0029 to 0032 accepted
 
 **Input**: User description: "A read-only Insights page showing the job-search funnel and rates, built on the 006 read model, plus Markdown rendering of note bodies as a separate small story."
 

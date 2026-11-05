@@ -1,6 +1,6 @@
 # ADR 0031: Derived Read-Model Flags for Insights, Written Only at the Repository Choke Point
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-11-04
 - **Feature**: `007-insights-dashboard`
 

@@ -195,7 +195,7 @@ description: "Task list for 007-insights-dashboard"
 - [X] T092 [P] Performance check on the seed with at least 1,000 postings and 300 applications: Insights ready within 2 seconds (SC-008); if not met, report the slowest requests rather than changing ADR 0029
 - [X] T093 [P] Verify SC-001 to SC-009 each against evidence from a named test or command in a short table in the final report
 - [X] T094 Final `pwsh ./scripts/review-gate.ps1`; report numbers from its output; leave all changes uncommitted in the working tree for review
-- [ ] T095 [Matt] Review ADRs 0029 to 0032 and move each from Proposed to Accepted when satisfied; run the T036 operator step on the real database before trusting the dashboard
+- [X] T095 [Matt] (done 2026-11-05: ADRs 0029 to 0032 accepted; T036 backfill done 2026-11-04) Review ADRs 0029 to 0032 and move each from Proposed to Accepted when satisfied; run the T036 operator step on the real database before trusting the dashboard
 
 ---
 

@@ -1,6 +1,6 @@
 # ADR 0030: Insights Stats Read Computed In Memory Through `IOwnerReadSeam`
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-11-04
 - **Feature**: `007-insights-dashboard`
 

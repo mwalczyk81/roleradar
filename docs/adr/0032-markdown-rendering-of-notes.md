@@ -1,6 +1,6 @@
 # ADR 0032: Markdown Rendering of Note Bodies
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-11-04
 - **Feature**: `007-insights-dashboard` (Phase 5 of `tasks.md`, plan Phase 4; ships independently of the Insights work)
 

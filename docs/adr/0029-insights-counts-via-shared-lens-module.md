@@ -1,6 +1,6 @@
 # ADR 0029: Insights Counts via OData `$count` and One Shared Lens Module
 
-- **Status**: Proposed
+- **Status**: Accepted
 - **Date**: 2026-11-04
 - **Feature**: `007-insights-dashboard`
 
