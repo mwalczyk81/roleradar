@@ -320,6 +320,13 @@ jobs:
           docker build -f deploy/Dockerfile.api -t roleradar-api:local .
           docker build -f deploy/Dockerfile.web -t roleradar-web:local .
 
+      # On a web-only change (package.json, pnpm-lock.yaml, web/**) the full test suite is skipped, so nothing has created
+      # TestResults yet. The Trivy containers below would then create it as root, and the launched-host test could not
+      # write its scan report there ("Access ... is denied").
+      - name: Create the TestResults directory as the runner user
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.images == 'true'
+        run: mkdir -p TestResults
+
       - name: Run Trivy vulnerability scan on container images
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.images == 'true'
         run: |
