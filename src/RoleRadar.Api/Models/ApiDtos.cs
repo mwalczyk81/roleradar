@@ -33,7 +33,13 @@ public sealed record PostingDetailDto(
     string? Url,
     PostingCompensationDto Compensation,
     IReadOnlyList<PostingSignalDto> Signals,
-    AssessmentNoteSummaryDto? AssessmentNote);
+    AssessmentNoteSummaryDto? AssessmentNote,
+    IReadOnlyList<PostingWarningDto>? Warnings = null);
+
+/// <summary>A notice returned by the transition endpoint. Clients show <c>Message</c> and never branch on <c>Code</c>.</summary>
+public sealed record PostingWarningDto(
+    string Code,
+    string Message);
 
 public sealed record TransitionPostingRequestDto(
     string ToDisposition,
@@ -41,7 +47,8 @@ public sealed record TransitionPostingRequestDto(
     Guid? CriterionId,
     string VersionToken,
     string? ResurfacePolicy = null,
-    string? OverrideReason = null);
+    string? OverrideReason = null,
+    string? EventDate = null);
 
 // Companies DTOs
 public sealed record CareerSourceDto(
@@ -87,7 +94,8 @@ public sealed record UpdateCompanyRequestDto(
 public sealed record ApplicationEventDto(
     string EventType,
     string EventDate,
-    string? Notes);
+    string? Notes,
+    string? EventSource = null);
 
 public sealed record ApplicationDetailDto(
     Guid Id,

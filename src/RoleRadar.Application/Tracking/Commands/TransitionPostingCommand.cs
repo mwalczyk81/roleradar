@@ -90,7 +90,10 @@ public sealed class TransitionPostingCommandValidator : ICommandValidator<Transi
             && !string.IsNullOrWhiteSpace(command.EventDate)
             && !DateOnly.TryParseExact(command.EventDate.Trim(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _))
         {
-            return new ResultError(ErrorCode.ValidationError, $"Event date must be in YYYY-MM-DD format: '{command.EventDate}'.");
+            return new ResultError(
+                ErrorCode.ValidationError,
+                $"Event date must be in YYYY-MM-DD format: '{command.EventDate}'.",
+                new Dictionary<string, object?> { ["field"] = "eventDate" });
         }
 
         if (targetDisp is PostingDisposition.ScreenedOut or PostingDisposition.Closed or PostingDisposition.Rejected)

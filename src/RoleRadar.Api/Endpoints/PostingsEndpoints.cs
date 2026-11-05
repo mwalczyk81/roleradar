@@ -72,6 +72,7 @@ public static class PostingsEndpoints
             CriterionId: request.CriterionId,
             ResurfacePolicy: request.ResurfacePolicy,
             OverrideReason: request.OverrideReason,
+            EventDate: request.EventDate,
             Actor: ApiActor,
             OwnerId: ownerId);
 
@@ -81,13 +82,19 @@ public static class PostingsEndpoints
             return ErrorEnvelope.FromResultError(result.Error);
         }
 
+        // The warning text comes from the Application layer; the API only maps it.
+        var warnings = result.Value!.Warnings
+            .Select(w => new PostingWarningDto(w.Code, w.Message))
+            .ToArray();
+
         return await BuildPostingDetailResultAsync(
             ownerId,
             id,
             postingRepository,
             companyRepository,
             noteRepository,
-            cancellationToken);
+            cancellationToken,
+            warnings);
     }
 
     private static async Task<IResult> BuildPostingDetailResultAsync(
@@ -96,7 +103,8 @@ public static class PostingsEndpoints
         IPostingRepository postingRepository,
         ICompanyRepository companyRepository,
         INoteRepository noteRepository,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyList<PostingWarningDto>? warnings = null)
     {
         var postingRes = await postingRepository.GetByIdAsync(ownerId, postingId, cancellationToken);
         if (!postingRes.IsSuccess || postingRes.Value is null)
@@ -156,7 +164,8 @@ public static class PostingsEndpoints
                 HasSalary: hasSalary,
                 CompHighPriority: posting.CompHighPriority),
             Signals: signals,
-            AssessmentNote: assessmentNote);
+            AssessmentNote: assessmentNote,
+            Warnings: warnings);
 
         return Results.Ok(detail);
     }

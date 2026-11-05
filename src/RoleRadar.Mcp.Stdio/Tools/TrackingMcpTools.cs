@@ -127,7 +127,7 @@ public sealed class TrackingMcpTools
         return SerializeResult(result);
     }
 
-    [McpServerTool(Name = "posting_transition"), Description("Transitions a posting between dispositions (lead, scored, unscored, screened_out, closed, rejected) or reopens a decided posting, validating against the pure domain transition matrix. Note: target 'applied' is disallowed (applications must be created via application_record).")]
+    [McpServerTool(Name = "posting_transition"), Description("Transitions a posting between dispositions (lead, scored, unscored, screened_out, closed, rejected) or reopens a decided posting, validating against the pure domain transition matrix. Note: target 'applied' is disallowed (applications must be created via application_record). Rejecting an applied posting also records a rejected event on its application.")]
     public async Task<string> PostingTransitionAsync(
         [Description("Unique identifier of the posting to transition.")] Guid postingId,
         [Description("Target disposition ('lead', 'scored', 'unscored', 'screened_out', 'closed', 'rejected').")] string targetDisposition,
@@ -136,6 +136,7 @@ public sealed class TrackingMcpTools
         [Description("Referenced screening criterion justifying the transition.")] Guid? criterionId = null,
         [Description("Resurface policy set upon transition to screened_out or closed ('never' or 'if_reopened').")] string? resurfacePolicy = null,
         [Description("Required override reason if explicitly reopening a rejected posting to lead.")] string? overrideReason = null,
+        [Description("Date (YYYY-MM-DD) recorded on the application when rejecting an applied posting. Defaults to today (UTC).")] string? eventDate = null,
         CancellationToken cancellationToken = default)
     {
         var command = new TransitionPostingCommand(
@@ -145,7 +146,8 @@ public sealed class TrackingMcpTools
             Reason: reason,
             CriterionId: criterionId,
             ResurfacePolicy: resurfacePolicy,
-            OverrideReason: overrideReason);
+            OverrideReason: overrideReason,
+            EventDate: eventDate);
 
         var result = await _transitionPostingHandler.HandleAsync(command, cancellationToken);
         return SerializeResult(result);

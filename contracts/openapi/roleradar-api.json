@@ -563,6 +563,12 @@
               "null",
               "string"
             ]
+          },
+          "eventSource": {
+            "type": [
+              "null",
+              "string"
+            ]
           }
         }
       },
@@ -944,6 +950,15 @@
                 "$ref": "#/components/schemas/AssessmentNoteSummaryDto"
               }
             ]
+          },
+          "warnings": {
+            "type": [
+              "null",
+              "array"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/PostingWarningDto"
+            }
           }
         }
       },
@@ -964,6 +979,21 @@
           "detectedAt": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "PostingWarningDto": {
+        "required": [
+          "code",
+          "message"
+        ],
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
           }
         }
       },
@@ -1123,6 +1153,12 @@
             ]
           },
           "overrideReason": {
+            "type": [
+              "null",
+              "string"
+            ]
+          },
+          "eventDate": {
             "type": [
               "null",
               "string"
