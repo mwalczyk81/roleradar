@@ -2,6 +2,7 @@ import React from "react";
 import type { FetcherWithComponents } from "react-router";
 import { Modal, Select, Input, Button } from "../ui.js";
 import type { TransitionActionData } from "../routes/postings.$id.js";
+import { useCloseOnSubmitSuccess } from "../lib/use-close-on-submit-success.js";
 import {
   type PostingDisposition,
   type ResurfacePolicy,
@@ -65,12 +66,8 @@ export function TransitionPostingDialog({
     }
   }, [open, currentDisposition, currentResurfacePolicy]);
 
-  // When transition succeeds, automatically close the dialog
-  React.useEffect(() => {
-    if (open && fetcher?.data?.ok === true && fetcher.state === "idle") {
-      onClose();
-    }
-  }, [open, fetcher?.data, fetcher?.state, onClose]);
+  // When a transition made from this dialog succeeds, close it (not on a reopen with an old success in the fetcher)
+  useCloseOnSubmitSuccess(open, fetcher, onClose);
 
   if (!open) return null;
 

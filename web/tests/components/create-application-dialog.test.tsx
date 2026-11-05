@@ -75,9 +75,42 @@ describe("CreateApplicationDialog Component", () => {
     expect(screen.getByText("Minimum salary must be positive")).toBeDefined();
   });
 
-  it("calls onClose when fetcher.data.ok is true and state is idle", () => {
+  it("calls onClose when a submission made from the dialog succeeds", () => {
     const onClose = vi.fn();
-    const successFetcher = createMockFetcher<TransitionActionData>({
+    const props = {
+      open: true,
+      onClose,
+      postingId: "post-123",
+      currentDisposition: "lead",
+      csrfToken: "csrf-test-token",
+    };
+    const { rerender } = render(
+      <CreateApplicationDialog {...props} fetcher={createMockFetcher<TransitionActionData>()} />
+    );
+
+    rerender(
+      <CreateApplicationDialog
+        {...props}
+        fetcher={createMockFetcher<TransitionActionData>({ state: "submitting" })}
+      />
+    );
+    expect(onClose).not.toHaveBeenCalled();
+
+    rerender(
+      <CreateApplicationDialog
+        {...props}
+        fetcher={createMockFetcher<TransitionActionData>({
+          state: "idle",
+          data: { ok: true } as unknown as TransitionActionData,
+        })}
+      />
+    );
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not close when opened while the fetcher still holds an earlier success", () => {
+    const onClose = vi.fn();
+    const staleSuccessFetcher = createMockFetcher<TransitionActionData>({
       state: "idle",
       data: { ok: true } as unknown as TransitionActionData,
     });
@@ -89,10 +122,10 @@ describe("CreateApplicationDialog Component", () => {
         postingId="post-123"
         currentDisposition="lead"
         csrfToken="csrf-test-token"
-        fetcher={successFetcher}
+        fetcher={staleSuccessFetcher}
       />
     );
 
-    expect(onClose).toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

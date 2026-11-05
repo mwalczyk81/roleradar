@@ -3,6 +3,7 @@ import type { FetcherWithComponents } from "react-router";
 import { Modal, Select, Input, Button, Alert, Checkbox } from "../ui.js";
 import { RESUME_VARIANT_OPTIONS } from "../lib/application-enums.js";
 import { canCreateApplication } from "../lib/dispositions.js";
+import { useCloseOnSubmitSuccess } from "../lib/use-close-on-submit-success.js";
 import type { TransitionActionData } from "../routes/postings.$id.js";
 
 export interface CreateApplicationDialogProps {
@@ -53,11 +54,7 @@ export function CreateApplicationDialog({
     }
   }, [open, requiresOverride]);
 
-  React.useEffect(() => {
-    if (open && fetcher.data?.ok === true && fetcher.state === "idle") {
-      onClose();
-    }
-  }, [open, fetcher.data, fetcher.state, onClose]);
+  useCloseOnSubmitSuccess(open, fetcher, onClose);
 
   const fieldErrors =
     fetcher.data && !fetcher.data.ok ? fetcher.data.fieldErrors || {} : {};
