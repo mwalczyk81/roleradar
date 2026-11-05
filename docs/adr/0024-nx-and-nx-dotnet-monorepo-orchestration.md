@@ -187,6 +187,8 @@ The GitHub Actions CI pipeline (`.github/workflows/ci.yml`) is structured to exe
 
 Automated verification is implemented in `scripts/verify-ci-affected.ps1`, which dynamically parses the filter definitions and job/step `if:` expressions directly from `.github/workflows/ci.yml` at runtime.
 
+> **Note (2026-11-04)**: `scripts/verify-ci-affected.ps1` was removed. Nothing ran it (it was not called from `ci.yml`, pre-commit, `package.json`, the nx configuration or any other script), and it re-implemented the workflow's path filters and `if:` expressions in a second place that had to be kept in step by hand. The `ci-gate` job in `.github/workflows/ci.yml` is the verification: it aggregates the result of every job and fails the pull request when a job that should have run did not succeed. The scenario table above still describes the intended behaviour.
+
 ## Consequences
 
 ### Positive
