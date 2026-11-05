@@ -268,4 +268,90 @@ describe("Applications Component Views", () => {
 
     expect(await findByText("No timeline events recorded for this application.")).toBeDefined();
   });
+
+  it("shows the Note label, offers note in the append form, and shows each event's source (FR-016, FR-006, SC-006)", async () => {
+    const app = {
+      id: "app-3",
+      postingId: "post-3",
+      companyId: "comp-3",
+      status: "rejected",
+      appliedAt: "2026-09-01",
+      events: [
+        { eventType: "applied", eventDate: "2026-09-01", notes: "Submitted online", eventSource: "web" },
+        { eventType: "rejected", eventDate: "2026-09-15", notes: "Rejected by email", eventSource: "posting_transition" },
+        { eventType: "rejected", eventDate: "2026-09-16", notes: "Rejected by phone", eventSource: "recruiter_call" },
+        { eventType: "note", eventDate: "2026-09-17", notes: "Corrected the rejection date", eventSource: null },
+        { eventType: "follow_up", eventDate: "2026-09-18", notes: "No source recorded here" },
+      ],
+    };
+
+    const AppStub = createRoutesStub([
+      {
+        path: "/applications/:id",
+        Component: ApplicationDetail,
+        loader: () => ({
+          application: app,
+          posting: { id: "post-3", title: "Platform Engineer", companyName: "Harbor Analytics" },
+          company: { id: "comp-3", name: "Harbor Analytics" },
+          csrfToken: "dummy-csrf",
+          userLabel: "matt@example.com",
+        }),
+      },
+    ]);
+
+    const view = render(React.createElement(AppStub, { initialEntries: ["/applications/app-3"] }));
+
+    // The note event is labelled "Note".
+    expect(await view.findByText("Corrected the rejection date")).toBeDefined();
+    const noteCard = view.getByText("Corrected the rejection date").closest("[data-testid='timeline-event']");
+    expect(noteCard).not.toBeNull();
+    expect(noteCard?.textContent).toContain("Note");
+
+    // A posting-driven rejection is told apart from a manual one without leaving the page.
+    const sources = view.getAllByTestId("event-source").map((el) => el.textContent);
+    expect(sources).toEqual(["Source: web", "Source: posting_transition", "Source: recruiter_call"]);
+    const fromPosting = view.getByText("Rejected by email").closest("[data-testid='timeline-event']");
+    expect(fromPosting?.textContent).toContain("Source: posting_transition");
+    const manual = view.getByText("Rejected by phone").closest("[data-testid='timeline-event']");
+    expect(manual?.textContent).toContain("Source: recruiter_call");
+    expect(manual?.textContent).not.toContain("posting_transition");
+
+    // Events with no source show nothing extra.
+    const noSource = view.getByText("No source recorded here").closest("[data-testid='timeline-event']");
+    expect(noSource?.textContent).not.toContain("Source:");
+    expect(noteCard?.textContent).not.toContain("Source:");
+
+    // The append form offers the note type.
+    fireEvent.click(await view.findByRole("button", { name: "Append Event" }));
+    const select = (await view.findByLabelText("Event Type *")) as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value)).toContain("note");
+  });
+
+  it("renders an event source as plain text, never as markup", async () => {
+    const hostile = "<img src=x onerror=alert(1)>";
+    const AppStub = createRoutesStub([
+      {
+        path: "/applications/:id",
+        Component: ApplicationDetail,
+        loader: () => ({
+          application: {
+            id: "app-4",
+            postingId: "post-4",
+            companyId: "comp-4",
+            status: "applied",
+            appliedAt: "2026-09-01",
+            events: [{ eventType: "applied", eventDate: "2026-09-01", notes: null, eventSource: hostile }],
+          },
+          posting: { id: "post-4", title: "Platform Engineer", companyName: "Harbor Analytics" },
+          company: { id: "comp-4", name: "Harbor Analytics" },
+          csrfToken: "dummy-csrf",
+          userLabel: "matt@example.com",
+        }),
+      },
+    ]);
+
+    const view = render(React.createElement(AppStub, { initialEntries: ["/applications/app-4"] }));
+    expect((await view.findByTestId("event-source")).textContent).toBe(`Source: ${hostile}`);
+    expect(view.container.querySelector("img")).toBeNull();
+  });
 });

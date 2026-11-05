@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import React from "react";
 import crypto from "node:crypto";
 import * as client from "openid-client";
-import { render, fireEvent } from "@testing-library/react";
-import { createRoutesStub } from "react-router";
+import { render, fireEvent, waitFor } from "@testing-library/react";
+import { createRoutesStub, data } from "react-router";
 import PostingDetail, { loader as postingDetailLoader } from "../../app/routes/postings.$id.js";
 import * as apiClientModule from "../../app/lib/api-client.server.js";
 import { setOidcConfigForTesting } from "../../app/lib/oidc.server.js";
@@ -311,5 +311,210 @@ describe("GET /postings/:id (T031)", () => {
     expect(reloadBtn).toBeDefined();
     fireEvent.click(reloadBtn);
     expect(queryByText("Concurrency Conflict")).toBeNull();
+  });
+
+  // ---- 008 phase 4: application notice, event date, warnings (T047, T048, T050) ----
+
+  const APPLIED_NOTICE = "This also records the rejection on the application.";
+
+  function stubFor(
+    posting: Record<string, unknown>,
+    action?: (args: { request: Request }) => unknown
+  ) {
+    return createRoutesStub([
+      {
+        path: "/postings/:id",
+        Component: PostingDetail,
+        loader: () => ({
+          posting,
+          criteria: sampleCriteria,
+          csrfToken: "mock-csrf-token-444",
+          userLabel: "matt@example.com",
+        }),
+        ...(action ? { action: action as never } : {}),
+      },
+    ]);
+  }
+
+  async function openDialog(view: ReturnType<typeof render>) {
+    fireEvent.click(await view.findByRole("button", { name: "Change Disposition" }));
+    return view.findByLabelText("Target Disposition *");
+  }
+
+  describe("application notice (FR-015)", () => {
+    const applied = { ...samplePosting, disposition: "applied", applicationId: "app-1" };
+
+    it("states the rejection is also recorded on the application: applied posting WITH an application, target rejected", async () => {
+      const Stub = stubFor(applied);
+      const view = render(React.createElement(Stub, { initialEntries: ["/postings/post-1"] }));
+      const target = await openDialog(view);
+      fireEvent.change(target, { target: { value: "rejected" } });
+      expect(await view.findByText(APPLIED_NOTICE)).toBeDefined();
+    });
+
+    it("does not state it when the posting has no application", async () => {
+      const Stub = stubFor({ ...applied, applicationId: null });
+      const view = render(React.createElement(Stub, { initialEntries: ["/postings/post-1"] }));
+      const target = await openDialog(view);
+      fireEvent.change(target, { target: { value: "rejected" } });
+      expect(view.queryByText(APPLIED_NOTICE)).toBeNull();
+      expect(view.queryByLabelText("Event Date (Optional)")).toBeNull();
+    });
+
+    it("does not state it when the target is not rejected", async () => {
+      const Stub = stubFor(applied);
+      const view = render(React.createElement(Stub, { initialEntries: ["/postings/post-1"] }));
+      const target = await openDialog(view);
+      fireEvent.change(target, { target: { value: "closed" } });
+      expect(view.queryByText(APPLIED_NOTICE)).toBeNull();
+      expect(view.queryByLabelText("Event Date (Optional)")).toBeNull();
+    });
+
+    it("does not state it for a disposition other than applied, even with an application id", async () => {
+      const Stub = stubFor({ ...samplePosting, disposition: "scored", applicationId: "app-1" });
+      const view = render(React.createElement(Stub, { initialEntries: ["/postings/post-1"] }));
+      const target = await openDialog(view);
+      fireEvent.change(target, { target: { value: "closed" } });
+      expect(view.queryByText(APPLIED_NOTICE)).toBeNull();
+    });
+  });
+
+  describe("event date field", () => {
+    const applied = { ...samplePosting, disposition: "applied", applicationId: "app-1" };
+
+    function okPosting(extra: Record<string, unknown> = {}) {
+      return { ...applied, disposition: "rejected", versionToken: "v-token-2", ...extra };
+    }
+
+    it("defaults to today's UTC date and posts as eventDate", async () => {
+      vi.useFakeTimers({ toFake: ["Date"], now: new Date("2026-11-05T23:59:00Z") });
+      try {
+        let captured: FormData | null = null;
+        const Stub = stubFor(applied, async ({ request }) => {
+          captured = await request.formData();
+          return { ok: true, posting: okPosting() };
+        });
+        const view = render(React.createElement(Stub, { initialEntries: ["/postings/post-1"] }));
+        const target = await openDialog(view);
+        fireEvent.change(target, { target: { value: "rejected" } });
+
+        const dateInput = (await view.findByLabelText("Event Date (Optional)")) as HTMLInputElement;
+        expect(dateInput.value).toBe("2026-11-05");
+
+        fireEvent.change(await view.findByRole("textbox", { name: "Reason *" }), { target: { value: "Rejected by email" } });
+        fireEvent.click(await view.findByRole("button", { name: "Apply Transition" }));
+
+        await waitFor(() => expect(captured).not.toBeNull());
+        expect((captured as unknown as FormData).get("eventDate")).toBe("2026-11-05");
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("posts the date the owner typed", async () => {
+      let captured: FormData | null = null;
+      const Stub = stubFor(applied, async ({ request }) => {
+        captured = await request.formData();
+        return { ok: true, posting: okPosting() };
+      });
+      const view = render(React.createElement(Stub, { initialEntries: ["/postings/post-1"] }));
+      const target = await openDialog(view);
+      fireEvent.change(target, { target: { value: "rejected" } });
+      fireEvent.change(await view.findByLabelText("Event Date (Optional)"), { target: { value: "2026-09-15" } });
+      fireEvent.change(await view.findByRole("textbox", { name: "Reason *" }), { target: { value: "Rejected by email" } });
+      fireEvent.click(await view.findByRole("button", { name: "Apply Transition" }));
+
+      await waitFor(() => expect(captured).not.toBeNull());
+      expect((captured as unknown as FormData).get("eventDate")).toBe("2026-09-15");
+    });
+
+    it("shows a 400 eventDate field error inline on the date field and keeps the dialog open", async () => {
+      const Stub = stubFor(applied, async () =>
+        data(
+          {
+            ok: false,
+            errorCode: "validation_error",
+            message: "Validation failed.",
+            fieldErrors: { eventDate: "Event date must be a valid date in yyyy-MM-dd format." },
+          },
+          { status: 400 }
+        )
+      );
+      const view = render(React.createElement(Stub, { initialEntries: ["/postings/post-1"] }));
+      const target = await openDialog(view);
+      fireEvent.change(target, { target: { value: "rejected" } });
+      fireEvent.change(await view.findByLabelText("Event Date (Optional)"), { target: { value: "09/15/2026" } });
+      fireEvent.change(await view.findByRole("textbox", { name: "Reason *" }), { target: { value: "Rejected by email" } });
+      fireEvent.click(await view.findByRole("button", { name: "Apply Transition" }));
+
+      expect(await view.findByText("Event date must be a valid date in yyyy-MM-dd format.")).toBeDefined();
+      expect(view.getByLabelText("Event Date (Optional)").getAttribute("aria-invalid")).toBe("true");
+      expect(view.getByRole("button", { name: "Apply Transition" })).toBeDefined();
+    });
+  });
+
+  describe("returned warnings (FR-011a)", () => {
+    const rejectedPosting = { ...samplePosting, disposition: "rejected", applicationId: "app-1" };
+
+    async function submitReopen(view: ReturnType<typeof render>) {
+      const target = await openDialog(view);
+      fireEvent.change(target, { target: { value: "lead" } });
+      fireEvent.change(await view.findByRole("textbox", { name: "Reason *" }), { target: { value: "Recruiter reopened" } });
+      fireEvent.click(await view.findByRole("button", { name: "Apply Transition" }));
+    }
+
+    it("shows each returned message on the page after the dialog closes, whatever the code is", async () => {
+      const Stub = stubFor(rejectedPosting, async () => ({
+        ok: true,
+        posting: {
+          ...rejectedPosting,
+          disposition: "lead",
+          versionToken: "v-token-2",
+          warnings: [
+            { code: "zz_code_the_page_has_never_seen", message: "Fictional notice: the application stays as it was." },
+            { code: "application_still_rejected", message: "Second fictional notice." },
+          ],
+        },
+      }));
+      const view = render(React.createElement(Stub, { initialEntries: ["/postings/post-1"] }));
+      await submitReopen(view);
+
+      expect(await view.findByText("Fictional notice: the application stays as it was.")).toBeDefined();
+      expect(view.getByText("Second fictional notice.")).toBeDefined();
+      await waitFor(() => expect(view.queryByLabelText("Target Disposition *")).toBeNull());
+      // The code is never rendered or used to pick wording.
+      expect(view.queryByText(/zz_code_the_page_has_never_seen/)).toBeNull();
+      expect(view.getAllByRole("alert").length).toBeGreaterThan(0);
+    });
+
+    it("renders warning text as plain text, never as markup", async () => {
+      const hostile = "<img src=x onerror=alert(1)> <b>bold</b>";
+      const Stub = stubFor(rejectedPosting, async () => ({
+        ok: true,
+        posting: {
+          ...rejectedPosting,
+          disposition: "lead",
+          warnings: [{ code: "application_closed", message: hostile }],
+        },
+      }));
+      const view = render(React.createElement(Stub, { initialEntries: ["/postings/post-1"] }));
+      await submitReopen(view);
+
+      expect(await view.findByText(hostile)).toBeDefined();
+      expect(view.container.querySelector("img")).toBeNull();
+      expect(view.container.querySelector("b")).toBeNull();
+    });
+
+    it("shows nothing extra when warnings are empty", async () => {
+      const Stub = stubFor(rejectedPosting, async () => ({
+        ok: true,
+        posting: { ...rejectedPosting, disposition: "lead", warnings: [] },
+      }));
+      const view = render(React.createElement(Stub, { initialEntries: ["/postings/post-1"] }));
+      await submitReopen(view);
+
+      await waitFor(() => expect(view.queryByLabelText("Target Disposition *")).toBeNull());
+      expect(view.queryByRole("alert")).toBeNull();
+    });
   });
 });

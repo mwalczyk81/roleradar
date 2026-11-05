@@ -433,3 +433,41 @@ body {
   background: transparent;
   border: 0;
 }
+
+/* Posting transition dialog and warnings (008). Classes only: the CSP forbids inline style attributes in new code. */
+.dialog-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+
+.dialog-field-label {
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+}
+
+.dialog-field-error {
+  color: var(--ds-danger-text);
+  font-size: var(--ds-text-xs);
+}
+
+.dialog-field-hint {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-xs);
+}
+
+.posting-warnings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+
+.posting-warnings p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.event-source {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-xs);
+}

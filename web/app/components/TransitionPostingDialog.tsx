@@ -1,6 +1,7 @@
 import React from "react";
 import type { FetcherWithComponents } from "react-router";
-import { Modal, Select, Input, Button } from "../ui.js";
+import { Alert, Modal, Select, Input, Button } from "../ui.js";
+import { formatDate } from "../lib/format-date.js";
 import type { TransitionActionData } from "../routes/postings.$id.js";
 import { useCloseOnSubmitSuccess } from "../lib/use-close-on-submit-success.js";
 import {
@@ -19,6 +20,8 @@ export interface TransitionPostingDialogProps {
   currentDisposition: string;
   currentResurfacePolicy?: string;
   versionToken: string;
+  /** Id of the posting's application, or null/undefined when it has none (FR-015). */
+  applicationId?: string | null;
   csrfToken: string;
   criteria?: Array<{ id: string; name: string }>;
   fetcher?: FetcherWithComponents<TransitionActionData>;
@@ -31,6 +34,7 @@ export function TransitionPostingDialog({
   currentDisposition,
   currentResurfacePolicy = "never",
   versionToken,
+  applicationId = null,
   csrfToken,
   criteria = [],
   fetcher,
@@ -46,6 +50,7 @@ export function TransitionPostingDialog({
   const [criterionId, setCriterionId] = React.useState("");
   const [resurfacePolicy, setResurfacePolicy] = React.useState("");
   const [overrideReason, setOverrideReason] = React.useState("");
+  const [eventDate, setEventDate] = React.useState("");
 
   // Update selected target when current disposition or open state changes
   React.useEffect(() => {
@@ -63,6 +68,7 @@ export function TransitionPostingDialog({
       setCriterionId("");
       setResurfacePolicy("");
       setOverrideReason("");
+      setEventDate(formatDate(new Date().toISOString()));
     }
   }, [open, currentDisposition, currentResurfacePolicy]);
 
@@ -77,6 +83,10 @@ export function TransitionPostingDialog({
   const fieldErrors = actionData?.ok === false ? actionData.fieldErrors : undefined;
 
   const FormComponent = fetcher?.Form || "form";
+
+  // Rejecting an applied posting that has an application also records the rejection there (FR-015).
+  const recordsOnApplication =
+    currentDisposition === "applied" && selectedDisposition === "rejected" && Boolean(applicationId);
 
   return (
     <Modal
@@ -167,6 +177,33 @@ export function TransitionPostingDialog({
                 </span>
               ) : null}
             </div>
+
+            {recordsOnApplication ? (
+              <>
+                <Alert variant="info">This also records the rejection on the application.</Alert>
+
+                <div className="dialog-field">
+                  <label htmlFor="eventDate" className="dialog-field-label">
+                    Event Date (Optional)
+                  </label>
+                  <Input
+                    id="eventDate"
+                    name="eventDate"
+                    value={eventDate}
+                    onChange={(e) => setEventDate(e.target.value)}
+                    placeholder="YYYY-MM-DD"
+                    invalid={Boolean(fieldErrors?.eventDate)}
+                    aria-describedby="eventDate-hint"
+                  />
+                  <span id="eventDate-hint" className="dialog-field-hint">
+                    The date the rejection is recorded on the application. Defaults to today (UTC).
+                  </span>
+                  {fieldErrors?.eventDate ? (
+                    <span className="dialog-field-error">{fieldErrors.eventDate}</span>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
 
             {/* Reason */}
             <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-1)" }}>

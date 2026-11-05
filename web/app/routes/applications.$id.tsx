@@ -431,6 +431,7 @@ export default function ApplicationDetail() {
                 return (
                   <div
                     key={`${ev.eventType}-${ev.eventDate}-${index}`}
+                    data-testid="timeline-event"
                     style={{
                       display: "flex",
                       flexDirection: "column",
@@ -464,6 +465,12 @@ export default function ApplicationDetail() {
                         {formatDate(ev.eventDate)}
                       </span>
                     </div>
+
+                    {ev.eventSource ? (
+                      <span className="event-source" data-testid="event-source">
+                        Source: {ev.eventSource}
+                      </span>
+                    ) : null}
 
                     {ev.notes ? (
                       <p
