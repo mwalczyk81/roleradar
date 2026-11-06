@@ -105,7 +105,7 @@ export default function CriteriaIndex() {
       sortable: true,
       sortValue: () => 0,
       render: (row) => (
-        <span style={{ fontWeight: "var(--ds-weight-medium)", color: "var(--ds-text)" }}>
+        <span className="text-emphasis">
           {row.name}
         </span>
       ),
@@ -127,12 +127,7 @@ export default function CriteriaIndex() {
       header: "Evaluation Rule",
       render: (row) => (
         <span
-          style={{
-            whiteSpace: "pre-wrap",
-            display: "inline-block",
-            color: "var(--ds-text)",
-            maxWidth: "25rem",
-          }}
+          className="cell-prewrap cell-rule-text"
         >
           {row.ruleText}
         </span>
@@ -143,7 +138,7 @@ export default function CriteriaIndex() {
       header: "Effective From",
       sortable: true,
       sortValue: () => 0,
-      render: (row) => <span style={{ whiteSpace: "nowrap" }}>{formatDate(row.effectiveFrom)}</span>,
+      render: (row) => <span className="cell-nowrap">{formatDate(row.effectiveFrom)}</span>,
     },
     {
       key: "effectiveTo",
@@ -151,7 +146,7 @@ export default function CriteriaIndex() {
       sortable: true,
       sortValue: () => 0,
       render: (row) => (
-        <span style={{ whiteSpace: "nowrap" }}>{row.effectiveTo ? formatDate(row.effectiveTo) : "Present"}</span>
+        <span className="cell-nowrap">{row.effectiveTo ? formatDate(row.effectiveTo) : "Present"}</span>
       ),
     },
     {
@@ -178,7 +173,7 @@ export default function CriteriaIndex() {
       theme={theme}
       onThemeToggle={toggleTheme}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+      <div className="page-stack">
         <DataTable
           sortScope="all"
           caption="Screening Evaluation Rules"

@@ -108,6 +108,21 @@ export default tseslint.config(
     },
   },
   {
+    // 009 US1: no inline styles in the app. With `style-src-attr` gone from the CSP a `style` attribute is blocked, so a
+    // `style` prop on any element or component in web/app fails lint. web/app/ds is vendored and ignored below.
+    files: ["app/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "JSXAttribute[name.name='style']",
+          message:
+            "Inline styles are blocked by the Content-Security-Policy (no style-src-attr). Use a class in app.css with --ds-* tokens, or a kit prop (Card padding, Input width).",
+        },
+      ],
+    },
+  },
+  {
     ignores: [
       "dist/**",
       "build/**",

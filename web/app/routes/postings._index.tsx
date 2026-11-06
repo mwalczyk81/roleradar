@@ -325,7 +325,11 @@ export default function PostingsIndex() {
       header: "Company",
       sortable: true,
       sortValue: () => 0,
-      render: (row) => <span>{row.companyName}</span>,
+      render: (row) => (
+        <Link to={`/companies/${row.companyId}`} className="company-link">
+          {row.companyName}
+        </Link>
+      ),
     },
     {
       key: "title",
@@ -335,11 +339,7 @@ export default function PostingsIndex() {
       render: (row) => (
         <Link
           to={`/postings/${row.id}`}
-          style={{
-            color: "var(--ds-primary)",
-            textDecoration: "none",
-            fontWeight: "var(--ds-weight-medium)",
-          }}
+          className="role-title-link"
         >
           {row.title}
         </Link>
@@ -381,7 +381,7 @@ export default function PostingsIndex() {
       header: "Added",
       sortable: true,
       sortValue: () => 0,
-      render: (row) => <span style={{ whiteSpace: "nowrap" }}>{formatDate(row.createdAt)}</span>,
+      render: (row) => <span className="cell-nowrap">{formatDate(row.createdAt)}</span>,
     },
   ];
 
@@ -411,7 +411,7 @@ export default function PostingsIndex() {
       theme={theme}
       onThemeToggle={toggleTheme}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+      <div className="page-stack">
         <Toolbar
           searchPlaceholder="Search postings..."
           searchLabel="Search job postings"
@@ -440,7 +440,7 @@ export default function PostingsIndex() {
             setSearchParams(next);
           }}
         >
-          <div style={{ display: "flex", gap: "var(--ds-space-2)", alignItems: "center" }}>
+          <div className="filter-group">
             <Select
               aria-label="Filter by Disposition"
               value={currentDisposition}
@@ -509,7 +509,7 @@ export default function PostingsIndex() {
               aria-label="Filter by Minimum Score"
               placeholder="Min Score"
               value={minScoreInput}
-              style={{ width: "7rem" }}
+              width="sm"
               onChange={(e) => {
                 const raw = e.target.value;
                 setMinScoreInput(raw);

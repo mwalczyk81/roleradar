@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { test, expect } from "./support/csp-guard.js";
 import fs from "node:fs";
 import path from "node:path";
 import { startInsightsHarness, loadNoteFixture, type InsightsHarness } from "./support/insights-stub.js";

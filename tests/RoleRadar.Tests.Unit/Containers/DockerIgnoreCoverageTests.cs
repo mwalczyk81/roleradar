@@ -16,7 +16,7 @@ public sealed class DockerIgnoreCoverageTests
 {
     // Extensions that are compile inputs for the shipped images. If one is excluded from the
     // build context, the image either fails to build or (worse for Razor) builds without the UI.
-    private static readonly string[] BuildInputExtensions = [".cs", ".csproj", ".cshtml", ".razor"];
+    private static readonly string[] BuildInputExtensions = [".cs", ".csproj", ".cshtml", ".razor", ".css", ".js"];
 
     [Fact]
     public void DockerIgnore_AllowsEveryBuildInputUnderSrc()
@@ -66,6 +66,46 @@ public sealed class DockerIgnoreCoverageTests
         var rules = ParseRules(lines);
 
         Assert.False(IsIncluded(rules, "src/RoleRadar.Identity/Pages/Account/Login.cshtml"));
+        Assert.True(IsIncluded(rules, "src/RoleRadar.Identity/Program.cs"));
+    }
+
+    private static readonly string[] IdentityOwnedStaticAssets =
+    [
+        "src/RoleRadar.Identity/wwwroot/css/identity.css",
+        "src/RoleRadar.Identity/wwwroot/js/theme.js",
+    ];
+
+    [Fact]
+    public void DockerIgnore_AllowsTheIdentityOwnedStylesheetAndThemeScript()
+    {
+        // Covers: a pinpoint guard for the sign-in page assets (009 US4). Without these two files the Identity image
+        // builds and reports healthy but serves an unstyled sign-in page, the same silent failure *.cshtml once had.
+        var repoRoot = FindRepoRoot();
+        var rules = ParseRules(File.ReadAllLines(Path.Combine(repoRoot, ".dockerignore")));
+
+        foreach (var asset in IdentityOwnedStaticAssets)
+        {
+            Assert.True(File.Exists(Path.Combine(repoRoot, asset)), $"Expected '{asset}' to exist.");
+            Assert.True(IsIncluded(rules, asset), $".dockerignore must allow '{asset}'.");
+        }
+    }
+
+    [Fact]
+    public void Matcher_WithoutWwwrootAllowEntry_ExcludesTheIdentityOwnedAssets()
+    {
+        // Covers: the matcher for the new entry. With the allow line removed both files must read as excluded;
+        // otherwise the pinpoint test above could never fail.
+        var repoRoot = FindRepoRoot();
+        var lines = File.ReadAllLines(Path.Combine(repoRoot, ".dockerignore"))
+            .Where(l => !l.Trim().Equals("!src/RoleRadar.Identity/wwwroot/**", StringComparison.Ordinal))
+            .ToArray();
+        var rules = ParseRules(lines);
+
+        foreach (var asset in IdentityOwnedStaticAssets)
+        {
+            Assert.False(IsIncluded(rules, asset), $"'{asset}' must be excluded when the wwwroot allow entry is absent.");
+        }
+
         Assert.True(IsIncluded(rules, "src/RoleRadar.Identity/Program.cs"));
     }
 

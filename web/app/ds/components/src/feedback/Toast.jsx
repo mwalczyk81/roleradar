@@ -1,5 +1,7 @@
 import React from "react";
 
+const cx = (...parts) => parts.filter(Boolean).join(" ");
+
 const tones = {
   info: "var(--ds-primary-subtle-text)",
   success: "var(--ds-success-text)",
@@ -20,8 +22,9 @@ const icons = {
  * `duration` ms (default 5000) unless it has an `action` or `duration` is 0, and it stays
  * while the pointer is over it or focus is inside it. `action` is { label, onClick }.
  * Put toasts inside a ToastRegion so they stack in a corner of the screen.
+ * Styled by `.ds-toast*` in bundle.css.
  */
-export function Toast({ variant = "info", title, message, action, onDismiss, duration = 5000, style = {}, onMouseEnter, onMouseLeave, onFocus, onBlur, ...rest }) {
+export function Toast({ variant = "info", title, message, action, onDismiss, duration = 5000, className, style, onMouseEnter, onMouseLeave, onFocus, onBlur, ...rest }) {
   const [paused, setPaused] = React.useState(false);
   const sticky = !!action || duration <= 0 || !onDismiss;
 
@@ -36,6 +39,7 @@ export function Toast({ variant = "info", title, message, action, onDismiss, dur
     <div
       {...rest}
       role={assertive ? "alert" : "status"}
+      className={cx("ds-toast", className)}
       onMouseEnter={(e) => {
         setPaused(true);
         onMouseEnter && onMouseEnter(e);
@@ -52,51 +56,22 @@ export function Toast({ variant = "info", title, message, action, onDismiss, dur
         setPaused(false);
         onBlur && onBlur(e);
       }}
-      style={{
-        display: "flex",
-        alignItems: "flex-start",
-        gap: "var(--ds-space-3)",
-        width: "100%",
-        maxWidth: "24rem",
-        boxSizing: "border-box",
-        padding: "var(--ds-space-3) var(--ds-space-4)",
-        background: "var(--ds-surface)",
-        color: "var(--ds-text)",
-        border: "var(--ds-border-thin) solid var(--ds-border)",
-        borderRadius: "var(--ds-radius-lg)",
-        boxShadow: "var(--ds-shadow-md)",
-        fontFamily: "var(--ds-font-sans)",
-        fontSize: "var(--ds-text-sm)",
-        lineHeight: "var(--ds-leading-normal)",
-        pointerEvents: "auto",
-        ...style,
-      }}
+      style={style}
     >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={tones[variant]} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: "1px" }}>
+      <svg className="ds-toast-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={tones[variant]} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         {icons[variant]}
       </svg>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: "var(--ds-weight-semibold)" }}>{title}</div>
-        {message ? <div style={{ color: "var(--ds-text-secondary)", marginTop: "var(--ds-space-1)" }}>{message}</div> : null}
+      <div className="ds-toast-body">
+        <div className="ds-toast-title">{title}</div>
+        {message ? <div className="ds-toast-message">{message}</div> : null}
         {action ? (
-          <button
-            type="button"
-            className="ds-icon-btn"
-            onClick={action.onClick}
-            style={{ marginTop: "var(--ds-space-2)", padding: "var(--ds-space-1) var(--ds-space-2)", marginLeft: "calc(var(--ds-space-2) * -1)", background: "none", border: "none", borderRadius: "var(--ds-radius-sm)", color: "var(--ds-primary-subtle-text)", fontFamily: "var(--ds-font-sans)", fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-semibold)", cursor: "pointer" }}
-          >
+          <button type="button" className="ds-icon-btn ds-toast-action" onClick={action.onClick}>
             {action.label}
           </button>
         ) : null}
       </div>
       {onDismiss ? (
-        <button
-          type="button"
-          className="ds-icon-btn"
-          onClick={onDismiss}
-          aria-label="Dismiss notification"
-          style={{ display: "inline-flex", padding: "var(--ds-space-1)", background: "none", border: "none", borderRadius: "var(--ds-radius-sm)", color: "var(--ds-text-secondary)", cursor: "pointer", flexShrink: 0 }}
-        >
+        <button type="button" className="ds-icon-btn ds-toast-close" onClick={onDismiss} aria-label="Dismiss notification">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
       ) : null}

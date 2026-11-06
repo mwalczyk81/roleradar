@@ -4,7 +4,7 @@
  * invents a value. Dates are written as UTC YYYY-MM-DD by the shared `formatDate`, never with a locale.
  */
 import type { components } from "../../../contracts/client/api-types.js";
-import { formatDate } from "./format-date.js";
+import { formatDate, formatShortDate } from "./format-date.js";
 import type { LensContext } from "./insights-lenses.js";
 
 export type InsightsStatsDto = components["schemas"]["InsightsStatsDto"];
@@ -74,7 +74,7 @@ export function buildStatsView(dto: InsightsStatsDto | null): StatsView {
       : { state: "ok", value: formatMedianDays(medianDays), sampleText: responsesText(sampleSize), days: medianDays, sampleSize };
 
   const items = dto.weeklyApplications.map((week) => ({
-    label: formatDate(week.weekStart),
+    label: formatShortDate(week.weekStart),
     fullLabel: `Week of ${formatDate(week.weekStart)}`,
     value: week.count,
   }));

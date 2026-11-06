@@ -1,12 +1,6 @@
 import React from "react";
 
-// Foreground uses the -text tokens so title text clears 4.5:1 on each subtle ground in both themes.
-const variants = {
-  info: { bg: "var(--ds-surface-hover)", fg: "var(--ds-text-secondary)" },
-  success: { bg: "var(--ds-success-subtle)", fg: "var(--ds-success-text)" },
-  warning: { bg: "var(--ds-warning-subtle)", fg: "var(--ds-warning-text)" },
-  danger: { bg: "var(--ds-danger-subtle)", fg: "var(--ds-danger-text)" },
-};
+const cx = (...parts) => parts.filter(Boolean).join(" ");
 
 const icons = {
   info: <path d="M12 16v-4M12 8h.01" />,
@@ -18,41 +12,22 @@ const icons = {
 /**
  * Alert — an inline banner conveying status. Variant carries meaning.
  * Warning and danger are announced assertively (role="alert"); info and success politely (role="status").
+ * Variants are `[data-variant]` rules in bundle.css; foreground uses the -text tokens so title
+ * text clears 4.5:1 on each subtle ground in both themes.
  */
-export function Alert({ variant = "info", title, onClose, style = {}, children, ...rest }) {
-  const v = variants[variant];
+export function Alert({ variant = "info", title, onClose, className, style, children, ...rest }) {
   const assertive = variant === "danger" || variant === "warning";
   return (
-    <div
-      role={assertive ? "alert" : "status"}
-      {...rest}
-      style={{
-        display: "flex",
-        gap: "var(--ds-space-3)",
-        padding: "var(--ds-space-3) var(--ds-space-4)",
-        borderRadius: "var(--ds-radius-md)",
-        background: v.bg,
-        color: v.fg,
-        fontFamily: "var(--ds-font-sans)",
-        fontSize: "var(--ds-text-sm)",
-        lineHeight: "var(--ds-leading-normal)",
-        ...style,
-      }}
-    >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, marginTop: "1px" }}>
+    <div role={assertive ? "alert" : "status"} {...rest} className={cx("ds-alert", className)} data-variant={variant} style={style}>
+      <svg className="ds-alert-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         {icons[variant]}
       </svg>
-      <div style={{ flex: 1 }}>
-        {title && <div style={{ fontWeight: "var(--ds-weight-semibold)", marginBottom: children ? "var(--ds-space-1)" : 0 }}>{title}</div>}
-        {children && <div style={{ color: "var(--ds-text)" }}>{children}</div>}
+      <div className="ds-alert-body">
+        {title && <div className="ds-alert-title" data-gap={children ? "" : undefined}>{title}</div>}
+        {children && <div className="ds-alert-text">{children}</div>}
       </div>
       {onClose && (
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Dismiss"
-          style={{ background: "none", border: "none", color: "currentColor", cursor: "pointer", padding: 0, display: "inline-flex", flexShrink: 0 }}
-        >
+        <button type="button" className="ds-alert-close" onClick={onClose} aria-label="Dismiss">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
         </button>
       )}

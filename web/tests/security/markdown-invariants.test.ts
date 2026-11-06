@@ -83,8 +83,16 @@ describe("Markdown invariants (T082)", () => {
 
       const root = fs.readFileSync(path.join(WEB_DIR, "app", "root.tsx"), "utf8");
       expect(root.match(/dangerouslySetInnerHTML/g)?.length).toBe(1);
-      expect(root).toContain("dangerouslySetInnerHTML={{ __html: themeScript }}");
-      expect(root).toMatch(/const themeScript = `[^`$]*`;/); // a constant template with no interpolation
+      expect(root).toContain("dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }}");
+
+      // The script is a module constant (009: it moved to lib/theme.ts with the rest of the theme logic). Its template
+      // may interpolate only the two module constants that name the cookie pattern and the colour-scheme query, never
+      // request data, so nothing a user controls can reach the sink.
+      const theme = fs.readFileSync(path.join(WEB_DIR, "app", "lib", "theme.ts"), "utf8");
+      const template = /export const THEME_BOOTSTRAP_SCRIPT = `([^`]*)`;/.exec(theme)?.[1];
+      expect(template, "THEME_BOOTSTRAP_SCRIPT must be a constant template literal").toBeDefined();
+      const interpolations = [...(template ?? "").matchAll(/\$\{([^}]*)\}/g)].map((m) => m[1]);
+      expect(interpolations).toEqual(["COOKIE_PATTERN.source", "DARK_SCHEME_QUERY"]);
     });
 
     it("never enables raw HTML in react-markdown: no skipHtml opt-out of text, no allowDangerousHtml, no rehypePlugins", () => {

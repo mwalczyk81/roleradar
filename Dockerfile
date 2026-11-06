@@ -16,7 +16,10 @@ COPY src/RoleRadar.Mcp.Stdio/RoleRadar.Mcp.Stdio.csproj src/RoleRadar.Mcp.Stdio/
 RUN dotnet restore src/RoleRadar.Cli/RoleRadar.Cli.csproj --locked-mode && \
     dotnet restore src/RoleRadar.Mcp.Stdio/RoleRadar.Mcp.Stdio.csproj --locked-mode
 
-# Copy source code and publish framework-dependent binaries
+# Copy source code and publish framework-dependent binaries.
+# The CLI references RoleRadar.Identity, whose build copies the vendored kit CSS and fonts into wwwroot (ADR 0034),
+# so the build stage needs web/app/ds even though the CLI and MCP images do not serve it.
+COPY web/app/ds/ web/app/ds/
 COPY src/ src/
 
 RUN dotnet publish src/RoleRadar.Mcp.Stdio/RoleRadar.Mcp.Stdio.csproj -c Release --no-restore -o /app/mcp && \

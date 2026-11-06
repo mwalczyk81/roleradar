@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect } from "./support/csp-guard.js";
 import { startInsightsHarness, type InsightsHarness } from "./support/insights-stub.js";
 import { assertLoopbackStub, assertNotRealStackProject } from "./support/isolation.js";
 

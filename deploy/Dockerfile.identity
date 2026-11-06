@@ -7,6 +7,8 @@ WORKDIR /src
 # Copy project files and restore with locked dependencies
 COPY global.json Directory.Build.props Directory.Packages.props .editorconfig ./
 COPY src/RoleRadar.Domain/RoleRadar.Domain.csproj src/RoleRadar.Domain/packages.lock.json src/RoleRadar.Domain/
+# The sign-in pages use the vendored kit CSS and fonts; the project copies them into wwwroot/ds at build (ADR 0034).
+COPY web/app/ds/ web/app/ds/
 COPY src/RoleRadar.Identity/RoleRadar.Identity.csproj src/RoleRadar.Identity/packages.lock.json src/RoleRadar.Identity/
 
 RUN dotnet restore src/RoleRadar.Identity/RoleRadar.Identity.csproj --locked-mode

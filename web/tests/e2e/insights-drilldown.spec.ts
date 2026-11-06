@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { test, expect } from "./support/csp-guard.js";
 import { startInsightsHarness, loadSnapshot, type InsightsHarness } from "./support/insights-stub.js";
 import { assertNotRealStackProject } from "./support/isolation.js";
 

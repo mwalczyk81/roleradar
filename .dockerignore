@@ -13,6 +13,7 @@
 !src/**/*.csproj
 !src/**/*.cs
 !src/**/*.cshtml
+!src/RoleRadar.Identity/wwwroot/**
 !package.json
 !pnpm-lock.yaml
 !pnpm-workspace.yaml

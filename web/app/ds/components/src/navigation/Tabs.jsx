@@ -1,5 +1,7 @@
 import React from "react";
 
+const cx = (...parts) => parts.filter(Boolean).join(" ");
+
 /**
  * Tabs — switch between sibling views. Controlled or uncontrolled via `value`/`defaultValue`.
  * `items` is an array of { value, label }.
@@ -9,7 +11,7 @@ import React from "react";
  * and each tab sets aria-controls to `${idBase}-panel-${value}`; give your panel
  * role="tabpanel", that id, and aria-labelledby of the tab id.
  */
-export function Tabs({ items = [], value, defaultValue, onChange, idBase, style = {}, onKeyDown, ...rest }) {
+export function Tabs({ items = [], value, defaultValue, onChange, idBase, className, style, onKeyDown, ...rest }) {
   const isControlled = value !== undefined;
   const [internal, setInternal] = React.useState(defaultValue ?? (items[0] && items[0].value));
   const active = isControlled ? value : internal;
@@ -44,12 +46,8 @@ export function Tabs({ items = [], value, defaultValue, onChange, idBase, style 
       {...rest}
       role="tablist"
       onKeyDown={handleKeyDown}
-      style={{
-        display: "flex",
-        gap: "var(--ds-space-1)",
-        borderBottom: "var(--ds-border-thin) solid var(--ds-border)",
-        ...style,
-      }}
+      className={cx("ds-tabs", className)}
+      style={style}
     >
       {items.map((it) => {
         const on = it.value === active;
@@ -66,20 +64,7 @@ export function Tabs({ items = [], value, defaultValue, onChange, idBase, style 
             aria-controls={`${base}-panel-${it.value}`}
             tabIndex={it.value === focusable ? 0 : -1}
             onClick={() => select(it.value)}
-            style={{
-              appearance: "none",
-              background: "none",
-              border: "none",
-              borderBottom: `var(--ds-border-thick) solid ${on ? "var(--ds-primary)" : "transparent"}`,
-              marginBottom: "-1px",
-              padding: "var(--ds-space-2) var(--ds-space-3)",
-              fontFamily: "var(--ds-font-sans)",
-              fontSize: "var(--ds-text-sm)",
-              fontWeight: "var(--ds-weight-medium)",
-              color: on ? "var(--ds-text)" : "var(--ds-text-muted)",
-              cursor: "pointer",
-              transition: "color var(--ds-duration-fast) var(--ds-ease-standard)",
-            }}
+            className="ds-tab"
           >
             {it.label}
           </button>

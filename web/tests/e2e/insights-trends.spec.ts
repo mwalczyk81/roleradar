@@ -1,4 +1,5 @@
-import { test, expect, type Page } from "@playwright/test";
+import { type Page } from "@playwright/test";
+import { test, expect } from "./support/csp-guard.js";
 import fs from "node:fs";
 import path from "node:path";
 import { startInsightsHarness, loadSnapshot, type InsightsHarness } from "./support/insights-stub.js";
@@ -57,7 +58,7 @@ test.describe("Insights trends (real Chromium, fictional loopback stub)", () => 
     harness.unexpectedFilters.length = 0;
   });
 
-  test("shows the median, the weekly column chart and the run-yield sparkline for the 90 day window", async ({ page }) => {
+  test("shows the median, the weekly column chart and the run-yield text and column chart for the 90 day window", async ({ page }) => {
     const csp = trackCsp(page);
     await page.goto(`${harness.baseUrl}/insights?window=90d&asOf=${AS_OF}`, { waitUntil: "networkidle" });
 
@@ -67,7 +68,8 @@ test.describe("Insights trends (real Chromium, fictional loopback stub)", () => 
     await expect(page.getByText("14 responses", { exact: true })).toBeVisible();
 
     await expect(trends(page).getByRole("group", { name: "Applications per week" })).toBeVisible();
-    await expect(trends(page).getByRole("img", { name: /new postings per search run/i })).toBeVisible();
+    await expect(trends(page).getByRole("group", { name: "New postings per search run" })).toBeVisible();
+    await expect(trends(page).getByTestId("run-yield-summary")).toContainText("6 new postings");
 
     // One stats request, with the enum window and the as-of date on screen, in addition to the 22 counts.
     const stats = harness.requests.filter((r) => r.pathname === "/api/v1/insights/stats");
@@ -109,7 +111,8 @@ test.describe("Insights trends (real Chromium, fictional loopback stub)", () => 
     await page.keyboard.press("Space");
     await expect(weeklyTable).toHaveCount(0);
 
-    const runToggle = trends(page).getByRole("button", { name: /table view of search runs/i });
+    const runFigure = trends(page).locator("figure", { hasText: "New postings per search run" });
+    const runToggle = runFigure.getByRole("button", { name: /^table view$/i });
     await runToggle.focus();
     await expect(runToggle).toBeFocused();
     await page.keyboard.press("Enter");
@@ -118,7 +121,7 @@ test.describe("Insights trends (real Chromium, fictional loopback stub)", () => 
     await expect(runTable.getByRole("row")).toHaveCount(7); // header + 6 runs
     await page.keyboard.press("Space");
     await expect(runTable).toHaveCount(0);
-    await expect(trends(page).getByRole("img", { name: /new postings per search run/i })).toBeVisible();
+    await expect(trends(page).getByRole("group", { name: "New postings per search run" })).toBeVisible();
   });
 
   test("the weekly columns can be reached and read with the keyboard (roving focus, arrow keys)", async ({ page }) => {

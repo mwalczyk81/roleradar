@@ -109,7 +109,8 @@ describe("Companies list interactions", () => {
     await waitFor(() => expect(harness.last().searchParams.get("offset")).toBe("25"));
 
     const link = (await findByText("Acme Robotics")).closest("a");
-    expect(link?.style.whiteSpace).toBe("nowrap");
+    // The no-wrap rule lives in app.css (.cell-nowrap); the computed value is pinned in tests/e2e/converted-styles.spec.ts.
+    expect(link?.classList.contains("cell-nowrap")).toBe(true);
   });
 
   it("renders unknown status and ownership values as plain text and empty headquarters as a dash", async () => {
@@ -165,7 +166,8 @@ describe("Notes list interactions", () => {
     const { findAllByText } = mount("/notes", NotesIndex, NOTES);
 
     const dates = await findAllByText("2026-10-03");
-    expect((dates[0] as HTMLElement).style.whiteSpace).toBe("nowrap");
+    // The no-wrap rule lives in app.css (.cell-nowrap); the computed value is pinned in tests/e2e/converted-styles.spec.ts.
+    expect((dates[0] as HTMLElement).classList.contains("cell-nowrap")).toBe(true);
   });
 
   it("shows the empty message when no notes match", async () => {
@@ -206,7 +208,8 @@ describe("Criteria list interactions", () => {
     expect(await findByText("mystery")).toBeDefined();
     expect(await findByText("Inactive")).toBeDefined();
     const dates = await findAllByText("2026-01-01");
-    expect((dates[0] as HTMLElement).style.whiteSpace).toBe("nowrap");
+    // The no-wrap rule lives in app.css (.cell-nowrap); the computed value is pinned in tests/e2e/converted-styles.spec.ts.
+    expect((dates[0] as HTMLElement).classList.contains("cell-nowrap")).toBe(true);
   });
 
   it("shows the empty message when nothing is in force", async () => {
@@ -251,7 +254,8 @@ describe("Search runs list interactions", () => {
 
     expect(await findByText("<img src=x onerror=alert(1)>")).toBeDefined();
     const date = (await findByText("2026-10-24")) as HTMLElement;
-    expect(date.style.whiteSpace).toBe("nowrap");
+    // The no-wrap rule lives in app.css (.cell-nowrap); the computed value is pinned in tests/e2e/converted-styles.spec.ts.
+    expect(date.classList.contains("cell-nowrap")).toBe(true);
   });
 
   it("shows the empty message when there are no runs", async () => {

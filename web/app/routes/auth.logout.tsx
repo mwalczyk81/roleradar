@@ -61,10 +61,10 @@ export async function loader() {
 
 export default function AuthLogout() {
   return (
-    <main style={{ padding: "2rem", textAlign: "center" }}>
+    <main className="signed-out-page">
       <h1>Signed Out</h1>
       <p>You have been signed out of RoleRadar.</p>
-      <p style={{ marginTop: "1rem" }}>
+      <p className="signed-out-link">
         <Link to="/postings">Sign in</Link>
       </p>
     </main>

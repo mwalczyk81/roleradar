@@ -1,0 +1,207 @@
+/* Sign-in and signed-out pages (009 US4, ADR 0034). Kit tokens only: no raw colours, no px values.
+   Loaded after /ds/tokens.css and /ds/components/bundle.css, which define the --ds-* tokens, the Plex fonts and the focus ring.
+   The theme comes from /js/theme.js (the system colour scheme) through the data-theme attribute on <html>.
+
+   The kit's Card, Input, Button and Alert are React components that style themselves inline, so bundle.css has no control
+   classes to reuse. The rules below therefore restate the values those components use (same tokens, same sizes), and the
+   Identity e2e test compares the computed result with the tokens. The brand rules copy .brand in the web app's app.css. */
+
+html {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  margin: 0;
+  padding: var(--ds-space-4);
+  background: var(--ds-bg-subtle);
+  color: var(--ds-text);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-base);
+  line-height: var(--ds-leading-normal);
+}
+
+/* The kit Card: surface, thin border, lg radius, sm shadow, space-6 padding. */
+.login-card,
+.logout-card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 25rem;
+  padding: var(--ds-space-6);
+  border: var(--ds-border-thin) solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-surface);
+  box-shadow: var(--ds-shadow-sm);
+}
+
+.logout-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-4);
+  text-align: center;
+}
+
+.logout-card form {
+  margin: 0;
+}
+
+.logout-card p {
+  margin: 0;
+  color: var(--ds-text-secondary);
+}
+
+/* Brand lockup: the web app shell brand (Brand.tsx, .brand in app.css) at the size of .ds-appshell-brand. */
+.brand-lockup {
+  display: flex;
+  justify-content: center;
+  margin-bottom: var(--ds-space-4);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-lg);
+  font-weight: var(--ds-weight-semibold);
+  color: var(--ds-text);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+  font-family: var(--ds-font-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.brand-mark {
+  flex: none;
+  color: var(--ds-primary);
+}
+
+.brand-name {
+  font-family: var(--ds-font-display);
+}
+
+h1 {
+  margin: 0 0 var(--ds-space-6);
+  font-family: var(--ds-font-display);
+  font-size: var(--ds-text-2xl);
+  font-weight: var(--ds-weight-semibold);
+  line-height: var(--ds-leading-tight);
+  text-align: center;
+}
+
+.logout-card h1 {
+  margin-bottom: 0;
+}
+
+.form-group {
+  margin-bottom: var(--ds-space-4);
+}
+
+label {
+  display: block;
+  margin-bottom: var(--ds-space-1);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+}
+
+/* The kit Input (md): control height, surface ground, control border, md radius, sm text; focus recolours the border and
+   draws a 2px ring with no offset. */
+input[type="text"],
+input[type="password"] {
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--ds-control-md);
+  padding: 0 var(--ds-space-3);
+  border: var(--ds-border-thin) solid var(--ds-border-control);
+  border-radius: var(--ds-radius-md);
+  background: var(--ds-surface);
+  color: var(--ds-text);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-sm);
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus {
+  border-color: var(--ds-focus-ring);
+  outline: var(--ds-border-thick) solid var(--ds-focus-ring);
+  outline-offset: 0;
+}
+
+/* The kit Button (md, full width): control height, md radius, medium weight, sm text. */
+.button {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-2);
+  width: 100%;
+  height: var(--ds-control-md);
+  padding: 0 var(--ds-space-4);
+  border: var(--ds-border-thin) solid transparent;
+  border-radius: var(--ds-radius-md);
+  color: var(--ds-text-on-accent);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+  line-height: 1.2;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.button-primary {
+  background: var(--ds-primary-solid);
+}
+
+.button-primary:hover {
+  background: var(--ds-primary-solid-hover);
+}
+
+.button-danger {
+  background: var(--ds-danger-solid);
+}
+
+.button-danger:hover {
+  filter: brightness(0.95);
+}
+
+.login-card .button {
+  margin-top: var(--ds-space-2);
+}
+
+/* The kit Alert (danger): subtle ground, no border, md radius, icon in the danger text colour, message in body text. */
+.alert {
+  display: flex;
+  gap: var(--ds-space-3);
+  margin-bottom: var(--ds-space-4);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border-radius: var(--ds-radius-md);
+  font-size: var(--ds-text-sm);
+  line-height: var(--ds-leading-normal);
+  text-align: left;
+}
+
+.alert-danger {
+  background: var(--ds-danger-subtle);
+  color: var(--ds-danger-text);
+}
+
+.alert-icon {
+  flex: none;
+}
+
+.alert-body {
+  flex: 1;
+  color: var(--ds-text);
+}
+
+.alert p {
+  margin: 0;
+}

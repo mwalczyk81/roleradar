@@ -54,7 +54,7 @@ test.describe("Real-Stack End-to-End User Journey (T062)", () => {
 
     // 1. Visit /postings without session -> redirect to Identity login
     await page.goto(`${baseUrl}/postings`, { waitUntil: "networkidle" });
-    await expect(page.locator("h1")).toContainText("RoleRadar Authentication", { timeout: 15000 });
+    await expect(page.locator("h1")).toContainText("Sign in", { timeout: 15000 });
 
     // 2. Submit primary credentials (username + password)
     await page.fill('input[name="Input.Username"]', username);
@@ -141,7 +141,7 @@ test.describe("Real-Stack End-to-End User Journey (T062)", () => {
     // 10. Re-challenge invariant: visiting /postings requires login again without clearCookies
     // Leaving the cookie jar intact proves Identity ended the SSO session rather than relying on context clearing
     await page.goto(`${baseUrl}/postings`, { waitUntil: "networkidle" });
-    await expect(page.locator("h1")).toContainText("RoleRadar Authentication");
+    await expect(page.locator("h1")).toContainText("Sign in");
     await expect(page.locator('input[name="Input.Username"]')).toBeVisible();
     await expect(page.locator('input[name="Input.Password"]')).toBeVisible();
     await expect(page.locator('input[name="TwoFactorInput.Code"]')).not.toBeVisible();

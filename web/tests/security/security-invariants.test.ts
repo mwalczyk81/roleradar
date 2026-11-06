@@ -311,7 +311,8 @@ describe("Security Invariants", () => {
     expect(csp).toBeDefined();
     expect(csp).toContain(`script-src 'self' 'nonce-${nonce1}'`);
     expect(csp).toContain(`style-src 'self' 'nonce-${nonce1}'`);
-    expect(csp).toContain("style-src-attr 'unsafe-inline'");
+    expect(csp).not.toContain("style-src-attr");
+    expect(csp).not.toContain("unsafe-inline");
     expect(csp).not.toContain("script-src 'unsafe-inline'");
     expect(csp).not.toContain("style-src 'self' 'unsafe-inline'");
 

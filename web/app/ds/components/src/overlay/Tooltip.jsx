@@ -1,5 +1,7 @@
 import React from "react";
 
+const cx = (...parts) => parts.filter(Boolean).join(" ");
+
 /**
  * Tooltip — a short text hint for one control. Wrap exactly one element (a button, a link, a
  * focusable badge): the tooltip shows on hover and on keyboard focus, hides on Escape, and
@@ -7,9 +9,8 @@ import React from "react";
  * pointing at the hint, so assistive tech reads it as the element's description. Keep the text
  * short and never put essential information only in a tooltip.
  */
-export function Tooltip({ content, children, placement = "top", delay = 300, style = {}, ...rest }) {
+export function Tooltip({ content, children, placement = "top", delay = 300, className, style, ...rest }) {
   const [open, setOpen] = React.useState(false);
-  const [shift, setShift] = React.useState(0);
   const bubble = React.useRef(null);
   const timer = React.useRef(null);
   const id = React.useId();
@@ -31,16 +32,22 @@ export function Tooltip({ content, children, placement = "top", delay = 300, sty
   React.useEffect(() => () => clearTimeout(timer.current), []);
 
   // Keep the hint inside the viewport: when it opens, slide it sideways if it would be clipped.
+  // The offset is set through the CSSOM (a style attribute would be blocked by the page's policy).
   React.useLayoutEffect(() => {
-    if (!open || !bubble.current) return;
-    const r = bubble.current.getBoundingClientRect();
+    const el = bubble.current;
+    if (!el) return;
+    if (!open) {
+      el.style.removeProperty("--ds-tip-shift");
+      return;
+    }
+    el.style.setProperty("--ds-tip-shift", "0px");
+    const r = el.getBoundingClientRect();
     const vw = document.documentElement.clientWidth;
     const margin = 8;
-    let next = shift;
-    if (r.left < margin) next = shift + (margin - r.left);
-    else if (vw && r.right > vw - margin) next = shift - (r.right - (vw - margin));
-    if (next !== shift) setShift(next);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let shift = 0;
+    if (r.left < margin) shift = margin - r.left;
+    else if (vw && r.right > vw - margin) shift = -(r.right - (vw - margin));
+    el.style.setProperty("--ds-tip-shift", `${shift}px`);
   }, [open]);
 
   React.useEffect(() => {
@@ -67,43 +74,10 @@ export function Tooltip({ content, children, placement = "top", delay = 300, sty
 
   const above = placement !== "bottom";
   return (
-    <span {...rest} onMouseEnter={showSoon} onMouseLeave={hide} style={{ position: "relative", display: "inline-flex", ...style }}>
+    <span {...rest} className={cx("ds-tooltip", className)} onMouseEnter={showSoon} onMouseLeave={hide} style={style}>
       {trigger}
-      <span
-        id={id}
-        ref={bubble}
-        role="tooltip"
-        style={{
-          position: "absolute",
-          left: "50%",
-          transform: `translateX(calc(-50% + ${shift}px))`,
-          [above ? "bottom" : "top"]: "100%",
-          [above ? "paddingBottom" : "paddingTop"]: "var(--ds-space-1)",
-          zIndex: "var(--ds-z-overlay)",
-          visibility: open ? "visible" : "hidden",
-          opacity: open ? 1 : 0,
-          transition: "opacity var(--ds-duration-fast) var(--ds-ease-out)",
-        }}
-      >
-        <span
-          style={{
-            display: "block",
-            width: "max-content",
-            maxWidth: "16rem",
-            padding: "var(--ds-space-1) var(--ds-space-2)",
-            background: "var(--ds-text)",
-            color: "var(--ds-bg)",
-            borderRadius: "var(--ds-radius-md)",
-            boxShadow: "var(--ds-shadow-md)",
-            fontFamily: "var(--ds-font-sans)",
-            fontSize: "var(--ds-text-xs)",
-            fontWeight: "var(--ds-weight-medium)",
-            lineHeight: "var(--ds-leading-normal)",
-            textAlign: "left",
-          }}
-        >
-          {content}
-        </span>
+      <span id={id} ref={bubble} role="tooltip" className="ds-tooltip-pos" data-placement={above ? "top" : "bottom"} data-open={open ? "" : undefined}>
+        <span className="ds-tooltip-bubble">{content}</span>
       </span>
     </span>
   );

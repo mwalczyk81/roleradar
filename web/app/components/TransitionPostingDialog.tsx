@@ -99,12 +99,7 @@ export function TransitionPostingDialog({
       <FormComponent
         method="post"
         action={`/postings/${postingId}`}
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--ds-space-4)",
-          fontFamily: "var(--ds-font-sans)",
-        }}
+        className="dialog-form"
       >
         <input type="hidden" name="_csrf" value={csrfToken} />
         <input type="hidden" name="versionToken" value={versionToken} />
@@ -112,20 +107,13 @@ export function TransitionPostingDialog({
         {generalError ? (
           <div
             role="alert"
-            style={{
-              padding: "var(--ds-space-3)",
-              backgroundColor: "var(--ds-danger-subtle)",
-              color: "var(--ds-danger-text)",
-              borderRadius: "var(--ds-radius-md)",
-              fontSize: "var(--ds-text-sm)",
-              fontWeight: "var(--ds-weight-medium)",
-            }}
+            className="dialog-alert-danger"
           >
             {generalError}
           </div>
         ) : null}
 
-        <div style={{ fontSize: "var(--ds-text-sm)", color: "var(--ds-text-secondary)" }}>
+        <div className="field-caption">
           Current disposition:{" "}
           <strong>
             {DISPOSITION_METADATA[currentDisposition as PostingDisposition]?.label ?? currentDisposition}
@@ -134,23 +122,17 @@ export function TransitionPostingDialog({
 
         {validRules.length === 0 ? (
           <div
-            style={{
-              padding: "var(--ds-space-3)",
-              backgroundColor: "var(--ds-surface-hover)",
-              color: "var(--ds-text-secondary)",
-              borderRadius: "var(--ds-radius-md)",
-              fontSize: "var(--ds-text-sm)",
-            }}
+            className="dialog-notice"
           >
             No disposition transitions are permitted from current disposition &apos;{currentDisposition}&apos; with policy &apos;{currentResurfacePolicy}&apos;.
           </div>
         ) : (
           <>
             {/* Target disposition */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-1)" }}>
+            <div className="dialog-field">
               <label
                 htmlFor="toDisposition"
-                style={{ fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-medium)" }}
+                className="dialog-field-label"
               >
                 Target Disposition *
               </label>
@@ -172,7 +154,7 @@ export function TransitionPostingDialog({
                 })}
               </Select>
               {fieldErrors?.toDisposition ? (
-                <span style={{ color: "var(--ds-danger-text)", fontSize: "var(--ds-text-xs)" }}>
+                <span className="dialog-field-error">
                   {fieldErrors.toDisposition}
                 </span>
               ) : null}
@@ -206,10 +188,10 @@ export function TransitionPostingDialog({
             ) : null}
 
             {/* Reason */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-1)" }}>
+            <div className="dialog-field">
               <label
                 htmlFor="reason"
-                style={{ fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-medium)" }}
+                className="dialog-field-label"
               >
                 Reason *
               </label>
@@ -223,17 +205,17 @@ export function TransitionPostingDialog({
                 invalid={Boolean(fieldErrors?.reason)}
               />
               {fieldErrors?.reason ? (
-                <span style={{ color: "var(--ds-danger-text)", fontSize: "var(--ds-text-xs)" }}>
+                <span className="dialog-field-error">
                   {fieldErrors.reason}
                 </span>
               ) : null}
             </div>
 
             {/* Criterion */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-1)" }}>
+            <div className="dialog-field">
               <label
                 htmlFor="criterionId"
-                style={{ fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-medium)" }}
+                className="dialog-field-label"
               >
                 Associated Criterion (Optional)
               </label>
@@ -253,10 +235,10 @@ export function TransitionPostingDialog({
             </div>
 
             {/* Resurface Policy */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-1)" }}>
+            <div className="dialog-field">
               <label
                 htmlFor="resurfacePolicy"
-                style={{ fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-medium)" }}
+                className="dialog-field-label"
               >
                 Resurface Policy (Optional)
               </label>
@@ -276,10 +258,10 @@ export function TransitionPostingDialog({
             </div>
 
             {/* Override Reason */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-1)" }}>
+            <div className="dialog-field">
               <label
                 htmlFor="overrideReason"
-                style={{ fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-medium)" }}
+                className="dialog-field-label"
               >
                 Override Reason (Optional)
               </label>
@@ -296,12 +278,7 @@ export function TransitionPostingDialog({
 
         {/* Actions */}
         <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "var(--ds-space-3)",
-            marginTop: "var(--ds-space-3)",
-          }}
+          className="dialog-actions"
         >
           <Button variant="secondary" onClick={onClose} type="button">
             Cancel

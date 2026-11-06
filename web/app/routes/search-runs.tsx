@@ -78,7 +78,7 @@ export default function SearchRunsIndex() {
       sortable: true,
       sortValue: () => 0,
       render: (row) => (
-        <span style={{ fontWeight: "var(--ds-weight-medium)", color: "var(--ds-text)", whiteSpace: "nowrap" }}>
+        <span className="text-emphasis cell-nowrap">
           {formatDate(row.runDate)}
         </span>
       ),
@@ -99,12 +99,7 @@ export default function SearchRunsIndex() {
       header: "Batch Summary",
       render: (row) => (
         <span
-          style={{
-            whiteSpace: "pre-wrap",
-            display: "inline-block",
-            color: "var(--ds-text-secondary)",
-            maxWidth: "24rem",
-          }}
+          className="cell-prewrap cell-summary-text"
         >
           {row.summary || "—"}
         </span>
@@ -123,7 +118,7 @@ export default function SearchRunsIndex() {
       theme={theme}
       onThemeToggle={toggleTheme}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+      <div className="page-stack">
         <DataTable
           sortScope="all"
           caption="Automated Search Runs History"

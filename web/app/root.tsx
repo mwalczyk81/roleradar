@@ -1,5 +1,4 @@
 import type { LinksFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
-import * as React from "react";
 import {
   Links,
   Meta,
@@ -12,6 +11,8 @@ import {
 import dsTokensHref from "./ds/tokens.css?url";
 import dsBundleHref from "./ds/components/bundle.css?url";
 import appCssHref from "./app.css?url";
+import { THEME_BOOTSTRAP_SCRIPT, parseThemeCookie } from "./lib/theme.js";
+import { useTheme } from "./lib/use-theme.js";
 
 export const meta: MetaFunction = () => [
   { title: "RoleRadar" },
@@ -24,9 +25,7 @@ export const links: LinksFunction = () => [
 ];
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
-  const cookieHeader = request.headers.get("Cookie");
-  const match = cookieHeader?.match(/roleradar_theme=(light|dark)/);
-  const theme = match ? (match[1] as "light" | "dark") : undefined;
+  const theme = parseThemeCookie(request.headers.get("Cookie"));
   const nonce =
     (context as { nonce?: string })?.nonce ??
     request.headers.get("X-CSP-Nonce") ??
@@ -40,55 +39,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 export default function App() {
   const { theme: serverTheme, nonce } = useLoaderData<typeof loader>();
-  const [theme, setTheme] = React.useState<"light" | "dark" | undefined>(() => {
-    if (typeof document !== "undefined") {
-      const match = document.cookie.match(/roleradar_theme=(light|dark)/);
-      if (match) return match[1] as "light" | "dark";
-      const attr = document.documentElement.getAttribute("data-theme");
-      if (attr === "light" || attr === "dark") return attr;
-      return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-    return serverTheme;
-  });
+  const { theme } = useTheme(serverTheme);
 
-  React.useEffect(() => {
-    const getCookieTheme = () => {
-      const match = document.cookie.match(/roleradar_theme=(light|dark)/);
-      return match ? (match[1] as "light" | "dark") : null;
-    };
-
-    const cookieTheme = getCookieTheme();
-    if (!cookieTheme && typeof window !== "undefined" && typeof window.matchMedia === "function") {
-      const mql = window.matchMedia("(prefers-color-scheme: dark)");
-      const current = mql.matches ? "dark" : "light";
-      setTheme(current);
-      document.documentElement.setAttribute("data-theme", current);
-
-      const handleChange = (e: MediaQueryListEvent) => {
-        if (!getCookieTheme()) {
-          const next = e.matches ? "dark" : "light";
-          setTheme(next);
-          document.documentElement.setAttribute("data-theme", next);
-        }
-      };
-
-      mql.addEventListener("change", handleChange);
-      return () => mql.removeEventListener("change", handleChange);
-    }
-  }, []);
-
-  const themeScript = `
-    (function() {
-      try {
-        var match = document.cookie.match(/roleradar_theme=(light|dark)/);
-        var theme = match ? match[1] : (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-        document.documentElement.setAttribute('data-theme', theme);
-      } catch (e) {}
-    })();
-  `;
+  // The server renders data-theme only when the cookie names a theme. With no cookie the blocking head script sets
+  // it before first paint, so the server leaves it out rather than guess.
+  const htmlTheme = typeof document === "undefined" ? serverTheme : theme;
 
   return (
-    <html lang="en" data-theme={theme} suppressHydrationWarning>
+    <html lang="en" data-theme={htmlTheme} suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -96,7 +54,7 @@ export default function App() {
         <Links />
         <script
           nonce={nonce}
-          dangerouslySetInnerHTML={{ __html: themeScript }}
+          dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP_SCRIPT }}
         />
       </head>
       <body>
@@ -121,7 +79,7 @@ export function ErrorBoundary({ error }: { error?: unknown }) {
         <Meta />
         <Links />
       </head>
-      <body style={{ padding: "2rem", fontFamily: "sans-serif" }}>
+      <body className="app-error-body">
         <h1>Application Error</h1>
         <p>{message}</p>
         <Scripts />

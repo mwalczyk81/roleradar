@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatDate } from "../../app/lib/format-date.js";
+import { formatDate, formatShortDate } from "../../app/lib/format-date.js";
 
 describe("formatDate unit tests", () => {
   it("formats standard ISO UTC timestamp to YYYY-MM-DD", () => {
@@ -21,5 +21,23 @@ describe("formatDate unit tests", () => {
     expect(formatDate(null)).toBe("");
     expect(formatDate(undefined)).toBe("");
     expect(formatDate("")).toBe("");
+  });
+});
+
+describe("formatShortDate unit tests", () => {
+  it("writes the UTC month and day as 'Jul 6', never locale formatted", () => {
+    expect(formatShortDate("2026-07-06T09:00:00Z")).toBe("Jul 6");
+    expect(formatShortDate("2026-12-31T23:59:59Z")).toBe("Dec 31");
+    expect(formatShortDate("2026-01-05T00:00:00Z")).toBe("Jan 5");
+  });
+
+  it("uses the UTC date, not the offset date", () => {
+    expect(formatShortDate("2026-10-31T23:00:00-05:00")).toBe("Nov 1");
+  });
+
+  it("keeps formatDate's behaviour for invalid and empty input", () => {
+    expect(formatShortDate("not a date")).toBe("not a date");
+    expect(formatShortDate(null)).toBe("");
+    expect(formatShortDate(undefined)).toBe("");
   });
 });

@@ -37,3 +37,4 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0031](./0031-insights-derived-read-model-flags.md) | Derived Read-Model Flags for Insights, Written Only at the Repository Choke Point | Accepted | `007-insights-dashboard` |
 | [ADR-0032](./0032-markdown-rendering-of-notes.md) | Markdown Rendering of Note Bodies | Accepted | `007-insights-dashboard` |
 | [ADR-0033](./0033-posting-rejection-syncs-to-application.md) | Rejecting an Applied Posting Records the Rejection on Its Application | Accepted | `008-posting-application-rejection-sync` |
+| [ADR-0034](./0034-identity-serves-kit-assets-and-csp.md) | Identity Serves the Kit Assets and a CSP for Its Sign-In Pages | Accepted | `009-ui-polish-theming` |

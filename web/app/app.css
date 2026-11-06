@@ -129,10 +129,32 @@ body {
   font-size: var(--ds-text-sm);
 }
 
+/* Drill-down links (J1): quiet at rest (secondary text, no underline, a small chevron as the affordance), underlined and
+   bronze on hover and keyboard focus. Links inside help prose stay underlined, so colour is never the only cue. */
 .insights-stage-links a,
-.insights-tile-links a,
-.insights-help a {
+.insights-tile-links a {
+  color: var(--ds-text-secondary);
+  text-decoration: none;
+}
+
+.insights-stage-links a::after,
+.insights-tile-links a::after {
+  content: " \203A" / "";
+}
+
+.insights-stage-links a:hover,
+.insights-stage-links a:focus-visible,
+.insights-tile-links a:hover,
+.insights-tile-links a:focus-visible {
   color: var(--ds-primary-subtle-text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.insights-help a {
+  color: var(--ds-text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .insights-tiles {
@@ -141,11 +163,22 @@ body {
   gap: var(--ds-space-4);
 }
 
+/* A tile is three rows (card, drill-down links, help) laid on the grid rows of .insights-tiles, so the cards of tiles in
+   one grid row share a height, and so do their links and help text (J6). A tile without links leaves its middle row empty. */
 .insights-tile {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ds-space-2);
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  row-gap: var(--ds-space-2);
   min-width: 0;
+}
+
+.insights-tile > .insights-tile-links {
+  grid-row: 2;
+}
+
+.insights-tile > .insights-help {
+  grid-row: 3;
 }
 
 .insights-tile-links {
@@ -156,8 +189,7 @@ body {
   font-size: var(--ds-text-sm);
 }
 
-/* Insights trends (007 phase 4). The charts come from the kit; these are only the wrappers the page writes itself and
-   the search-run table view. Tokens only, no raw colours. */
+/* Insights trends (007 phase 4). The charts come from the kit; these are only the wrappers the page writes itself. Tokens only, no raw colours. */
 .insights-trend {
   display: flex;
   flex-direction: column;
@@ -176,61 +208,6 @@ body {
   font-size: var(--ds-text-sm);
 }
 
-.insights-sparkline {
-  display: block;
-  max-width: 100%;
-  height: auto;
-}
-
-.insights-run-toggle {
-  align-self: flex-start;
-  padding: var(--ds-space-1) var(--ds-space-3);
-  border: 1px solid var(--ds-border);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-surface);
-  color: var(--ds-text);
-  font-family: inherit;
-  font-size: var(--ds-text-sm);
-  cursor: pointer;
-}
-
-.insights-run-toggle[aria-pressed="true"] {
-  border-color: var(--ds-primary);
-  background: var(--ds-primary-subtle);
-  color: var(--ds-primary-subtle-text);
-}
-
-.insights-run-toggle:focus-visible {
-  outline: 2px solid var(--ds-focus-ring);
-  outline-offset: 2px;
-}
-
-.insights-run-table {
-  width: 100%;
-  max-width: 28rem;
-  border-collapse: collapse;
-  font-size: var(--ds-text-sm);
-  font-variant-numeric: tabular-nums;
-}
-
-.insights-run-table caption {
-  padding-bottom: var(--ds-space-2);
-  color: var(--ds-text-secondary);
-  text-align: left;
-}
-
-.insights-run-table th,
-.insights-run-table td {
-  padding: var(--ds-space-1) var(--ds-space-3);
-  border-bottom: 1px solid var(--ds-border);
-  text-align: left;
-}
-
-.insights-run-table th:last-child,
-.insights-run-table td:last-child {
-  text-align: right;
-}
-
 /* Note bodies rendered as Markdown (007 phase 5, ADR 0032). Classes only: the CSP forbids inline style attributes, and
    MarkdownBody never writes one. Tokens only, no raw colours, so light and dark both follow the theme. */
 .note-content {
@@ -243,12 +220,16 @@ body {
 
 .markdown-body {
   min-width: 0;
-  max-width: 72ch;
   color: var(--ds-text);
   font-family: var(--ds-font-sans);
   font-size: var(--ds-text-base);
   line-height: var(--ds-leading-relaxed);
   overflow-wrap: anywhere;
+}
+
+/* Prose keeps a reading width; a table region is the one child that uses the full card content width (FR-026). */
+.markdown-body > :not(.markdown-table-scroll) {
+  max-width: 72ch;
 }
 
 .markdown-body > :first-child {
@@ -287,9 +268,21 @@ body {
   font-size: var(--ds-text-lg);
 }
 
+/* h4 stays the larger display heading; h5 and h6 step down to the text face so they read as labels, h6 as small caps (J5). */
 .markdown-body h5,
 .markdown-body h6 {
+  font-family: var(--ds-font-sans);
+}
+
+.markdown-body h5 {
   font-size: var(--ds-text-base);
+}
+
+.markdown-body h6 {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .markdown-body ul,
@@ -467,7 +460,664 @@ body {
   overflow-wrap: anywhere;
 }
 
-.event-source {
+.event-source,
+.caption-small {
   color: var(--ds-text-secondary);
   font-size: var(--ds-text-xs);
+}
+
+/* ------------------------------------------------------------------------------------------------------------------
+   Shared layout and text classes (009 phase 3). These replace inline style props, grouped by meaning, so routes
+   share them. Tokens only. Each declaration below is the one the inline style used to carry.
+   ------------------------------------------------------------------------------------------------------------------ */
+
+/* The error boundary renders outside the shell, so it styles the body directly. */
+.app-error-body {
+  padding: 2rem;
+  font-family: sans-serif;
+}
+
+/* Full-height centred status pages: not authorized, service unavailable, sign in again. */
+.status-page {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-page-empty {
+  background-color: var(--ds-surface);
+  padding: var(--ds-space-6);
+}
+
+.status-page-notice {
+  padding: var(--ds-space-4);
+  background: var(--ds-bg);
+  color: var(--ds-text);
+}
+
+.notice-card {
+  max-width: 28rem;
+  width: 100%;
+  background: var(--ds-surface);
+  border: var(--ds-border-thin) solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  padding: var(--ds-space-6);
+  text-align: center;
+  box-shadow: var(--ds-shadow-md);
+}
+
+.notice-title {
+  font-size: var(--ds-text-xl);
+  font-weight: var(--ds-weight-bold);
+  margin-bottom: var(--ds-space-3);
+}
+
+.notice-text {
+  color: var(--ds-text-muted);
+  margin-bottom: var(--ds-space-6);
+  font-size: var(--ds-text-sm);
+}
+
+.link-button-primary {
+  display: inline-block;
+  padding: var(--ds-space-2) var(--ds-space-4);
+  background: var(--ds-primary-solid);
+  color: var(--ds-text-on-accent);
+  border-radius: var(--ds-radius-md);
+  text-decoration: none;
+  font-weight: var(--ds-weight-semibold);
+  font-size: var(--ds-text-sm);
+}
+
+.button-neutral {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--ds-space-2) var(--ds-space-4);
+  border-radius: var(--ds-radius-md);
+  background-color: var(--ds-surface-hover);
+  color: var(--ds-text);
+  border: thin solid var(--ds-border);
+  cursor: pointer;
+  font-weight: var(--ds-weight-medium);
+  font-size: var(--ds-text-sm);
+}
+
+.stack-centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ds-space-3);
+}
+
+.command-snippet {
+  display: inline-block;
+  padding: var(--ds-space-2) var(--ds-space-4);
+  background-color: var(--ds-surface-hover);
+  color: var(--ds-text);
+  border-radius: var(--ds-radius-md);
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-text-sm);
+  border: thin solid var(--ds-border);
+}
+
+.signed-out-page {
+  padding: 2rem;
+  text-align: center;
+}
+
+.signed-out-link {
+  margin-top: 1rem;
+}
+
+/* Page content: a vertical stack of sections inside the shell. */
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-6);
+}
+
+/* Table cells. */
+.cell-nowrap {
+  white-space: nowrap;
+}
+
+.text-emphasis {
+  font-weight: var(--ds-weight-medium);
+  color: var(--ds-text);
+}
+
+.cell-prewrap {
+  white-space: pre-wrap;
+  display: inline-block;
+}
+
+.cell-rule-text {
+  color: var(--ds-text);
+  max-width: 25rem;
+}
+
+.cell-summary-text {
+  color: var(--ds-text-secondary);
+  max-width: 24rem;
+}
+
+/* Links. The entity link is the accent-coloured link to a record from a list or detail page. */
+.entity-link {
+  color: var(--ds-primary);
+  text-decoration: none;
+  font-weight: var(--ds-weight-medium);
+}
+
+/* The title of a record in a list (postings and applications): the text colour at rest, bronze on hover and keyboard
+   focus (J7). --ds-primary-subtle-text is the bronze role that keeps 4.5:1 on the hovered row in both themes
+   (--ds-primary falls to 4.05:1 on the dark hover row). The focus ring itself comes from the kit. */
+.role-title-link {
+  font-weight: var(--ds-weight-medium);
+  color: var(--ds-text);
+  text-decoration: none;
+}
+
+/* The company name in a list row: the same colour states as the title, but normal weight so the title stays the lead. */
+.company-link {
+  color: var(--ds-text);
+  text-decoration: none;
+}
+
+.role-title-link:hover,
+.role-title-link:focus-visible,
+.company-link:hover,
+.company-link:focus-visible {
+  color: var(--ds-primary-subtle-text);
+}
+
+.row-action-link {
+  font-size: var(--ds-text-sm);
+  color: var(--ds-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  color: var(--ds-text-secondary);
+  text-decoration: none;
+  font-size: var(--ds-text-sm);
+}
+
+/* Search and filter bars on list pages. */
+.search-form {
+  display: flex;
+  gap: var(--ds-space-2);
+  max-width: 30rem;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ds-space-4);
+}
+
+.filter-group,
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.field-caption {
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-secondary);
+}
+
+.filter-select-width {
+  width: 12rem;
+}
+
+/* Tags and detail cards. */
+.tag-row {
+  display: flex;
+  gap: var(--ds-space-1);
+  flex-wrap: wrap;
+}
+
+.tag-row-roomy {
+  gap: var(--ds-space-2);
+}
+
+.card-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-4);
+}
+
+/* Declared after .page-heading so its bold weight wins over the heading's 600. */
+.note-title {
+  margin: 0;
+  font-size: var(--ds-text-2xl);
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-bold);
+}
+
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+  align-items: center;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+}
+
+/* Posting detail page and its transition dialog. */
+.detail-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--ds-space-4);
+}
+
+.detail-title {
+  margin: 0 0 var(--ds-space-1) 0;
+  font-size: var(--ds-text-xl);
+}
+
+.detail-meta {
+  display: flex;
+  gap: var(--ds-space-3);
+  align-items: center;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+}
+
+.score-label {
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-bold);
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: var(--ds-space-6);
+}
+
+.section-title {
+  margin: 0 0 var(--ds-space-3) 0;
+  font-size: var(--ds-text-base);
+}
+
+.detail-list {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--ds-space-2);
+  margin: 0;
+  font-size: var(--ds-text-sm);
+}
+
+.detail-term {
+  color: var(--ds-text-secondary);
+}
+
+.detail-value {
+  margin: 0;
+}
+
+.break-link {
+  color: var(--ds-primary);
+  word-break: break-all;
+}
+
+.text-small {
+  font-size: var(--ds-text-sm);
+}
+
+.note-summary {
+  margin: 0 0 var(--ds-space-2) 0;
+  white-space: pre-wrap;
+}
+
+.signal-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+
+.signal-row {
+  padding: var(--ds-space-3);
+  background-color: var(--ds-surface-hover);
+  border-radius: var(--ds-radius-md);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.signal-evidence {
+  color: var(--ds-text-secondary);
+  margin-left: var(--ds-space-2);
+}
+
+.dialog-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-4);
+  font-family: var(--ds-font-sans);
+}
+
+.dialog-alert-danger {
+  padding: var(--ds-space-3);
+  background-color: var(--ds-danger-subtle);
+  color: var(--ds-danger-text);
+  border-radius: var(--ds-radius-md);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-weight-medium);
+}
+
+.dialog-notice {
+  padding: var(--ds-space-3);
+  background-color: var(--ds-surface-hover);
+  color: var(--ds-text-secondary);
+  border-radius: var(--ds-radius-md);
+  font-size: var(--ds-text-sm);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ds-space-3);
+  margin-top: var(--ds-space-3);
+}
+
+/* Company detail page: header, edit form, tag chips and career sources. */
+.detail-heading-xl {
+  margin: 0;
+  font-size: var(--ds-text-2xl);
+  font-weight: 700;
+}
+
+.detail-badges {
+  display: flex;
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-5);
+}
+
+.form-heading {
+  margin: 0;
+  font-size: var(--ds-text-lg);
+  font-weight: 600;
+}
+
+.form-label {
+  display: block;
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  margin-bottom: var(--ds-space-1);
+}
+
+.form-label-small {
+  display: block;
+  font-size: var(--ds-text-xs);
+  margin-bottom: var(--ds-space-1);
+}
+
+.form-error {
+  color: var(--ds-danger-text);
+  font-size: var(--ds-text-xs);
+  margin-top: var(--ds-space-1);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--ds-space-4);
+}
+
+.form-subheading {
+  font-size: var(--ds-text-sm);
+  font-weight: 600;
+  margin-bottom: var(--ds-space-2);
+}
+
+.form-actions {
+  display: flex;
+  gap: var(--ds-space-3);
+  margin-top: var(--ds-space-2);
+}
+
+.chip-row {
+  display: flex;
+  gap: var(--ds-space-2);
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: var(--ds-space-2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  background-color: var(--ds-surface-hover);
+  padding: var(--ds-space-1) var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+  font-size: var(--ds-text-xs);
+}
+
+.chip-remove {
+  background: none;
+  border: none;
+  color: var(--ds-text-secondary);
+  cursor: pointer;
+  padding: 0;
+  font-size: var(--ds-text-xs);
+}
+
+.inline-form-row {
+  display: flex;
+  gap: var(--ds-space-2);
+  max-width: 24rem;
+}
+
+.empty-caption {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  margin-bottom: var(--ds-space-3);
+}
+
+.source-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  margin-bottom: var(--ds-space-4);
+}
+
+.source-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--ds-space-3);
+  border-radius: var(--ds-radius-md);
+  border: var(--ds-border-thin) solid var(--ds-border);
+  gap: var(--ds-space-3);
+}
+
+.source-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+
+.source-url {
+  font-weight: 600;
+  font-size: var(--ds-text-sm);
+}
+
+.underline-link {
+  color: var(--ds-primary);
+  text-decoration: underline;
+}
+
+.source-meta {
+  display: flex;
+  gap: var(--ds-space-2);
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-secondary);
+}
+
+.subform-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-4);
+  background-color: var(--ds-surface);
+  border-radius: var(--ds-radius-md);
+  border: var(--ds-border-thin) solid var(--ds-border);
+}
+
+.subform-title {
+  font-weight: 600;
+  font-size: var(--ds-text-xs);
+  text-transform: uppercase;
+}
+
+.subform-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--ds-space-3);
+}
+
+/* Application detail page: summary card, timeline and the append-event dialog (slice 3e). */
+.link-primary {
+  color: var(--ds-primary);
+  text-decoration: none;
+}
+
+.icon-leading {
+  margin-right: var(--ds-space-1);
+}
+
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--ds-space-4);
+}
+
+/* Declared after .page-heading so its margin and size win. */
+.timeline-heading {
+  margin: 0;
+  font-size: var(--ds-text-base);
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-4);
+  position: relative;
+}
+
+.timeline-event {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  padding: var(--ds-space-3);
+  background-color: var(--ds-surface-hover);
+  border-radius: var(--ds-radius-md);
+  border-left: var(--ds-space-1) solid var(--ds-primary);
+}
+
+.timeline-event-terminal {
+  border-left: var(--ds-space-1) solid var(--ds-danger);
+}
+
+.timeline-event-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.timeline-event-label {
+  font-weight: var(--ds-weight-bold);
+  font-size: var(--ds-text-sm);
+}
+
+.timeline-event-notes {
+  margin: var(--ds-space-1) 0 0 0;
+  font-size: var(--ds-text-sm);
+  white-space: pre-wrap;
+  color: var(--ds-text);
+}
+
+/* Modal form fields: a label above a control, an inline error under it, and the button row. */
+.field-label {
+  display: block;
+  margin-bottom: var(--ds-space-1);
+  font-size: var(--ds-text-sm);
+}
+
+.field-label-medium {
+  font-weight: var(--ds-weight-medium);
+}
+
+.field-label-hint {
+  display: block;
+  margin-bottom: var(--ds-space-1);
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-secondary);
+}
+
+.inline-field-error {
+  color: var(--ds-danger);
+  font-size: var(--ds-text-xs);
+}
+
+.sync-note {
+  margin: var(--ds-space-2) 0 0 0;
+  font-size: var(--ds-text-xs);
+  color: var(--ds-text-secondary);
+  background-color: var(--ds-surface-sunken);
+  padding: var(--ds-space-2);
+  border-radius: var(--ds-radius-sm);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ds-space-2);
+  margin-top: var(--ds-space-2);
+}
+
+/* Create-application dialog. */
+.dialog-subject {
+  margin: 0;
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-secondary);
+}
+
+.salary-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 5rem;
+  gap: var(--ds-space-2);
+}
+
+.override-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3);
+  background-color: var(--ds-surface-hover);
+  border-radius: var(--ds-radius-md);
 }

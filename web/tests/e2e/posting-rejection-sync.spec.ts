@@ -1,4 +1,5 @@
-import { test, expect, type BrowserContext, type Page } from "@playwright/test";
+import { type BrowserContext, type Page } from "@playwright/test";
+import { test, expect } from "./support/csp-guard.js";
 import path from "node:path";
 import fs from "node:fs";
 import os from "node:os";

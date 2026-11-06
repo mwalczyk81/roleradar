@@ -22,7 +22,8 @@ export function AppShell({
   onThemeToggle,
   headerActions,
   children,
-  style = {},
+  className,
+  style,
   ...rest
 }) {
   const [open, setOpen] = React.useState(false);
@@ -40,7 +41,7 @@ export function AppShell({
   }, [open]);
 
   return (
-    <div {...rest} className="ds-appshell" data-nav-open={open ? "true" : "false"} style={style}>
+    <div {...rest} className={["ds-appshell", className].filter(Boolean).join(" ")} data-nav-open={open ? "true" : "false"} style={style}>
       <a className="ds-skip-link" href="#ds-main-content">Skip to main content</a>
       <aside className="ds-appshell-sidebar">
         <div className="ds-appshell-brand">{brand}</div>
@@ -82,11 +83,10 @@ export function AppShell({
           {onThemeToggle ? (
             <button
               type="button"
-              className="ds-icon-btn"
+              className="ds-icon-btn ds-appshell-theme"
               onClick={onThemeToggle}
               aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
               title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
-              style={{ display: "inline-flex", padding: "var(--ds-space-2)", background: "none", border: "none", borderRadius: "var(--ds-radius-md)", color: "var(--ds-text-secondary)", cursor: "pointer" }}
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 {theme === "dark" ? <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></> : <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />}

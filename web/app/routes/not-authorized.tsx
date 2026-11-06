@@ -21,14 +21,7 @@ export default function NotAuthorized() {
 
   return (
     <main
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        minHeight: "100vh",
-        backgroundColor: "var(--ds-surface)",
-        padding: "var(--ds-space-6)",
-      }}
+      className="status-page status-page-empty"
     >
       <EmptyState
         icon={<ShieldAlert size={28} />}
@@ -39,19 +32,7 @@ export default function NotAuthorized() {
             <input type="hidden" name="_csrf" value={csrfToken} />
             <button
               type="submit"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "var(--ds-space-2) var(--ds-space-4)",
-                borderRadius: "var(--ds-radius-md)",
-                backgroundColor: "var(--ds-surface-hover)",
-                color: "var(--ds-text)",
-                border: "thin solid var(--ds-border)",
-                cursor: "pointer",
-                fontWeight: "var(--ds-weight-medium)",
-                fontSize: "var(--ds-text-sm)",
-              }}
+              className="button-neutral"
             >
               Sign Out
             </button>

@@ -8,8 +8,8 @@ import { buildStatsView, UNAVAILABLE_STATS, type InsightsStatsDto, type StatsVie
 import type { LensContext } from "../../app/lib/insights-lenses.js";
 
 /**
- * T070 (component part): the trend section. A ColumnChart of weekly applications and a Sparkline of search-run yield,
- * each with a table view that works from the keyboard (native buttons), a median response time tile, and an honest
+ * T070 (component part): the trend section. A ColumnChart of weekly applications and a text line plus a small ColumnChart of search-run yield,
+ * each chart with a table view that works from the keyboard (native buttons), a median response time tile, and an honest
  * unavailable state that leaves the rest of the page alone.
  */
 
@@ -125,17 +125,20 @@ describe("Insights trends (T070)", () => {
     }
   });
 
-  it("shows search-run yield as a sparkline named for what it is, with its own table view", async () => {
+  it("shows search-run yield as text plus a small column chart named for what it is, with its own table view", async () => {
     const { section } = await trendSection(stats());
 
-    expect(section.getByRole("img", { name: /new postings per search run/i })).toBeDefined();
+    expect(section.getByTestId("run-yield-summary").textContent).toContain("9 new postings");
+    expect(section.getByTestId("run-yield-summary").textContent).toContain("2 runs in this window");
+    expect(section.getByRole("group", { name: "New postings per search run" })).toBeDefined();
     const buttons = section.getAllByRole("button", { name: /table view/i });
     expect(buttons).toHaveLength(2); // one for the column chart, one for the run yield
   });
 
   it("switches run yield to a native table, oldest first, and back", async () => {
     const { section } = await trendSection(stats());
-    const runToggle = section.getByRole("button", { name: /table view of search runs/i });
+    const figure = section.getByText("New postings per search run").closest("figure") as HTMLElement;
+    const runToggle = within(figure).getByRole("button", { name: /^table view$/i });
 
     expect(runToggle.getAttribute("aria-pressed")).toBe("false");
     fireEvent.click(runToggle);
@@ -143,13 +146,13 @@ describe("Insights trends (T070)", () => {
     expect(runToggle.getAttribute("aria-pressed")).toBe("true");
     const table = await section.findByRole("table", { name: /new postings per search run/i });
     const rows = within(table).getAllByRole("row").slice(1).map((r) => r.textContent);
-    expect(rows).toEqual(["2026-09-104", "2026-09-209"]);
-    expect(section.queryByRole("img", { name: /new postings per search run/i })).toBeNull();
+    expect(rows).toEqual(["Run on 2026-09-104", "Run on 2026-09-209"]);
+    expect(section.queryByRole("group", { name: "New postings per search run" })).toBeNull();
 
     fireEvent.click(runToggle);
     expect(runToggle.getAttribute("aria-pressed")).toBe("false");
     expect(section.queryByRole("table", { name: /new postings per search run/i })).toBeNull();
-    expect(section.getByRole("img", { name: /new postings per search run/i })).toBeDefined();
+    expect(section.getByRole("group", { name: "New postings per search run" })).toBeDefined();
   });
 
   it("labels a capped run series 'showing latest 120 runs'", async () => {
@@ -221,7 +224,7 @@ describe("Insights trends (T070)", () => {
     const { sectionElement } = await trendSection(stats());
 
     // The kit draws its own SVG and layout; the page's wrappers and the table-view control must use classes only.
-    const owned = sectionElement.querySelectorAll(".insights-trend, .insights-trend-note, .insights-run-table, .insights-run-toggle");
+    const owned = sectionElement.querySelectorAll(".insights-trend, .insights-trend-note");
     expect(owned.length).toBeGreaterThan(0);
     for (const element of owned) {
       expect(element.hasAttribute("style")).toBe(false);

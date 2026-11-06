@@ -130,58 +130,24 @@ export default function AuthCallback() {
   if (data?.replay) {
     return (
       <main
-        style={{
-          display: "flex",
-          minHeight: "100vh",
-          alignItems: "center",
-          justifyContent: "center",
-          padding: "var(--ds-space-4)",
-          background: "var(--ds-bg)",
-          color: "var(--ds-text)",
-        }}
+        className="status-page status-page-notice"
       >
         <div
-          style={{
-            maxWidth: "28rem",
-            width: "100%",
-            background: "var(--ds-surface)",
-            border: "var(--ds-border-thin) solid var(--ds-border)",
-            borderRadius: "var(--ds-radius-lg)",
-            padding: "var(--ds-space-6)",
-            textAlign: "center",
-            boxShadow: "var(--ds-shadow-md)",
-          }}
+          className="notice-card"
         >
           <h1
-            style={{
-              fontSize: "var(--ds-text-xl)",
-              fontWeight: "var(--ds-weight-bold)",
-              marginBottom: "var(--ds-space-3)",
-            }}
+            className="notice-title"
           >
             Sign in again
           </h1>
           <p
-            style={{
-              color: "var(--ds-text-muted)",
-              marginBottom: "var(--ds-space-6)",
-              fontSize: "var(--ds-text-sm)",
-            }}
+            className="notice-text"
           >
             This authorization link has already been used or has expired. Please sign in again to continue.
           </p>
           <a
             href="/postings"
-            style={{
-              display: "inline-block",
-              padding: "var(--ds-space-2) var(--ds-space-4)",
-              background: "var(--ds-primary-solid)",
-              color: "var(--ds-text-on-accent)",
-              borderRadius: "var(--ds-radius-md)",
-              textDecoration: "none",
-              fontWeight: "var(--ds-weight-semibold)",
-              fontSize: "var(--ds-text-sm)",
-            }}
+            className="link-button-primary"
           >
             Sign in again
           </a>

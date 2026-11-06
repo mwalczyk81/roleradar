@@ -417,19 +417,12 @@ export default function PostingDetail() {
       theme={theme}
       onThemeToggle={toggleTheme}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+      <div className="page-stack">
         {/* Breadcrumb back to postings list */}
         <div>
           <Link
             to="/postings"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "var(--ds-space-1)",
-              color: "var(--ds-text-secondary)",
-              textDecoration: "none",
-              fontSize: "var(--ds-text-sm)",
-            }}
+            className="back-link"
           >
             <ArrowLeft size={16} />
             <span>Back to Job Postings</span>
@@ -446,29 +439,17 @@ export default function PostingDetail() {
           </Alert>
         ) : null}
 
-        {/* Top Summary Card */}
-        <Card style={{ padding: "var(--ds-space-5)" }}>
+        {/* Top Summary Card. */}
+        <Card padding="md">
           <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              flexWrap: "wrap",
-              gap: "var(--ds-space-4)",
-            }}
+            className="detail-header-row"
           >
             <div>
-              <h2 className="page-heading" style={{ margin: "0 0 var(--ds-space-1) 0", fontSize: "var(--ds-text-xl)" }}>
+              <h2 className="page-heading detail-title">
                 {posting.title}
               </h2>
               <div
-                style={{
-                  display: "flex",
-                  gap: "var(--ds-space-3)",
-                  alignItems: "center",
-                  color: "var(--ds-text-secondary)",
-                  fontSize: "var(--ds-text-sm)",
-                }}
+                className="detail-meta"
               >
                 <span>{posting.companyName}</span>
                 {posting.location ? <span>• {posting.location}</span> : null}
@@ -476,17 +457,13 @@ export default function PostingDetail() {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "var(--ds-space-2)", alignItems: "center" }}>
+            <div className="action-group">
               <Badge tone={dispMeta.tone} data-tone={dispMeta.tone} data-testid="disposition-badge">
                 {dispMeta.label}
               </Badge>
               {posting.score !== null && posting.score !== undefined ? (
                 <span
-                  style={{
-                    fontFamily: "var(--ds-font-mono)",
-                    fontSize: "var(--ds-text-sm)",
-                    fontWeight: "var(--ds-weight-bold)",
-                  }}
+                  className="score-label"
                 >
                   Score: {posting.score}
                 </span>
@@ -519,42 +496,32 @@ export default function PostingDetail() {
 
         {/* Details Grid */}
         <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(20rem, 1fr))",
-            gap: "var(--ds-space-6)",
-          }}
+          className="detail-grid"
         >
-          {/* Metadata Card */}
-          <Card style={{ padding: "var(--ds-space-5)" }}>
-            <h3 className="page-heading" style={{ margin: "0 0 var(--ds-space-3) 0", fontSize: "var(--ds-text-base)" }}>Details</h3>
+          {/* Metadata Card. */}
+          <Card padding="md">
+            <h3 className="page-heading section-title">Details</h3>
             <dl
-              style={{
-                display: "grid",
-                gridTemplateColumns: "max-content 1fr",
-                gap: "var(--ds-space-2)",
-                margin: 0,
-                fontSize: "var(--ds-text-sm)",
-              }}
+              className="detail-list"
             >
-              <dt style={{ color: "var(--ds-text-secondary)" }}>Resurface Policy:</dt>
-              <dd style={{ margin: 0 }}>
+              <dt className="detail-term">Resurface Policy:</dt>
+              <dd className="detail-value">
                 {RESURFACE_POLICY_LABELS[posting.resurfacePolicy as ResurfacePolicy] ?? posting.resurfacePolicy}
               </dd>
 
-              <dt style={{ color: "var(--ds-text-secondary)" }}>Compensation:</dt>
-              <dd style={{ margin: 0 }}>
+              <dt className="detail-term">Compensation:</dt>
+              <dd className="detail-value">
                 {posting.compensation?.rawText ?? (posting.compensation?.currency ? `Currency: ${posting.compensation.currency}` : "—")}
               </dd>
 
-              <dt style={{ color: "var(--ds-text-secondary)" }}>Posting URL:</dt>
-              <dd style={{ margin: 0 }}>
+              <dt className="detail-term">Posting URL:</dt>
+              <dd className="detail-value">
                 {posting.url ? (
                   <a
                     href={posting.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={{ color: "var(--ds-primary)", wordBreak: "break-all" }}
+                    className="break-link"
                   >
                     {posting.url}
                   </a>
@@ -563,62 +530,54 @@ export default function PostingDetail() {
                 )}
               </dd>
 
-              <dt style={{ color: "var(--ds-text-secondary)" }}>Created:</dt>
-              <dd style={{ margin: 0 }}>{formatDate(posting.createdAt)}</dd>
+              <dt className="detail-term">Created:</dt>
+              <dd className="detail-value">{formatDate(posting.createdAt)}</dd>
 
-              <dt style={{ color: "var(--ds-text-secondary)" }}>Updated:</dt>
-              <dd style={{ margin: 0 }}>{formatDate(posting.updatedAt)}</dd>
+              <dt className="detail-term">Updated:</dt>
+              <dd className="detail-value">{formatDate(posting.updatedAt)}</dd>
             </dl>
           </Card>
 
-          {/* Assessment Note Card */}
-          <Card style={{ padding: "var(--ds-space-5)" }}>
-            <h3 className="page-heading" style={{ margin: "0 0 var(--ds-space-3) 0", fontSize: "var(--ds-text-base)" }}>Assessment Note</h3>
+          {/* Assessment Note Card. */}
+          <Card padding="md">
+            <h3 className="page-heading section-title">Assessment Note</h3>
             {posting.assessmentNote ? (
-              <div style={{ fontSize: "var(--ds-text-sm)" }}>
-                <p style={{ margin: "0 0 var(--ds-space-2) 0", whiteSpace: "pre-wrap" }}>
+              <div className="text-small">
+                <p className="note-summary">
                   {posting.assessmentNote.summary}
                 </p>
-                <div style={{ color: "var(--ds-text-secondary)", fontSize: "var(--ds-text-xs)" }}>
+                <div className="caption-small">
                   Updated: {formatDate(posting.assessmentNote.updatedAt)}
                 </div>
               </div>
             ) : (
-              <div style={{ color: "var(--ds-text-secondary)", fontSize: "var(--ds-text-sm)" }}>
+              <div className="field-caption">
                 No assessment note recorded for this opportunity.
               </div>
             )}
           </Card>
         </div>
 
-        {/* Signals Card */}
-        <Card style={{ padding: "var(--ds-space-5)" }}>
-          <h3 className="page-heading" style={{ margin: "0 0 var(--ds-space-3) 0", fontSize: "var(--ds-text-base)" }}>Opportunity Signals</h3>
+        {/* Signals Card. */}
+        <Card padding="md">
+          <h3 className="page-heading section-title">Opportunity Signals</h3>
           {posting.signals && posting.signals.length > 0 ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-2)" }}>
+            <div className="signal-list">
               {posting.signals.map((sig, index) => (
                 <div
                   key={`${sig.signalType}-${index}`}
-                  style={{
-                    padding: "var(--ds-space-3)",
-                    backgroundColor: "var(--ds-surface-hover)",
-                    borderRadius: "var(--ds-radius-md)",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    gap: "var(--ds-space-2)",
-                  }}
+                  className="signal-row"
                 >
-                  <div style={{ fontSize: "var(--ds-text-sm)" }}>
+                  <div className="text-small">
                     <strong>{sig.signalType}</strong>
                     {sig.evidence ? (
-                      <span style={{ color: "var(--ds-text-secondary)", marginLeft: "var(--ds-space-2)" }}>
+                      <span className="signal-evidence">
                         — {sig.evidence}
                       </span>
                     ) : null}
                   </div>
                   {sig.detectedAt ? (
-                    <span style={{ fontSize: "var(--ds-text-xs)", color: "var(--ds-text-secondary)" }}>
+                    <span className="caption-small">
                       {formatDate(sig.detectedAt)}
                     </span>
                   ) : null}
@@ -626,7 +585,7 @@ export default function PostingDetail() {
               ))}
             </div>
           ) : (
-            <div style={{ color: "var(--ds-text-secondary)", fontSize: "var(--ds-text-sm)" }}>
+            <div className="field-caption">
               No opportunity signals detected.
             </div>
           )}

@@ -7,6 +7,8 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   invalid?: boolean;
   /** Icon node rendered inside, at the start of the field. */
   leadingIcon?: React.ReactNode;
+  /** Fixed width: "xs" (5rem), "sm" (7rem) or "md" (12rem). Omit to fill the container. */
+  width?: "xs" | "sm" | "md";
 }
 
 /** Single-line text field. Always paired with a label. */
