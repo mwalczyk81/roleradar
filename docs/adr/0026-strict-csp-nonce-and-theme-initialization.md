@@ -57,6 +57,8 @@ In CSP Level 3, style directives distinguish between element stylesheets and sty
 - `style-src-attr 'unsafe-inline'`: Permits element-level `style="..."` attributes on DOM elements without weakening stylesheet protection or script execution policies.
 - Script execution remains strictly bound to `script-src 'self' 'nonce-{NONCE}'` with zero `'unsafe-inline'`.
 
+**Amended by feature `009-ui-polish-theming` (phase 6): the `style-src-attr 'unsafe-inline'` clause is removed.** The app has no inline `style` props (an ESLint rule enforces it) and the vendored kit (version `1793983477-b1df`) renders no `style` attribute (`web/tests/unit/kit-no-style-attributes.test.tsx` and `web/tests/architecture/kit-style-emitters.test.ts`). A style attribute now falls back to `style-src` and is blocked. The header example above is the policy as first accepted; the current policy is in `web/server.ts` and `specs/009-ui-polish-theming/contracts/csp-policies.md`.
+
 ### 2. Zero-FOUC Theme Initialization Script
 
 The server passes `nonce` through loader context into the root document template (`root.tsx`). In the `<head>`, an inline script tagged with the matching `nonce` reads the cookie or system color scheme:

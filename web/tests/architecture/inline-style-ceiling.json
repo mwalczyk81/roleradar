@@ -1,9 +1,0 @@
-{
-  "total": 8,
-  "files": {
-    "app/routes/applications.$id.tsx": 2,
-    "app/routes/companies.$id.tsx": 1,
-    "app/routes/postings.$id.tsx": 4,
-    "app/routes/postings._index.tsx": 1
-  }
-}

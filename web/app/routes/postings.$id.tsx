@@ -439,8 +439,8 @@ export default function PostingDetail() {
           </Alert>
         ) : null}
 
-        {/* Top Summary Card. K6: the kit Card sets its own inline padding after ours, so this space-5 override stays a style prop. */}
-        <Card style={{ padding: "var(--ds-space-5)" }}>
+        {/* Top Summary Card. */}
+        <Card padding="md">
           <div
             className="detail-header-row"
           >
@@ -498,8 +498,8 @@ export default function PostingDetail() {
         <div
           className="detail-grid"
         >
-          {/* Metadata Card. K6: the kit Card sets its own inline padding after ours, so this space-5 override stays a style prop. */}
-          <Card style={{ padding: "var(--ds-space-5)" }}>
+          {/* Metadata Card. */}
+          <Card padding="md">
             <h3 className="page-heading section-title">Details</h3>
             <dl
               className="detail-list"
@@ -538,8 +538,8 @@ export default function PostingDetail() {
             </dl>
           </Card>
 
-          {/* Assessment Note Card. K6: the kit Card sets its own inline padding after ours, so this space-5 override stays a style prop. */}
-          <Card style={{ padding: "var(--ds-space-5)" }}>
+          {/* Assessment Note Card. */}
+          <Card padding="md">
             <h3 className="page-heading section-title">Assessment Note</h3>
             {posting.assessmentNote ? (
               <div className="text-small">
@@ -558,8 +558,8 @@ export default function PostingDetail() {
           </Card>
         </div>
 
-        {/* Signals Card. K6: the kit Card sets its own inline padding after ours, so this space-5 override stays a style prop. */}
-        <Card style={{ padding: "var(--ds-space-5)" }}>
+        {/* Signals Card. */}
+        <Card padding="md">
           <h3 className="page-heading section-title">Opportunity Signals</h3>
           {posting.signals && posting.signals.length > 0 ? (
             <div className="signal-list">

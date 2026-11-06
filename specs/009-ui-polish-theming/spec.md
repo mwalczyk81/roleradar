@@ -231,7 +231,7 @@ None. No data is created, changed or read differently.
 
 - **SC-001**: Zero inline `style` attributes are written by RoleRadar's own web markup: 203 reduced to 0 across 17 files, with the before and after screenshot comparison unchanged in both themes on every route.
 - **SC-002**: The browser suite finishes with zero CSP violations on every route in light and dark.
-- **SC-003**: The CSP no longer contains `style-src-attr 'unsafe-inline'` once K1 is vendored; if K1 is not available, the spec records the count of kit-emitted attributes still blocking it.
+- **SC-003** (met, phase 6): The CSP no longer contains `style-src-attr 'unsafe-inline'`. K1 is vendored (kit version `1793983477-b1df`): `web/scripts/kit-style-emitters.mjs` reports 0 inline style objects in 27 kit source files, the style-attribute census is 0 on all 23 captured routes, and the app has no `style` prop (ESLint `no-restricted-syntax`). `web/server.ts`, `server.test.ts`, `security-invariants.test.ts` and `csp-style-attribute.spec.ts` assert the header has no `style-src-attr` and no `unsafe-inline`.
 - **SC-004**: Theme logic is defined in exactly one module, and a first-paint check shows the right `data-theme` in the server HTML for both cookie values.
 - **SC-005**: Every colour pair touched passes WCAG AA (4.5:1 for text) in light and dark, and the shared axe helper reports zero serious or critical violations on each touched page.
 - **SC-006**: Insights tiles in a row have equal heights on desktop, and a wide note table is not clipped while the page has no horizontal scroll.

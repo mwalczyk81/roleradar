@@ -504,11 +504,8 @@ export default function PostingsIndex() {
               type="number"
               aria-label="Filter by Minimum Score"
               placeholder="Min Score"
-              className="placeholder-muted"
               value={minScoreInput}
-              /* Kit request K6: the kit Input sets an inline width of 100% that no className can override, so this one
-                 width stays an inline style (the ratchet allows exactly this one in this file). Fixed by K1 or a width prop. */
-              style={{ width: "7rem" }}
+              width="sm"
               onChange={(e) => {
                 const raw = e.target.value;
                 setMinScoreInput(raw);

@@ -613,13 +613,6 @@ body {
 /* The title of a record in a list (postings and applications): the text colour at rest, bronze on hover and keyboard
    focus (J7). --ds-primary-subtle-text is the bronze role that keeps 4.5:1 on the hovered row in both themes
    (--ds-primary falls to 4.05:1 on the dark hover row). The focus ring itself comes from the kit. */
-/* K4: the kit Input sets no placeholder colour, so the browser default (#757575) applies: 4.61:1 on the light surface but
-   3.29:1 on the dark one. The muted text token passes in both themes (4.80:1 and 6.01:1). Used on the Min Score input,
-   through its className, until the kit gives Input a placeholder token. */
-.placeholder-muted::placeholder {
-  color: var(--ds-text-muted);
-}
-
 .role-title-link {
   font-weight: var(--ds-weight-medium);
   color: var(--ds-text);

@@ -276,9 +276,11 @@ test.describe("CSP and SSR Style Attribute Invariant (Real Chromium)", () => {
     const heading = page.getByRole("heading", { name: "Service Unavailable" });
     await expect(heading).toBeVisible();
 
-    // Verify EmptyState vendored design system component has inline computed styles applied before hydration
+    // Verify the EmptyState vendored design system component has its computed styles applied before hydration, through
+    // classes: the element carries no style attribute (009 phase 6: the policy has no style-src-attr).
     const emptyStateIcon = page.locator("span[aria-hidden='true']");
     await expect(emptyStateIcon).toBeVisible();
+    expect(await emptyStateIcon.getAttribute("style")).toBeNull();
 
     const iconDisplay = await emptyStateIcon.evaluate((el) => {
       return window.getComputedStyle(el).display;
@@ -301,6 +303,39 @@ test.describe("CSP and SSR Style Attribute Invariant (Real Chromium)", () => {
 
     // Zero CSP violations
     expect(cspViolations).toEqual([]);
+  });
+
+  test("sends a CSP without style-src-attr and without any unsafe-inline (009 phase 6)", async ({ request }) => {
+    const response = await request.get(`${baseUrl}/service-unavailable`);
+    const csp = response.headers()["content-security-policy"];
+    expect(csp).toBeDefined();
+    expect(csp).not.toContain("style-src-attr");
+    expect(csp).not.toContain("unsafe-inline");
+    expect(csp).toContain("style-src 'self' 'nonce-");
+  });
+
+  test("EmptyState on /service-unavailable is styled from the server HTML with JavaScript disabled, no style attribute anywhere", async ({
+    browser,
+  }) => {
+    const context = await browser.newContext({ ignoreHTTPSErrors: true, javaScriptEnabled: false });
+    try {
+      const page = await context.newPage();
+      await page.goto(`${baseUrl}/service-unavailable`);
+      await expect(page.getByRole("heading", { name: "Service Unavailable" })).toBeVisible();
+
+      const icon = page.locator("span[aria-hidden='true']").first();
+      await expect(icon).toBeVisible();
+      // page.evaluate cannot run with JavaScript off, so read the laid-out box: an unstyled inline span would be 0 wide,
+      // and the kit class (width 3rem, centred flex box) gives 48px. The server HTML alone carries the styling.
+      const box = await icon.boundingBox();
+      expect(box?.width).toBe(48);
+      expect(box?.height).toBe(48);
+
+      const withStyleAttribute = await page.locator("[style]").count();
+      expect(withStyleAttribute, "elements with a style attribute in the server HTML").toBe(0);
+    } finally {
+      await context.close();
+    }
   });
 
   test("loads /postings list with API stubbed, asserting zero CSP violations and axe zero serious/critical in light and dark", async ({

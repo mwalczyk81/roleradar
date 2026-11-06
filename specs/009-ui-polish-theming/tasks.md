@@ -144,7 +144,7 @@ description: "Task list for 009-ui-polish-theming"
 - [X] T054 [P] [US1] Add computed-style assertions in `web/tests/e2e/converted-styles.spec.ts` for `/applications/:id` (timeline spacing, event rows, append-event dialog) and the create-application dialog on `/postings/:id`. Run and paste.
 - [X] T055 [US1] Convert 54 of the 56 styles to classes in `web/app/app.css`. `create-application-dialog.test.tsx`, `applications.component.test.tsx` and `applications.a11y.test.ts` pass unmodified, or the edit is listed.
 - [X] T056 [US1] Baseline comparison and census for `/applications/:id` (plain, append-event dialog open) and `/postings/:id` with the create dialog open, both themes; paste results.
-- [ ] T057 [US1] **Deferred to Phase 6** (amended). The ratchet stays a vitest test with per-file ceilings, because the K6 leftovers (8 inline styles on kit `Card` and `Input`) keep the total above zero. In Phase 6, once K1 is vendored and the ceiling can reach 0, add an ESLint rule to `web/eslint.config.js` (`no-restricted-syntax` on `JSXAttribute[name.name='style']`, applied to `web/app/**` except `web/app/ds/**`), shown red first by temporarily adding a `style` prop in a scratch file, then remove the scratch file, `web/tests/architecture/inline-style-ratchet.test.ts` and `inline-style-ceiling.json`, and update `contracts/inline-style-ratchet.md` rule 6 to "done". Until then `contracts/inline-style-ratchet.md` rule 6 stays open.
+- [X] T057 [US1] **Deferred to Phase 6** (amended). The ratchet stays a vitest test with per-file ceilings, because the K6 leftovers (8 inline styles on kit `Card` and `Input`) keep the total above zero. In Phase 6, once K1 is vendored and the ceiling can reach 0, add an ESLint rule to `web/eslint.config.js` (`no-restricted-syntax` on `JSXAttribute[name.name='style']`, applied to `web/app/**` except `web/app/ds/**`), shown red first by temporarily adding a `style` prop in a scratch file, then remove the scratch file, `web/tests/architecture/inline-style-ratchet.test.ts` and `inline-style-ceiling.json`, and update `contracts/inline-style-ratchet.md` rule 6 to "done". Until then `contracts/inline-style-ratchet.md` rule 6 stays open.
 - [X] T058 [US1] Full-route baseline comparison for every route in both themes and the census table; paste. The remaining census entries are kit-rendered except the 8 known K6 leftovers (the census cannot tell them apart, see the slice 3e notes); they are the input for Phase 6. Saved as `census-end-phase3.json` beside the baseline (outside the repo).
 - [X] T059 [US1] Phase gate (see header). Report remaining app count 8 (K6), kit count 150 in 27 files re-measured.
 - [X] T060 **Boundary: Phase 3.** Report the full list of near-identical style objects that were merged or kept apart (judgement calls). Wait for "go".
@@ -269,9 +269,7 @@ description: "Task list for 009-ui-polish-theming"
 - T090: `AccountSecurityHeaders` derives the `form-action` origins from the same client list that is registered (`IdentityServerConfig.GetClients`, now called once in `Program.cs` and passed to both). http(s) origins only, default ports dropped, first-seen order, no repeats.
 - T091: the pages gained classes (`button`, `button-primary`, `button-danger`) and `role="alert"` on the error box; the `<p style="margin: 0;">` became a CSS rule. No field, name, hidden input, anti-forgery call, handler or `.cshtml.cs` changed.
 - T093: ADR 0034 is Proposed; Matt accepts it at T095.
-- Amendment after Matt's J8 review (markup and `identity.css` only): the pages carry the app's brand lockup (the `Brand.tsx` mark and wordmark), the heading "Sign in" on Login, the `--ds-bg-subtle` ground, a kit-Card surface (`--ds-shadow-sm`, `space-6` padding) and kit-Input, Button and Alert values. `bundle.css` has no control classes (the kit components style themselves inline), so `identity.css` restates their token values and the e2e test compares computed styles with the tokens. `web/tests/e2e/real-stack.spec.ts` asserted the old h1 text "RoleRadar Authentication" and now asserts "Sign in". Contact sheet: `%TEMP%
-oleradar-visual
-eview-phase5bindex.html`.
+- Amendment after Matt's J8 review (markup and `identity.css` only): the pages carry the app's brand lockup (the `Brand.tsx` mark and wordmark), the heading "Sign in" on Login, the `--ds-bg-subtle` ground, a kit-Card surface (`--ds-shadow-sm`, `space-6` padding) and kit-Input, Button and Alert values. `bundle.css` has no control classes (the kit components style themselves inline), so `identity.css` restates their token values and the e2e test compares computed styles with the tokens. `web/tests/e2e/real-stack.spec.ts` asserted the old h1 text "RoleRadar Authentication" and now asserts "Sign in". Contact sheet: `%TEMP%\roleradar-visual\review-phase5b\index.html`.
 - J8 contact sheet (outside the repo): `%TEMP%\roleradar-visual\review-phase5\index.html`, one self-contained file.
 
 **Checkpoint**: US4 holds in tests and in a real sign-in.
@@ -284,24 +282,35 @@ eview-phase5bindex.html`.
 
 ### Precondition
 
-- [ ] T097 [P] [US1] New `web/scripts/kit-style-emitters.mjs` that scans `web/app/ds/components/src/**/*.jsx` for `style=` and prints per-file counts and the total as JSON; and new `web/tests/architecture/kit-style-emitters.test.ts` that runs the same scan and reports the total. Run it and paste the output (expect 150 in 27 files at the start of the phase).
-- [ ] T098 [US1] Decide the path from T097: total 0 means K1 is vendored (go to Path B); any other total means Path A.
+- [X] T097 [P] [US1] New `web/scripts/kit-style-emitters.mjs` that scans `web/app/ds/components/src/**/*.jsx` for `style=` and prints per-file counts and the total as JSON; and new `web/tests/architecture/kit-style-emitters.test.ts` that runs the same scan and reports the total. Run it and paste the output (expect 150 in 27 files at the start of the phase).
+- [X] T098 [US1] Decide the path from T097: total 0 means K1 is vendored (go to Path B); any other total means Path A.
 
 ### Path A: K1 not vendored (the phase ends here)
 
-- [ ] T099 [US1] Write `specs/009-ui-polish-theming/kit-style-emitters.md` from the T097 output and the end-of-Phase-3 census: per kit file the count, which kit component it is, which app routes render it (from `census-end-phase3.json`), and the unchanged K1 wording (integer-percent classes 0 to 100 in `bundle.css`, no post-hydration script). State that `web/server.ts` is unchanged and that a small follow-up feature picks the flip up after Matt vendors K1.
-- [ ] T100 [US1] Update `specs/009-ui-polish-theming/spec.md` SC-003 with the recorded count and file list reference. Run `pre-commit run --all-files` and the LF check. No `web/server.ts` change.
-- [ ] T101 **Boundary: Phase 6, Path A.** Report: the blocked state, the exact list, and that the feature is otherwise complete. Stop.
+- [ ] T099 (not applicable, Path B taken) [US1] Write `specs/009-ui-polish-theming/kit-style-emitters.md` from the T097 output and the end-of-Phase-3 census: per kit file the count, which kit component it is, which app routes render it (from `census-end-phase3.json`), and the unchanged K1 wording (integer-percent classes 0 to 100 in `bundle.css`, no post-hydration script). State that `web/server.ts` is unchanged and that a small follow-up feature picks the flip up after Matt vendors K1.
+- [ ] T100 (not applicable, Path B taken) [US1] Update `specs/009-ui-polish-theming/spec.md` SC-003 with the recorded count and file list reference. Run `pre-commit run --all-files` and the LF check. No `web/server.ts` change.
+- [ ] T101 (not applicable, Path B taken) **Boundary: Phase 6, Path A.** Report: the blocked state, the exact list, and that the feature is otherwise complete. Stop.
 
 ### Path B: K1 vendored
 
-- [ ] T102 [Matt] Publish the kit version that satisfies K1 and vendor it using the `web/app/ds/SYNC.md` procedure (copy-only, never hand-edited), updating `SYNC.md` hashes so `web/tests/architecture/ds-sync.test.ts` passes. Then tell the agent to continue.
-- [ ] T103 [US1] Re-run the Phase 1 visual baseline comparison against the new kit (`ROLERADAR_VISUAL_DIR` set, no `--update-snapshots`) for every route in both themes. Differences of one percent in chart sizes are expected from rounding; every other difference is reported and stops the phase until Matt rules on it. Re-run `kit-style-emitters` and paste a total of 0.
-- [ ] T104 [US1] Tests first: edit `web/tests/unit/server.test.ts` to expect a CSP without `style-src-attr` and run it red; add to `web/tests/e2e/csp-style-attribute.spec.ts` an assertion that the response header lacks `style-src-attr 'unsafe-inline'`; edit the kit `EmptyState` check so it asserts computed styles apply before hydration through classes (no `style` attribute on the element). Paste the red output.
-- [ ] T105 [US1] Remove the `style-src-attr 'unsafe-inline';` clause from `applySecurityHeaders` in `web/server.ts`. Update `contracts/csp-policies.md` to "done".
-- [ ] T106 [US1] Run the whole Playwright suite with the guard on every route in light and dark; paste the pass count and the count of CSP violations (expect 0). Any violation stops the phase and is reported with its route and element.
-- [ ] T107 [US1] Phase gate (see header) plus `pwsh ./scripts/review-gate.ps1` and the Phase 5 Identity checks (`web/tests/e2e/identity-signin.spec.ts` is unaffected).
-- [ ] T108 **Boundary: Phase 6, Path B.** Report per the header. J-items: none.
+- [X] T102 [Matt] Publish the kit version that satisfies K1 and vendor it using the `web/app/ds/SYNC.md` procedure (copy-only, never hand-edited), updating `SYNC.md` hashes so `web/tests/architecture/ds-sync.test.ts` passes. Then tell the agent to continue.
+- [X] T103 [US1] Re-run the Phase 1 visual baseline comparison against the new kit (`ROLERADAR_VISUAL_DIR` set, no `--update-snapshots`) for every route in both themes. Differences of one percent in chart sizes are expected from rounding; every other difference is reported and stops the phase until Matt rules on it. Re-run `kit-style-emitters` and paste a total of 0.
+- [X] T104 [US1] Tests first: edit `web/tests/unit/server.test.ts` to expect a CSP without `style-src-attr` and run it red; add to `web/tests/e2e/csp-style-attribute.spec.ts` an assertion that the response header lacks `style-src-attr 'unsafe-inline'`; edit the kit `EmptyState` check so it asserts computed styles apply before hydration through classes (no `style` attribute on the element). Paste the red output.
+- [X] T105 [US1] Remove the `style-src-attr 'unsafe-inline';` clause from `applySecurityHeaders` in `web/server.ts`. Update `contracts/csp-policies.md` to "done".
+- [X] T106 [US1] Run the whole Playwright suite with the guard on every route in light and dark; paste the pass count and the count of CSP violations (expect 0). Any violation stops the phase and is reported with its route and element.
+- [X] T107 [US1] Phase gate (see header) plus `pwsh ./scripts/review-gate.ps1` and the Phase 5 Identity checks (`web/tests/e2e/identity-signin.spec.ts` is unaffected).
+- [X] T108 **Boundary: Phase 6, Path B.** Report per the header. J-items: none.
+
+**Phase 6 implementation notes**:
+
+- K1 was already vendored and committed (kit `1793983477-b1df`, commit 3ebfbc0), so T102 is done and Path B was taken. T099 to T101 (Path A) do not apply.
+- K6 edits: the seven `<Card style={{ padding }}>` became `padding="md"` and the Min Score `Input` became `width="sm"`; `.placeholder-muted` and its CSS were removed (the kit reads `--ds-placeholder`). The pins in `converted-styles.spec.ts` now assert no style attribute and the space-5 padding by computed value.
+- T097: `web/scripts/kit-style-emitters.mjs` counts `style={{` and `style: {` (comments stripped), not `style={style}` and not CSSOM writes. On the current kit it reports 0 in 27 files; on the commit before K1 it reported 137 in 27 files. `kit-style-emitters.test.ts` also unit-tests the counter. The render-side guard stays in `kit-no-style-attributes.test.tsx`.
+- T057: ESLint `no-restricted-syntax` on `JSXAttribute[name.name='style']` for `app/**`, shown failing on a scratch file (removed). `inline-style-ratchet.test.ts` and `inline-style-ceiling.json` are deleted.
+- T104 and T105: `server.test.ts`, `security-invariants.test.ts` (Invariant 6) and `csp-style-attribute.spec.ts` expect no `style-src-attr` and no `unsafe-inline`; the clause is removed from `applySecurityHeaders`. New e2e: the live header check, and the EmptyState box (48 by 48) and zero `[style]` elements from the server HTML with JavaScript disabled. ADR 0026 carries an amendment note.
+- T103: the 10 `insights-*` captures were re-recorded (whole-percent chart marks, accepted by Matt); the other 64 matched without `--update-snapshots`, including after the K6 edits. `company-detail-errors` failed once on a full run and passed on rerun (the known sidebar-position flake).
+- `review-gate.ps1` must run from Git Bash: from the PowerShell tool `bash` resolves to the WSL launcher and `ODataDocsExamplesTests` fails. One run failed `CliContainer_ReceivesSigterm_TerminatesWithinBoundedTimeout` under load; it passed alone and the full re-run passed.
+
 
 ---
 

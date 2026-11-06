@@ -335,8 +335,8 @@ export default function CompanyDetail() {
           </Link>
         </div>
 
-        {/* Company Header Card. K6: the kit Card sets its own inline padding after ours, so this space-5 override stays a style prop. */}
-        <Card style={{ padding: "var(--ds-space-5)" }}>
+        {/* Company Header Card. */}
+        <Card padding="md">
           <div
             className="detail-header-row"
           >

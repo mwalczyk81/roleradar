@@ -8,8 +8,8 @@
 2. The JSON file holds one integer per file path (forward slashes) and a `total`. Initial total is **203** across the 17 files in spec US1.
 3. The test fails when a file's real count is **above** its ceiling (a new inline style) or when the ceiling is **above** the real count (a phase landed without lowering it).
 4. A file not in the JSON has a ceiling of 0.
-5. The kit is out of this test. A separate Phase 6 test (`kit-style-emitters.test.ts`) counts `style=` in `web/app/ds/components/src/**` and is the precondition for the CSP flip (today 150 in 27 files).
-6. At total 0 the ceiling file and test are removed and replaced by an ESLint `no-restricted-syntax` rule on `JSXAttribute[name.name='style']` for `web/app/**` outside `ds`.
+5. The kit is out of this test. A separate Phase 6 test (`kit-style-emitters.test.ts`) counts inline style objects (`style={{`, `style: {`) in `web/app/ds/components/src/**`, not the pass-through `style={style}` and not CSSOM writes. It was the precondition for the CSP flip and now reports 0.
+6. **Done (phase 6).** At total 0 the ceiling file and test were removed and replaced by an ESLint `no-restricted-syntax` rule on `JSXAttribute[name.name='style']` for `web/app/**` outside `ds` (`web/eslint.config.js`). Rules 1 to 4 describe the retired ratchet.
 
 ## Ceiling schedule
 

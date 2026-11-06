@@ -51,6 +51,31 @@ const ENTITY_LINK = { color: "var(--ds-primary)", "text-decoration": "none", "fo
 const TAG_ROW = { display: "flex", gap: "var(--ds-space-1)", "flex-wrap": "wrap" };
 const SEARCH_FORM = { display: "flex", gap: "var(--ds-space-2)", "max-width": "30rem" };
 
+/**
+ * Kit request K6, delivered by the kit `Card padding` prop: exactly `expected` cards on the page compute to the space-5
+ * padding on all four sides (the default is space-6), and no card carries a style attribute.
+ */
+async function expectMediumPaddedCards(page: Page, expected: number): Promise<void> {
+  const result = await page.evaluate(() => {
+    const probe = document.createElement("div");
+    probe.style.padding = "var(--ds-space-5)";
+    document.body.appendChild(probe);
+    const want = getComputedStyle(probe).paddingTop;
+    probe.remove();
+    const cards = Array.from(document.querySelectorAll<HTMLElement>(".ds-card"));
+    return {
+      want,
+      withStyleAttribute: cards.filter((card) => card.hasAttribute("style")).length,
+      medium: cards.filter((card) => {
+        const cs = getComputedStyle(card);
+        return [cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft].every((side) => side === want);
+      }).length,
+    };
+  });
+  expect(result.withStyleAttribute, "cards with a style attribute").toBe(0);
+  expect(result.medium, `cards padded ${result.want}`).toBe(expected);
+}
+
 test.describe("slice 3a: small routes", () => {
   test("root error boundary body", async ({ page }) => {
     await open(page, "/no-such-route");
@@ -215,11 +240,10 @@ test.describe("slice 3b: list routes", () => {
     await pin(page.locator("td a.role-title-link").first(), { "font-weight": "var(--ds-weight-medium)", color: "var(--ds-text)", "text-decoration": "none" });
     await pin(page.locator("td .cell-nowrap").first(), CELL_NOWRAP);
     await pin(page.locator(".filter-group").first(), { display: "flex", gap: "var(--ds-space-2)", "align-items": "center" });
-    // The Min Score input keeps its inline width: the kit Input sets an inline width of 100% that no class can override
-    // (kit request K6). It is the one remaining style attribute in this file.
+    // The Min Score input gets its width from the kit `width="sm"` prop (7rem, a kit class): no style attribute remains.
     const minScore = page.getByPlaceholder("Min Score");
+    await expectNoStyleAttribute(minScore);
     await expectDeclarations(minScore, { width: "7rem" });
-    expect(await minScore.getAttribute("style")).toContain("width:7rem");
   });
 
   test("/notes", async ({ page }) => {
@@ -366,12 +390,9 @@ test.describe("slice 3c: posting detail and the transition dialog", () => {
     });
   });
 
-  test("/postings/:id keeps the four Card padding overrides as inline style (kit request K6)", async ({ page }) => {
+  test("/postings/:id gives four Cards the kit padding=\"md\" (space-5) with no style attribute (K6)", async ({ page }) => {
     await open(page, "/postings/post-e2e-1");
-    // The kit Card applies its own inline padding after the consumer's, so no class can change it. Four cards ask for
-    // space-5 instead of the default space-6; they keep the style prop until the kit offers a padding prop (K6).
-    const cards = page.locator('div[style*="padding:var(--ds-space-5)"]');
-    expect(await cards.count()).toBe(4);
+    await expectMediumPaddedCards(page, 4);
   });
 
   test("transition dialog: form, fields, labels, actions", async ({ page }) => {
@@ -600,9 +621,9 @@ test.describe("slice 3d: company detail", () => {
     }
   });
 
-  test("/companies/:id keeps the header Card padding override as inline style (kit request K6); the form Card repeats the kit default", async ({ page }) => {
+  test("/companies/:id gives the header Card the kit padding=\"md\" (space-5) with no style attribute (K6); the form Card repeats the kit default", async ({ page }) => {
     await open(page, "/companies/comp-e2e-1");
-    expect(await page.locator('div[style*="padding:var(--ds-space-5)"]').count()).toBe(1);
+    await expectMediumPaddedCards(page, 1);
   });
 });
 
@@ -730,9 +751,9 @@ test.describe("slice 3e: applications.$id", () => {
     await pin(page.locator("p.field-caption"), { color: "var(--ds-text-secondary)", "font-size": "var(--ds-text-sm)" });
   });
 
-  test("/applications/:id keeps the two Card padding overrides as inline style (kit request K6)", async ({ page }) => {
+  test("/applications/:id gives two Cards the kit padding=\"md\" (space-5) with no style attribute (K6)", async ({ page }) => {
     await open(page, "/applications/app-e2e-1");
-    expect(await page.locator('div[style*="padding:var(--ds-space-5)"]').count()).toBe(2);
+    await expectMediumPaddedCards(page, 2);
   });
 
   test("/applications/:id append-event dialog", async ({ page }) => {

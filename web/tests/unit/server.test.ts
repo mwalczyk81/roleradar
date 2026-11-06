@@ -18,7 +18,7 @@ describe("server.ts TLS and CSP invariants", () => {
     vi.restoreAllMocks();
   });
 
-  it("sets CSP with strict script-src and style-src-attr 'unsafe-inline'", () => {
+  it("sets CSP with strict script-src and style-src, and no style-src-attr clause (009 phase 6)", () => {
     const res = new http.ServerResponse({} as unknown as http.IncomingMessage);
     const nonce = generateCspNonce();
     applySecurityHeaders(res, nonce);
@@ -27,7 +27,9 @@ describe("server.ts TLS and CSP invariants", () => {
     expect(csp).toBeDefined();
     expect(csp).toContain(`script-src 'self' 'nonce-${nonce}'`);
     expect(csp).toContain(`style-src 'self' 'nonce-${nonce}'`);
-    expect(csp).toContain("style-src-attr 'unsafe-inline'");
+    // No style-src-attr: a style attribute falls back to style-src, which has no 'unsafe-inline', so it is blocked.
+    expect(csp).not.toContain("style-src-attr");
+    expect(csp).not.toContain("unsafe-inline");
     expect(csp).not.toContain("script-src 'unsafe-inline'");
   });
 

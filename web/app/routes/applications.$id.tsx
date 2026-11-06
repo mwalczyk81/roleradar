@@ -327,7 +327,7 @@ export default function ApplicationDetail() {
         </div>
 
         {/* Top Summary Card */}
-        <Card style={{ padding: "var(--ds-space-5)" }}>
+        <Card padding="md">
           <div className="detail-header-row">
             <div>
               <h2 className="page-heading detail-title">{loaderData.posting.title}</h2>
@@ -362,7 +362,7 @@ export default function ApplicationDetail() {
         </Card>
 
         {/* Application Timeline Events Card */}
-        <Card style={{ padding: "var(--ds-space-5)" }}>
+        <Card padding="md">
           <div className="timeline-header">
             <h3 className="page-heading timeline-heading">
               Application History & Timeline ({application.events.length} event{application.events.length === 1 ? "" : "s"})
