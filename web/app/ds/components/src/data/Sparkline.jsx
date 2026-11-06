@@ -10,7 +10,7 @@ const PAD = 6; // the end dot is 8px across plus a 2px ring, so the line stays 6
  * and use a ColumnChart where readers need to read values. The accessible name summarises the
  * range; pass `label` to say what the line is.
  */
-export function Sparkline({ values = [], width = 96, height = 28, label, valueFormat = formatCount, surface = "var(--ds-surface)", style = {}, ...rest }) {
+export function Sparkline({ values = [], width = 96, height = 28, label, valueFormat = formatCount, surface = "var(--ds-surface)", className, style, ...rest }) {
   const n = values.length;
   if (n === 0) return null;
   const min = Math.min(...values);
@@ -28,7 +28,8 @@ export function Sparkline({ values = [], width = 96, height = 28, label, valueFo
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      style={{ display: "block", flex: "none", overflow: "visible", ...style }}
+      className={["ds-sparkline", className].filter(Boolean).join(" ")}
+      style={style}
     >
       {n > 1 ? (
         <polyline

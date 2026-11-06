@@ -1,5 +1,7 @@
 import React from "react";
 
+const cx = (...parts) => parts.filter(Boolean).join(" ");
+
 /**
  * Menu — a dropdown menu opened from a button. `trigger` is the button's content and `label`
  * its accessible name (required when the trigger is only an icon). `items` is a list of
@@ -11,7 +13,7 @@ import React from "react";
  * starts with it, Escape closes and returns focus to the button, Tab closes. Clicking outside
  * closes. Selecting an item runs its handler, closes the menu and returns focus to the button.
  */
-export function Menu({ trigger, label, items = [], align = "start", variant = "secondary", linkComponent, style = {}, ...rest }) {
+export function Menu({ trigger, label, items = [], align = "start", variant = "secondary", linkComponent, className, style, ...rest }) {
   const [open, setOpen] = React.useState(false);
   const [request, setRequest] = React.useState(null); // which item to focus after opening
   const wrapRef = React.useRef(null);
@@ -86,26 +88,8 @@ export function Menu({ trigger, label, items = [], align = "start", variant = "s
     }
   }
 
-  const triggerStyle = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: "var(--ds-space-2)",
-    height: "var(--ds-control-md)",
-    minWidth: "var(--ds-control-md)",
-    padding: "0 var(--ds-space-3)",
-    background: variant === "secondary" ? "var(--ds-surface)" : "transparent",
-    color: "var(--ds-text)",
-    border: `var(--ds-border-thin) solid ${variant === "secondary" ? "var(--ds-border-control)" : "transparent"}`,
-    borderRadius: "var(--ds-radius-md)",
-    fontFamily: "var(--ds-font-sans)",
-    fontSize: "var(--ds-text-sm)",
-    fontWeight: "var(--ds-weight-medium)",
-    cursor: "pointer",
-  };
-
   return (
-    <div {...rest} ref={wrapRef} style={{ position: "relative", display: "inline-block", ...style }}>
+    <div {...rest} ref={wrapRef} className={cx("ds-menu", className)} style={style}>
       <button
         ref={triggerRef}
         type="button"
@@ -124,7 +108,7 @@ export function Menu({ trigger, label, items = [], align = "start", variant = "s
             openMenu("last");
           }
         }}
-        style={triggerStyle}
+        data-variant={variant}
       >
         {trigger}
       </button>
@@ -134,49 +118,22 @@ export function Menu({ trigger, label, items = [], align = "start", variant = "s
           role="menu"
           aria-label={label}
           onKeyDown={onMenuKeyDown}
-          style={{
-            position: "absolute",
-            top: "calc(100% + var(--ds-space-1))",
-            [align === "end" ? "right" : "left"]: 0,
-            zIndex: "var(--ds-z-dropdown)",
-            minWidth: "12rem",
-            padding: "var(--ds-space-1)",
-            background: "var(--ds-surface)",
-            border: "var(--ds-border-thin) solid var(--ds-border)",
-            borderRadius: "var(--ds-radius-lg)",
-            boxShadow: "var(--ds-shadow-md)",
-            fontFamily: "var(--ds-font-sans)",
-          }}
+          className="ds-menu-list"
+          data-align={align === "end" ? "end" : "start"}
         >
           {items.map((it, i) => {
             if (it.separator) {
-              return <div key={`sep-${i}`} role="separator" style={{ height: 0, margin: "var(--ds-space-1) 0", borderTop: "var(--ds-border-thin) solid var(--ds-border)" }} />;
+              return <div key={`sep-${i}`} role="separator" className="ds-menu-separator" />;
             }
             const common = {
               role: "menuitem",
               tabIndex: -1,
               className: "ds-menu-item",
+              "data-disabled": it.disabled ? "" : undefined,
               "aria-disabled": it.disabled || undefined,
               "data-danger": it.danger ? "" : undefined,
               ref: (el) => {
                 itemRefs.current[i] = el;
-              },
-              style: {
-                display: "flex",
-                alignItems: "center",
-                width: "100%",
-                boxSizing: "border-box",
-                padding: "var(--ds-space-2) var(--ds-space-3)",
-                background: "none",
-                border: "none",
-                borderRadius: "var(--ds-radius-md)",
-                textAlign: "left",
-                textDecoration: "none",
-                fontFamily: "var(--ds-font-sans)",
-                fontSize: "var(--ds-text-sm)",
-                color: it.danger ? "var(--ds-danger-text)" : "var(--ds-text)",
-                cursor: it.disabled ? "not-allowed" : "pointer",
-                opacity: it.disabled ? 0.5 : 1,
               },
               onClick: (e) => {
                 if (it.disabled) {

@@ -39,6 +39,8 @@ export function Badge(props: BadgeProps): JSX.Element;
 export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   /** Apply the standard space-6 padding. Set false to lay out edge-to-edge content (e.g. a table). @default true */
   padded?: boolean;
+  /** Padding step: "none", "sm" (space-4), "md" (space-5) or "lg" (space-6). Wins over `padded`. @default "lg" */
+  padding?: "none" | "sm" | "md" | "lg";
   /** Lift to shadow-md on hover and show a pointer cursor. @default false */
   interactive?: boolean;
   children?: React.ReactNode;
@@ -84,6 +86,8 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
   invalid?: boolean;
   /** Icon node rendered inside, at the start of the field. */
   leadingIcon?: React.ReactNode;
+  /** Fixed width: "xs" (5rem), "sm" (7rem) or "md" (12rem). Omit to fill the container. */
+  width?: "xs" | "sm" | "md";
 }
 
 /** Single-line text field. Always paired with a label. */

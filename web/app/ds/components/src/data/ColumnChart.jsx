@@ -1,10 +1,14 @@
 import React from "react";
 import { ChartEmpty, ChartFrame, ChartTip, TableView, TipBody, anchorOf, formatCount, formatTick, niceTicks, useChartTip, useRoving, useWidth } from "./chartParts.jsx";
 
-const TOP_PAD = 20; // room above the tallest column for its value
-const LABEL_ROW = 24; // x-axis labels
 const MIN_SLOT = 20; // columns never get narrower; the plot scrolls sideways instead
 const LABEL_WIDTH = 48; // space one x-axis label needs
+
+/** Whole percent, 0 to 100, as a class suffix: bundle.css has one rule per value, so marks paint before any script runs. */
+const pctOf = (value, whole) => Math.max(0, Math.min(100, Math.round(whole > 0 ? (value / whole) * 100 : 0)));
+
+/** The plot height in px, rounded to a multiple of 10 between 60 and 400 (bundle.css has one rule per step). */
+const plotHeight = (height) => Math.max(60, Math.min(400, Math.round((Number(height) || 180) / 10) * 10));
 
 /**
  * ColumnChart — vertical columns for counts over time buckets, such as applications per week.
@@ -14,6 +18,8 @@ const LABEL_WIDTH = 48; // space one x-axis label needs
  * x-axis labels thin out to fit. Hover or focus a column for its readout (`fullLabel` is the
  * long form, such as "Week of Oct 5"); arrow keys move between columns (one tab stop). A
  * "Table view" button swaps the plot for a native table of every value.
+ * Column heights and tick positions are whole percents and `height` snaps to a multiple of
+ * 10px (60 to 400): the sizes are classes in bundle.css, not inline styles.
  */
 export function ColumnChart({
   title,
@@ -26,7 +32,6 @@ export function ColumnChart({
   framed = true,
   isLoading = false,
   emptyMessage = "No data for this period.",
-  style = {},
   ...rest
 }) {
   const { figureRef, tip, show, hide } = useChartTip();
@@ -42,38 +47,36 @@ export function ColumnChart({
   const step = slot ? Math.max(1, Math.ceil(LABEL_WIDTH / slot)) : n <= 8 ? 1 : n <= 16 ? 2 : 4;
   const peak = data.findIndex((d) => d.value === max);
   const showValue = (i) => labelAll || i === peak || i === n - 1;
-  const total = TOP_PAD + height + LABEL_ROW;
+
+  // The plot never gets narrower than its columns; set after mount (the container width is only known there).
+  React.useLayoutEffect(() => {
+    if (plotRef.current) plotRef.current.style.minWidth = `${n * MIN_SLOT}px`;
+  }, [n]);
 
   const plot =
     n === 0 ? (
       <ChartEmpty>{isLoading ? "Loading" : emptyMessage}</ChartEmpty>
     ) : (
-      <div style={{ display: "flex", gap: "var(--ds-space-2)" }}>
-        <div aria-hidden="true" style={{ position: "relative", flex: "0 0 2.25rem", height: total }}>
-          <div style={{ position: "absolute", top: TOP_PAD, left: 0, right: 0, height }}>
+      <div className="ds-colchart" data-plot-h={plotHeight(height)}>
+        <div aria-hidden="true" className="ds-colchart-axis">
+          <div className="ds-colchart-area">
             {ticks.map((t) => (
-              <span
-                key={t}
-                style={{ position: "absolute", right: 0, bottom: `${(t / top) * 100}%`, transform: "translateY(50%)", fontSize: "var(--ds-text-xs)", color: "var(--ds-text-secondary)", fontVariantNumeric: "tabular-nums" }}
-              >
+              <span key={t} className={`ds-colchart-tick ds-b-${pctOf(t, top)}`}>
                 {formatTick(t)}
               </span>
             ))}
           </div>
         </div>
-        <div style={{ flex: 1, minWidth: 0, overflowX: "auto", paddingRight: "var(--ds-space-2)" }}>
-          <div ref={plotRef} onKeyDown={(e) => e.key === "Escape" && hide()} style={{ position: "relative", height: total, minWidth: n * MIN_SLOT }}>
-            <div aria-hidden="true" style={{ position: "absolute", top: TOP_PAD, left: 0, right: 0, height }}>
+        <div className="ds-colchart-scroll">
+          <div ref={plotRef} onKeyDown={(e) => e.key === "Escape" && hide()} className="ds-colchart-plot">
+            <div aria-hidden="true" className="ds-colchart-area">
               {ticks.map((t) => (
-                <span
-                  key={t}
-                  style={{ position: "absolute", left: 0, right: 0, bottom: `${(t / top) * 100}%`, height: 0, borderTop: `var(--ds-border-thin) solid ${t === 0 ? "var(--ds-border-strong)" : "var(--ds-border)"}` }}
-                />
+                <span key={t} className={`ds-colchart-gridline ds-b-${pctOf(t, top)}`} data-base={t === 0 ? "" : undefined} />
               ))}
             </div>
-            <div role="group" aria-label={title} style={{ position: "absolute", top: TOP_PAD, left: 0, right: 0, height, display: "flex" }}>
+            <div role="group" aria-label={title} className="ds-colchart-area ds-colchart-slots">
               {data.map((d, i) => {
-                const pct = (d.value / top) * 100;
+                const pct = pctOf(d.value, top);
                 const name = d.fullLabel || d.label;
                 return (
                   <div
@@ -89,24 +92,10 @@ export function ColumnChart({
                       show(i, anchorOf(e));
                     }}
                     onBlur={hide}
-                    style={{ position: "relative", flex: "1 1 0", minWidth: 0, height: "100%", display: "flex", alignItems: "flex-end", justifyContent: "center" }}
                   >
-                    <span
-                      className="ds-chart-bar"
-                      style={{
-                        width: "min(24px, calc(100% - 4px))",
-                        height: `${pct}%`,
-                        minHeight: d.value > 0 ? "2px" : 0,
-                        background: "var(--ds-chart-primary)",
-                        borderRadius: "4px 4px 0 0",
-                        transition: "background var(--ds-duration-fast) var(--ds-ease-standard)",
-                      }}
-                    />
+                    <span className={`ds-chart-bar ds-chart-bar-col ds-h-${pct}`} data-nz={d.value > 0 ? "" : undefined} />
                     {showValue(i) ? (
-                      <span
-                        aria-hidden="true"
-                        style={{ position: "absolute", left: "50%", bottom: `calc(${pct}% + 4px)`, transform: "translateX(-50%)", whiteSpace: "nowrap", fontSize: "var(--ds-text-xs)", fontWeight: "var(--ds-weight-medium)", color: "var(--ds-text)" }}
-                      >
+                      <span aria-hidden="true" className={`ds-colchart-value ds-cap-${pct}`}>
                         {formatTick(d.value)}
                       </span>
                     ) : null}
@@ -114,9 +103,9 @@ export function ColumnChart({
                 );
               })}
             </div>
-            <div aria-hidden="true" style={{ position: "absolute", top: TOP_PAD + height, left: 0, right: 0, height: LABEL_ROW, display: "flex" }}>
+            <div aria-hidden="true" className="ds-colchart-labels">
               {data.map((d, i) => (
-                <span key={`${i}-${d.label}`} style={{ flex: "1 1 0", minWidth: 0, display: "flex", justifyContent: "center", paddingTop: "var(--ds-space-1)", fontSize: "var(--ds-text-xs)", color: "var(--ds-text-secondary)", whiteSpace: "nowrap" }}>
+                <span key={`${i}-${d.label}`} className="ds-colchart-label">
                   {i % step === 0 ? d.label : ""}
                 </span>
               ))}
@@ -140,11 +129,10 @@ export function ColumnChart({
       plot={plot}
       table={table}
       onViewChange={hide}
-      style={style}
       tip={
         active ? (
           <ChartTip x={tip.x} y={tip.y} figureRef={figureRef}>
-            <TipBody color="var(--ds-chart-primary)" value={valueFormat(active.value)} label={active.fullLabel || active.label} />
+            <TipBody tone="primary" value={valueFormat(active.value)} label={active.fullLabel || active.label} />
           </ChartTip>
         ) : null
       }

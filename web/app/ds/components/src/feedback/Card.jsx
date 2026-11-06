@@ -1,32 +1,17 @@
 import React from "react";
 
+const cx = (...parts) => parts.filter(Boolean).join(" ");
+
 /**
  * Card — the default surface container: surface bg, 1px border, sm shadow, lg radius.
+ * `padding` is "none", "sm" (space-4), "md" (space-5) or "lg" (space-6, the default); it
+ * wins over `padded`, which stays for compatibility (`padded={false}` is `padding="none"`).
+ * Styled by `.ds-card` in bundle.css; the interactive hover lift is a pseudo-class.
  */
-export function Card({ padded = true, interactive = false, style = {}, onMouseEnter, onMouseLeave, children, ...rest }) {
-  const [hover, setHover] = React.useState(false);
+export function Card({ padded = true, padding, interactive = false, className, style, children, ...rest }) {
+  const pad = padding || (padded ? "lg" : "none");
   return (
-    <div
-      {...rest}
-      onMouseEnter={(e) => {
-        interactive && setHover(true);
-        onMouseEnter && onMouseEnter(e);
-      }}
-      onMouseLeave={(e) => {
-        interactive && setHover(false);
-        onMouseLeave && onMouseLeave(e);
-      }}
-      style={{
-        background: "var(--ds-surface)",
-        border: "var(--ds-border-thin) solid var(--ds-border)",
-        borderRadius: "var(--ds-radius-lg)",
-        boxShadow: interactive && hover ? "var(--ds-shadow-md)" : "var(--ds-shadow-sm)",
-        padding: padded ? "var(--ds-space-6)" : 0,
-        transition: "box-shadow var(--ds-duration-base) var(--ds-ease-standard)",
-        ...(interactive ? { cursor: "pointer" } : null),
-        ...style,
-      }}
-    >
+    <div {...rest} className={cx("ds-card", className)} data-padding={pad} data-interactive={interactive ? "" : undefined} style={style}>
       {children}
     </div>
   );

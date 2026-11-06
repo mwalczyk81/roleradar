@@ -13,10 +13,20 @@ function compare(a, b) {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
 }
 
+const cx = (...parts) => parts.filter(Boolean).join(" ");
+
+const PERCENT = /^(\d{1,3})%$/;
+
+/** A whole-percent column width is a class (server-rendered); any other CSS length is applied after mount. */
+function widthClass(width) {
+  const m = typeof width === "string" ? PERCENT.exec(width) : null;
+  return m && Number(m[1]) <= 100 ? `ds-w-${m[1]}` : undefined;
+}
+
 function SortIcon({ direction }) {
   // Up chevron when ascending, down when descending, stacked pair when unsorted.
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0, opacity: direction ? 1 : 0.5 }}>
+    <svg className="ds-sort-icon" data-active={direction ? "" : undefined} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       {direction === "asc" ? <path d="m18 15-6-6-6 6" /> : direction === "desc" ? <path d="m6 9 6 6 6-6" /> : <path d="m7 15 5 5 5-5M7 9l5-5 5 5" />}
     </svg>
   );
@@ -30,6 +40,8 @@ function SortIcon({ direction }) {
  * Numbers go in `numeric` columns (monospace, right-aligned). Give the table a `caption`
  * (visually hidden) or an `ariaLabel`. With `onRowClick`, rows are focusable and respond to
  * Enter and Space; clicks on links and buttons inside a row do not trigger it.
+ * A column `width` of a whole percent ("20%") is server-rendered through a class; any other CSS
+ * length ("8rem") and `maxHeight` are applied after the page loads (bundle.css; no inline styles).
  */
 export function DataTable({
   columns = [],
@@ -51,7 +63,8 @@ export function DataTable({
   pagination,
   stickyHeader = true,
   maxHeight,
-  style = {},
+  className,
+  style,
   ...rest
 }) {
   const [internalCol, setInternalCol] = React.useState(defaultSortColumn);
@@ -88,30 +101,22 @@ export function DataTable({
   const scrollable = maxHeight !== undefined;
   const cellAlign = (c) => (c.numeric ? "right" : c.align || "left");
 
-  const th = {
-    padding: "var(--ds-space-2) var(--ds-space-4)",
-    background: "var(--ds-bg-subtle)",
-    borderBottom: "var(--ds-border-thin) solid var(--ds-border)",
-    color: "var(--ds-text-secondary)",
-    fontFamily: "var(--ds-font-sans)",
-    fontSize: "var(--ds-text-xs)",
-    fontWeight: "var(--ds-weight-medium)",
-    letterSpacing: "0.04em",
-    textTransform: "uppercase",
-    whiteSpace: "nowrap",
-    ...(stickyHeader ? { position: "sticky", top: 0, zIndex: "var(--ds-z-sticky)" } : null),
-  };
+  const scrollRef = React.useRef(null);
+  const rootRef = React.useRef(null);
 
-  const td = (c) => ({
-    padding: "var(--ds-space-3) var(--ds-space-4)",
-    textAlign: cellAlign(c),
-    color: "var(--ds-text)",
-    fontSize: "var(--ds-text-sm)",
-    lineHeight: "var(--ds-leading-normal)",
-    fontFamily: c.numeric ? "var(--ds-font-mono)" : "var(--ds-font-sans)",
-    fontVariantNumeric: c.numeric ? "tabular-nums" : undefined,
-    verticalAlign: "middle",
-    ...(c.width ? { width: c.width } : null),
+  // Free-form sizes cannot be classes; set them through the CSSOM once the table is mounted.
+  React.useLayoutEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    columns.forEach((c, i) => {
+      if (!c.width || widthClass(c.width)) return;
+      root.querySelectorAll(`[data-col="${i}"]`).forEach((el) => {
+        el.style.width = typeof c.width === "number" ? `${c.width}px` : c.width;
+      });
+    });
+    if (scrollRef.current && maxHeight !== undefined) {
+      scrollRef.current.style.maxHeight = typeof maxHeight === "number" ? `${maxHeight}px` : maxHeight;
+    }
   });
 
   const total = pagination ? pagination.total : 0;
@@ -121,62 +126,40 @@ export function DataTable({
   const to = Math.min(offset + limit, total);
 
   return (
-    <div
-      {...rest}
-      style={{
-        background: "var(--ds-surface)",
-        border: "var(--ds-border-thin) solid var(--ds-border)",
-        borderRadius: "var(--ds-radius-lg)",
-        overflow: "hidden",
-        fontFamily: "var(--ds-font-sans)",
-        ...style,
-      }}
-    >
+    <div {...rest} ref={rootRef} className={cx("ds-datatable-root", className)} style={style}>
       <div
+        ref={scrollRef}
         className="ds-datatable-scroll"
         {...(scrollable ? { tabIndex: 0, role: "region", "aria-label": ariaLabel || caption || "Table" } : null)}
-        style={{ overflow: "auto", ...(scrollable ? { maxHeight } : null) }}
       >
         <table
           className="ds-datatable"
+          data-sticky={stickyHeader ? "" : undefined}
           aria-busy={isLoading || undefined}
           aria-label={!caption ? ariaLabel : undefined}
-          style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}
         >
           {caption ? <caption className="ds-visually-hidden">{caption}</caption> : null}
           <thead>
             <tr>
-              {columns.map((c) => {
+              {columns.map((c, i) => {
                 const on = c.sortable && c.key === activeCol;
                 return (
                   <th
                     key={c.key}
                     scope="col"
+                    data-col={i}
+                    data-align={cellAlign(c)}
+                    className={widthClass(c.width)}
                     aria-sort={c.sortable ? (on ? (activeDir === "desc" ? "descending" : "ascending") : "none") : undefined}
-                    style={{ ...th, textAlign: cellAlign(c), ...(c.width ? { width: c.width } : null) }}
                   >
                     {c.sortable ? (
                       <button
                         type="button"
                         className="ds-datatable-sort"
+                        data-active={on ? "" : undefined}
+                        data-reverse={cellAlign(c) === "right" ? "" : undefined}
                         onClick={() => toggleSort(c.key)}
                         title={sortScope === "all" ? "Sorts all rows" : "Sorts the rows on this page"}
-                        style={{
-                          appearance: "none",
-                          background: "none",
-                          border: "none",
-                          padding: 0,
-                          margin: 0,
-                          font: "inherit",
-                          letterSpacing: "inherit",
-                          textTransform: "inherit",
-                          color: on ? "var(--ds-text)" : "inherit",
-                          cursor: "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "var(--ds-space-1)",
-                          flexDirection: cellAlign(c) === "right" ? "row-reverse" : "row",
-                        }}
                       >
                         {c.header}
                         <SortIcon direction={on ? (activeDir === "desc" ? "desc" : "asc") : null} />
@@ -193,9 +176,9 @@ export function DataTable({
             {isLoading
               ? Array.from({ length: loadingRows }, (_, i) => (
                   <tr key={`sk-${i}`} aria-hidden="true">
-                    {columns.map((c) => (
-                      <td key={c.key} style={td(c)}>
-                        <span className="ds-skeleton-block" style={{ display: "inline-block", height: "0.875rem", width: c.numeric ? "3rem" : "70%", borderRadius: "var(--ds-radius-sm)" }} />
+                    {columns.map((c, ci) => (
+                      <td key={c.key} data-col={ci} data-align={cellAlign(c)} data-numeric={c.numeric ? "" : undefined} className={widthClass(c.width)}>
+                        <span className="ds-skeleton-block ds-datatable-skeleton" data-numeric={c.numeric ? "" : undefined} />
                       </td>
                     ))}
                   </tr>
@@ -203,9 +186,9 @@ export function DataTable({
               : rows.length === 0
               ? (
                   <tr>
-                    <td colSpan={Math.max(columns.length, 1)} style={{ padding: "var(--ds-space-10) var(--ds-space-4)", textAlign: "center", color: "var(--ds-text-secondary)", fontSize: "var(--ds-text-sm)" }}>
+                    <td colSpan={Math.max(columns.length, 1)} className="ds-datatable-empty">
                       <div>{emptyMessage}</div>
-                      {emptyAction ? <div style={{ marginTop: "var(--ds-space-3)" }}>{emptyAction}</div> : null}
+                      {emptyAction ? <div className="ds-datatable-empty-action">{emptyAction}</div> : null}
                     </td>
                   </tr>
                 )
@@ -229,11 +212,11 @@ export function DataTable({
                       }
                     }}
                   >
-                    {columns.map((c) => {
+                    {columns.map((c, ci) => {
                       const raw = c.render ? c.render(row) : row[c.key];
                       return (
-                        <td key={c.key} style={td(c)}>
-                          {isEmpty(raw) ? <span style={{ color: "var(--ds-text-secondary)" }}>{DASH}</span> : raw}
+                        <td key={c.key} data-col={ci} data-align={cellAlign(c)} data-numeric={c.numeric ? "" : undefined} className={widthClass(c.width)}>
+                          {isEmpty(raw) ? <span className="ds-datatable-dash">{DASH}</span> : raw}
                         </td>
                       );
                     })}
@@ -243,42 +226,17 @@ export function DataTable({
         </table>
       </div>
       {((hasSortable && !isLoading && rows.length > 1) || pagination) && (
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "var(--ds-space-3)",
-            padding: "var(--ds-space-3) var(--ds-space-4)",
-            borderTop: "var(--ds-border-thin) solid var(--ds-border)",
-            background: "var(--ds-bg-subtle)",
-            fontSize: "var(--ds-text-xs)",
-            color: "var(--ds-text-secondary)",
-          }}
-        >
+        <div className="ds-datatable-footer">
           <span>{hasSortable && sortScope !== "all" && !isLoading && rows.length > 1 ? "Sorting applies to the rows on this page only." : ""}</span>
           {pagination ? (
-            <nav aria-label="Pagination" style={{ display: "flex", alignItems: "center", gap: "var(--ds-space-3)" }}>
-              <span aria-live="polite" style={{ fontVariantNumeric: "tabular-nums" }}>
+            <nav aria-label="Pagination" className="ds-datatable-pager">
+              <span aria-live="polite" className="ds-datatable-range">
                 {total === 0 ? "No results" : `Showing ${from}–${to} of ${total}`}
               </span>
-              <button
-                type="button"
-                className="ds-pager-btn"
-                disabled={offset <= 0}
-                onClick={() => pagination.onPageChange(Math.max(0, offset - limit))}
-                style={pagerButton}
-              >
+              <button type="button" className="ds-pager-btn" disabled={offset <= 0} onClick={() => pagination.onPageChange(Math.max(0, offset - limit))}>
                 Previous
               </button>
-              <button
-                type="button"
-                className="ds-pager-btn"
-                disabled={offset + limit >= total}
-                onClick={() => pagination.onPageChange(offset + limit)}
-                style={pagerButton}
-              >
+              <button type="button" className="ds-pager-btn" disabled={offset + limit >= total} onClick={() => pagination.onPageChange(offset + limit)}>
                 Next
               </button>
             </nav>
@@ -288,16 +246,3 @@ export function DataTable({
     </div>
   );
 }
-
-const pagerButton = {
-  height: "var(--ds-control-sm)",
-  padding: "0 var(--ds-space-3)",
-  background: "var(--ds-surface)",
-  color: "var(--ds-text)",
-  border: "var(--ds-border-thin) solid var(--ds-border-control)",
-  borderRadius: "var(--ds-radius-md)",
-  fontFamily: "var(--ds-font-sans)",
-  fontSize: "var(--ds-text-sm)",
-  fontWeight: "var(--ds-weight-medium)",
-  cursor: "pointer",
-};

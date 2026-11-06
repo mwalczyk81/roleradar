@@ -10,11 +10,13 @@ const DELTA_ICON = {
 };
 const DELTA_WORD = { up: "Up", down: "Down", flat: "No change" };
 
-function deltaColor(good) {
-  if (good === true) return "var(--ds-success-text)";
-  if (good === false) return "var(--ds-danger-text)";
-  return "var(--ds-text-secondary)";
+function deltaTone(good) {
+  if (good === true) return "good";
+  if (good === false) return "bad";
+  return "neutral";
 }
+
+const cx = (...parts) => parts.filter(Boolean).join(" ");
 
 /**
  * StatTile — one headline number with its context. `label` names it, `value` leads, `of` keeps
@@ -24,25 +26,25 @@ function deltaColor(good) {
  * change is good (`good`), the arrow and text say which way it went. Large figures use the
  * font's proportional digits, not tabular ones.
  */
-export function StatTile({ label, value, of, delta, trend, trendLabel, note, denominator, smallSampleBelow = SMALL_SAMPLE, valueFormat = formatCount, style = {}, ...rest }) {
+export function StatTile({ label, value, of, delta, trend, trendLabel, note, denominator, smallSampleBelow = SMALL_SAMPLE, valueFormat = formatCount, className, ...rest }) {
   const noteText = note !== undefined ? note : denominator !== undefined && denominator < smallSampleBelow ? "Small sample" : null;
   const shown = typeof value === "number" ? valueFormat(value) : value;
   return (
-    <Card {...rest} style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-2)", padding: "var(--ds-space-5)", minWidth: 0, ...style }}>
-      <dl style={{ margin: 0, display: "flex", flexDirection: "column", gap: "var(--ds-space-2)", minWidth: 0 }}>
-        <dt style={{ fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-medium)", color: "var(--ds-text-secondary)" }}>{label}</dt>
-        <dd style={{ margin: 0, display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", columnGap: "var(--ds-space-4)", rowGap: "var(--ds-space-2)" }}>
-          <span style={{ display: "flex", alignItems: "baseline", flexWrap: "wrap", columnGap: "var(--ds-space-2)", minWidth: 0 }}>
-            <span style={{ fontFamily: "var(--ds-font-display)", fontSize: "var(--ds-text-3xl)", fontWeight: "var(--ds-weight-semibold)", lineHeight: "var(--ds-leading-tight)", fontVariantNumeric: "normal", color: "var(--ds-text)" }}>{shown}</span>
-            {of ? <span style={{ fontSize: "var(--ds-text-sm)", color: "var(--ds-text-secondary)" }}>{of}</span> : null}
+    <Card {...rest} padding="md" className={cx("ds-stat", className)}>
+      <dl className="ds-stat-list">
+        <dt className="ds-stat-label">{label}</dt>
+        <dd className="ds-stat-main">
+          <span className="ds-stat-figure">
+            <span className="ds-stat-value">{shown}</span>
+            {of ? <span className="ds-stat-of">{of}</span> : null}
           </span>
           {trend && trend.length > 0 ? <Sparkline values={trend} label={trendLabel} valueFormat={valueFormat} /> : null}
         </dd>
         {delta || noteText ? (
-          <dd style={{ margin: 0, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "var(--ds-space-2)", fontSize: "var(--ds-text-xs)" }}>
+          <dd className="ds-stat-meta">
             {delta ? (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--ds-space-1)", color: "var(--ds-text-secondary)" }}>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--ds-space-1)", color: deltaColor(delta.good), fontWeight: "var(--ds-weight-medium)" }}>
+              <span className="ds-stat-delta">
+                <span className="ds-stat-delta-change" data-tone={deltaTone(delta.good)}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d={DELTA_ICON[delta.direction || "flat"]} />
                   </svg>

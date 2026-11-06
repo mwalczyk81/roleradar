@@ -1,5 +1,7 @@
 import React from "react";
 
+const cx = (...parts) => parts.filter(Boolean).join(" ");
+
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -7,9 +9,10 @@ const FOCUSABLE =
  * Modal — centered dialog over a dimmed backdrop. Closes on Esc / backdrop click.
  * Focus moves into the dialog on open, Tab is trapped inside, focus returns to the
  * element that opened it on close, and page scroll is locked while open. Pass `title`
- * (labels the dialog) or `ariaLabel` when there is no visible title.
+ * (labels the dialog) or `ariaLabel` when there is no visible title. `width` is the dialog's
+ * maximum width (a number is px); it is applied after mount, the dialog is only ever opened by script.
  */
-export function Modal({ open, onClose, title, ariaLabel, footer, width = 480, style = {}, children }) {
+export function Modal({ open, onClose, title, ariaLabel, footer, width = 480, className, style, children }) {
   const dialogRef = React.useRef(null);
   const titleId = React.useId();
 
@@ -55,22 +58,17 @@ export function Modal({ open, onClose, title, ariaLabel, footer, width = 480, st
     }
   }
 
+  React.useLayoutEffect(() => {
+    if (open && dialogRef.current) dialogRef.current.style.maxWidth = typeof width === "number" ? `${width}px` : width;
+  }, [open, width]);
+
   if (!open) return null;
 
   return (
     <div
+      className="ds-modal-backdrop"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose && onClose();
-      }}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: "var(--ds-z-modal)",
-        background: "rgb(2 6 23 / 0.55)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "var(--ds-space-4)",
       }}
     >
       <div
@@ -81,56 +79,19 @@ export function Modal({ open, onClose, title, ariaLabel, footer, width = 480, st
         aria-label={!title ? ariaLabel : undefined}
         tabIndex={-1}
         onKeyDown={trapTab}
-        style={{
-          width: "100%",
-          maxWidth: typeof width === "number" ? `${width}px` : width,
-          background: "var(--ds-surface)",
-          color: "var(--ds-text)",
-          borderRadius: "var(--ds-radius-lg)",
-          boxShadow: "var(--ds-shadow-lg)",
-          fontFamily: "var(--ds-font-sans)",
-          outline: "none",
-          ...style,
-        }}
+        className={cx("ds-modal", className)}
+        style={style}
       >
         {title && (
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "var(--ds-space-4)",
-              padding: "var(--ds-space-5) var(--ds-space-6)",
-              borderBottom: "var(--ds-border-thin) solid var(--ds-border)",
-            }}
-          >
-            <div id={titleId} style={{ fontSize: "var(--ds-text-lg)", fontWeight: "var(--ds-weight-semibold)" }}>{title}</div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close"
-              style={{ background: "none", border: "none", color: "var(--ds-text-muted)", cursor: "pointer", display: "inline-flex", padding: 0 }}
-            >
+          <div className="ds-modal-header">
+            <div id={titleId} className="ds-modal-title">{title}</div>
+            <button type="button" onClick={onClose} aria-label="Close" className="ds-modal-close">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
             </button>
           </div>
         )}
-        <div style={{ padding: "var(--ds-space-6)", fontSize: "var(--ds-text-sm)", lineHeight: "var(--ds-leading-normal)" }}>
-          {children}
-        </div>
-        {footer && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: "var(--ds-space-3)",
-              padding: "var(--ds-space-4) var(--ds-space-6)",
-              borderTop: "var(--ds-border-thin) solid var(--ds-border)",
-            }}
-          >
-            {footer}
-          </div>
-        )}
+        <div className="ds-modal-body">{children}</div>
+        {footer && <div className="ds-modal-footer">{footer}</div>}
       </div>
     </div>
   );

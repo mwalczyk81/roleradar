@@ -3,9 +3,9 @@
 Vendored copy of Matt's Design System. The vendored copy under `web/app/ds` is strictly copy-only and NEVER edited by hand. Any fixes, styling updates, or Part C additions must be published to the upstream design kit artifact first, and then brought into this repository via a clean re-sync.
 
 - Source: Design System artifact, <https://claude.ai/artifact/E2SU2aXqnLZ5r9tu5VE9Mm>
-- Kit version: 1793794809-c293 (v26, includes Part C, the chart components first published as v20, the identity pass and the DataTable sortScope prop)
-- Synced: 2026-11-04
-- Synced by: Claude (read of the published files, copied unmodified; `project/` prefix removed)
+- Kit version: 1793983477-b1df (v27, no inline styles: every component styles itself through classes in bundle.css; v26 plus the K1 change)
+- Synced: 2026-11-06
+- Synced by: Claude (published to the kit artifact first, then copied unmodified; `project/` prefix removed)
 - Namespace in the kit bundle: `MattSDesignSystem_522a7a` (not used here; the app imports the sources in `components/src`)
 
 ## Contents
@@ -35,6 +35,21 @@ Identity pass (kit versions 24 and 25): the accent is the bronze ramp from the o
 
 DataTable gained a `sortScope` prop in kit version 26: `"page"` (default, unchanged) says in the footer and the header tooltip that sorting applies to the rows on the page; `"all"` is for tables the API sorts, and removes both. `components/src/data/DataTable.jsx`, `components/DataTable/DataTable.d.ts`, `components/DataTable/README.md` and `components/index.d.ts` changed in that sync.
 
+No inline styles (kit version 27, 009 K1): no component writes a `style` attribute into its markup, so a page can set
+`style-src-attr 'none'`. Static styling is classes and `data-*` attributes in `components/bundle.css` (the original file is
+unchanged at the top; K1 only appends rules and the `--ds-placeholder` token, so the personal site, which vendors only
+`tokens.css` and `bundle.css`, keeps working). Chart sizes (bar lengths, column heights, tick positions) are whole percents
+(`.ds-w-N`, `.ds-h-N`, `.ds-b-N`, `.ds-cap-N`, `.ds-bar-w-N`, generated at the end of the file), so server-rendered charts
+paint without script; a ColumnChart `height` snaps to a multiple of 10px (60 to 400) through `[data-plot-h]`. Values only
+known in the browser (the chart readout position, the Tooltip viewport shift, the Modal `width`, DataTable free-form column
+widths and `maxHeight`, Skeleton free-form sizes) are set through the CSSOM, which the policy allows. New props: `Card`
+`padding` (`none`, `sm`, `md`, `lg`) and `Input` `width` (`xs`, `sm`, `md`). `Input`, `Textarea` and the Toolbar search read
+the new `--ds-placeholder` token (the muted text colour, 4.5:1 or better in both themes). `Sparkline` stays. The kit's own
+`bundle.js` (the preview runtime, not vendored) was not rebuilt, so the preview cards still draw the old inline-styled
+components. Verified here: 33 server-render cases with no style attribute (`tests/unit/kit-no-style-attributes.test.tsx`), and
+the visual baseline unchanged on 64 of 74 captures; the 10 that changed are the Insights charts, by about a pixel where a mark is
+rounded to a whole percent.
+
 ## Re-sync
 
 Ask Claude to re-export from the kit. Update the version, date and hashes above, and review the diff like any other change.
@@ -54,8 +69,8 @@ cc7e6aca97383646e60d33bee7fcef1657e86f0cb628208386565bb117ed6f06  components/Bar
 00cf8e759f68de0aa05eadd32e593d92ba0148b4118c2dd1e96494afa22148ea  components/BarChart/README.md
 b3dec14da444c4535f24e2282c1806324c6ca17ce78c26df9ec173acd77943d2  components/Button/Button.d.ts
 64e5d3612c7f7a255ae0fe1f7a19400e65ae803117969edab2473fcd65fc3bb1  components/Button/README.md
-4665ed563eea8d883b584a386335e9327f338ad8391b67be0f40fce94bc4a7de  components/Card/Card.d.ts
-2ef1733ee62e885421561b8ebf023c42f7c954a487bc3da1dbe52463947f9754  components/Card/README.md
+77cae53784dd3c277e72e2c0a05bc9a08082614e8abde7a7ecd72b254152317e  components/Card/Card.d.ts
+0090a88cf377855a2e1b17eb54da151f438648b93e2781160ef4a016075e9132  components/Card/README.md
 406a141f91cef020507b24a87760c899fba32304142d814682564a54e4a7addc  components/Checkbox/Checkbox.d.ts
 c701fb944fe5d2c125a23141a4f3a096071e1a90c745d824106103cf7f5478cd  components/Checkbox/README.md
 71300f01e5b41e33731ef9a7698ea250bd297fcf00fd8f8d04c47cdf5334fae9  components/ColumnChart/ColumnChart.d.ts
@@ -64,8 +79,8 @@ b5a98ee63c76463363f1bb7e2a44d751148bfea0504b901f255f0003bcb0f7a9  components/Dat
 e7ec6295115fa3f66a6981ac36c1f7036bee4760800598868a625e10d61226d0  components/DataTable/README.md
 aaca10374b6dbe0edf0b0cc74d76d3a5799be318b174baf2f610f659451757f5  components/EmptyState/EmptyState.d.ts
 4eb942bde3c7572591203d543f2e3e341cf708eef84a1a564cd38e98534b7849  components/EmptyState/README.md
-20b4065c839e50d2c55702a456c69038d86d44041527fa40ca8a96c1ee51fb64  components/Input/Input.d.ts
-9c3a471a64e5d0f414c492818bdf5d1a57b90025644c0f926c9ac3b356388a77  components/Input/README.md
+3354abe821fcab0132e64be29ef9e41c3bdddaab57e342288bf8b1d469f74d9e  components/Input/Input.d.ts
+c9d76326868874f1915b04fc375245303180839b280d2bcc4475a935a5eb1d38  components/Input/README.md
 aafd5ffab46e9a1005cf8a7bdcbda94a17bf2c796e161facc29fca3c69622de3  components/Menu/Menu.d.ts
 0ae6e05eea0731667be11e3df96948941a256b4bc607824dd7207b3a75fbc0e4  components/Menu/README.md
 45a5d291cc2b87433959d409aba205abaedebe7bf42e774cb77874f4aa7280d5  components/Modal/Modal.d.ts
@@ -94,35 +109,35 @@ d8707a15881dd16110e78f0d651447fba11e81d68cfb34863b0164eb5307b1c0  components/Toa
 fb4e796b9c14102892986802ee1e6371344ed3b225f04b38ca4f37edcf2f6223  components/Toolbar/Toolbar.d.ts
 b3de70fa3b0f3f86ab939d66dc87e00df87503df06b97581113b45cb7f567eb4  components/Tooltip/README.md
 726433458f49c1a5a2039ac5e99d591b3cfa88b3f2905b14d1bf068379ac9ed2  components/Tooltip/Tooltip.d.ts
-894df15ebd2832d61cce810a99d6a8be08b7ab786480153eac82c72d2c39eb03  components/bundle.css
-351c4a30dd5c38b2b628cbd65512711366a6ae7d04d409ee5dcd3a13e4dec65b  components/index.d.ts
-8a463b86242b6faf407620ad2b2ed7d8c74cdf60f61566709bc1989d30cea7de  components/src/data/BarChart.jsx
-b5f085796263fddf65eba75a1b649db0a8937a65b65c61077ee6c174146bc882  components/src/data/ColumnChart.jsx
-221be65ab2dc3c6a4be96df3e6d1dd5bb87e9446610382d14c91b8628bd928c1  components/src/data/DataTable.jsx
-440d42be12e78ed2af2f8e08721eae29dfcc92a3e8bf9d575c594be811536ae0  components/src/data/Sparkline.jsx
-1d6d4a17d9069b7203f4b9c6912905660316c9608c5f4b41d2eeb196dcca2fda  components/src/data/StatTile.jsx
-c49b3329d0edc42823feb819e3ae34dc9690ca1eef35df52604bcbe6197c753f  components/src/data/Toolbar.jsx
-ef075557a143c6b73768f66a934daa99293039b4fb6261ac26cbd504a9ca3964  components/src/data/chartParts.jsx
-351af1476975f2b7f9b597ec6892d49562fc7a390e93e6b0d27c52af5472cc83  components/src/feedback/Alert.jsx
-b75efcfcb2c2fcf9d776da42daec9eae48aac69e3943bf6d62eb949b7032df43  components/src/feedback/Avatar.jsx
-d6e30d5c071084cf8c69672f5a9c711949c77317daeda250af204916bb8eb12b  components/src/feedback/Badge.jsx
-bad29af9c5aefd6ec05a1e2a71ae83f9a21b81e0e1356f6ea69071f321d159a1  components/src/feedback/Card.jsx
-53c977abe4bac5a390c6d569333514abbffc2aa4cc02e839170141fda4cbb01c  components/src/feedback/EmptyState.jsx
-948b8cbe702d29ca015713bd7c9b745ba8837b9444503e0341f4bc4a2609f9ac  components/src/feedback/Skeleton.jsx
-acbffb30b2a39fbbc6e3ded490b31bed92ed572387d987f56254fbf7f0662eec  components/src/feedback/Toast.jsx
-394e4c04f9e102d3401f225a2b803d22b496a41192cfa6242cbbb2f4b587558f  components/src/feedback/ToastRegion.jsx
-dc9f20f56c117d099f99af18a02ceb694e22bbac4b5c86d8f61db828bb1f0c4a  components/src/forms/Button.jsx
-e0912791a628a45bf13ac49e23ee5adbff84dd2a519c3f78eb593f1c33a57cbc  components/src/forms/Checkbox.jsx
-8f6a1b3d86e5a80dcc007afe6822a0137b342d3069669b1264ac049edc76c965  components/src/forms/Input.jsx
-55993b0110d25517e668f387fffb92a5427da2f274981c0bde9504cdc1686a62  components/src/forms/Radio.jsx
-0ff0222d7ffc08ae7356cc938d108960ba2b4ce397969f2dc310711741bc0898  components/src/forms/Select.jsx
-ec9791c40c3daeff8e26844c28e57eb2a51ee3464bfaee01add33a620906dfb0  components/src/forms/Switch.jsx
-45d37313748fb92b8c68d77bfeac2aabce096090138b3fbfa85dd07981b02f59  components/src/forms/Textarea.jsx
-25bdfa30c4cfa9e3d1c3be27be00ef3bfcfedc238847017aa0c416ad0470940c  components/src/layout/AppShell.jsx
-7b4a7a17182a5c495e47c6c14501633eeabacf6b9fe16e6581311dea1ae6ebc9  components/src/navigation/Tabs.jsx
-29e9805c03a0465ea00d36f0378830e044492ef0228d544511a7e4e0cc65e76f  components/src/overlay/Menu.jsx
-1cd4b963407539bd6de7e1ec2b9c8126e88bb868ad1adeb37442b90976c046b8  components/src/overlay/Modal.jsx
-95f1e8a58406012c1ddaebd059706b676ee8b2262e4a2816fc411057bf71d368  components/src/overlay/Tooltip.jsx
+3c80f9f708ad5ed80eb36eba93895ddf05a031362aa72cfad265fbab5ea7f9b2  components/bundle.css
+e2cfaaa201607481ac37f47aeb9dc9e9725cd0ed4e56d72db3d0a8b8f62cb317  components/index.d.ts
+f095e254a99c19d109cf3f7a3cad9f9a6c63dfe5fdd22d44529599486261181e  components/src/data/BarChart.jsx
+847516f78f91553322ed4160a184dd12a55ab274ad56e6d784e8a711b79dbeb5  components/src/data/ColumnChart.jsx
+4be81e6b34d7eec66fbe2f539288835a94ddee6b3abc48c9fdc2bb0eb6d8ebfc  components/src/data/DataTable.jsx
+0d6c77496489e13d17e0eabf9bdc063c50c3c353af0e39b3c7bbf1b3f518ba2c  components/src/data/Sparkline.jsx
+cc249498005f05575be55d749bc11a8df470c1c01a8bad8e80bdeb7cb5c1ec47  components/src/data/StatTile.jsx
+34468111fb20e4242fd106d262bf9ed950b152674e214d8ea0ff2e2deaa50e8c  components/src/data/Toolbar.jsx
+87b0a6dceec47fae701f263c445ee6b96b4f8426218474fd4752b15323aceb36  components/src/data/chartParts.jsx
+a56e79e5ffba2125cbbae6b8d77d21724a03726a4a6f53d6b428982c9fd681cb  components/src/feedback/Alert.jsx
+28a3f116b91e80257eb90d6f23f4320b87c2d58fc726da0104e676bebdfeab08  components/src/feedback/Avatar.jsx
+cef9fa26924972ce1ad359e9fed081b9ac81d0b2eaaed1a41ab4f46f6f37b1c8  components/src/feedback/Badge.jsx
+9d8e058c642499caa0b3e0a52810024872aa9d994493114400fd769495e35b2d  components/src/feedback/Card.jsx
+21e09f80857c18cedec3cebb566556f588237c1af78378a7b532e4f1d911f11a  components/src/feedback/EmptyState.jsx
+118211ffa9b784c11abbae42120b592392cb9e802845e397708edc9d52a058d6  components/src/feedback/Skeleton.jsx
+b22d47409b1f6c23b918d94a76131035f8d13e7d1f5a29f322f7d7fbfd9f9985  components/src/feedback/Toast.jsx
+f25b3558fb605ffaf153358cd8afbf4e21c4d7ac7127538c01dcec3f058bce5b  components/src/feedback/ToastRegion.jsx
+a4ec0c2c14b19c33e219e083049334bed984c47e4004aa7bbbaf641b3ff44622  components/src/forms/Button.jsx
+4b5c0c1d3be58b26e31088a3df8eb8581018d8f175c8d61f38807b82306bd729  components/src/forms/Checkbox.jsx
+70bda513f12e6f981d488d5a366345004e880c40cf8f1056a4a8ed23bd377098  components/src/forms/Input.jsx
+1c5194c8b17340473675bf5ff71a7f91e04e0ccf50bbbee679fc7d87d3738b4a  components/src/forms/Radio.jsx
+54c02e805eceda2b70b993e1826ee74ea124ee23e37a115342115e6e0231295b  components/src/forms/Select.jsx
+91759b8ff1f1aac453f4483ed336d4d3237a39e4b140ce65db78ce0734dc9595  components/src/forms/Switch.jsx
+22d02a89c00af92072a3b11f1a0a7c31d375a7aba156c9b0111692cea1740930  components/src/forms/Textarea.jsx
+0ba22a584a819812e12359cba2740565a76e6a96844e587dcc2916a911ce5340  components/src/layout/AppShell.jsx
+89cc80036610681fba388d223b2e443458ef0cf2a9aa718c30600b2890a21de9  components/src/navigation/Tabs.jsx
+84bd1b4f628cb68a56f651a84723dfea4e83a5fad1b7bcdd30fa255982e05686  components/src/overlay/Menu.jsx
+3ba064c8f4cd2474dbf4b746df9a2a0609e3b5579b967ad6c8f02527e9f2d95b  components/src/overlay/Modal.jsx
+bc27df7e3b809fd4d2e0d533dcffe0e0f02f7243be2d73cf7830e4b3c288fcf7  components/src/overlay/Tooltip.jsx
 08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7  fonts/ibm-plex-mono-latin-400-normal.woff2
 01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22  fonts/ibm-plex-mono-latin-500-normal.woff2
 e2291e842cf5af167122a22881a740c7f2dda7716f1e8cd76680264f4a859470  fonts/ibm-plex-sans-latin-wght-normal.woff2

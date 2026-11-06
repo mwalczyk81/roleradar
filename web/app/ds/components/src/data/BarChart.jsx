@@ -1,8 +1,8 @@
 import React from "react";
 import { ChartEmpty, ChartFrame, ChartTip, SMALL_SAMPLE, TableView, TipBody, anchorOf, formatCount, formatPercent, useChartTip, useRoving } from "./chartParts.jsx";
 
-const BAR_HEIGHT = "1.25rem"; // 20px, under the 24px cap
-const VALUE_SPACE = "4.5rem"; // room after the longest bar for its value
+/** Whole percent, 0 to 100, as a class suffix: bundle.css has one rule per value, so bars paint before any script runs. */
+const pctOf = (value, whole) => Math.max(0, Math.min(100, Math.round(whole > 0 ? (value / whole) * 100 : 0)));
 
 /**
  * BarChart — horizontal bars for comparing counts across categories. Each bar's value sits at
@@ -11,7 +11,8 @@ const VALUE_SPACE = "4.5rem"; // room after the longest bar for its value
  * is under `smallSampleBelow` (default 10) gets a visible "Small sample" note. To make one bar
  * the point, set `highlight` on it and the rest turn gray. A "Table view" button swaps the plot
  * for a native table of the same values. Hover or focus a bar for its readout; arrow keys move
- * between bars (one tab stop). Bar thickness is capped at 20px.
+ * between bars (one tab stop). Bar thickness is capped at 20px. Bar lengths are whole percents
+ * of the longest bar (classes in bundle.css, not inline styles).
  */
 export function BarChart({
   title,
@@ -25,7 +26,6 @@ export function BarChart({
   framed = true,
   isLoading = false,
   emptyMessage = "No data for this period.",
-  style = {},
   ...rest
 }) {
   const { figureRef, tip, show, hide } = useChartTip();
@@ -57,7 +57,7 @@ export function BarChart({
         onKeyDown={(e) => {
           if (e.key === "Escape") hide();
         }}
-        style={{ display: "flex", flexDirection: "column", gap: "2px" }}
+        className="ds-barchart"
       >
         {rows.map((r, i) => (
           <div
@@ -73,43 +73,24 @@ export function BarChart({
               show(i, anchorOf(e));
             }}
             onBlur={hide}
-            style={{
-              display: "grid",
-              gridTemplateColumns: "minmax(6rem, 35%) minmax(0, 1fr)",
-              alignItems: "center",
-              columnGap: "var(--ds-space-3)",
-              minHeight: "2.25rem",
-              padding: "var(--ds-space-1) var(--ds-space-2)",
-              borderRadius: "var(--ds-radius-md)",
-            }}
           >
-            <span style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: "2px" }}>
-              <span style={{ fontSize: "var(--ds-text-sm)", color: "var(--ds-text)", overflowWrap: "anywhere" }}>{r.label}</span>
+            <span className="ds-barchart-name">
+              <span className="ds-barchart-label">{r.label}</span>
               {r.percent || r.small ? (
-                <span style={{ fontSize: "var(--ds-text-xs)", color: "var(--ds-text-secondary)" }}>
+                <span className="ds-barchart-note">
                   {r.percent ? `${r.percent} of previous stage` : null}
                   {r.percent && r.small ? " · " : null}
                   {r.small ? "Small sample" : null}
                 </span>
               ) : null}
             </span>
-            <span style={{ display: "flex", alignItems: "center", gap: "var(--ds-space-2)", minWidth: 0 }}>
+            <span className="ds-barchart-track">
               <span
-                className="ds-chart-bar"
+                className={`ds-chart-bar ds-chart-bar-row ds-bar-w-${pctOf(r.value, max)}`}
                 data-muted={r.muted ? "" : undefined}
-                style={{
-                  flex: "none",
-                  height: BAR_HEIGHT,
-                  width: `calc((100% - ${VALUE_SPACE}) * ${max > 0 ? r.value / max : 0})`,
-                  minWidth: r.value > 0 ? "2px" : 0,
-                  background: r.muted ? "var(--ds-chart-muted)" : "var(--ds-chart-primary)",
-                  borderRadius: "0 4px 4px 0",
-                  transition: "background var(--ds-duration-fast) var(--ds-ease-standard)",
-                }}
+                data-nz={r.value > 0 ? "" : undefined}
               />
-              <span style={{ whiteSpace: "nowrap", fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-semibold)", color: "var(--ds-text)" }}>
-                {valueFormat(r.value)}
-              </span>
+              <span className="ds-barchart-value">{valueFormat(r.value)}</span>
             </span>
           </div>
         ))}
@@ -144,12 +125,11 @@ export function BarChart({
       plot={plot}
       table={table}
       onViewChange={hide}
-      style={style}
       tip={
         active ? (
           <ChartTip x={tip.x} y={tip.y} figureRef={figureRef}>
             <TipBody
-              color={active.muted ? "var(--ds-chart-muted)" : "var(--ds-chart-primary)"}
+              tone={active.muted ? "muted" : "primary"}
               value={valueFormat(active.value)}
               label={`${active.label}${active.percent ? ` · ${active.percent} of previous stage` : ""}${active.small ? " · small sample" : ""}`}
             />

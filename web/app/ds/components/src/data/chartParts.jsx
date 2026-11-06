@@ -41,14 +41,6 @@ export function niceTicks(max) {
   return { top, ticks };
 }
 
-export const surfaceStyle = {
-  background: "var(--ds-surface)",
-  border: "var(--ds-border-thin) solid var(--ds-border)",
-  borderRadius: "var(--ds-radius-lg)",
-  boxShadow: "var(--ds-shadow-sm)",
-  padding: "var(--ds-space-6)",
-};
-
 /** One tab stop for a whole chart; arrow keys, Home and End move between marks. */
 export function useRoving(count) {
   const [active, setActive] = React.useState(0);
@@ -113,57 +105,45 @@ export function useWidth(ref) {
   return width;
 }
 
-/** Floating readout above a mark. Values lead, the label follows. Clamped to the figure. */
+const cx = (...parts) => parts.filter(Boolean).join(" ");
+
+/**
+ * Floating readout above a mark. Values lead, the label follows. Clamped to the figure.
+ * It only exists while a mark is hovered or focused, so its position is set from script
+ * (CSSOM, not a style attribute): `.ds-chart-tip` in bundle.css holds everything else.
+ */
 export function ChartTip({ x, y, figureRef, children }) {
   const ref = React.useRef(null);
-  const [shift, setShift] = React.useState(0);
   React.useLayoutEffect(() => {
     const el = ref.current;
     const fig = figureRef.current;
-    if (!el || !fig) return;
-    const w = el.offsetWidth;
-    const fw = fig.clientWidth;
-    const margin = 4;
-    const left = x - w / 2;
-    let next = 0;
-    if (left < margin) next = margin - left;
-    else if (fw && left + w > fw - margin) next = fw - margin - (left + w);
-    setShift(next);
+    if (!el) return;
+    let shift = 0;
+    if (fig) {
+      const w = el.offsetWidth;
+      const fw = fig.clientWidth;
+      const margin = 4;
+      const left = x - w / 2;
+      if (left < margin) shift = margin - left;
+      else if (fw && left + w > fw - margin) shift = fw - margin - (left + w);
+    }
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    el.style.transform = `translate(calc(-50% + ${shift}px), calc(-100% - 8px))`;
   }, [x, y, figureRef]);
   return (
-    <div
-      ref={ref}
-      aria-hidden="true"
-      style={{
-        position: "absolute",
-        left: x,
-        top: y,
-        transform: `translate(calc(-50% + ${shift}px), calc(-100% - 8px))`,
-        zIndex: "var(--ds-z-overlay)",
-        pointerEvents: "none",
-        width: "max-content",
-        maxWidth: "16rem",
-        padding: "var(--ds-space-1) var(--ds-space-2)",
-        background: "var(--ds-text)",
-        color: "var(--ds-bg)",
-        borderRadius: "var(--ds-radius-md)",
-        boxShadow: "var(--ds-shadow-md)",
-        fontFamily: "var(--ds-font-sans)",
-        fontSize: "var(--ds-text-xs)",
-        lineHeight: "var(--ds-leading-normal)",
-      }}
-    >
+    <div ref={ref} aria-hidden="true" className="ds-chart-tip">
       {children}
     </div>
   );
 }
 
-/** Tooltip row: a short key stroke in the series color, the value in strong, then the label. */
-export function TipBody({ color, value, label }) {
+/** Tooltip row: a short key stroke in the series colour, the value in strong, then the label. */
+export function TipBody({ tone = "primary", value, label }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: "var(--ds-space-2)" }}>
-      <span aria-hidden="true" style={{ width: "0.75rem", height: "2px", flex: "none", background: color, borderRadius: "1px" }} />
-      <strong style={{ fontWeight: "var(--ds-weight-semibold)", fontVariantNumeric: "tabular-nums" }}>{value}</strong>
+    <span className="ds-chart-tip-row">
+      <span aria-hidden="true" className="ds-chart-tip-key" data-tone={tone} />
+      <strong className="ds-chart-tip-value">{value}</strong>
       <span>{label}</span>
     </span>
   );
@@ -171,24 +151,14 @@ export function TipBody({ color, value, label }) {
 
 /** Native table twin of a chart: every value the chart shows, reachable without a pointer. */
 export function TableView({ caption, columns, rows }) {
-  const th = {
-    padding: "var(--ds-space-2) var(--ds-space-3)",
-    borderBottom: "var(--ds-border-thin) solid var(--ds-border)",
-    color: "var(--ds-text-secondary)",
-    fontSize: "var(--ds-text-xs)",
-    fontWeight: "var(--ds-weight-medium)",
-    letterSpacing: "0.04em",
-    textTransform: "uppercase",
-    whiteSpace: "nowrap",
-  };
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "var(--ds-font-sans)" }}>
+    <div className="ds-chart-table-wrap">
+      <table className="ds-chart-table">
         <caption className="ds-visually-hidden">{caption}</caption>
         <thead>
           <tr>
             {columns.map((c) => (
-              <th key={c.header} scope="col" style={{ ...th, textAlign: c.numeric ? "right" : "left" }}>
+              <th key={c.header} scope="col" data-numeric={c.numeric ? "" : undefined}>
                 {c.header}
               </th>
             ))}
@@ -198,18 +168,7 @@ export function TableView({ caption, columns, rows }) {
           {rows.map((row, r) => (
             <tr key={r}>
               {row.map((cell, c) => (
-                <td
-                  key={c}
-                  style={{
-                    padding: "var(--ds-space-2) var(--ds-space-3)",
-                    borderBottom: r === rows.length - 1 ? "0" : "var(--ds-border-thin) solid var(--ds-border)",
-                    textAlign: columns[c].numeric ? "right" : "left",
-                    color: "var(--ds-text)",
-                    fontSize: "var(--ds-text-sm)",
-                    fontFamily: columns[c].numeric ? "var(--ds-font-mono)" : "var(--ds-font-sans)",
-                    fontVariantNumeric: columns[c].numeric ? "tabular-nums" : undefined,
-                  }}
-                >
+                <td key={c} data-numeric={columns[c].numeric ? "" : undefined}>
                   {cell === "" || cell === null || cell === undefined ? "—" : cell}
                 </td>
               ))}
@@ -222,11 +181,7 @@ export function TableView({ caption, columns, rows }) {
 }
 
 export function ChartEmpty({ children }) {
-  return (
-    <div style={{ padding: "var(--ds-space-8) var(--ds-space-4)", textAlign: "center", color: "var(--ds-text-secondary)", fontSize: "var(--ds-text-sm)" }}>
-      {children}
-    </div>
-  );
+  return <div className="ds-chart-empty">{children}</div>;
 }
 
 /** "Small sample" note for a denominator under the threshold. */
@@ -239,30 +194,13 @@ export function SampleNote({ children = "Small sample" }) {
  * toggle. The chart is the default view; the table is its accessible twin. While `isLoading`
  * the previous render stays in place, dimmed, so the layout does not jump.
  */
-export function ChartFrame({ figureRef, title, subtitle, framed = true, isLoading = false, plot, table, tip, onViewChange, style = {}, ...rest }) {
+export function ChartFrame({ figureRef, title, subtitle, framed = true, isLoading = false, plot, table, tip, onViewChange, className, style, ...rest }) {
   const [view, setView] = React.useState("chart");
   return (
-    <figure
-      {...rest}
-      ref={figureRef}
-      aria-busy={isLoading || undefined}
-      style={{
-        position: "relative",
-        margin: 0,
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 1fr) auto",
-        columnGap: "var(--ds-space-4)",
-        rowGap: "var(--ds-space-4)",
-        alignItems: "start",
-        fontFamily: "var(--ds-font-sans)",
-        color: "var(--ds-text)",
-        ...(framed ? surfaceStyle : null),
-        ...style,
-      }}
-    >
-      <figcaption style={{ minWidth: 0 }}>
-        <div style={{ fontSize: "var(--ds-text-lg)", fontWeight: "var(--ds-weight-semibold)", lineHeight: "var(--ds-leading-tight)" }}>{title}</div>
-        {subtitle ? <div style={{ marginTop: "var(--ds-space-1)", fontSize: "var(--ds-text-sm)", color: "var(--ds-text-secondary)" }}>{subtitle}</div> : null}
+    <figure {...rest} ref={figureRef} aria-busy={isLoading || undefined} className={cx("ds-chart-frame", className)} data-framed={framed ? "" : undefined} style={style}>
+      <figcaption className="ds-chart-caption">
+        <div className="ds-chart-title">{title}</div>
+        {subtitle ? <div className="ds-chart-subtitle">{subtitle}</div> : null}
       </figcaption>
       <button
         type="button"
@@ -272,23 +210,10 @@ export function ChartFrame({ figureRef, title, subtitle, framed = true, isLoadin
           setView(view === "table" ? "chart" : "table");
           if (onViewChange) onViewChange();
         }}
-        style={{
-          height: "var(--ds-control-sm)",
-          padding: "0 var(--ds-space-3)",
-          background: "var(--ds-surface)",
-          color: "var(--ds-text)",
-          border: "var(--ds-border-thin) solid var(--ds-border-control)",
-          borderRadius: "var(--ds-radius-md)",
-          fontFamily: "var(--ds-font-sans)",
-          fontSize: "var(--ds-text-sm)",
-          fontWeight: "var(--ds-weight-medium)",
-          cursor: "pointer",
-          whiteSpace: "nowrap",
-        }}
       >
         Table view
       </button>
-      <div style={{ gridColumn: "1 / -1", minWidth: 0, opacity: isLoading ? 0.5 : 1, transition: "opacity var(--ds-duration-base) var(--ds-ease-standard)" }}>
+      <div className="ds-chart-body" data-loading={isLoading ? "" : undefined}>
         {view === "table" ? table : plot}
       </div>
       {view === "chart" ? tip : null}
