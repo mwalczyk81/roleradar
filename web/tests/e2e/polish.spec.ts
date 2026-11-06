@@ -85,6 +85,29 @@ test.describe("polish: postings list and applications list", () => {
       await expectVisibleFocusIndicator(link);
     });
 
+    test(`postings company name is a link to the company with the same hover and focus states (${theme})`, async ({ page }) => {
+      await page.goto(appUrl("/postings"), { waitUntil: "networkidle" });
+      await setTheme(page, theme);
+      const link = page.locator('table a[href^="/companies/"]').first();
+      await expect(link, "the company cell is a link to /companies/:id").toHaveCount(1);
+      const text = await tokenColour(page, "--ds-text");
+      const bronze = await tokenColour(page, "--ds-primary-subtle-text");
+      await page.mouse.move(0, 0);
+      await settleAnimations(page);
+      expect(await textColour(link), "colour at rest equals the text token").toBe(text);
+      expect(await link.evaluate((el) => getComputedStyle(el).textDecorationLine)).toBe("none");
+      await link.hover();
+      await settleAnimations(page);
+      expect(await textColour(link), "colour on hover equals the bronze token").toBe(bronze);
+      expect(await textContrast(link), "contrast on hover").toBeGreaterThanOrEqual(AA_TEXT);
+      await page.mouse.move(0, 0);
+      await settleAnimations(page);
+      await link.focus();
+      await settleAnimations(page);
+      expect(await textColour(link), "colour on focus equals the bronze token").toBe(bronze);
+      await expectVisibleFocusIndicator(link);
+    });
+
     test(`applications list title link follows the same states, and no colour names an undefined token (${theme})`, async ({ page }) => {
       await page.goto(appUrl("/applications"), { waitUntil: "networkidle" });
       await setTheme(page, theme);

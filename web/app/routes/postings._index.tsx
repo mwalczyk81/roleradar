@@ -325,7 +325,11 @@ export default function PostingsIndex() {
       header: "Company",
       sortable: true,
       sortValue: () => 0,
-      render: (row) => <span>{row.companyName}</span>,
+      render: (row) => (
+        <Link to={`/companies/${row.companyId}`} className="company-link">
+          {row.companyName}
+        </Link>
+      ),
     },
     {
       key: "title",

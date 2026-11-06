@@ -619,8 +619,16 @@ body {
   text-decoration: none;
 }
 
+/* The company name in a list row: the same colour states as the title, but normal weight so the title stays the lead. */
+.company-link {
+  color: var(--ds-text);
+  text-decoration: none;
+}
+
 .role-title-link:hover,
-.role-title-link:focus-visible {
+.role-title-link:focus-visible,
+.company-link:hover,
+.company-link:focus-visible {
   color: var(--ds-primary-subtle-text);
 }
 
