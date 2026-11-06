@@ -317,20 +317,10 @@ export default function ApplicationDetail() {
       theme={theme}
       onThemeToggle={toggleTheme}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+      <div className="page-stack">
         {/* Breadcrumb back to applications list */}
         <div>
-          <Link
-            to="/applications"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "var(--ds-space-1)",
-              color: "var(--ds-text-secondary)",
-              textDecoration: "none",
-              fontSize: "var(--ds-text-sm)",
-            }}
-          >
+          <Link to="/applications" className="back-link">
             <ArrowLeft size={16} />
             <span>Back to Applications</span>
           </Link>
@@ -338,45 +328,21 @@ export default function ApplicationDetail() {
 
         {/* Top Summary Card */}
         <Card style={{ padding: "var(--ds-space-5)" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              flexWrap: "wrap",
-              gap: "var(--ds-space-4)",
-            }}
-          >
+          <div className="detail-header-row">
             <div>
-              <h2 className="page-heading" style={{ margin: "0 0 var(--ds-space-1) 0", fontSize: "var(--ds-text-xl)" }}>
-                {loaderData.posting.title}
-              </h2>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "var(--ds-space-3)",
-                  alignItems: "center",
-                  color: "var(--ds-text-secondary)",
-                  fontSize: "var(--ds-text-sm)",
-                }}
-              >
-                <Link
-                  to={`/companies/${application.companyId}`}
-                  style={{ color: "var(--ds-primary)", textDecoration: "none" }}
-                >
+              <h2 className="page-heading detail-title">{loaderData.posting.title}</h2>
+              <div className="detail-meta">
+                <Link to={`/companies/${application.companyId}`} className="link-primary">
                   {loaderData.company.name}
                 </Link>
                 <span>• Applied on {formatDate(application.appliedAt)}</span>
-                <Link
-                  to={`/postings/${application.postingId}`}
-                  style={{ color: "var(--ds-primary)", textDecoration: "none" }}
-                >
+                <Link to={`/postings/${application.postingId}`} className="link-primary">
                   View Job Opportunity →
                 </Link>
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "var(--ds-space-2)", alignItems: "center" }}>
+            <div className="action-group">
               <Badge tone={outcomeMeta.tone} data-testid="application-status-badge">
                 {outcomeMeta.label}
               </Badge>
@@ -388,7 +354,7 @@ export default function ApplicationDetail() {
                   setIsDialogOpen(true);
                 }}
               >
-                <Plus size={16} style={{ marginRight: "var(--ds-space-1)" }} />
+                <Plus size={16} className="icon-leading" />
                 Append Event
               </Button>
             </div>
@@ -397,32 +363,16 @@ export default function ApplicationDetail() {
 
         {/* Application Timeline Events Card */}
         <Card style={{ padding: "var(--ds-space-5)" }}>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "var(--ds-space-4)",
-            }}
-          >
-            <h3 className="page-heading" style={{ margin: 0, fontSize: "var(--ds-text-base)" }}>
+          <div className="timeline-header">
+            <h3 className="page-heading timeline-heading">
               Application History & Timeline ({application.events.length} event{application.events.length === 1 ? "" : "s"})
             </h3>
           </div>
 
           {application.events.length === 0 ? (
-            <p style={{ color: "var(--ds-text-secondary)", fontSize: "var(--ds-text-sm)" }}>
-              No timeline events recorded for this application.
-            </p>
+            <p className="field-caption">No timeline events recorded for this application.</p>
           ) : (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--ds-space-4)",
-                position: "relative",
-              }}
-            >
+            <div className="timeline">
               {application.events.map((ev, index) => {
                 const meta = isApplicationEventType(ev.eventType)
                   ? APPLICATION_EVENT_TYPE_METADATA[ev.eventType]
@@ -432,38 +382,16 @@ export default function ApplicationDetail() {
                   <div
                     key={`${ev.eventType}-${ev.eventDate}-${index}`}
                     data-testid="timeline-event"
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "var(--ds-space-1)",
-                      padding: "var(--ds-space-3)",
-                      backgroundColor: "var(--ds-surface-hover)",
-                      borderRadius: "var(--ds-radius-md)",
-                      borderLeft: meta.terminal
-                        ? "var(--ds-space-1) solid var(--ds-danger)"
-                        : "var(--ds-space-1) solid var(--ds-primary)",
-                    }}
+                    className={meta.terminal ? "timeline-event timeline-event-terminal" : "timeline-event"}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <div style={{ display: "flex", gap: "var(--ds-space-2)", alignItems: "center" }}>
-                        <span style={{ fontWeight: "var(--ds-weight-bold)", fontSize: "var(--ds-text-sm)" }}>
-                          {meta.label}
-                        </span>
+                    <div className="timeline-event-head">
+                      <div className="action-group">
+                        <span className="timeline-event-label">{meta.label}</span>
                         {meta.resultingStatusDescription ? (
-                          <span style={{ fontSize: "var(--ds-text-xs)", color: "var(--ds-text-secondary)" }}>
-                            ({meta.resultingStatusDescription})
-                          </span>
+                          <span className="caption-small">({meta.resultingStatusDescription})</span>
                         ) : null}
                       </div>
-                      <span style={{ fontSize: "var(--ds-text-xs)", color: "var(--ds-text-secondary)" }}>
-                        {formatDate(ev.eventDate)}
-                      </span>
+                      <span className="caption-small">{formatDate(ev.eventDate)}</span>
                     </div>
 
                     {ev.eventSource ? (
@@ -473,16 +401,7 @@ export default function ApplicationDetail() {
                     ) : null}
 
                     {ev.notes ? (
-                      <p
-                        style={{
-                          margin: "var(--ds-space-1) 0 0 0",
-                          fontSize: "var(--ds-text-sm)",
-                          whiteSpace: "pre-wrap",
-                          color: "var(--ds-text-primary)",
-                        }}
-                      >
-                        {ev.notes}
-                      </p>
+                      <p className="timeline-event-notes">{ev.notes}</p>
                     ) : null}
                   </div>
                 );
@@ -500,22 +419,14 @@ export default function ApplicationDetail() {
           <fetcher.Form method="post">
             <input type="hidden" name="_csrf" value={loaderData.csrfToken} />
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-4)" }}>
+            <div className="card-stack">
               {fetcher.data && !fetcher.data.ok && fetcher.data.message ? (
                 <Alert variant="danger">{fetcher.data.message}</Alert>
               ) : null}
 
               {/* Event Type Select */}
               <div>
-                <label
-                  htmlFor="append-event-type"
-                  style={{
-                    display: "block",
-                    marginBottom: "var(--ds-space-1)",
-                    fontSize: "var(--ds-text-sm)",
-                    fontWeight: "var(--ds-weight-medium)",
-                  }}
-                >
+                <label htmlFor="append-event-type" className="field-label field-label-medium">
                   Event Type *
                 </label>
                 <Select
@@ -530,23 +441,9 @@ export default function ApplicationDetail() {
                     </option>
                   ))}
                 </Select>
-                {fieldErrors.eventType ? (
-                  <span style={{ color: "var(--ds-danger)", fontSize: "var(--ds-text-xs)" }}>
-                    {fieldErrors.eventType}
-                  </span>
-                ) : null}
+                {fieldErrors.eventType ? <span className="inline-field-error">{fieldErrors.eventType}</span> : null}
                 {postingSyncNote ? (
-                  <p
-                    data-testid="posting-sync-note"
-                    style={{
-                      margin: "var(--ds-space-2) 0 0 0",
-                      fontSize: "var(--ds-text-xs)",
-                      color: "var(--ds-text-secondary)",
-                      backgroundColor: "var(--ds-surface-sunken)",
-                      padding: "var(--ds-space-2)",
-                      borderRadius: "var(--ds-radius-sm)",
-                    }}
-                  >
+                  <p data-testid="posting-sync-note" className="sync-note">
                     {postingSyncNote}
                   </p>
                 ) : null}
@@ -554,15 +451,7 @@ export default function ApplicationDetail() {
 
               {/* Event Date */}
               <div>
-                <label
-                  htmlFor="append-event-date"
-                  style={{
-                    display: "block",
-                    marginBottom: "var(--ds-space-1)",
-                    fontSize: "var(--ds-text-sm)",
-                    fontWeight: "var(--ds-weight-medium)",
-                  }}
-                >
+                <label htmlFor="append-event-date" className="field-label field-label-medium">
                   Event Date *
                 </label>
                 <Input
@@ -573,23 +462,12 @@ export default function ApplicationDetail() {
                   onChange={(e) => setEventDate(e.target.value)}
                   required
                 />
-                {fieldErrors.eventDate ? (
-                  <span style={{ color: "var(--ds-danger)", fontSize: "var(--ds-text-xs)" }}>
-                    {fieldErrors.eventDate}
-                  </span>
-                ) : null}
+                {fieldErrors.eventDate ? <span className="inline-field-error">{fieldErrors.eventDate}</span> : null}
               </div>
 
               {/* Notes */}
               <div>
-                <label
-                  htmlFor="append-event-notes"
-                  style={{
-                    display: "block",
-                    marginBottom: "var(--ds-space-1)",
-                    fontSize: "var(--ds-text-sm)",
-                  }}
-                >
+                <label htmlFor="append-event-notes" className="field-label">
                   Notes & Details
                 </label>
                 <Textarea
@@ -599,23 +477,12 @@ export default function ApplicationDetail() {
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
                 />
-                {fieldErrors.notes ? (
-                  <span style={{ color: "var(--ds-danger)", fontSize: "var(--ds-text-xs)" }}>
-                    {fieldErrors.notes}
-                  </span>
-                ) : null}
+                {fieldErrors.notes ? <span className="inline-field-error">{fieldErrors.notes}</span> : null}
               </div>
 
               {/* Event Source */}
               <div>
-                <label
-                  htmlFor="append-event-source"
-                  style={{
-                    display: "block",
-                    marginBottom: "var(--ds-space-1)",
-                    fontSize: "var(--ds-text-sm)",
-                  }}
-                >
+                <label htmlFor="append-event-source" className="field-label">
                   Source / Channel
                 </label>
                 <Input
@@ -628,14 +495,7 @@ export default function ApplicationDetail() {
               </div>
 
               {/* Modal Actions */}
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "var(--ds-space-2)",
-                  marginTop: "var(--ds-space-2)",
-                }}
-              >
+              <div className="modal-actions">
                 <Button
                   type="button"
                   variant="ghost"

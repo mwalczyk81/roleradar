@@ -323,52 +323,33 @@ export default function CompanyDetail() {
       theme={theme}
       onThemeToggle={toggleTheme}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+      <div className="page-stack">
         {/* Breadcrumb Navigation */}
         <div>
           <Link
             to="/companies"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "var(--ds-space-1)",
-              color: "var(--ds-text-secondary)",
-              textDecoration: "none",
-              fontSize: "var(--ds-text-sm)",
-            }}
+            className="back-link"
           >
             <ArrowLeft size={16} />
             <span>Back to Companies</span>
           </Link>
         </div>
 
-        {/* Company Header Card */}
+        {/* Company Header Card. K6: the kit Card sets its own inline padding after ours, so this space-5 override stays a style prop. */}
         <Card style={{ padding: "var(--ds-space-5)" }}>
           <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              gap: "var(--ds-space-4)",
-              flexWrap: "wrap",
-            }}
+            className="detail-header-row"
           >
             <div>
-              <h2 className="page-heading" style={{ margin: 0, fontSize: "var(--ds-text-2xl)", fontWeight: 700 }}>
+              <h2 className="page-heading detail-heading-xl">
                 {company.name}
               </h2>
               <div
-                style={{
-                  display: "flex",
-                  gap: "var(--ds-space-2)",
-                  marginTop: "var(--ds-space-2)",
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                }}
+                className="detail-badges"
               >
                 <Badge tone={statusMeta.tone}>{statusMeta.label}</Badge>
                 {company.headquarters ? (
-                  <span style={{ color: "var(--ds-text-secondary)", fontSize: "var(--ds-text-sm)" }}>
+                  <span className="field-caption">
                     {company.headquarters}
                   </span>
                 ) : null}
@@ -385,17 +366,17 @@ export default function CompanyDetail() {
         ) : null}
 
         {/* Edit Company Form */}
-        <Card style={{ padding: "var(--ds-space-6)" }}>
+        <Card>
           <fetcher.Form
             method="post"
-            style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-5)" }}
+            className="form-stack"
           >
             <input type="hidden" name="_csrf" value={loaderData.csrfToken} />
             <input type="hidden" name="versionToken" value={company.versionToken} />
             <input type="hidden" name="categoryTags" value={JSON.stringify(categoryTags)} />
             <input type="hidden" name="careerSources" value={JSON.stringify(careerSources)} />
 
-            <h2 className="page-heading" style={{ margin: 0, fontSize: "var(--ds-text-lg)", fontWeight: 600 }}>
+            <h2 className="page-heading form-heading">
               Edit Company Profile
             </h2>
 
@@ -403,12 +384,7 @@ export default function CompanyDetail() {
             <div>
               <label
                 htmlFor="company-name-input"
-                style={{
-                  display: "block",
-                  fontSize: "var(--ds-text-sm)",
-                  fontWeight: 600,
-                  marginBottom: "var(--ds-space-1)",
-                }}
+                className="form-label"
               >
                 Company Name *
               </label>
@@ -424,11 +400,7 @@ export default function CompanyDetail() {
               {fieldErrors.name ? (
                 <div
                   id="company-name-error"
-                  style={{
-                    color: "var(--ds-danger-text)",
-                    fontSize: "var(--ds-text-xs)",
-                    marginTop: "var(--ds-space-1)",
-                  }}
+                  className="form-error"
                 >
                   {fieldErrors.name}
                 </div>
@@ -437,21 +409,12 @@ export default function CompanyDetail() {
 
             {/* Status and Ownership Type Grid */}
             <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(12rem, 1fr))",
-                gap: "var(--ds-space-4)",
-              }}
+              className="form-grid"
             >
               <div>
                 <label
                   htmlFor="company-status-select"
-                  style={{
-                    display: "block",
-                    fontSize: "var(--ds-text-sm)",
-                    fontWeight: 600,
-                    marginBottom: "var(--ds-space-1)",
-                  }}
+                  className="form-label"
                 >
                   Status *
                 </label>
@@ -472,11 +435,7 @@ export default function CompanyDetail() {
                 {fieldErrors.status ? (
                   <div
                     id="company-status-error"
-                    style={{
-                      color: "var(--ds-danger-text)",
-                      fontSize: "var(--ds-text-xs)",
-                      marginTop: "var(--ds-space-1)",
-                    }}
+                    className="form-error"
                   >
                     {fieldErrors.status}
                   </div>
@@ -486,12 +445,7 @@ export default function CompanyDetail() {
               <div>
                 <label
                   htmlFor="company-ownership-select"
-                  style={{
-                    display: "block",
-                    fontSize: "var(--ds-text-sm)",
-                    fontWeight: 600,
-                    marginBottom: "var(--ds-space-1)",
-                  }}
+                  className="form-label"
                 >
                   Ownership Type
                 </label>
@@ -512,11 +466,7 @@ export default function CompanyDetail() {
                 {fieldErrors.ownershipType ? (
                   <div
                     id="company-ownership-error"
-                    style={{
-                      color: "var(--ds-danger-text)",
-                      fontSize: "var(--ds-text-xs)",
-                      marginTop: "var(--ds-space-1)",
-                    }}
+                    className="form-error"
                   >
                     {fieldErrors.ownershipType}
                   </div>
@@ -528,12 +478,7 @@ export default function CompanyDetail() {
             <div>
               <label
                 htmlFor="company-hq-input"
-                style={{
-                  display: "block",
-                  fontSize: "var(--ds-text-sm)",
-                  fontWeight: 600,
-                  marginBottom: "var(--ds-space-1)",
-                }}
+                className="form-label"
               >
                 Headquarters
               </label>
@@ -550,12 +495,7 @@ export default function CompanyDetail() {
             <div>
               <label
                 htmlFor="company-desc-input"
-                style={{
-                  display: "block",
-                  fontSize: "var(--ds-text-sm)",
-                  fontWeight: 600,
-                  marginBottom: "var(--ds-space-1)",
-                }}
+                className="form-label"
               >
                 Description
               </label>
@@ -573,57 +513,31 @@ export default function CompanyDetail() {
             <div>
               <label
                 htmlFor="category-tag-input"
-                style={{
-                  display: "block",
-                  fontSize: "var(--ds-text-sm)",
-                  fontWeight: 600,
-                  marginBottom: "var(--ds-space-1)",
-                }}
+                className="form-label"
               >
                 Category Tags
               </label>
               <div
-                style={{
-                  display: "flex",
-                  gap: "var(--ds-space-2)",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  marginBottom: "var(--ds-space-2)",
-                }}
+                className="chip-row"
               >
                 {categoryTags.map((tag) => (
                   <span
                     key={tag}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "var(--ds-space-1)",
-                      backgroundColor: "var(--ds-surface-hover)",
-                      padding: "var(--ds-space-1) var(--ds-space-2)",
-                      borderRadius: "var(--ds-radius-sm)",
-                      fontSize: "var(--ds-text-xs)",
-                    }}
+                    className="chip"
                   >
                     <span>{tag}</span>
                     <button
                       type="button"
                       aria-label={`Remove category tag ${tag}`}
                       onClick={() => handleRemoveTag(tag)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        color: "var(--ds-text-secondary)",
-                        cursor: "pointer",
-                        padding: 0,
-                        fontSize: "var(--ds-text-xs)",
-                      }}
+                      className="chip-remove"
                     >
                       ×
                     </button>
                   </span>
                 ))}
               </div>
-              <div style={{ display: "flex", gap: "var(--ds-space-2)", maxWidth: "24rem" }}>
+              <div className="inline-form-row">
                 <Input
                   id="category-tag-input"
                   placeholder="New tag..."
@@ -646,60 +560,36 @@ export default function CompanyDetail() {
             {/* Career Sources List Editor */}
             <div>
               <div
-                style={{
-                  fontSize: "var(--ds-text-sm)",
-                  fontWeight: 600,
-                  marginBottom: "var(--ds-space-2)",
-                }}
+                className="form-subheading"
               >
                 Career Sources
               </div>
 
               {careerSources.length === 0 ? (
                 <div
-                  style={{
-                    color: "var(--ds-text-secondary)",
-                    fontSize: "var(--ds-text-sm)",
-                    marginBottom: "var(--ds-space-3)",
-                  }}
+                  className="empty-caption"
                 >
                   No career sources registered.
                 </div>
               ) : (
                 <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "var(--ds-space-2)",
-                    marginBottom: "var(--ds-space-4)",
-                  }}
+                  className="source-list"
                 >
                   {careerSources.map((source, idx) => {
                     const isHttp = isValidHttpUrl(source.sourceUrl || "");
                     return (
                       <div
                         key={idx}
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "var(--ds-space-3)",
-                          borderRadius: "var(--ds-radius-md)",
-                          border: "var(--ds-border-thin) solid var(--ds-border)",
-                          gap: "var(--ds-space-3)",
-                        }}
+                        className="source-row"
                       >
-                        <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-1)" }}>
-                          <div style={{ fontWeight: 600, fontSize: "var(--ds-text-sm)" }}>
+                        <div className="source-details">
+                          <div className="source-url">
                             {isHttp ? (
                               <a
                                 href={source.sourceUrl || "#"}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                style={{
-                                  color: "var(--ds-primary)",
-                                  textDecoration: "underline",
-                                }}
+                                className="underline-link"
                               >
                                 {source.sourceUrl}
                               </a>
@@ -708,12 +598,7 @@ export default function CompanyDetail() {
                             )}
                           </div>
                           <div
-                            style={{
-                              display: "flex",
-                              gap: "var(--ds-space-2)",
-                              fontSize: "var(--ds-text-xs)",
-                              color: "var(--ds-text-secondary)",
-                            }}
+                            className="source-meta"
                           >
                             <span>Provider: {source.atsProvider || "custom"}</span>
                             {source.atsTenant ? <span>Tenant: {source.atsTenant}</span> : null}
@@ -738,34 +623,18 @@ export default function CompanyDetail() {
 
               {/* Add Career Source subform */}
               <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "var(--ds-space-3)",
-                  padding: "var(--ds-space-4)",
-                  backgroundColor: "var(--ds-surface)",
-                  borderRadius: "var(--ds-radius-md)",
-                  border: "var(--ds-border-thin) solid var(--ds-border)",
-                }}
+                className="subform-panel"
               >
-                <div style={{ fontWeight: 600, fontSize: "var(--ds-text-xs)", textTransform: "uppercase" }}>
+                <div className="subform-title">
                   Add Career Source
                 </div>
                 <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(11rem, 1fr))",
-                    gap: "var(--ds-space-3)",
-                  }}
+                  className="subform-grid"
                 >
                   <div>
                     <label
                       htmlFor="new-source-url"
-                      style={{
-                        display: "block",
-                        fontSize: "var(--ds-text-xs)",
-                        marginBottom: "var(--ds-space-1)",
-                      }}
+                      className="form-label-small"
                     >
                       Career Page / ATS URL *
                     </label>
@@ -780,11 +649,7 @@ export default function CompanyDetail() {
                   <div>
                     <label
                       htmlFor="new-ats-provider"
-                      style={{
-                        display: "block",
-                        fontSize: "var(--ds-text-xs)",
-                        marginBottom: "var(--ds-space-1)",
-                      }}
+                      className="form-label-small"
                     >
                       ATS Provider
                     </label>
@@ -799,11 +664,7 @@ export default function CompanyDetail() {
                   <div>
                     <label
                       htmlFor="new-ats-tenant"
-                      style={{
-                        display: "block",
-                        fontSize: "var(--ds-text-xs)",
-                        marginBottom: "var(--ds-space-1)",
-                      }}
+                      className="form-label-small"
                     >
                       Tenant / Org Slug
                     </label>
@@ -818,11 +679,7 @@ export default function CompanyDetail() {
                   <div>
                     <label
                       htmlFor="new-fetch-method"
-                      style={{
-                        display: "block",
-                        fontSize: "var(--ds-text-xs)",
-                        marginBottom: "var(--ds-space-1)",
-                      }}
+                      className="form-label-small"
                     >
                       Fetch Method
                     </label>
@@ -848,7 +705,7 @@ export default function CompanyDetail() {
             </div>
 
             {/* Submit Action Controls */}
-            <div style={{ display: "flex", gap: "var(--ds-space-3)", marginTop: "var(--ds-space-2)" }}>
+            <div className="form-actions">
               <Button
                 type="submit"
                 variant="primary"

@@ -68,9 +68,9 @@ export function CreateApplicationDialog({
         <input type="hidden" name="postingId" value={postingId} />
         <input type="hidden" name="currentDisposition" value={currentDisposition} />
 
-        <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-4)" }}>
+        <div className="card-stack">
           {postingTitle ? (
-            <p style={{ margin: 0, fontSize: "var(--ds-text-sm)", color: "var(--ds-text-secondary)" }}>
+            <p className="dialog-subject">
               Applying for: <strong>{postingTitle}</strong>
             </p>
           ) : null}
@@ -83,15 +83,7 @@ export function CreateApplicationDialog({
 
           {/* Submission Date */}
           <div>
-            <label
-              htmlFor="app-submitted-date"
-              style={{
-                display: "block",
-                marginBottom: "var(--ds-space-1)",
-                fontSize: "var(--ds-text-sm)",
-                fontWeight: "var(--ds-weight-medium)",
-              }}
-            >
+            <label htmlFor="app-submitted-date" className="field-label field-label-medium">
               Submission Date *
             </label>
             <Input
@@ -103,7 +95,7 @@ export function CreateApplicationDialog({
               required
             />
             {fieldErrors.submittedDate ? (
-              <span style={{ color: "var(--ds-danger)", fontSize: "var(--ds-text-xs)" }}>
+              <span className="inline-field-error">
                 {fieldErrors.submittedDate}
               </span>
             ) : null}
@@ -111,15 +103,7 @@ export function CreateApplicationDialog({
 
           {/* Resume Variant */}
           <div>
-            <label
-              htmlFor="app-resume-variant"
-              style={{
-                display: "block",
-                marginBottom: "var(--ds-space-1)",
-                fontSize: "var(--ds-text-sm)",
-                fontWeight: "var(--ds-weight-medium)",
-              }}
-            >
+            <label htmlFor="app-resume-variant" className="field-label field-label-medium">
               Resume Variant *
             </label>
             <Select
@@ -135,23 +119,16 @@ export function CreateApplicationDialog({
               ))}
             </Select>
             {fieldErrors.resumeVariant ? (
-              <span style={{ color: "var(--ds-danger)", fontSize: "var(--ds-text-xs)" }}>
+              <span className="inline-field-error">
                 {fieldErrors.resumeVariant}
               </span>
             ) : null}
           </div>
 
           {/* Desired Salary Row */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 5rem", gap: "var(--ds-space-2)" }}>
+          <div className="salary-row">
             <div>
-              <label
-                htmlFor="app-salary-min"
-                style={{
-                  display: "block",
-                  marginBottom: "var(--ds-space-1)",
-                  fontSize: "var(--ds-text-sm)",
-                }}
-              >
+              <label htmlFor="app-salary-min" className="field-label">
                 Desired Min
               </label>
               <Input
@@ -163,21 +140,14 @@ export function CreateApplicationDialog({
                 onChange={(e) => setDesiredSalaryMin(e.target.value)}
               />
               {fieldErrors.desiredSalaryMin ? (
-                <span style={{ color: "var(--ds-danger)", fontSize: "var(--ds-text-xs)" }}>
+                <span className="inline-field-error">
                   {fieldErrors.desiredSalaryMin}
                 </span>
               ) : null}
             </div>
 
             <div>
-              <label
-                htmlFor="app-salary-max"
-                style={{
-                  display: "block",
-                  marginBottom: "var(--ds-space-1)",
-                  fontSize: "var(--ds-text-sm)",
-                }}
-              >
+              <label htmlFor="app-salary-max" className="field-label">
                 Desired Max
               </label>
               <Input
@@ -189,21 +159,14 @@ export function CreateApplicationDialog({
                 onChange={(e) => setDesiredSalaryMax(e.target.value)}
               />
               {fieldErrors.desiredSalaryMax ? (
-                <span style={{ color: "var(--ds-danger)", fontSize: "var(--ds-text-xs)" }}>
+                <span className="inline-field-error">
                   {fieldErrors.desiredSalaryMax}
                 </span>
               ) : null}
             </div>
 
             <div>
-              <label
-                htmlFor="app-salary-curr"
-                style={{
-                  display: "block",
-                  marginBottom: "var(--ds-space-1)",
-                  fontSize: "var(--ds-text-sm)",
-                }}
-              >
+              <label htmlFor="app-salary-curr" className="field-label">
                 Currency
               </label>
               <Input
@@ -219,14 +182,7 @@ export function CreateApplicationDialog({
 
           {/* Target Start Date */}
           <div>
-            <label
-              htmlFor="app-target-start"
-              style={{
-                display: "block",
-                marginBottom: "var(--ds-space-1)",
-                fontSize: "var(--ds-text-sm)",
-              }}
-            >
+            <label htmlFor="app-target-start" className="field-label">
               Target Start Date
             </label>
             <Input
@@ -237,7 +193,7 @@ export function CreateApplicationDialog({
               onChange={(e) => setTargetStartDate(e.target.value)}
             />
             {fieldErrors.targetStartDate ? (
-              <span style={{ color: "var(--ds-danger)", fontSize: "var(--ds-text-xs)" }}>
+              <span className="inline-field-error">
                 {fieldErrors.targetStartDate}
               </span>
             ) : null}
@@ -245,14 +201,7 @@ export function CreateApplicationDialog({
 
           {/* Resume Pointer */}
           <div>
-            <label
-              htmlFor="app-resume-pointer"
-              style={{
-                display: "block",
-                marginBottom: "var(--ds-space-1)",
-                fontSize: "var(--ds-text-sm)",
-              }}
-            >
+            <label htmlFor="app-resume-pointer" className="field-label">
               Resume Pointer / URL
             </label>
             <Input
@@ -265,7 +214,7 @@ export function CreateApplicationDialog({
               onChange={(e) => setResumePointer(e.target.value)}
             />
             {fieldErrors.resumePointer ? (
-              <span style={{ color: "var(--ds-danger)", fontSize: "var(--ds-text-xs)" }}>
+              <span className="inline-field-error">
                 {fieldErrors.resumePointer}
               </span>
             ) : null}
@@ -273,14 +222,7 @@ export function CreateApplicationDialog({
 
           {/* Confirmation Code */}
           <div>
-            <label
-              htmlFor="app-confirmation-code"
-              style={{
-                display: "block",
-                marginBottom: "var(--ds-space-1)",
-                fontSize: "var(--ds-text-sm)",
-              }}
-            >
+            <label htmlFor="app-confirmation-code" className="field-label">
               Confirmation Code
             </label>
             <Input
@@ -293,7 +235,7 @@ export function CreateApplicationDialog({
               onChange={(e) => setConfirmationCode(e.target.value)}
             />
             {fieldErrors.confirmationCode ? (
-              <span style={{ color: "var(--ds-danger)", fontSize: "var(--ds-text-xs)" }}>
+              <span className="inline-field-error">
                 {fieldErrors.confirmationCode}
               </span>
             ) : null}
@@ -301,41 +243,21 @@ export function CreateApplicationDialog({
 
           {/* Override controls when required */}
           {requiresOverride ? (
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--ds-space-2)",
-                padding: "var(--ds-space-3)",
-                backgroundColor: "var(--ds-surface-hover)",
-                borderRadius: "var(--ds-radius-md)",
-              }}
-            >
-              <div style={{ display: "flex", alignItems: "center", gap: "var(--ds-space-2)" }}>
+            <div className="override-panel">
+              <div className="action-group">
                 <Checkbox
                   id="app-override-decided"
                   name="overrideDecided"
                   checked={overrideDecided}
                   onChange={(e) => setOverrideDecided(e.target.checked)}
                 />
-                <label
-                  htmlFor="app-override-decided"
-                  style={{ fontSize: "var(--ds-text-sm)", fontWeight: "var(--ds-weight-medium)" }}
-                >
+                <label htmlFor="app-override-decided" className="dialog-field-label">
                   Override decided disposition *
                 </label>
               </div>
 
               <div>
-                <label
-                  htmlFor="app-override-reason"
-                  style={{
-                    display: "block",
-                    marginBottom: "var(--ds-space-1)",
-                    fontSize: "var(--ds-text-xs)",
-                    color: "var(--ds-text-secondary)",
-                  }}
-                >
+                <label htmlFor="app-override-reason" className="field-label-hint">
                   Override Reason *
                 </label>
                 <Input
@@ -348,7 +270,7 @@ export function CreateApplicationDialog({
                   required={requiresOverride}
                 />
                 {fieldErrors.overrideReason ? (
-                  <span style={{ color: "var(--ds-danger)", fontSize: "var(--ds-text-xs)" }}>
+                  <span className="inline-field-error">
                     {fieldErrors.overrideReason}
                   </span>
                 ) : null}
@@ -361,14 +283,7 @@ export function CreateApplicationDialog({
           ) : null}
 
           {/* Actions */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "flex-end",
-              gap: "var(--ds-space-2)",
-              marginTop: "var(--ds-space-2)",
-            }}
-          >
+          <div className="modal-actions">
             <Button type="button" variant="ghost" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>

@@ -123,6 +123,48 @@ test.describe("Visual baseline: app routes (fictional loopback stub)", () => {
     },
     { name: "companies-list", path: "/companies", census: true },
     { name: "company-detail", path: "/companies/comp-e2e-1", census: true },
+    {
+      // The edit form with typed values: a renamed company, a new tag chip, a half-filled career source, another status.
+      name: "company-detail-edit",
+      path: "/companies/comp-e2e-1",
+      after: async (page) => {
+        await page.locator("#company-name-input").fill("Acme Cloud Services (edited)");
+        await page.locator("#company-status-select").selectOption({ index: 1 });
+        await page.locator("#category-tag-input").fill("fictional-tag");
+        await page.locator("#category-tag-input").press("Enter");
+        await page.locator("#new-source-url").fill("https://careers.example.com/fictional");
+        await page.locator("#new-ats-provider").fill("greenhouse");
+      },
+    },
+    {
+      // No career sources registered: the empty caption instead of the source list.
+      name: "company-detail-no-sources",
+      path: "/companies/comp-e2e-1",
+      prepare: (s) => {
+        s.currentCompanyCareerSources = [];
+      },
+    },
+    {
+      // A rejected save: the error banner and the inline field errors.
+      name: "company-detail-errors",
+      path: "/companies/comp-e2e-1",
+      prepare: (s) => {
+        s.nextCompanyResponseStatus = 400;
+        s.nextCompanyResponseBody = {
+          errorCode: "VALIDATION_ERROR",
+          message: "Validation failed.",
+          details: [
+            { field: "name", issue: "Company name cannot be blank." },
+            { field: "status", issue: "Status is not recognised." },
+            { field: "ownershipType", issue: "Ownership type is not recognised." },
+          ],
+        };
+      },
+      after: async (page) => {
+        await page.getByRole("button", { name: "Save Changes" }).click();
+        await page.getByText("Company name cannot be blank.").waitFor();
+      },
+    },
     { name: "applications-list", path: "/applications", census: true },
     { name: "application-detail", path: "/applications/app-e2e-1", census: true },
     {
@@ -131,6 +173,95 @@ test.describe("Visual baseline: app routes (fictional loopback stub)", () => {
       after: async (page) => {
         await page.getByRole("button", { name: "Append Event" }).click();
         await page.getByRole("dialog").waitFor();
+      },
+    },
+    {
+      // A timeline with a posting_transition event (terminal, with the 008 source line), a note event and an event
+      // with no notes and no source.
+      name: "application-detail-timeline",
+      path: "/applications/app-e2e-1",
+      prepare: (s) => {
+        s.currentApplicationStatus = "rejected";
+        s.currentApplicationEvents = [
+          { eventType: "applied", eventDate: "2026-10-31", notes: "Initial application submitted", eventSource: "web" },
+          { eventType: "follow_up", eventDate: "2026-11-01", notes: null },
+          { eventType: "note", eventDate: "2026-11-02", notes: "Recruiter called.\nSecond line of a fictional note." },
+          { eventType: "rejected", eventDate: "2026-11-03", notes: "Rejected by email", eventSource: "posting_transition" },
+        ];
+      },
+      census: true,
+    },
+    {
+      // The append-event dialog with a field error: the server rejects the date and the inline error shows.
+      name: "application-append-event-dialog-error",
+      path: "/applications/app-e2e-1",
+      prepare: (s) => {
+        s.nextApplicationResponseStatus = 400;
+        s.nextApplicationResponseBody = {
+          errorCode: "VALIDATION_ERROR",
+          message: "Validation failed.",
+          details: [
+            { field: "eventDate", message: "Event date cannot be in the future." },
+            { field: "notes", message: "Notes are too long." },
+          ],
+        };
+      },
+      after: async (page) => {
+        await page.getByRole("button", { name: "Append Event" }).click();
+        const dialog = page.getByRole("dialog");
+        await dialog.waitFor();
+        await dialog.getByRole("button", { name: "Append Event" }).click();
+        await dialog.getByText("Event date cannot be in the future.").waitFor();
+      },
+    },
+    {
+      // A rejected event type shows the posting sync note under the select.
+      name: "application-append-event-dialog-sync-note",
+      path: "/applications/app-e2e-1",
+      after: async (page) => {
+        await page.getByRole("button", { name: "Append Event" }).click();
+        const dialog = page.getByRole("dialog");
+        await dialog.waitFor();
+        await dialog.getByLabel("Event Type *").selectOption("rejected");
+        await dialog.getByTestId("posting-sync-note").waitFor();
+      },
+    },
+    {
+      // The create dialog on a closed posting: the override alert and the override panel.
+      name: "posting-create-application-dialog-override",
+      path: "/postings/post-e2e-1",
+      prepare: (s) => {
+        s.currentPostingDisposition = "closed";
+      },
+      after: async (page) => {
+        await page.getByRole("button", { name: "Create Application" }).click();
+        await page.getByRole("dialog").waitFor();
+      },
+    },
+    {
+      // The create dialog after a rejected submit: the override panel with its error, inline field errors and the banner.
+      name: "posting-create-application-dialog-errors",
+      path: "/postings/post-e2e-1",
+      prepare: (s) => {
+        s.currentPostingDisposition = "closed";
+        s.nextApplicationResponseStatus = 400;
+        s.nextApplicationResponseBody = {
+          errorCode: "VALIDATION_ERROR",
+          message: "Validation failed.",
+          details: [
+            { field: "desiredSalaryMin", message: "Minimum salary must be positive." },
+            { field: "confirmationCode", message: "Confirmation code is too long." },
+          ],
+        };
+      },
+      after: async (page) => {
+        await page.getByRole("button", { name: "Create Application" }).click();
+        const dialog = page.getByRole("dialog");
+        await dialog.waitFor();
+        await dialog.getByLabel("Override Reason *").fill("Fictional reason to reopen this posting.");
+        await dialog.getByLabel("Desired Min").fill("-5");
+        await dialog.getByRole("button", { name: "Record Application" }).click();
+        await dialog.getByText("Minimum salary must be positive.").waitFor();
       },
     },
     { name: "criteria", path: "/criteria", census: true },

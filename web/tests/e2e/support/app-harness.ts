@@ -30,6 +30,8 @@ export interface ApplicationEventStub {
   eventType: string;
   eventDate: string;
   notes: string | null;
+  /** 008: where the event came from ("web", "posting_transition"); the timeline shows it as a source line when set. */
+  eventSource?: string | null;
 }
 
 /**
@@ -40,6 +42,8 @@ export interface StubState {
   currentPostingDisposition: string;
   currentPostingVersionToken: string;
   currentPostingTitle: string;
+  /** Optional: the assessment note the posting detail returns. Absent means none. */
+  currentPostingAssessmentNote?: { summary: string; updatedAt: string } | null;
   nextTransitionResponseStatus: number | null;
   nextTransitionResponseBody: unknown;
   currentCompanyName: string;
@@ -72,6 +76,7 @@ export function defaultStubState(): StubState {
     currentPostingDisposition: "lead",
     currentPostingVersionToken: "ver-1",
     currentPostingTitle: "Principal Engineer",
+    currentPostingAssessmentNote: null,
     nextTransitionResponseStatus: null,
     nextTransitionResponseBody: null,
     currentCompanyName: "Acme Cloud Services",
@@ -230,7 +235,7 @@ export async function startAppHarness(s: StubState, sessionId: string): Promise<
               detectedAt: "2026-10-31T10:00:00Z",
             },
           ],
-          assessmentNote: null,
+          assessmentNote: s.currentPostingAssessmentNote ?? null,
         })
       );
       return;

@@ -3,35 +3,49 @@ import { expect, type Locator } from "@playwright/test";
 /**
  * 009 phase 3: computed-style pins for the inline-style conversion. A pin states the declarations the element used to
  * carry as an inline style, written exactly as they were (tokens and all), and the helper resolves each one the way the
- * browser would (on a probe element, through the CSS object model, which the CSP allows) and compares it with what the
+ * browser would (on a stand-in copy of the element, through the CSS object model, which the CSP allows) and compares it with what the
  * real element computes now. A conversion that changes a value, drops a declaration or loses the class fails here.
  *
- * Properties are written in CSS kebab-case ("padding", "font-size"). Do not pin percentage widths: they resolve against
- * the parent, so a probe on the body cannot stand in for the element.
+ * Properties are written in CSS kebab-case ("padding", "font-size").
  */
 
-async function resolveOnProbe(locator: Locator, property: string, css: string): Promise<string> {
-  return await locator.page().evaluate(
-    ([prop, value]) => {
-      const probe = document.createElement("span");
-      document.body.appendChild(probe);
-      probe.style.setProperty(prop as string, value as string);
-      const resolved = getComputedStyle(probe).getPropertyValue(prop as string);
-      probe.remove();
-      return resolved;
-    },
-    [property, css]
-  );
+/**
+ * Compares, for every declaration, the element's computed value with the value a stand-in computes when it carries the
+ * old inline style instead of its classes. The stand-in is a deep copy of the element placed next to it, so it sits in
+ * the same parent (same flex or grid context, same inheritance, same width) and has the same children, which is what
+ * lets percentage widths, grid track sizes and inherited colours resolve the way they did when the style was inline.
+ */
+async function compareWithInlineStandIn(
+  locator: Locator,
+  declarations: Record<string, string>
+): Promise<Array<{ property: string; css: string; expected: string; actual: string }>> {
+  return await locator.evaluate((el, entries) => {
+    const parent = el.parentElement as Element;
+    const standIn = el.cloneNode(true) as HTMLElement;
+    standIn.removeAttribute("class");
+    standIn.removeAttribute("style");
+    parent.insertBefore(standIn, el.nextSibling);
+    const rows = (entries as Array<[string, string]>).map(([property, css]) => {
+      standIn.style.setProperty(property, css);
+      return { property, css, expected: "", actual: "" };
+    });
+    const standInStyle = getComputedStyle(standIn);
+    const elementStyle = getComputedStyle(el);
+    for (const row of rows) {
+      row.expected = standInStyle.getPropertyValue(row.property);
+      row.actual = elementStyle.getPropertyValue(row.property);
+    }
+    standIn.remove();
+    return rows;
+  }, Object.entries(declarations));
 }
 
-/** Each declaration, resolved on a probe, equals the computed value on the first element the locator matches. */
+/** Each declaration, applied as an inline style to a stand-in, computes the same as on the first matched element. */
 export async function expectDeclarations(locator: Locator, declarations: Record<string, string>): Promise<void> {
   expect(await locator.count(), `${String(locator)} matches at least one element`).toBeGreaterThan(0);
-  const target = locator.first();
-  for (const [property, css] of Object.entries(declarations)) {
-    const expected = await resolveOnProbe(target, property, css);
-    const actual = await target.evaluate((el, prop) => getComputedStyle(el).getPropertyValue(prop), property);
-    expect(actual, `${property} of ${String(locator)} (${css})`).toBe(expected);
+  const rows = await compareWithInlineStandIn(locator.first(), declarations);
+  for (const row of rows) {
+    expect(row.actual, `${row.property} of ${String(locator)} (${row.css})`).toBe(row.expected);
   }
 }
 
