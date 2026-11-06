@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { Brand } from "../components/Brand.js";
+import { formatShortDate } from "../lib/format-date.js";
 import { assertApiOk, requireUserSession } from "../lib/auth-guard.server.js";
 import { loadInsightsCounts, MAX_IN_FLIGHT } from "../lib/insights-counts.server.js";
 import { LENS_LABELS, lensListHref, parseWindowParams } from "../lib/insights-lenses.js";
@@ -235,14 +236,15 @@ function TrendsSection({ stats }: { stats: StatsView }) {
               </>
             ) : (
               <>
-                <p className="insights-trend-note" data-testid="run-yield-summary">
-                  Latest search run ({latestRun.date}): {plural(latestRun.newPostings, "new posting", "new postings")}. {plural(stats.runs.rows.length, "run", "runs")} in this window.
-                </p>
                 <ColumnChart
                   title={runTitle}
-                  data={stats.runs.rows.map((row) => ({ label: row.date, fullLabel: `Run on ${row.date}`, value: row.newPostings }))}
+                  subtitle={
+                    <span data-testid="run-yield-summary">
+                      Latest search run ({latestRun.date}): {plural(latestRun.newPostings, "new posting", "new postings")}. {plural(stats.runs.rows.length, "run", "runs")} in this window.
+                    </span>
+                  }
+                  data={stats.runs.rows.map((row) => ({ label: formatShortDate(row.date), fullLabel: `Run on ${row.date}`, value: row.newPostings }))}
                   height={120}
-                  framed={false}
                   labelHeader="Run date"
                   valueHeader="New postings"
                 />

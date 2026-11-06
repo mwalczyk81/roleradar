@@ -333,8 +333,8 @@ test.describe("polish: Insights and the wide-table note", () => {
     const chart = trends.getByRole("group", { name: "New postings per search run" });
     await expect(chart).toBeVisible();
     const figure = trends.locator("figure", { hasText: "New postings per search run" });
-    console.log("run-chart-height", (await figure.boundingBox())?.height);
-    expect((await figure.boundingBox())?.height ?? Infinity, "the run chart is small (about 120 high plus labels)").toBeLessThan(260);
+    expect((await chart.boundingBox())?.height ?? Infinity, "the run chart plot is the small one (120 high, kit default 180)").toBeLessThan(150);
+    expect((await figure.boundingBox())?.height ?? Infinity, "the framed chart with its title and summary stays compact").toBeLessThan(320);
     await figure.getByRole("button", { name: /^table view$/i }).click();
     const table = figure.getByRole("table");
     await expect(table.getByRole("row")).toHaveCount(runs.length + 1);

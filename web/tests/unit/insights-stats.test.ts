@@ -101,13 +101,13 @@ describe("buildStatsView", () => {
     expect(view.median.value).toBe("0 days");
   });
 
-  it("turns weekly buckets into chart items with UTC date labels and keeps the zero weeks", () => {
+  it("turns weekly buckets into chart items with short UTC axis labels, the ISO date kept in the full label, and keeps the zero weeks", () => {
     const view = buildStatsView(dto());
 
     expect(view.weekly.items).toEqual([
-      { label: "2026-09-14", fullLabel: "Week of 2026-09-14", value: 2 },
-      { label: "2026-09-21", fullLabel: "Week of 2026-09-21", value: 0 },
-      { label: "2026-09-28", fullLabel: "Week of 2026-09-28", value: 1 },
+      { label: "Sep 14", fullLabel: "Week of 2026-09-14", value: 2 },
+      { label: "Sep 21", fullLabel: "Week of 2026-09-21", value: 0 },
+      { label: "Sep 28", fullLabel: "Week of 2026-09-28", value: 1 },
     ]);
     expect(view.weekly.total).toBe(3);
     expect(view.weekly.empty).toBe(false);
