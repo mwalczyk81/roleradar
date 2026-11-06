@@ -184,3 +184,6 @@ job-search-export*
 packages/
 .DS_Store
 Thumbs.db
+
+# Kit CSS and fonts copied into the Identity host at build (ADR 0034)
+src/RoleRadar.Identity/wwwroot/ds/

@@ -4,6 +4,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using RoleRadar.Identity.Configuration;
 using RoleRadar.Identity.Data;
+using RoleRadar.Identity.Services;
 
 namespace RoleRadar.Identity;
 
@@ -83,6 +84,8 @@ public partial class Program
         var issuerUri = builder.Configuration["Identity:IssuerUri"]
             ?? Environment.GetEnvironmentVariable("ROLERADAR_IDENTITY_ISSUER_URI");
 
+        var clients = IdentityServerConfig.GetClients(builder.Configuration).ToList();
+
         builder.Services.AddIdentityServer(options =>
         {
             if (!string.IsNullOrWhiteSpace(issuerUri))
@@ -108,7 +111,7 @@ public partial class Program
         .AddInMemoryIdentityResources(IdentityServerConfig.GetIdentityResources())
         .AddInMemoryApiScopes(IdentityServerConfig.GetApiScopes())
         .AddInMemoryApiResources(IdentityServerConfig.GetApiResources())
-        .AddInMemoryClients(IdentityServerConfig.GetClients(builder.Configuration));
+        .AddInMemoryClients(clients);
 
         IdentityServerConfig.ConfigureRateLimiting(builder.Services);
 
@@ -119,6 +122,10 @@ public partial class Program
             var dbContext = scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>();
             dbContext.Database.Migrate();
         }
+
+        // 009 US4: the kit and Identity assets, then the /Account headers (form-action comes from the registered clients).
+        app.UseStaticFiles();
+        app.UseAccountSecurityHeaders(clients);
 
         app.UseRateLimiter();
         app.UseRouting();

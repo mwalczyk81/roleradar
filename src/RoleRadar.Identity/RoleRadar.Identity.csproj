@@ -3,6 +3,12 @@
     <NoWarn>$(NoWarn);CA1861;IDE0161</NoWarn>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <!-- 009 US4 (ADR 0034): the sign-in pages use the kit CSS and fonts from the web app. They are copied at build, not committed. -->
+    <KitDesignSystemDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)../../web/app/ds'))/</KitDesignSystemDir>
+    <KitAssetsOutputDir>$(MSBuildThisFileDirectory)wwwroot/ds/</KitAssetsOutputDir>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Duende.IdentityServer" />
     <PackageReference Include="Duende.IdentityServer.AspNetIdentity" />
@@ -14,4 +20,16 @@
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
+
+  <!-- Runs before build and publish. Fails with a clear message when the vendored design system is missing. -->
+  <Target Name="CopyKitAssets" BeforeTargets="BeforeBuild;BeforePublish;ResolveStaticWebAssetsInputs">
+    <Error Condition="!Exists('$(KitDesignSystemDir)tokens.css')"
+           Text="RoleRadar.Identity needs the vendored design system, but '$(KitDesignSystemDir)tokens.css' is missing. Build from a full checkout; deploy/Dockerfile.identity copies web/app/ds before restore." />
+    <ItemGroup>
+      <KitFont Include="$(KitDesignSystemDir)fonts/*.woff2" />
+    </ItemGroup>
+    <Copy SourceFiles="$(KitDesignSystemDir)tokens.css" DestinationFolder="$(KitAssetsOutputDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(KitDesignSystemDir)components/bundle.css" DestinationFolder="$(KitAssetsOutputDir)components/" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(KitFont)" DestinationFolder="$(KitAssetsOutputDir)fonts/" SkipUnchangedFiles="true" />
+  </Target>
 </Project>

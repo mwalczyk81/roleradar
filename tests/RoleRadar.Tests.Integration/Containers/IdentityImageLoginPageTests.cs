@@ -20,6 +20,18 @@ public sealed class IdentityImageLoginPageTests
     private const string ImageTag = "roleradar-identity:login-page-test";
     private const string RazorTypeMarker = "Pages_Account_Login";
 
+    private const string ExpectedAccountCsp =
+        "default-src 'none'; style-src 'self'; font-src 'self'; script-src 'self'; img-src 'self' data:; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self' https://localhost:5003";
+
+    private static readonly (string Path, string ContentType)[] ThemedAssets =
+    [
+        ("/ds/tokens.css", "text/css"),
+        ("/ds/components/bundle.css", "text/css"),
+        ("/ds/fonts/ibm-plex-sans-latin-wght-normal.woff2", "font/woff2"),
+        ("/css/identity.css", "text/css"),
+        ("/js/theme.js", "text/javascript"),
+    ];
+
     [Fact]
     [Trait("Category", "Slow")]
     public async Task IdentityImage_ContainsCompiledLoginPage_AndServesLoginFormOverHttp()
@@ -124,6 +136,25 @@ public sealed class IdentityImageLoginPageTests
             Assert.Contains("name=\"Input.Username\"", body, StringComparison.Ordinal);
             Assert.Contains("name=\"Input.Password\"", body, StringComparison.Ordinal);
             Assert.Contains("__RequestVerificationToken", body, StringComparison.Ordinal);
+
+            // 5. 009 US4: the page is themed. Without these files the page builds, reports healthy and renders unstyled
+            //    (the same silent failure *.cshtml once had), so every one must answer 200 with the right content type.
+            foreach (var (path, contentType) in ThemedAssets)
+            {
+                var asset = await http.GetAsync(path);
+                Assert.True(
+                    asset.StatusCode == HttpStatusCode.OK,
+                    $"GET {path} returned {(int)asset.StatusCode} ({asset.StatusCode}); the image serves an unstyled sign-in page. " +
+                    "Check that .dockerignore allows src/RoleRadar.Identity/wwwroot/** and that the kit copy ran in the build.");
+                Assert.StartsWith(contentType, asset.Content.Headers.ContentType?.MediaType ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+                Assert.True((await asset.Content.ReadAsByteArrayAsync()).Length > 0, $"{path} is empty.");
+            }
+
+            Assert.DoesNotContain("<style", body, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotMatch(new System.Text.RegularExpressions.Regex(@"\sstyle\s*=", System.Text.RegularExpressions.RegexOptions.IgnoreCase), body);
+
+            // The default registered web client redirects to https://localhost:5003, so that is the one form-action origin.
+            Assert.Equal(ExpectedAccountCsp, response.Headers.GetValues("Content-Security-Policy").Single());
         }
         finally
         {
