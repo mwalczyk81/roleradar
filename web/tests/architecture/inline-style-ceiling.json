@@ -1,0 +1,11 @@
+{
+  "total": 151,
+  "files": {
+    "app/components/CreateApplicationDialog.tsx": 24,
+    "app/components/TransitionPostingDialog.tsx": 17,
+    "app/routes/applications.$id.tsx": 32,
+    "app/routes/companies.$id.tsx": 40,
+    "app/routes/postings.$id.tsx": 37,
+    "app/routes/postings._index.tsx": 1
+  }
+}

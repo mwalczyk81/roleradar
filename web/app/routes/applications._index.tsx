@@ -197,11 +197,7 @@ export default function ApplicationsIndex() {
         return (
           <Link
             to={row.companyId ? `/companies/${row.companyId}` : "/companies"}
-            style={{
-              fontWeight: "var(--ds-weight-medium)",
-              color: "var(--ds-primary)",
-              textDecoration: "none",
-            }}
+            className="entity-link"
           >
             {companyName}
           </Link>
@@ -218,11 +214,7 @@ export default function ApplicationsIndex() {
         return (
           <Link
             to={`/applications/${row.id}`}
-            style={{
-              fontWeight: "var(--ds-weight-medium)",
-              color: "var(--ds-text-primary)",
-              textDecoration: "none",
-            }}
+            className="entity-title-link"
           >
             {postingTitle}
           </Link>
@@ -288,12 +280,7 @@ export default function ApplicationsIndex() {
       render: (row) => (
         <Link
           to={`/applications/${row.id}`}
-          style={{
-            fontSize: "var(--ds-text-sm)",
-            color: "var(--ds-primary)",
-            textDecoration: "none",
-            whiteSpace: "nowrap",
-          }}
+          className="row-action-link"
         >
           View Timeline →
         </Link>
@@ -312,7 +299,7 @@ export default function ApplicationsIndex() {
       theme={theme}
       onThemeToggle={toggleTheme}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+      <div className="page-stack">
         {data.lens ? (
           <div className="lens-chip" role="group" aria-label="Insights filter">
             <span className="lens-chip-text">Insights: {data.lens.label}</span>
@@ -336,22 +323,16 @@ export default function ApplicationsIndex() {
 
         {/* Status Filter Bar */}
         <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            flexWrap: "wrap",
-            gap: "var(--ds-space-4)",
-          }}
+          className="filter-bar"
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "var(--ds-space-2)" }}>
+          <div className="filter-group">
             <label
               htmlFor="status-filter-select"
-              style={{ fontSize: "var(--ds-text-sm)", color: "var(--ds-text-secondary)" }}
+              className="field-caption"
             >
               Filter by Status:
             </label>
-            <div style={{ width: "12rem" }}>
+            <div className="filter-select-width">
               <Select
                 id="status-filter-select"
                 value={data.statusFilter}
@@ -376,7 +357,7 @@ export default function ApplicationsIndex() {
               </Select>
             </div>
           </div>
-          <div style={{ fontSize: "var(--ds-text-sm)", color: "var(--ds-text-secondary)" }}>
+          <div className="field-caption">
             Total Tracked: <strong>{data.totalCount}</strong>
           </div>
         </div>

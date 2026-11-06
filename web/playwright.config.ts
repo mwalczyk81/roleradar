@@ -9,8 +9,13 @@ export function getRealStackHostResolverRules(identityPort?: string, apiPort?: s
   return `MAP identity:5001 127.0.0.1:${resolvedIdentityPort}, MAP identity 127.0.0.1:${resolvedIdentityPort}, MAP api:5002 127.0.0.1:${resolvedApiPort}, MAP api 127.0.0.1:${resolvedApiPort}`;
 }
 
+// 009: when ROLERADAR_VISUAL_DIR is set (the visual baseline spec), screenshots are read from and written to that
+// folder, which must be outside the repository. Unset, Playwright keeps its default snapshot location.
+const visualDir = process.env.ROLERADAR_VISUAL_DIR?.split("\\").join("/");
+
 export default defineConfig({
   testDir: "./tests/e2e",
+  ...(visualDir ? { snapshotPathTemplate: `${visualDir}/{platform}/{arg}{ext}` } : {}),
   fullyParallel: false,
   workers: 1,
   // GitHub runners occasionally drop the network interface mid-run (net::ERR_NETWORK_CHANGED on loopback goto).

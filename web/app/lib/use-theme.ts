@@ -1,54 +1,49 @@
 import * as React from "react";
+import {
+  applyTheme,
+  readAttributeTheme,
+  readCookieTheme,
+  readSystemTheme,
+  watchSystemTheme,
+  writeThemeCookie,
+  type Theme,
+} from "./theme.js";
 
-export function useTheme(initialTheme?: "light" | "dark") {
-  const [theme, setTheme] = React.useState<"light" | "dark">(() => {
-    if (typeof document !== "undefined") {
-      const attr = document.documentElement.getAttribute("data-theme") as "light" | "dark" | null;
-      if (attr === "light" || attr === "dark") return attr;
-      if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) return "dark";
-    }
-    return initialTheme ?? "light";
-  });
+/**
+ * What the first render shows. On the server there is no document, so it is the theme the loader read from the cookie
+ * (or light). In the browser it is the cookie, then the attribute the head script set, then a dark system, then the
+ * given theme, then light.
+ */
+function initialThemeFor(initialTheme: Theme | undefined): Theme {
+  if (typeof document === "undefined") return initialTheme ?? "light";
+  return readCookieTheme() ?? readAttributeTheme() ?? (readSystemTheme() === "dark" ? "dark" : undefined) ?? initialTheme ?? "light";
+}
+
+export function useTheme(initialTheme?: Theme) {
+  const [theme, setTheme] = React.useState<Theme>(() => initialThemeFor(initialTheme));
 
   React.useEffect(() => {
-    const getCookieTheme = () => {
-      const match = document.cookie.match(/roleradar_theme=(light|dark)/);
-      return match ? (match[1] as "light" | "dark") : null;
-    };
+    // Once the owner has chosen a theme (a cookie exists) the system setting no longer matters.
+    if (readCookieTheme()) return;
 
-    // If no cookie set, sync with current DOM or system and listen for live changes
-    const cookieTheme = getCookieTheme();
-    if (!cookieTheme && typeof window !== "undefined" && typeof window.matchMedia === "function") {
-      const mql = window.matchMedia("(prefers-color-scheme: dark)");
-      const current = mql.matches ? "dark" : "light";
-      setTheme(current);
-      document.documentElement.setAttribute("data-theme", current);
+    const system = readSystemTheme();
+    if (!system) return;
+    setTheme(system);
+    applyTheme(document, system);
 
-      const handleChange = (e: MediaQueryListEvent) => {
-        if (!getCookieTheme()) {
-          const next = e.matches ? "dark" : "light";
-          setTheme(next);
-          document.documentElement.setAttribute("data-theme", next);
-        }
-      };
-
-      mql.addEventListener("change", handleChange);
-      return () => mql.removeEventListener("change", handleChange);
-    }
+    return watchSystemTheme((next) => {
+      if (readCookieTheme()) return;
+      setTheme(next);
+      applyTheme(document, next);
+    });
   }, []);
 
   const toggleTheme = React.useCallback(() => {
-    setTheme((prevTheme) => {
-      const nextTheme = prevTheme === "dark" ? "light" : "dark";
-      if (typeof document !== "undefined") {
-        document.documentElement.setAttribute("data-theme", nextTheme);
-        const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
-        const secureAttr = isHttps ? "; Secure" : "";
-        document.cookie = `roleradar_theme=${nextTheme}; Path=/; SameSite=Lax; Max-Age=31536000${secureAttr}`;
-      }
-      return nextTheme;
-    });
-  }, []);
+    const next: Theme = theme === "dark" ? "light" : "dark";
+    applyTheme(document, next);
+    writeThemeCookie(next, window.location.protocol === "https:");
+    setTheme(next);
+  }, [theme]);
 
   return { theme, toggleTheme };
 }

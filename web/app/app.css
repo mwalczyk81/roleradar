@@ -471,3 +471,235 @@ body {
   color: var(--ds-text-secondary);
   font-size: var(--ds-text-xs);
 }
+
+/* ------------------------------------------------------------------------------------------------------------------
+   Shared layout and text classes (009 phase 3). These replace inline style props, grouped by meaning, so routes
+   share them. Tokens only. Each declaration below is the one the inline style used to carry.
+   ------------------------------------------------------------------------------------------------------------------ */
+
+/* The error boundary renders outside the shell, so it styles the body directly. */
+.app-error-body {
+  padding: 2rem;
+  font-family: sans-serif;
+}
+
+/* Full-height centred status pages: not authorized, service unavailable, sign in again. */
+.status-page {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-page-empty {
+  background-color: var(--ds-surface);
+  padding: var(--ds-space-6);
+}
+
+.status-page-notice {
+  padding: var(--ds-space-4);
+  background: var(--ds-bg);
+  color: var(--ds-text);
+}
+
+.notice-card {
+  max-width: 28rem;
+  width: 100%;
+  background: var(--ds-surface);
+  border: var(--ds-border-thin) solid var(--ds-border);
+  border-radius: var(--ds-radius-lg);
+  padding: var(--ds-space-6);
+  text-align: center;
+  box-shadow: var(--ds-shadow-md);
+}
+
+.notice-title {
+  font-size: var(--ds-text-xl);
+  font-weight: var(--ds-weight-bold);
+  margin-bottom: var(--ds-space-3);
+}
+
+.notice-text {
+  color: var(--ds-text-muted);
+  margin-bottom: var(--ds-space-6);
+  font-size: var(--ds-text-sm);
+}
+
+.link-button-primary {
+  display: inline-block;
+  padding: var(--ds-space-2) var(--ds-space-4);
+  background: var(--ds-primary-solid);
+  color: var(--ds-text-on-accent);
+  border-radius: var(--ds-radius-md);
+  text-decoration: none;
+  font-weight: var(--ds-weight-semibold);
+  font-size: var(--ds-text-sm);
+}
+
+.button-neutral {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--ds-space-2) var(--ds-space-4);
+  border-radius: var(--ds-radius-md);
+  background-color: var(--ds-surface-hover);
+  color: var(--ds-text);
+  border: thin solid var(--ds-border);
+  cursor: pointer;
+  font-weight: var(--ds-weight-medium);
+  font-size: var(--ds-text-sm);
+}
+
+.stack-centered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ds-space-3);
+}
+
+.command-snippet {
+  display: inline-block;
+  padding: var(--ds-space-2) var(--ds-space-4);
+  background-color: var(--ds-surface-hover);
+  color: var(--ds-text);
+  border-radius: var(--ds-radius-md);
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-text-sm);
+  border: thin solid var(--ds-border);
+}
+
+.signed-out-page {
+  padding: 2rem;
+  text-align: center;
+}
+
+.signed-out-link {
+  margin-top: 1rem;
+}
+
+/* Page content: a vertical stack of sections inside the shell. */
+.page-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-6);
+}
+
+/* Table cells. */
+.cell-nowrap {
+  white-space: nowrap;
+}
+
+.text-emphasis {
+  font-weight: var(--ds-weight-medium);
+  color: var(--ds-text);
+}
+
+.cell-prewrap {
+  white-space: pre-wrap;
+  display: inline-block;
+}
+
+.cell-rule-text {
+  color: var(--ds-text);
+  max-width: 25rem;
+}
+
+.cell-summary-text {
+  color: var(--ds-text-secondary);
+  max-width: 24rem;
+}
+
+/* Links. The entity link is the accent-coloured link to a record from a list or detail page. */
+.entity-link {
+  color: var(--ds-primary);
+  text-decoration: none;
+  font-weight: var(--ds-weight-medium);
+}
+
+/* This link named a colour token that does not exist (--ds-text-primary), so it has always inherited its colour from
+   the cell. The declaration is kept as it was; phase 4 decides the real colour. */
+.entity-title-link {
+  font-weight: var(--ds-weight-medium);
+  color: var(--ds-text-primary);
+  text-decoration: none;
+}
+
+.row-action-link {
+  font-size: var(--ds-text-sm);
+  color: var(--ds-primary);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ds-space-1);
+  color: var(--ds-text-secondary);
+  text-decoration: none;
+  font-size: var(--ds-text-sm);
+}
+
+/* Search and filter bars on list pages. */
+.search-form {
+  display: flex;
+  gap: var(--ds-space-2);
+  max-width: 30rem;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ds-space-4);
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-2);
+}
+
+.field-caption {
+  font-size: var(--ds-text-sm);
+  color: var(--ds-text-secondary);
+}
+
+.filter-select-width {
+  width: 12rem;
+}
+
+/* Tags and detail cards. */
+.tag-row {
+  display: flex;
+  gap: var(--ds-space-1);
+  flex-wrap: wrap;
+}
+
+.tag-row-roomy {
+  gap: var(--ds-space-2);
+}
+
+.card-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-4);
+}
+
+/* Declared after .page-heading so its bold weight wins over the heading's 600. */
+.note-title {
+  margin: 0;
+  font-size: var(--ds-text-2xl);
+  color: var(--ds-text);
+  font-weight: var(--ds-weight-bold);
+}
+
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-3);
+  align-items: center;
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+}

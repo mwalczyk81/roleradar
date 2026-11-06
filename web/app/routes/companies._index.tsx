@@ -91,12 +91,7 @@ export default function CompaniesIndex() {
       render: (row) => (
         <Link
           to={`/companies/${row.id}`}
-          style={{
-            fontWeight: "var(--ds-weight-medium)",
-            color: "var(--ds-primary)",
-            textDecoration: "none",
-            whiteSpace: "nowrap",
-          }}
+          className="entity-link cell-nowrap"
         >
           {row.name}
         </Link>
@@ -133,7 +128,7 @@ export default function CompaniesIndex() {
       key: "categoryTags",
       header: "Categories",
       render: (row) => (
-        <div style={{ display: "flex", gap: "var(--ds-space-1)", flexWrap: "wrap" }}>
+        <div className="tag-row">
           {row.categoryTags && row.categoryTags.length > 0 ? (
             row.categoryTags.map((tag: string) => (
               <Badge key={tag} tone="neutral">
@@ -159,8 +154,8 @@ export default function CompaniesIndex() {
       theme={theme}
       onThemeToggle={toggleTheme}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
-        <Form method="get" style={{ display: "flex", gap: "var(--ds-space-2)", maxWidth: "30rem" }}>
+      <div className="page-stack">
+        <Form method="get" className="search-form">
           <Input
             name="q"
             defaultValue={data.q}

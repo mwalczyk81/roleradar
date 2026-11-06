@@ -335,11 +335,7 @@ export default function PostingsIndex() {
       render: (row) => (
         <Link
           to={`/postings/${row.id}`}
-          style={{
-            color: "var(--ds-primary)",
-            textDecoration: "none",
-            fontWeight: "var(--ds-weight-medium)",
-          }}
+          className="entity-link"
         >
           {row.title}
         </Link>
@@ -381,7 +377,7 @@ export default function PostingsIndex() {
       header: "Added",
       sortable: true,
       sortValue: () => 0,
-      render: (row) => <span style={{ whiteSpace: "nowrap" }}>{formatDate(row.createdAt)}</span>,
+      render: (row) => <span className="cell-nowrap">{formatDate(row.createdAt)}</span>,
     },
   ];
 
@@ -411,7 +407,7 @@ export default function PostingsIndex() {
       theme={theme}
       onThemeToggle={toggleTheme}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+      <div className="page-stack">
         <Toolbar
           searchPlaceholder="Search postings..."
           searchLabel="Search job postings"
@@ -440,7 +436,7 @@ export default function PostingsIndex() {
             setSearchParams(next);
           }}
         >
-          <div style={{ display: "flex", gap: "var(--ds-space-2)", alignItems: "center" }}>
+          <div className="filter-group">
             <Select
               aria-label="Filter by Disposition"
               value={currentDisposition}
@@ -509,6 +505,8 @@ export default function PostingsIndex() {
               aria-label="Filter by Minimum Score"
               placeholder="Min Score"
               value={minScoreInput}
+              /* Kit request K6: the kit Input sets an inline width of 100% that no className can override, so this one
+                 width stays an inline style (the ratchet allows exactly this one in this file). Fixed by K1 or a width prop. */
               style={{ width: "7rem" }}
               onChange={(e) => {
                 const raw = e.target.value;

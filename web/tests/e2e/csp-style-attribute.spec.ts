@@ -1,21 +1,10 @@
-import { test, expect, type Page, type BrowserContext } from "@playwright/test";
-import path from "node:path";
-import fs from "node:fs";
-import os from "node:os";
-import net from "node:net";
-import type https from "node:https";
-import http from "node:http";
-import selfsigned from "selfsigned";
+import { type Page, type BrowserContext } from "@playwright/test";
+import { test, expect } from "./support/csp-guard.js";
+import { startAppHarness, type AppHarness, type StubState } from "./support/app-harness.js";
 import axe from "axe-core";
-import { createWebServer } from "../../server.js";
 import { saveSession } from "../../app/lib/session.server.js";
-import * as client from "openid-client";
-import { setOidcConfigForTesting } from "../../app/lib/oidc.server.js";
 
-let server: https.Server | http.Server;
-let apiServer: http.Server;
 let baseUrl: string;
-let tempTlsDir: string;
 const E2E_SESSION_ID = "e2e-auth-session-id-playwright";
 
 let currentPostingDisposition = "lead";
@@ -63,488 +52,76 @@ let currentNoteDetail: Record<string, unknown> | null = null;
 let lastSearchRunsQueryReceived: Record<string, string> = {};
 let currentSearchRunsList: Array<Record<string, unknown>> = [];
 
+let harness: AppHarness;
+
+const stubState: StubState = {
+  get currentPostingDisposition() { return currentPostingDisposition; },
+  set currentPostingDisposition(v) { currentPostingDisposition = v; },
+  get currentPostingVersionToken() { return currentPostingVersionToken; },
+  set currentPostingVersionToken(v) { currentPostingVersionToken = v; },
+  get currentPostingTitle() { return currentPostingTitle; },
+  set currentPostingTitle(v) { currentPostingTitle = v; },
+  get nextTransitionResponseStatus() { return nextTransitionResponseStatus; },
+  set nextTransitionResponseStatus(v) { nextTransitionResponseStatus = v; },
+  get nextTransitionResponseBody() { return nextTransitionResponseBody; },
+  set nextTransitionResponseBody(v) { nextTransitionResponseBody = v; },
+  get currentCompanyName() { return currentCompanyName; },
+  set currentCompanyName(v) { currentCompanyName = v; },
+  get currentCompanyStatus() { return currentCompanyStatus; },
+  set currentCompanyStatus(v) { currentCompanyStatus = v; },
+  get currentCompanyOwnership() { return currentCompanyOwnership; },
+  set currentCompanyOwnership(v) { currentCompanyOwnership = v; },
+  get currentCompanyDescription() { return currentCompanyDescription; },
+  set currentCompanyDescription(v) { currentCompanyDescription = v; },
+  get currentCompanyHeadquarters() { return currentCompanyHeadquarters; },
+  set currentCompanyHeadquarters(v) { currentCompanyHeadquarters = v; },
+  get currentCompanyCategoryTags() { return currentCompanyCategoryTags; },
+  set currentCompanyCategoryTags(v) { currentCompanyCategoryTags = v; },
+  get currentCompanyCareerSources() { return currentCompanyCareerSources; },
+  set currentCompanyCareerSources(v) { currentCompanyCareerSources = v; },
+  get currentCompanyVersionToken() { return currentCompanyVersionToken; },
+  set currentCompanyVersionToken(v) { currentCompanyVersionToken = v; },
+  get nextCompanyResponseStatus() { return nextCompanyResponseStatus; },
+  set nextCompanyResponseStatus(v) { nextCompanyResponseStatus = v; },
+  get nextCompanyResponseBody() { return nextCompanyResponseBody; },
+  set nextCompanyResponseBody(v) { nextCompanyResponseBody = v; },
+  get lastCompaniesQueryReceived() { return lastCompaniesQueryReceived; },
+  set lastCompaniesQueryReceived(v) { lastCompaniesQueryReceived = v; },
+  get currentApplicationStatus() { return currentApplicationStatus; },
+  set currentApplicationStatus(v) { currentApplicationStatus = v; },
+  get currentApplicationEvents() { return currentApplicationEvents; },
+  set currentApplicationEvents(v) { currentApplicationEvents = v; },
+  get nextApplicationResponseStatus() { return nextApplicationResponseStatus; },
+  set nextApplicationResponseStatus(v) { nextApplicationResponseStatus = v; },
+  get nextApplicationResponseBody() { return nextApplicationResponseBody; },
+  set nextApplicationResponseBody(v) { nextApplicationResponseBody = v; },
+  get lastApplicationsQueryReceived() { return lastApplicationsQueryReceived; },
+  set lastApplicationsQueryReceived(v) { lastApplicationsQueryReceived = v; },
+  get lastCriteriaQueryReceived() { return lastCriteriaQueryReceived; },
+  set lastCriteriaQueryReceived(v) { lastCriteriaQueryReceived = v; },
+  get currentCriteriaList() { return currentCriteriaList; },
+  set currentCriteriaList(v) { currentCriteriaList = v; },
+  get lastNotesQueryReceived() { return lastNotesQueryReceived; },
+  set lastNotesQueryReceived(v) { lastNotesQueryReceived = v; },
+  get currentNotesList() { return currentNotesList; },
+  set currentNotesList(v) { currentNotesList = v; },
+  get currentNoteDetail() { return currentNoteDetail; },
+  set currentNoteDetail(v) { currentNoteDetail = v; },
+  get lastSearchRunsQueryReceived() { return lastSearchRunsQueryReceived; },
+  set lastSearchRunsQueryReceived(v) { lastSearchRunsQueryReceived = v; },
+  get currentSearchRunsList() { return currentSearchRunsList; },
+  set currentSearchRunsList(v) { currentSearchRunsList = v; },
+};
+
 test.beforeAll(async () => {
-  const serverBuild = path.resolve(process.cwd(), "build", "server", "index.js");
-  if (!fs.existsSync(serverBuild)) {
-    throw new Error(`Missing ${serverBuild}. Run "pnpm --filter web run build" before the e2e suite.`);
-  }
-  const mockOidcConfig = new client.Configuration(
-    {
-      issuer: "https://identity:5001",
-      authorization_endpoint: "https://identity:5001/connect/authorize",
-      token_endpoint: "https://identity:5001/connect/token",
-      end_session_endpoint: "https://identity:5001/connect/endsession",
-    },
-    "roleradar-web",
-    "playwright-test-client-secret"
-  );
-  setOidcConfigForTesting(mockOidcConfig);
-  // Generate throwaway self-signed certificate and key in temporary directory (zero dependency on gitignored files)
-  tempTlsDir = fs.mkdtempSync(path.join(os.tmpdir(), "roleradar-e2e-tls-"));
-  const certPath = path.join(tempTlsDir, "throwaway-cert.crt");
-  const keyPath = path.join(tempTlsDir, "throwaway-key.key");
-
-  const pems = await selfsigned.generate(
-    [{ name: "commonName", value: "127.0.0.1" }],
-    { notAfterDate: new Date(Date.now() + 86400_000) }
-  );
-  fs.writeFileSync(certPath, pems.cert, "utf8");
-  fs.writeFileSync(keyPath, pems.private, "utf8");
-
-  process.env.SESSION_ENCRYPTION_KEY = Buffer.alloc(32, 9).toString("base64");
-  process.env.ROLERADAR_WEB_CLIENT_SECRET = "playwright-test-client-secret";
-  process.env.HTTPS_CERT_PATH = certPath;
-  process.env.HTTPS_CERT_KEY_PATH = keyPath;
-  process.env.COOKIE_SECURE = "true";
-
-  // Stub RoleRadar API at the network layer on a free loopback port (no real tokens)
-  apiServer = http.createServer((req, res) => {
-    const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
-    res.setHeader("Content-Type", "application/json");
-
-    if (url.pathname === "/odata/Postings") {
-      res.writeHead(200);
-      res.end(
-        JSON.stringify({
-          items: [
-            {
-              id: "post-e2e-1",
-              companyId: "comp-1",
-              companyName: "Acme Corp",
-              title: currentPostingTitle,
-              requisitionId: "REQ-101",
-              location: "Remote",
-              disposition: currentPostingDisposition,
-              resurfacePolicy: "never",
-              score: 92.5,
-              versionToken: currentPostingVersionToken,
-              createdAt: "2026-10-31T10:00:00Z",
-              updatedAt: "2026-10-31T11:00:00Z",
-            },
-          ],
-          value: [
-            {
-              id: "post-e2e-1",
-              companyId: "comp-1",
-              companyName: "Acme Corp",
-              title: currentPostingTitle,
-              requisitionId: "REQ-101",
-              location: "Remote",
-              disposition: currentPostingDisposition,
-              resurfacePolicy: "never",
-              score: 92.5,
-              createdAt: "2026-10-31T10:00:00Z",
-              updatedAt: "2026-10-31T11:00:00Z",
-            },
-          ],
-          "@odata.count": 1,
-          totalCount: 1,
-          limit: 25,
-          offset: 0,
-        })
-      );
-      return;
-    }
-
-    if (url.pathname === "/api/v1/postings/post-e2e-1") {
-      res.writeHead(200);
-      res.end(
-        JSON.stringify({
-          id: "post-e2e-1",
-          companyId: "comp-1",
-          companyName: "Acme Corp",
-          title: currentPostingTitle,
-          requisitionId: "REQ-101",
-          location: "Remote",
-          disposition: currentPostingDisposition,
-          resurfacePolicy: "never",
-          score: 92.5,
-          versionToken: currentPostingVersionToken,
-          createdAt: "2026-10-31T10:00:00Z",
-          updatedAt: "2026-10-31T11:00:00Z",
-          url: "https://example.com/jobs/101",
-          compensation: {
-            currency: "USD",
-            rawText: "$180,000 - $220,000",
-            hasSalary: true,
-          },
-          signals: [
-            {
-              signalType: "positive",
-              evidence: "100% remote flexibility",
-              detectedAt: "2026-10-31T10:00:00Z",
-            },
-          ],
-          assessmentNote: null,
-        })
-      );
-      return;
-    }
-
-    if (url.pathname === "/api/v1/postings/post-e2e-1/transition" && req.method === "POST") {
-      let bodyStr = "";
-      req.on("data", (chunk) => {
-        bodyStr += chunk;
-      });
-      req.on("end", () => {
-        if (nextTransitionResponseStatus !== null) {
-          const status = nextTransitionResponseStatus;
-          const body = nextTransitionResponseBody;
-          nextTransitionResponseStatus = null;
-          nextTransitionResponseBody = null;
-          res.writeHead(status);
-          res.end(JSON.stringify(body));
-          return;
-        }
-
-        const payload = JSON.parse(bodyStr || "{}");
-        currentPostingDisposition = payload.toDisposition || "scored";
-        currentPostingVersionToken = "ver-2";
-
-        res.writeHead(200);
-        res.end(
-          JSON.stringify({
-            id: "post-e2e-1",
-            companyId: "comp-1",
-            companyName: "Acme Corp",
-            title: currentPostingTitle,
-            requisitionId: "REQ-101",
-            location: "Remote",
-            disposition: currentPostingDisposition,
-            resurfacePolicy: payload.resurfacePolicy || "never",
-            score: 92.5,
-            versionToken: currentPostingVersionToken,
-            createdAt: "2026-10-31T10:00:00Z",
-            updatedAt: "2026-10-31T12:00:00Z",
-            url: "https://example.com/jobs/101",
-            compensation: {
-              currency: "USD",
-              rawText: "$180,000 - $220,000",
-              hasSalary: true,
-            },
-            signals: [
-              {
-                signalType: "positive",
-                evidence: "100% remote flexibility",
-                detectedAt: "2026-10-31T10:00:00Z",
-              },
-            ],
-            assessmentNote: null,
-          })
-        );
-      });
-      return;
-    }
-
-    // Companies, notes, criteria and search runs list pages read from OData (Phase 5).
-    if (url.pathname === "/odata/Companies" && req.method === "GET") {
-      lastCompaniesQueryReceived = Object.fromEntries(url.searchParams.entries());
-      res.writeHead(200);
-      res.end(
-        JSON.stringify({
-          "@odata.count": 1,
-          value: [
-            {
-              id: "comp-e2e-1",
-              name: currentCompanyName,
-              status: currentCompanyStatus,
-              ownershipType: currentCompanyOwnership,
-              description: currentCompanyDescription,
-              headquarters: currentCompanyHeadquarters,
-              categoryTags: currentCompanyCategoryTags,
-            },
-          ],
-        })
-      );
-      return;
-    }
-
-    if (url.pathname === "/odata/Criteria" && req.method === "GET") {
-      lastCriteriaQueryReceived = Object.fromEntries(url.searchParams.entries());
-      const rows = currentCriteriaList ?? [
-        {
-          id: "crit-1",
-          name: "Remote Policy",
-          category: "weight",
-          ruleText: "Must allow remote work",
-          effectiveFrom: "2026-01-01T00:00:00Z",
-          effectiveTo: null,
-          isActive: true,
-        },
-      ];
-      res.writeHead(200);
-      res.end(JSON.stringify({ "@odata.count": rows.length, value: rows }));
-      return;
-    }
-
-    if (url.pathname === "/odata/Notes" && req.method === "GET") {
-      lastNotesQueryReceived = Object.fromEntries(url.searchParams.entries());
-      res.writeHead(200);
-      res.end(JSON.stringify({ "@odata.count": currentNotesList.length, value: currentNotesList }));
-      return;
-    }
-
-    if (url.pathname === "/odata/SearchRuns" && req.method === "GET") {
-      lastSearchRunsQueryReceived = Object.fromEntries(url.searchParams.entries());
-      res.writeHead(200);
-      res.end(JSON.stringify({ "@odata.count": currentSearchRunsList.length, value: currentSearchRunsList }));
-      return;
-    }
-
-    if (url.pathname === "/api/v1/companies/comp-e2e-1" && req.method === "GET") {
-      res.writeHead(200);
-      res.end(
-        JSON.stringify({
-          id: "comp-e2e-1",
-          name: currentCompanyName,
-          status: currentCompanyStatus,
-          ownershipType: currentCompanyOwnership,
-          description: currentCompanyDescription,
-          headquarters: currentCompanyHeadquarters,
-          categoryTags: currentCompanyCategoryTags,
-          careerSources: currentCompanyCareerSources,
-          versionToken: currentCompanyVersionToken,
-        })
-      );
-      return;
-    }
-
-    if (url.pathname === "/api/v1/companies/comp-e2e-1" && req.method === "PATCH") {
-      let bodyStr = "";
-      req.on("data", (chunk) => {
-        bodyStr += chunk;
-      });
-      req.on("end", () => {
-        if (nextCompanyResponseStatus !== null) {
-          const status = nextCompanyResponseStatus;
-          const body = nextCompanyResponseBody;
-          nextCompanyResponseStatus = null;
-          nextCompanyResponseBody = null;
-          res.writeHead(status);
-          res.end(JSON.stringify(body));
-          return;
-        }
-
-        const payload = JSON.parse(bodyStr || "{}");
-        if (payload.name) currentCompanyName = payload.name;
-        if (payload.status) currentCompanyStatus = payload.status;
-        if (payload.ownershipType) currentCompanyOwnership = payload.ownershipType;
-        if (payload.description !== undefined) currentCompanyDescription = payload.description;
-        if (payload.headquarters !== undefined) currentCompanyHeadquarters = payload.headquarters;
-        if (payload.categoryTags) currentCompanyCategoryTags = payload.categoryTags;
-        if (payload.careerSources) currentCompanyCareerSources = payload.careerSources;
-        currentCompanyVersionToken = "comp-ver-2";
-
-        res.writeHead(200);
-        res.end(
-          JSON.stringify({
-            id: "comp-e2e-1",
-            name: currentCompanyName,
-            status: currentCompanyStatus,
-            ownershipType: currentCompanyOwnership,
-            description: currentCompanyDescription,
-            headquarters: currentCompanyHeadquarters,
-            categoryTags: currentCompanyCategoryTags,
-            careerSources: currentCompanyCareerSources,
-            versionToken: currentCompanyVersionToken,
-          })
-        );
-      });
-      return;
-    }
-
-    // The applications list reads from OData (Phase 4); the REST list endpoint is no longer used by the web.
-    if (url.pathname === "/odata/Applications" && req.method === "GET") {
-      lastApplicationsQueryReceived = Object.fromEntries(url.searchParams.entries());
-      res.writeHead(200);
-      res.end(
-        JSON.stringify({
-          "@odata.count": 1,
-          value: [
-            {
-              id: "app-e2e-1",
-              postingId: "post-e2e-1",
-              companyId: "comp-e2e-1",
-              postingTitle: "Principal Engineer",
-              companyName: "Acme Cloud Services",
-              status: currentApplicationStatus,
-              appliedAt: "2026-10-31T00:00:00Z",
-              hasInterview: false,
-              firstResponseAt: null,
-              lastEventAt: "2026-10-31T00:00:00Z",
-              ageInDays: 2,
-            },
-          ],
-        })
-      );
-      return;
-    }
-
-    if (url.pathname === "/api/v1/applications/app-e2e-1" && req.method === "GET") {
-      res.writeHead(200);
-      res.end(
-        JSON.stringify({
-          id: "app-e2e-1",
-          postingId: "post-e2e-1",
-          companyId: "comp-e2e-1",
-          status: currentApplicationStatus,
-          appliedAt: "2026-10-31",
-          events: currentApplicationEvents,
-        })
-      );
-      return;
-    }
-
-    if (url.pathname === "/api/v1/applications" && req.method === "POST") {
-      let bodyStr = "";
-      req.on("data", (chunk) => {
-        bodyStr += chunk;
-      });
-      req.on("end", () => {
-        if (nextApplicationResponseStatus !== null) {
-          const status = nextApplicationResponseStatus;
-          const body = nextApplicationResponseBody;
-          nextApplicationResponseStatus = null;
-          nextApplicationResponseBody = null;
-          res.writeHead(status);
-          res.end(JSON.stringify(body));
-          return;
-        }
-
-        const payload = JSON.parse(bodyStr || "{}");
-        currentPostingDisposition = "applied";
-        currentApplicationStatus = "applied";
-        currentApplicationEvents = [
-          {
-            eventType: "applied",
-            eventDate: payload.submittedDate || "2026-10-31",
-            notes: "Application submitted",
-          },
-        ];
-
-        res.writeHead(201);
-        res.end(
-          JSON.stringify({
-            id: "app-e2e-1",
-            postingId: payload.postingId || "post-e2e-1",
-            companyId: "comp-e2e-1",
-            status: "applied",
-            appliedAt: payload.submittedDate || "2026-10-31",
-            events: currentApplicationEvents,
-          })
-        );
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/v1/applications/app-e2e-1/events" && req.method === "POST") {
-      let bodyStr = "";
-      req.on("data", (chunk) => {
-        bodyStr += chunk;
-      });
-      req.on("end", () => {
-        if (nextApplicationResponseStatus !== null) {
-          const status = nextApplicationResponseStatus;
-          const body = nextApplicationResponseBody;
-          nextApplicationResponseStatus = null;
-          nextApplicationResponseBody = null;
-          res.writeHead(status);
-          res.end(JSON.stringify(body));
-          return;
-        }
-
-        const payload = JSON.parse(bodyStr || "{}");
-        const eventType = payload.eventType || "follow_up";
-        currentApplicationEvents.push({
-          eventType,
-          eventDate: payload.eventDate || "2026-11-01",
-          notes: payload.notes || null,
-        });
-
-        if (eventType === "offer_accepted" || eventType === "offer_declined" || eventType === "withdrawn") {
-          currentApplicationStatus = "closed";
-          currentPostingDisposition = "closed";
-        } else if (eventType === "rejected") {
-          currentApplicationStatus = "rejected";
-          currentPostingDisposition = "rejected";
-        }
-
-        res.writeHead(200);
-        res.end(
-          JSON.stringify({
-            id: "app-e2e-1",
-            postingId: "post-e2e-1",
-            companyId: "comp-e2e-1",
-            status: currentApplicationStatus,
-            appliedAt: "2026-10-31",
-            events: currentApplicationEvents,
-          })
-        );
-      });
-      return;
-    }
-
-    if (url.pathname === "/api/v1/notes/note-e2e-1" && req.method === "GET") {
-      if (!currentNoteDetail) {
-        res.writeHead(404);
-        res.end(JSON.stringify({ ok: false, errorCode: "NOT_FOUND", message: "Note not found" }));
-        return;
-      }
-      res.writeHead(200);
-      res.end(JSON.stringify(currentNoteDetail));
-      return;
-    }
-
-    res.writeHead(404);
-    res.end(JSON.stringify({ ok: false, errorCode: "NOT_FOUND", message: "Not found" }));
-  });
-
-  await new Promise<void>((resolve) => {
-    apiServer.listen(0, "127.0.0.1", () => {
-      const addr = apiServer.address() as net.AddressInfo;
-      process.env.ROLERADAR_API_BASE_URL = `http://127.0.0.1:${addr.port}`;
-      resolve();
-    });
-  });
-
-  // Seed authenticated user session into shared in-memory session store
-  saveSession({
-    sessionId: E2E_SESSION_ID,
-    ownerSub: "playwright-test-user",
-    accessToken: "stubbed-access-token",
-    refreshToken: "stubbed-refresh-token",
-    expiresAt: Date.now() + 3600_000,
-    createdAt: Date.now(),
-    csrfToken: "playwright-csrf-token",
-  });
-
-  server = createWebServer();
-
-  await new Promise<void>((resolve) => {
-    server.listen(0, "127.0.0.1", () => {
-      const addr = server.address() as net.AddressInfo;
-      baseUrl = `https://127.0.0.1:${addr.port}`;
-      resolve();
-    });
-  });
+  harness = await startAppHarness(stubState, E2E_SESSION_ID);
+  baseUrl = harness.baseUrl;
 });
 
 test.afterAll(async () => {
-  setOidcConfigForTesting(null);
-  if (server) {
-    await new Promise<void>((resolve) => {
-      server.close(() => resolve());
-    });
-  }
-  if (apiServer) {
-    await new Promise<void>((resolve) => {
-      apiServer.close(() => resolve());
-    });
-  }
-  if (tempTlsDir && fs.existsSync(tempTlsDir)) {
-    fs.rmSync(tempTlsDir, { recursive: true, force: true });
-  }
+  await harness.stop();
 });
+
 
 async function setupSessionCookie(context: BrowserContext) {
   saveSession({

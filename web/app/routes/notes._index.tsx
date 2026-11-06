@@ -90,11 +90,7 @@ export default function NotesIndex() {
       render: (row) => (
         <Link
           to={`/notes/${row.id}`}
-          style={{
-            fontWeight: "var(--ds-weight-medium)",
-            color: "var(--ds-primary)",
-            textDecoration: "none",
-          }}
+          className="entity-link"
         >
           {row.heading}
         </Link>
@@ -104,7 +100,7 @@ export default function NotesIndex() {
       key: "tags",
       header: "Tags",
       render: (row) => (
-        <div style={{ display: "flex", gap: "var(--ds-space-1)", flexWrap: "wrap" }}>
+        <div className="tag-row">
           {row.tags && row.tags.length > 0 ? (
             row.tags.map((tag: string) => (
               <Badge key={tag} tone="neutral">
@@ -128,14 +124,14 @@ export default function NotesIndex() {
       header: "Created",
       sortable: true,
       sortValue: () => 0,
-      render: (row) => <span style={{ whiteSpace: "nowrap" }}>{formatDate(row.createdAt)}</span>,
+      render: (row) => <span className="cell-nowrap">{formatDate(row.createdAt)}</span>,
     },
     {
       key: "updatedAt",
       header: "Updated",
       sortable: true,
       sortValue: () => 0,
-      render: (row) => <span style={{ whiteSpace: "nowrap" }}>{formatDate(row.updatedAt)}</span>,
+      render: (row) => <span className="cell-nowrap">{formatDate(row.updatedAt)}</span>,
     },
   ];
 
@@ -150,9 +146,9 @@ export default function NotesIndex() {
       theme={theme}
       onThemeToggle={toggleTheme}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+      <div className="page-stack">
         {/* Search Bar */}
-        <Form method="get" style={{ display: "flex", gap: "var(--ds-space-2)", maxWidth: "30rem" }}>
+        <Form method="get" className="search-form">
           <Input
             name="q"
             defaultValue={data.q}

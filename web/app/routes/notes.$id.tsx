@@ -70,19 +70,12 @@ export default function NoteDetail() {
       theme={theme}
       onThemeToggle={toggleTheme}
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-6)" }}>
+      <div className="page-stack">
         {/* Back Link */}
         <div>
           <Link
             to="/notes"
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "var(--ds-space-1)",
-              color: "var(--ds-text-secondary)",
-              textDecoration: "none",
-              fontSize: "var(--ds-text-sm)",
-            }}
+            className="back-link"
           >
             <ArrowLeft size={16} />
             <span>Back to Notes</span>
@@ -90,29 +83,15 @@ export default function NoteDetail() {
         </div>
 
         {/* Note Card */}
-        <Card style={{ padding: "var(--ds-space-6)" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "var(--ds-space-4)" }}>
-            <h2 className="page-heading"
-              style={{
-                margin: 0,
-                fontSize: "var(--ds-text-2xl)",
-                color: "var(--ds-text)",
-                fontWeight: "var(--ds-weight-bold)",
-              }}
-            >
+        <Card>
+          <div className="card-stack">
+            <h2 className="page-heading note-title">
               {note.heading}
             </h2>
 
             {/* Metadata row */}
             <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "var(--ds-space-3)",
-                alignItems: "center",
-                color: "var(--ds-text-secondary)",
-                fontSize: "var(--ds-text-sm)",
-              }}
+              className="meta-row"
             >
               <span>Created {formatDate(note.createdAt)}</span>
               <span>• Updated {formatDate(note.updatedAt)}</span>
@@ -121,11 +100,7 @@ export default function NoteDetail() {
                   <span>•</span>
                   <Link
                     to={linkedRoute}
-                    style={{
-                      color: "var(--ds-primary)",
-                      textDecoration: "none",
-                      fontWeight: "var(--ds-weight-medium)",
-                    }}
+                    className="entity-link"
                   >
                     View Linked {note.linkedEntityType ? (note.linkedEntityType.toLowerCase() === "posting" ? "Job Opportunity" : note.linkedEntityType.charAt(0).toUpperCase() + note.linkedEntityType.slice(1)) : "Entity"} →
                   </Link>
@@ -140,7 +115,7 @@ export default function NoteDetail() {
 
             {/* Tags */}
             {note.tags && note.tags.length > 0 ? (
-              <div style={{ display: "flex", gap: "var(--ds-space-2)", flexWrap: "wrap" }}>
+              <div className="tag-row tag-row-roomy">
                 {note.tags.map((tag: string) => (
                   <Badge key={tag} tone="neutral">
                     {tag}
