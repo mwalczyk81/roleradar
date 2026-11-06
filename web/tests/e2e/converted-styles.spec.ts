@@ -1,7 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 import { test, expect } from "./support/csp-guard.js";
 import { startAppHarness, defaultStubState, type AppHarness } from "./support/app-harness.js";
-import { expectColourInheritedFromParent, expectDeclarations, expectNoStyleAttribute } from "./support/computed-style.js";
+import { expectDeclarations, expectNoStyleAttribute } from "./support/computed-style.js";
 
 /**
  * 009 phase 3: pins for the routes whose inline styles became classes. Each pin lists the declarations the element
@@ -196,10 +196,10 @@ test.describe("slice 3b: list routes", () => {
     await pin(page.locator(".filter-select-width"), { width: "12rem" });
     await pin(page.locator("div.field-caption"), { "font-size": "var(--ds-text-sm)", color: "var(--ds-text-secondary)" });
     await pin(page.locator("td a.entity-link").first(), ENTITY_LINK);
-    // The posting title link named an undefined token for its colour, so it has always inherited its colour.
-    const title = page.locator("td a.entity-title-link").first();
-    await pin(title, { "font-weight": "var(--ds-weight-medium)", "text-decoration": "none" });
-    await expectColourInheritedFromParent(title);
+    // 009 phase 4: the posting title link named an undefined token for its colour (so it inherited); it is now the shared
+    // role-title link with the defined text colour. Its hover and focus colours are pinned in polish.spec.ts.
+    const title = page.locator("td a.role-title-link").first();
+    await pin(title, { "font-weight": "var(--ds-weight-medium)", color: "var(--ds-text)", "text-decoration": "none" });
     await pin(page.locator("td a.row-action-link").first(), {
       "font-size": "var(--ds-text-sm)",
       color: "var(--ds-primary)",
@@ -211,7 +211,8 @@ test.describe("slice 3b: list routes", () => {
   test("/postings", async ({ page }) => {
     await open(page, "/postings");
     await pin(page.locator(".page-stack").first(), PAGE_STACK);
-    await pin(page.locator("td a.entity-link").first(), ENTITY_LINK);
+    // 009 phase 4: the role title is the shared role-title link (text colour at rest), no longer the accent entity link.
+    await pin(page.locator("td a.role-title-link").first(), { "font-weight": "var(--ds-weight-medium)", color: "var(--ds-text)", "text-decoration": "none" });
     await pin(page.locator("td .cell-nowrap").first(), CELL_NOWRAP);
     await pin(page.locator(".filter-group").first(), { display: "flex", gap: "var(--ds-space-2)", "align-items": "center" });
     // The Min Score input keeps its inline width: the kit Input sets an inline width of 100% that no class can override
@@ -718,9 +719,9 @@ test.describe("slice 3e: applications.$id", () => {
       margin: "var(--ds-space-1) 0 0 0",
       "font-size": "var(--ds-text-sm)",
       "white-space": "pre-wrap",
+      // 009 phase 4: the colour used to name an undefined token (--ds-text-primary) and inherited; it is the text token now.
+      color: "var(--ds-text)",
     });
-    // The notes colour named an undefined token (--ds-text-primary) and so inherits; the pin states that.
-    await expectColourInheritedFromParent(events.nth(2).locator("p.timeline-event-notes"));
   });
 
   test("/applications/:id with no events shows the empty caption", async ({ page }) => {

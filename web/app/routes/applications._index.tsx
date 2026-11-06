@@ -214,7 +214,7 @@ export default function ApplicationsIndex() {
         return (
           <Link
             to={`/applications/${row.id}`}
-            className="entity-title-link"
+            className="role-title-link"
           >
             {postingTitle}
           </Link>

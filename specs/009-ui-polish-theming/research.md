@@ -78,6 +78,8 @@ Facts were read from the code at `317f1fc` on branch `009-ui-polish-theming`. No
 - **Markdown tables** (`app.css` `.markdown-body`): prose is `max-width: 72ch`; the table scroll region sits inside that column, so it is clipped at 72ch. Fix: the card content is the full-width container; prose children get the 72ch cap, the `.markdown-table-scroll` does not. Check: scroll region width equals card content width and exceeds the prose width.
 - **Headings h4 to h6**: h4 is `--ds-text-lg`, h5 and h6 are `--ds-text-base`, all semibold display serif; h5 and h6 are identical and body text is Plex Sans base. Distinct = h4 stays larger, h5 uses sans semibold with letter-spacing, h6 small caps/uppercase small. Judgement J5; the check is that computed style differs from `<p>` at each level and h5 differs from h6.
 
+**Phase 4 measurement (T065, 2026-11-06).** The kit `Input` sets no `::placeholder` rule, so Chromium paints its default `#757575`: 4.61:1 on the light surface (passes) and 3.29:1 on the dark surface (fails AA). The cause is the kit, so K4 stands (the kit needs a placeholder token used by `Input`, `Select` and `Textarea`). An app-side fix exists that needs no inline style and no wrapper, because `Input` passes `className` to the `<input>`: `.placeholder-muted::placeholder { color: var(--ds-text-muted) }` on the Min Score input only, 4.80:1 light and 6.01:1 dark. It is a stopgap and is removed when K4 is vendored.
+
 ## R12. Existing tests that assert markup or style being changed
 
 | Test | Phase | Reason |

@@ -40,6 +40,8 @@ export interface InsightsHarness {
   unexpectedFilters: string[];
   setCoverageMode(mode: CoverageMode): void;
   setStatsMode(mode: StatsMode): void;
+  /** Phase 4: answers 0 for one lens (a key of insights-lenses.json) so a rate whose denominator it is shows "No data". null restores it. */
+  setZeroedLens(key: string | null): void;
   signIn(context: BrowserContext): Promise<void>;
   /** The count the stub answers for a filter on an entity set, for specs that compare numbers. */
   countFor(set: "Postings" | "Applications", filter: string): number | undefined;
@@ -199,6 +201,12 @@ export async function startInsightsHarness(sessionId: string): Promise<InsightsH
   const unexpectedFilters: string[] = [];
   let coverageMode: CoverageMode = "ok";
   let statsMode: StatsMode = "ok";
+  let zeroedLens: string | null = null;
+  const lensCountKeys = new Map<string, Set<string>>();
+  for (const [lensKey, entry] of Object.entries(snapshot.lenses)) {
+    const set = entry.entity === "postings" ? "Postings" : "Applications";
+    lensCountKeys.set(lensKey, new Set(Object.values(entry.filters).map((filter) => `${set}|${filter}`)));
+  }
 
   const apiPort = await freePort();
   const apiServer = http.createServer((req, res) => {
@@ -250,6 +258,9 @@ export async function startInsightsHarness(sessionId: string): Promise<InsightsH
     } else {
       const key = `${set}|${filter}`;
       total = counts.get(key);
+      if (total !== undefined && zeroedLens !== null && lensCountKeys.get(zeroedLens)?.has(key)) {
+        total = 0;
+      }
       if (total !== undefined && coverageMode === "needs-backfill" && coverageFilters.has(key) && total > 0) {
         total -= 1;
       }
@@ -340,6 +351,9 @@ export async function startInsightsHarness(sessionId: string): Promise<InsightsH
     },
     setStatsMode: (mode) => {
       statsMode = mode;
+    },
+    setZeroedLens: (key) => {
+      zeroedLens = key;
     },
     signIn: async (context) => {
       await context.addCookies([

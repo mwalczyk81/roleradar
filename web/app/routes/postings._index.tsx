@@ -335,7 +335,7 @@ export default function PostingsIndex() {
       render: (row) => (
         <Link
           to={`/postings/${row.id}`}
-          className="entity-link"
+          className="role-title-link"
         >
           {row.title}
         </Link>
@@ -504,6 +504,7 @@ export default function PostingsIndex() {
               type="number"
               aria-label="Filter by Minimum Score"
               placeholder="Min Score"
+              className="placeholder-muted"
               value={minScoreInput}
               /* Kit request K6: the kit Input sets an inline width of 100% that no className can override, so this one
                  width stays an inline style (the ratchet allows exactly this one in this file). Fixed by K1 or a width prop. */

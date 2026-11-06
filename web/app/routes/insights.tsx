@@ -1,4 +1,4 @@
-import { useState } from "react";
+import type { ReactNode } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { Brand } from "../components/Brand.js";
@@ -11,7 +11,7 @@ import { buildInsightsView, type CountItem, type FunnelView, type InsightsView, 
 import { getNavItems } from "../lib/nav.js";
 import { createLimiter } from "../lib/request-limiter.server.js";
 import { useTheme } from "../lib/use-theme.js";
-import { Alert, AppShell, BarChart, Button, ColumnChart, Sparkline, StatTile, type BarChartItem } from "../ui.js";
+import { Alert, AppShell, BarChart, Button, ColumnChart, StatTile, type BarChartItem } from "../ui.js";
 
 export const meta: MetaFunction = () => [{ title: "Insights - RoleRadar" }];
 
@@ -47,7 +47,8 @@ function stageText(item: { value: number | null; state: string }): string {
   return String(item.value);
 }
 
-function FunnelSection({ funnel }: { funnel: FunnelView }) {
+/** A funnel and its drill-down links; children are the help text and links that belong with this funnel. */
+function FunnelSection({ funnel, children }: { funnel: FunnelView; children?: ReactNode }) {
   const headingId = `funnel-${funnel.id}`;
 
   // Draw the leading stages whose counts can be trusted; anything gated or unavailable is listed below as text.
@@ -101,6 +102,7 @@ function FunnelSection({ funnel }: { funnel: FunnelView }) {
           </ul>
         </>
       )}
+      {children}
     </section>
   );
 }
@@ -185,9 +187,13 @@ function BackfillNotice({ view }: { view: InsightsView }) {
 const MEDIAN_HELP =
   "Median days from the applied date to the first response: an interview, offer, offer accepted, offer declined or rejected event. Follow-ups and withdrawals do not count. Whole UTC days, and a median, not a mean.";
 
+function plural(count: number, one: string, many: string): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+
 function TrendsSection({ stats }: { stats: StatsView }) {
-  const [runsAsTable, setRunsAsTable] = useState(false);
   const runTitle = "New postings per search run";
+  const latestRun = stats.runs.rows[stats.runs.rows.length - 1];
 
   return (
     <section aria-labelledby="trends" className="insights-section">
@@ -222,35 +228,24 @@ function TrendsSection({ stats }: { stats: StatsView }) {
           </div>
 
           <div className="insights-trend">
-            <h3 className="insights-trend-title page-heading">{runTitle}</h3>
-            {stats.runs.empty ? (
-              <p className="insights-help">No search runs in this window.</p>
+            {latestRun === undefined ? (
+              <>
+                <h3 className="insights-trend-title page-heading">{runTitle}</h3>
+                <p className="insights-help">No search runs in this window.</p>
+              </>
             ) : (
               <>
-                <button type="button" className="insights-run-toggle" aria-pressed={runsAsTable} onClick={() => setRunsAsTable((value) => !value)}>
-                  Table view of search runs
-                </button>
-                {runsAsTable ? (
-                  <table className="insights-run-table">
-                    <caption>{runTitle}</caption>
-                    <thead>
-                      <tr>
-                        <th scope="col">Run date</th>
-                        <th scope="col">New postings</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {stats.runs.rows.map((row, index) => (
-                        <tr key={`${row.date}-${index}`}>
-                          <td>{row.date}</td>
-                          <td>{row.newPostings}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <Sparkline className="insights-sparkline" values={stats.runs.values} label={runTitle} width={320} height={56} />
-                )}
+                <p className="insights-trend-note" data-testid="run-yield-summary">
+                  Latest search run ({latestRun.date}): {plural(latestRun.newPostings, "new posting", "new postings")}. {plural(stats.runs.rows.length, "run", "runs")} in this window.
+                </p>
+                <ColumnChart
+                  title={runTitle}
+                  data={stats.runs.rows.map((row) => ({ label: row.date, fullLabel: `Run on ${row.date}`, value: row.newPostings }))}
+                  height={120}
+                  framed={false}
+                  labelHeader="Run date"
+                  valueHeader="New postings"
+                />
               </>
             )}
             {stats.runs.note ? <p className="insights-trend-note">{stats.runs.note}</p> : null}
@@ -313,13 +308,17 @@ export default function Insights() {
 
         <BackfillNotice view={view} />
 
-        <FunnelSection funnel={postingsFunnel} />
-        <p className="insights-help">
-          First seen is the date RoleRadar first recorded a posting, not the date the employer posted it. Postings imported in bulk share one first-seen
-          date, so a window can group them together. Reviewed means a posting that is not a lead or unscored, or that has an application; closed postings
-          with no application count as expired, not reviewed. It uses each posting&apos;s current disposition, so a posting that was reviewed and later
-          returned to lead is not counted as reviewed.
-        </p>
+        <FunnelSection funnel={postingsFunnel}>
+          <p className="insights-help">
+            First seen is the date RoleRadar first recorded a posting, not the date the employer posted it. Postings imported in bulk share one first-seen
+            date, so a window can group them together. Reviewed means a posting that is not a lead or unscored, or that has an application; closed postings
+            with no application count as expired, not reviewed. It uses each posting&apos;s current disposition, so a posting that was reviewed and later
+            returned to lead is not counted as reviewed.
+          </p>
+          <p className="insights-help">
+            <Link to={lensListHref("leads", ctx)}>See all postings in this window</Link>
+          </p>
+        </FunnelSection>
 
         <FunnelSection funnel={applicationsFunnel} />
         {offers.state === "ok" && offers.count !== null ? (
@@ -385,9 +384,6 @@ export default function Insights() {
             not count. Applications older than 14 days form the mature cohort for the interview rate, and older than 30 days for the ghost rate. An application exactly 30 days old
             is in the ghost rate denominator (30 days or older) but is not ghosted until it is older than 30 days. Lists open with the same filter,
             window and as-of date, so the number you click and the rows you see agree.
-          </p>
-          <p className="insights-help">
-            <Link to={lensListHref("leads", ctx)}>See all postings in this window</Link>
           </p>
         </section>
       </div>

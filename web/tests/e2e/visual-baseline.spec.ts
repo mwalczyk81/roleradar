@@ -121,6 +121,28 @@ test.describe("Visual baseline: app routes (fictional loopback stub)", () => {
         await page.getByRole("dialog").waitFor();
       },
     },
+    {
+      // 009 phase 4 (J7): the role-title link under the pointer and under keyboard focus.
+      name: "postings-role-link-hover",
+      path: "/postings",
+      after: async (page) => {
+        await page.locator('table a[href^="/postings/"]').first().hover();
+      },
+    },
+    {
+      name: "postings-role-link-focus",
+      path: "/postings",
+      after: async (page) => {
+        await page.locator('table a[href^="/postings/"]').first().focus();
+      },
+    },
+    {
+      name: "applications-title-link-hover",
+      path: "/applications",
+      after: async (page) => {
+        await page.locator('table a[href^="/applications/"]').first().hover();
+      },
+    },
     { name: "companies-list", path: "/companies", census: true },
     { name: "company-detail", path: "/companies/comp-e2e-1", census: true },
     {
@@ -264,6 +286,45 @@ test.describe("Visual baseline: app routes (fictional loopback stub)", () => {
         await dialog.getByText("Minimum salary must be positive.").waitFor();
       },
     },
+    {
+      // 009 phase 4 (J5): h3 to h6 next to body text, a list and a table, fictional content.
+      name: "note-headings",
+      path: "/notes/note-e2e-1",
+      prepare: (s) => {
+        s.currentNoteDetail = {
+          id: "note-e2e-1",
+          heading: "Fictional heading levels",
+          content: [
+            "Opening paragraph in body text, before any heading.",
+            "",
+            "# Heading three",
+            "",
+            "Body text under heading three.",
+            "",
+            "## Heading four",
+            "",
+            "Body text under heading four, with a [fictional link](https://example.com/fictional).",
+            "",
+            "### Heading five",
+            "",
+            "Body text under heading five.",
+            "",
+            "#### Heading six",
+            "",
+            "Body text under heading six.",
+            "",
+            "- first point",
+            "- second point",
+            "",
+          ].join("\n"),
+          tags: ["fictional"],
+          linkedEntityType: "posting",
+          linkedEntityId: "post-e2e-1",
+          createdAt: "2026-10-15T12:00:00Z",
+          updatedAt: "2026-10-16T12:00:00Z",
+        };
+      },
+    },
     { name: "criteria", path: "/criteria", census: true },
     {
       name: "notes-list",
@@ -379,10 +440,33 @@ test.describe("Visual baseline: Insights and the wide-table note (fictional loop
     await insights?.close();
   });
 
-  const pages = [
+  interface InsightsCase {
+    name: string;
+    path: string;
+    zeroedLens?: string;
+    after?: (page: Page) => Promise<void>;
+  }
+  const pages: InsightsCase[] = [
     { name: "insights-90d", path: `/insights?window=90d&asOf=${AS_OF}` },
     { name: "insights-all", path: `/insights?window=all&asOf=${AS_OF}` },
     { name: "note-wide-table", path: `/notes/${loadNoteFixture().id}` },
+    // 009 phase 4 (J6): a "No data" tile in the same grid row as ordinary tiles.
+    { name: "insights-no-data", path: `/insights?window=90d&asOf=${AS_OF}`, zeroedLens: "ghost-eligible" },
+    // 009 phase 4 (J1): a drill-down link under the pointer and under keyboard focus.
+    {
+      name: "insights-drill-link-hover",
+      path: `/insights?window=90d&asOf=${AS_OF}`,
+      after: async (page) => {
+        await page.locator('a[data-role="numerator"]').first().hover();
+      },
+    },
+    {
+      name: "insights-drill-link-focus",
+      path: `/insights?window=90d&asOf=${AS_OF}`,
+      after: async (page) => {
+        await page.locator('a[data-role="numerator"]').first().focus();
+      },
+    },
   ];
 
   for (const entry of pages) {
@@ -399,8 +483,11 @@ test.describe("Visual baseline: Insights and the wide-table note (fictional loop
           census[entry.name] = { count: elements.length, elements };
         }
 
+        insights.setZeroedLens(entry.zeroedLens ?? null);
         await page.goto(`${insights.baseUrl}${entry.path}`, { waitUntil: "networkidle" });
+        if (entry.after) await entry.after(page);
         await capture(page, entry.name, theme);
+        insights.setZeroedLens(null);
       });
     }
   }

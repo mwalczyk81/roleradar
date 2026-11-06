@@ -1,7 +1,11 @@
 import { expect, afterEach } from "vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import axe from "axe-core";
 import nodeCrypto from "node:crypto";
+
+// The first role query on a large page (Insights) can take over a second when the whole suite runs in parallel, which
+// exceeded the 1000 ms default of findBy* and waitFor. A longer wait changes no assertion; a real failure still fails.
+configure({ asyncUtilTimeout: 5000 });
 
 if (nodeCrypto.webcrypto) {
   Object.defineProperty(globalThis, "crypto", {

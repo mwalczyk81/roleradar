@@ -129,10 +129,32 @@ body {
   font-size: var(--ds-text-sm);
 }
 
+/* Drill-down links (J1): quiet at rest (secondary text, no underline, a small chevron as the affordance), underlined and
+   bronze on hover and keyboard focus. Links inside help prose stay underlined, so colour is never the only cue. */
 .insights-stage-links a,
-.insights-tile-links a,
-.insights-help a {
+.insights-tile-links a {
+  color: var(--ds-text-secondary);
+  text-decoration: none;
+}
+
+.insights-stage-links a::after,
+.insights-tile-links a::after {
+  content: " \203A" / "";
+}
+
+.insights-stage-links a:hover,
+.insights-stage-links a:focus-visible,
+.insights-tile-links a:hover,
+.insights-tile-links a:focus-visible {
   color: var(--ds-primary-subtle-text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.insights-help a {
+  color: var(--ds-text);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }
 
 .insights-tiles {
@@ -141,11 +163,22 @@ body {
   gap: var(--ds-space-4);
 }
 
+/* A tile is three rows (card, drill-down links, help) laid on the grid rows of .insights-tiles, so the cards of tiles in
+   one grid row share a height, and so do their links and help text (J6). A tile without links leaves its middle row empty. */
 .insights-tile {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ds-space-2);
+  display: grid;
+  grid-row: span 3;
+  grid-template-rows: subgrid;
+  row-gap: var(--ds-space-2);
   min-width: 0;
+}
+
+.insights-tile > .insights-tile-links {
+  grid-row: 2;
+}
+
+.insights-tile > .insights-help {
+  grid-row: 3;
 }
 
 .insights-tile-links {
@@ -156,8 +189,7 @@ body {
   font-size: var(--ds-text-sm);
 }
 
-/* Insights trends (007 phase 4). The charts come from the kit; these are only the wrappers the page writes itself and
-   the search-run table view. Tokens only, no raw colours. */
+/* Insights trends (007 phase 4). The charts come from the kit; these are only the wrappers the page writes itself. Tokens only, no raw colours. */
 .insights-trend {
   display: flex;
   flex-direction: column;
@@ -176,61 +208,6 @@ body {
   font-size: var(--ds-text-sm);
 }
 
-.insights-sparkline {
-  display: block;
-  max-width: 100%;
-  height: auto;
-}
-
-.insights-run-toggle {
-  align-self: flex-start;
-  padding: var(--ds-space-1) var(--ds-space-3);
-  border: 1px solid var(--ds-border);
-  border-radius: var(--ds-radius-md);
-  background: var(--ds-surface);
-  color: var(--ds-text);
-  font-family: inherit;
-  font-size: var(--ds-text-sm);
-  cursor: pointer;
-}
-
-.insights-run-toggle[aria-pressed="true"] {
-  border-color: var(--ds-primary);
-  background: var(--ds-primary-subtle);
-  color: var(--ds-primary-subtle-text);
-}
-
-.insights-run-toggle:focus-visible {
-  outline: 2px solid var(--ds-focus-ring);
-  outline-offset: 2px;
-}
-
-.insights-run-table {
-  width: 100%;
-  max-width: 28rem;
-  border-collapse: collapse;
-  font-size: var(--ds-text-sm);
-  font-variant-numeric: tabular-nums;
-}
-
-.insights-run-table caption {
-  padding-bottom: var(--ds-space-2);
-  color: var(--ds-text-secondary);
-  text-align: left;
-}
-
-.insights-run-table th,
-.insights-run-table td {
-  padding: var(--ds-space-1) var(--ds-space-3);
-  border-bottom: 1px solid var(--ds-border);
-  text-align: left;
-}
-
-.insights-run-table th:last-child,
-.insights-run-table td:last-child {
-  text-align: right;
-}
-
 /* Note bodies rendered as Markdown (007 phase 5, ADR 0032). Classes only: the CSP forbids inline style attributes, and
    MarkdownBody never writes one. Tokens only, no raw colours, so light and dark both follow the theme. */
 .note-content {
@@ -243,12 +220,16 @@ body {
 
 .markdown-body {
   min-width: 0;
-  max-width: 72ch;
   color: var(--ds-text);
   font-family: var(--ds-font-sans);
   font-size: var(--ds-text-base);
   line-height: var(--ds-leading-relaxed);
   overflow-wrap: anywhere;
+}
+
+/* Prose keeps a reading width; a table region is the one child that uses the full card content width (FR-026). */
+.markdown-body > :not(.markdown-table-scroll) {
+  max-width: 72ch;
 }
 
 .markdown-body > :first-child {
@@ -287,9 +268,21 @@ body {
   font-size: var(--ds-text-lg);
 }
 
+/* h4 stays the larger display heading; h5 and h6 step down to the text face so they read as labels, h6 as small caps (J5). */
 .markdown-body h5,
 .markdown-body h6 {
+  font-family: var(--ds-font-sans);
+}
+
+.markdown-body h5 {
   font-size: var(--ds-text-base);
+}
+
+.markdown-body h6 {
+  color: var(--ds-text-secondary);
+  font-size: var(--ds-text-sm);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .markdown-body ul,
@@ -617,12 +610,25 @@ body {
   font-weight: var(--ds-weight-medium);
 }
 
-/* This link named a colour token that does not exist (--ds-text-primary), so it has always inherited its colour from
-   the cell. The declaration is kept as it was; phase 4 decides the real colour. */
-.entity-title-link {
+/* The title of a record in a list (postings and applications): the text colour at rest, bronze on hover and keyboard
+   focus (J7). --ds-primary-subtle-text is the bronze role that keeps 4.5:1 on the hovered row in both themes
+   (--ds-primary falls to 4.05:1 on the dark hover row). The focus ring itself comes from the kit. */
+/* K4: the kit Input sets no placeholder colour, so the browser default (#757575) applies: 4.61:1 on the light surface but
+   3.29:1 on the dark one. The muted text token passes in both themes (4.80:1 and 6.01:1). Used on the Min Score input,
+   through its className, until the kit gives Input a placeholder token. */
+.placeholder-muted::placeholder {
+  color: var(--ds-text-muted);
+}
+
+.role-title-link {
   font-weight: var(--ds-weight-medium);
-  color: var(--ds-text-primary);
+  color: var(--ds-text);
   text-decoration: none;
+}
+
+.role-title-link:hover,
+.role-title-link:focus-visible {
+  color: var(--ds-primary-subtle-text);
 }
 
 .row-action-link {
@@ -1047,12 +1053,11 @@ body {
   font-size: var(--ds-text-sm);
 }
 
-/* The colour names a token that does not exist (--ds-text-primary), so it has always inherited. Kept as it was. */
 .timeline-event-notes {
   margin: var(--ds-space-1) 0 0 0;
   font-size: var(--ds-text-sm);
   white-space: pre-wrap;
-  color: var(--ds-text-primary);
+  color: var(--ds-text);
 }
 
 /* Modal form fields: a label above a control, an inline error under it, and the button row. */
