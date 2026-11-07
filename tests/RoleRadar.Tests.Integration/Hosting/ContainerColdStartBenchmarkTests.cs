@@ -5,6 +5,7 @@ using Xunit;
 namespace RoleRadar.Tests.Integration.Hosting;
 
 [Collection("BenchmarkCollection")]
+[Trait("Lane", "images")]
 public sealed class ContainerColdStartBenchmarkTests : IClassFixture<ContainerImagesFixture>
 {
     [Fact]

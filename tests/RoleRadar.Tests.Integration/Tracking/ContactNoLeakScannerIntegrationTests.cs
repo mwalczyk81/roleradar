@@ -8,6 +8,7 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Tracking;
 
+[Trait("Lane", "images")]
 public sealed class ContactNoLeakScannerIntegrationTests : IAsyncLifetime
 {
     private readonly SharedMongoFixture _fixture;

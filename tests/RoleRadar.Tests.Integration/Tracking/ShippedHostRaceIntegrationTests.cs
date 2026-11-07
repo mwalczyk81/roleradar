@@ -10,6 +10,7 @@ using Xunit;
 namespace RoleRadar.Tests.Integration.Tracking;
 
 [Collection("ShippedHostRaceCollection")]
+[Trait("Lane", "images")]
 public sealed class ShippedHostRaceIntegrationTests
 {
     private readonly SharedMongoFixture _sharedMongo;

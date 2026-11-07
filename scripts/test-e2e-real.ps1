@@ -49,12 +49,12 @@ try {
 
     $env:ROLERADAR_REAL_STACK_E2E = "1"
 
-    Write-Output "==> [test-e2e-real] Executing RealStackEndToEndTests in tests/RoleRadar.Tests.Integration..."
+    Write-Output "==> [test-e2e-real] Executing the real-stack lane (Lane=real-stack) in tests/RoleRadar.Tests.Integration..."
     $testArgs = @(
         "test",
         "tests/RoleRadar.Tests.Integration/RoleRadar.Tests.Integration.csproj",
         "-c", $Configuration,
-        "--filter", "FullyQualifiedName~RealStackEndToEndTests"
+        "--filter", "Lane=real-stack"
     )
 
     & dotnet @testArgs

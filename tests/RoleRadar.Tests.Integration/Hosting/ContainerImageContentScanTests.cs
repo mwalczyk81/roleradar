@@ -4,6 +4,11 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Hosting;
 
+/// <summary>
+/// Image history and filesystem content checks. The scan-report check lives in <see cref="ContainerScanReportTests"/>,
+/// which needs the reports of a real scan and runs in its own lane after the scan.
+/// </summary>
+[Trait("Lane", "images")]
 public sealed class ContainerImageContentScanTests
 {
     private static async Task<string> RunDockerCommandAsync(string arguments)
@@ -80,34 +85,5 @@ public sealed class ContainerImageContentScanTests
         {
             await RunDockerCommandAsync($"rm -f {containerId}");
         }
-    }
-
-    [Fact]
-    public async Task ContainerSecurityScanReport_ExistsAndPasses()
-    {
-        var repoRoot = ContainerTestHarness.FindRepoRoot();
-        var testResultsDir = Path.Combine(repoRoot, "TestResults");
-        Directory.CreateDirectory(testResultsDir);
-        var reportPath = Path.Combine(testResultsDir, "container-scan-report.json");
-
-        if (!File.Exists(reportPath))
-        {
-            await ContainerTestHarness.EnsureImagesBuiltAsync();
-            var reportContent = """
-            {
-              "timestamp": "2026-10-24T13:45:00Z",
-              "passed": true,
-              "hadolint": { "status": "PASS", "violations": 0 },
-              "trivy": { "status": "PASS", "criticalWithFix": 0 },
-              "sbom": { "status": "PASS" },
-              "contentScan": { "status": "PASS", "denylistMatches": 0, "gitOrEnvFiles": 0 }
-            }
-            """;
-            await File.WriteAllTextAsync(reportPath, reportContent);
-        }
-
-        Assert.True(File.Exists(reportPath), $"Container security scan report must exist at: {reportPath}");
-        var json = await File.ReadAllTextAsync(reportPath);
-        Assert.Contains("\"passed\": true", json);
     }
 }

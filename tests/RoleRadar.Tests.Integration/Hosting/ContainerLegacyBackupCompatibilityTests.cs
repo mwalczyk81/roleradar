@@ -11,6 +11,7 @@ using Xunit;
 namespace RoleRadar.Tests.Integration.Hosting;
 
 [Collection("ContainerIsolatedCollection")]
+[Trait("Lane", "images")]
 public sealed class ContainerLegacyBackupCompatibilityTests : IClassFixture<IsolatedContainerMongoFixture>
 {
     private readonly IsolatedContainerMongoFixture _mongo;

@@ -38,3 +38,5 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0032](./0032-markdown-rendering-of-notes.md) | Markdown Rendering of Note Bodies | Accepted | `007-insights-dashboard` |
 | [ADR-0033](./0033-posting-rejection-syncs-to-application.md) | Rejecting an Applied Posting Records the Rejection on Its Application | Accepted | `008-posting-application-rejection-sync` |
 | [ADR-0034](./0034-identity-serves-kit-assets-and-csp.md) | Identity Serves the Kit Assets and a CSP for Its Sign-In Pages | Accepted | `009-ui-polish-theming` |
+| [ADR-0035](./0035-generated-enum-contract.md) | Enum Values in the API Contract Are Generated, Not Snapshotted | Accepted | `010-contracts-test-integrity` |
+| [ADR-0036](./0036-test-lanes-and-gate-scan.md) | Test Lanes by Trait, and a Gate That Scans Its Own Images | Accepted | `010-contracts-test-integrity` |

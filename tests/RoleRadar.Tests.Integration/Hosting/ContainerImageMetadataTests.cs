@@ -4,6 +4,7 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Hosting;
 
+[Trait("Lane", "images")]
 public sealed class ContainerImageMetadataTests
 {
     private static async Task<JsonElement> InspectImageConfigAsync(string imageTag)

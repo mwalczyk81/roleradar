@@ -20,6 +20,20 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 
+# Reads the last "Failed: n, Passed: n, Skipped: n" summary line of a dotnet test run.
+function Get-TestCounts {
+    param([object[]]$Output)
+    $result = [pscustomobject]@{ Failed = -1; Passed = 0; Skipped = -1 }
+    foreach ($line in $Output) {
+        if ("$line" -match 'Failed:\s+(\d+),\s+Passed:\s+(\d+),\s+Skipped:\s+(\d+)') {
+            $result.Failed = [int]$Matches[1]
+            $result.Passed = [int]$Matches[2]
+            $result.Skipped = [int]$Matches[3]
+        }
+    }
+    return $result
+}
+
 if (-not $Branch) {
     $Branch = (git -C $repoRoot rev-parse --abbrev-ref HEAD).Trim()
 }
@@ -36,6 +50,8 @@ $gateResults = [ordered]@{
     Tests = "FAIL"
     Coverage = "FAIL"
     Images = "FAIL"
+    Scan = "FAIL"
+    ImageLane = "FAIL"
     WebSmoke = "FAIL"
 }
 
@@ -47,6 +63,10 @@ $testCounts = [ordered]@{
 }
 
 $coveragePct = 0.0
+$scanReports = 0
+$scanCritical = 0
+$scanTestCounts = [pscustomobject]@{ Failed = -1; Passed = 0; Skipped = -1 }
+$imageLaneCounts = [pscustomobject]@{ Failed = -1; Passed = 0; Skipped = -1 }
 $cliSizeMb = "N/A"
 $mcpSizeMb = "N/A"
 $identitySizeMb = "N/A"
@@ -111,9 +131,12 @@ try {
         $gateResults.Typecheck = "SKIP"
     }
 
-    # 6. Run test suite with coverage via scripts/test-all.ps1
+    # 6. Run test suite with coverage via scripts/test-all.ps1. This is the default run: it excludes only the lanes that
+    # need something it does not have (scan: the Trivy reports, web-container and real-stack: their own steps below). The
+    # images lane is deliberately NOT excluded: those classes also run here in host mode, as they always did, and run
+    # again in step 7c against the review images (image mode). Docker-only classes therefore run twice, on purpose.
     $null = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "verify-devstack-canary.ps1") -Action Record 2>&1
-    $testOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-all.ps1 -NoBuild --collect:"XPlat Code Coverage" --results-directory ./TestResults 2>&1
+    $testOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-all.ps1 -NoBuild --collect:"XPlat Code Coverage" --results-directory ./TestResults --filter "Lane!=scan&Lane!=web-container&Lane!=real-stack" 2>&1
     if ($LASTEXITCODE -eq 0) {
         $gateResults.Tests = "PASS"
     } else {
@@ -186,8 +209,67 @@ try {
         $apiSizeMb = "$([math]::Round([int64]$apiBytes / 1MB, 1)) MB"
     }
 
-    # 8. Web container smoke test
-    $smokeOutput = & dotnet test tests/RoleRadar.Tests.Integration -c Release --no-build --filter "FullyQualifiedName~WebContainer" 2>&1
+    # 7b. Container scan (feature 010, ADR 0036). Trivy runs on the images built above with the same pinned image and flags
+    # as CI (failing severity CRITICAL, --ignore-unfixed) and writes the reports the scan test reads. The mounts are plain
+    # paths, proven from pwsh on Windows; from Git Bash the CI form needs MSYS_NO_PATHCONV=1 and pwd -W.
+    $scanDir = Join-Path $tempDir "TestResults"
+    $trivyCache = Join-Path $tempDir ".trivy-cache"
+    New-Item -ItemType Directory -Force -Path $scanDir, $trivyCache | Out-Null
+    $scanTargets = [ordered]@{
+        cli = "roleradar-cli:review-$cloneGuid"
+        mcp = "roleradar-mcp:review-$cloneGuid"
+        identity = "roleradar-identity:review-$cloneGuid"
+        api = "roleradar-api:review-$cloneGuid"
+        web = "roleradar-web:review-$cloneGuid"
+    }
+    foreach ($target in $scanTargets.Keys) {
+        # Trivy exits 1 on a CRITICAL finding but still writes the report; the scan test below is what judges it.
+        $null = & docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "${scanDir}:/TestResults" -v "${trivyCache}:/root/.cache" aquasec/trivy:0.59.1 image --list-all-pkgs --severity=CRITICAL --exit-code 1 --ignore-unfixed --format json --output "/TestResults/trivy-report-$target.json" $scanTargets[$target] 2>&1
+        $reportPath = Join-Path $scanDir "trivy-report-$target.json"
+        if (Test-Path -LiteralPath $reportPath) {
+            $scanReports++
+            # Only for the summary line; the scan test below is what judges the reports. A result entry without
+            # Vulnerabilities (or a clean report without Results) is normal Trivy output, so probe the properties.
+            try {
+                $report = Get-Content -LiteralPath $reportPath -Raw | ConvertFrom-Json
+                $resultsProperty = $report.PSObject.Properties['Results']
+                $results = if ($null -ne $resultsProperty) { @($resultsProperty.Value) } else { @() }
+                foreach ($result in $results) {
+                    $vulnerabilitiesProperty = $result.PSObject.Properties['Vulnerabilities']
+                    if ($null -eq $vulnerabilitiesProperty) { continue }
+                    foreach ($vulnerability in @($vulnerabilitiesProperty.Value)) {
+                        if ($vulnerability.Severity -eq "CRITICAL") { $scanCritical++ }
+                    }
+                }
+            } catch {
+                Write-Warning "Could not read counts from ${reportPath}: $($_.Exception.Message)"
+            }
+        }
+    }
+
+    $env:ROLERADAR_REQUIRE_SCAN = "1"
+    $scanTestOutput = & dotnet test tests/RoleRadar.Tests.Integration -c Release --no-build --filter "Lane=scan" 2>&1
+    $scanTestExit = $LASTEXITCODE
+    Remove-Item Env:\ROLERADAR_REQUIRE_SCAN -ErrorAction SilentlyContinue
+    $scanTestCounts = Get-TestCounts $scanTestOutput
+    if ($scanTestExit -eq 0 -and $scanTestCounts.Failed -eq 0 -and $scanTestCounts.Passed -ge 1 -and $scanTestCounts.Skipped -eq 0 -and $scanReports -eq $scanTargets.Count) {
+        $gateResults.Scan = "PASS"
+    } else {
+        Write-Warning "Container scan failed, skipped or incomplete (reports=$scanReports, passed=$($scanTestCounts.Passed), skipped=$($scanTestCounts.Skipped), exit=$scanTestExit): $($scanTestOutput -join "`n")"
+    }
+
+    # 7c. Images lane (Lane=images) against the review images, the same ones that were just scanned.
+    $imageLaneOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-images.ps1 -CliImage "roleradar-cli:review-$cloneGuid" -McpImage "roleradar-mcp:review-$cloneGuid" -IdentityImage "roleradar-identity:review-$cloneGuid" -WebImage "roleradar-web:review-$cloneGuid" -Filter "Lane=images" -NoBuild 2>&1
+    $imageLaneExit = $LASTEXITCODE
+    $imageLaneCounts = Get-TestCounts $imageLaneOutput
+    if ($imageLaneExit -eq 0 -and $imageLaneCounts.Failed -eq 0 -and $imageLaneCounts.Passed -ge 1 -and $imageLaneCounts.Skipped -eq 0) {
+        $gateResults.ImageLane = "PASS"
+    } else {
+        Write-Warning "Images lane failed, skipped a test or ran no tests (passed=$($imageLaneCounts.Passed), failed=$($imageLaneCounts.Failed), skipped=$($imageLaneCounts.Skipped), exit=$imageLaneExit): $($imageLaneOutput -join "`n")"
+    }
+
+    # 8. Web container smoke test (Lane=web-container)
+    $smokeOutput = & dotnet test tests/RoleRadar.Tests.Integration -c Release --no-build --filter "Lane=web-container" 2>&1
     $smokePassed = 0
     $smokeSkipped = -1
     $smokeFailed = -1
@@ -254,8 +336,10 @@ Write-Output "5. Tests:         $($gateResults.Tests) (Unit: $($testCounts.Unit)
 Write-Output "6. Domain+App Cov: $coveragePct% (Gate: >= 85%) -> $($gateResults.Coverage)"
 Write-Output "7. Image Builds:  $($gateResults.Images) (CLI: $cliSizeMb, MCP: $mcpSizeMb, Identity: $identitySizeMb, Web: $webSizeMb, API: $apiSizeMb)"
 Write-Output "8. Web image + smoke: $($gateResults.WebSmoke)"
+Write-Output "9. Container scan:    $($gateResults.Scan) (reports: $scanReports, CRITICAL: $scanCritical, HIGH: not scanned (policy CRITICAL); test passed: $($scanTestCounts.Passed), skipped: $($scanTestCounts.Skipped))"
+Write-Output "10. Images lane:      $($gateResults.ImageLane) (passed: $($imageLaneCounts.Passed), failed: $($imageLaneCounts.Failed), skipped: $($imageLaneCounts.Skipped))"
 if ($IncludeE2E) {
-    Write-Output "9. Real-stack E2E:    $($gateResults.RealStackE2E)"
+    Write-Output "11. Real-stack E2E:   $($gateResults.RealStackE2E)"
 }
 Write-Output "Verdict: $(if ($allPassed) { 'ALL GATES PASSED' } else { 'GATE FAILURE' })"
 Write-Output "================================================="

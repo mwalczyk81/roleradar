@@ -256,7 +256,7 @@ jobs:
 
       - name: Run full test suite (Unit, Architecture, Contract, Integration) with Coverage
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
-        run: dotnet test RoleRadar.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults --filter "FullyQualifiedName!~WebContainer&FullyQualifiedName!~RealStack"
+        run: dotnet test RoleRadar.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults --filter "Lane!=scan&Lane!=web-container&Lane!=real-stack"
 
       - name: Verify dev stack safety canary remains untouched
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
@@ -354,6 +354,12 @@ jobs:
             TestResults/trivy-report-*.json
             TestResults/sbom-*.json
             TestResults/database-capability-matrix.*
+
+      # The scan test reads the reports Trivy just wrote; it has its own lane because it cannot run before them. CI is set,
+      # so a missing or invalid report fails the step (it never writes a report of its own).
+      - name: Verify the container scan reports (scan lane)
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.images == 'true'
+        run: dotnet test tests/RoleRadar.Tests.Integration/RoleRadar.Tests.Integration.csproj -c Release --no-build --filter "Lane=scan"
 
       - name: Run launched-host test suites against container images
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.images == 'true'

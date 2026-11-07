@@ -8,6 +8,7 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Hosting;
 
+[Trait("Lane", "images")]
 public sealed class ContainerContactPrivacyNoLeakTests : IAsyncLifetime
 {
     private readonly SharedMongoFixture _fixture;

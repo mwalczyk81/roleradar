@@ -14,6 +14,7 @@ namespace RoleRadar.Tests.Integration.Containers;
 /// <c>roleradar-identity-data</c> volume are never referenced.
 /// </summary>
 [Collection("BenchmarkCollection")]
+[Trait("Lane", "images")]
 public sealed class IdentityImageLoginPageTests
 {
     // Separate tag so this test never overwrites the developer's roleradar-identity:local image.
