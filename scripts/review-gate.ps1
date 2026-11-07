@@ -21,7 +21,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 
 # Reads the last "Failed: n, Passed: n, Skipped: n" summary line of a dotnet test run.
-function Get-TestCounts {
+function Get-TestCount {
     param([object[]]$Output)
     $result = [pscustomobject]@{ Failed = -1; Passed = 0; Skipped = -1 }
     foreach ($line in $Output) {
@@ -251,7 +251,7 @@ try {
     $scanTestOutput = & dotnet test tests/RoleRadar.Tests.Integration -c Release --no-build --filter "Lane=scan" 2>&1
     $scanTestExit = $LASTEXITCODE
     Remove-Item Env:\ROLERADAR_REQUIRE_SCAN -ErrorAction SilentlyContinue
-    $scanTestCounts = Get-TestCounts $scanTestOutput
+    $scanTestCounts = Get-TestCount $scanTestOutput
     if ($scanTestExit -eq 0 -and $scanTestCounts.Failed -eq 0 -and $scanTestCounts.Passed -ge 1 -and $scanTestCounts.Skipped -eq 0 -and $scanReports -eq $scanTargets.Count) {
         $gateResults.Scan = "PASS"
     } else {
@@ -261,7 +261,7 @@ try {
     # 7c. Images lane (Lane=images) against the review images, the same ones that were just scanned.
     $imageLaneOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-images.ps1 -CliImage "roleradar-cli:review-$cloneGuid" -McpImage "roleradar-mcp:review-$cloneGuid" -IdentityImage "roleradar-identity:review-$cloneGuid" -WebImage "roleradar-web:review-$cloneGuid" -Filter "Lane=images" -NoBuild 2>&1
     $imageLaneExit = $LASTEXITCODE
-    $imageLaneCounts = Get-TestCounts $imageLaneOutput
+    $imageLaneCounts = Get-TestCount $imageLaneOutput
     if ($imageLaneExit -eq 0 -and $imageLaneCounts.Failed -eq 0 -and $imageLaneCounts.Passed -ge 1 -and $imageLaneCounts.Skipped -eq 0) {
         $gateResults.ImageLane = "PASS"
     } else {
