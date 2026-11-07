@@ -104,9 +104,9 @@ public sealed class MongoContainerStartGateDiagnosticsTests
         var failure = await Assert.ThrowsAnyAsync<Exception>(() => MongoContainerStartGate.StartAsync(container));
 
         Assert.True(failure.Message.Contains("docker State:", StringComparison.Ordinal), "message was: " + failure.Message);
-        Assert.Contains("\"ExitCode\":2", failure.Message);
-        Assert.Contains("unrecognised option '--definitely-not-a-mongod-flag'", failure.Message);
-        Assert.Contains("--- last container log lines ---", failure.Message);
+        Assert.True(failure.Message.Contains("\"ExitCode\":2", StringComparison.Ordinal), "message was: " + failure.Message);
+        Assert.True(failure.Message.Contains("unrecognised option '--definitely-not-a-mongod-flag'", StringComparison.Ordinal), "message was: " + failure.Message);
+        Assert.True(failure.Message.Contains("--- last container log lines ---", StringComparison.Ordinal), "message was: " + failure.Message);
     }
 
     /// <summary>The diagnostics must not themselves throw when no container was ever created (an image that cannot be pulled).</summary>
