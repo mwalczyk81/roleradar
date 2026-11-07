@@ -154,6 +154,18 @@ test.describe("Identity sign-in pages (Docker image, real Chromium)", () => {
     await page.waitForLoadState("networkidle");
   }
 
+  // 010 US4: the page binds the one-time-code field on every post, so a wrong password used to list its field messages
+  // ("The Code field is required", the 6-to-7 length message) under the real error. Only the password-step error may show.
+  test("a wrong password lists only the password-step error, never the one-time-code field messages", async ({ page }) => {
+    await openLoginWithError(page);
+
+    const alert = page.getByRole("alert");
+    await expect(alert).toBeVisible();
+    expect(await alert.locator("p").allTextContents()).toEqual(["Invalid username or password."]);
+    await expect(page.getByText("The Code field is required")).toHaveCount(0);
+    await expect(page.getByText(/minimum length of 6/)).toHaveCount(0);
+  });
+
   for (const scheme of SCHEMES) {
     for (const spec of PAGES) {
       test(`${spec.name} (${scheme}): the brand lockup is the app shell brand, and the page has one h1`, async ({ page }) => {

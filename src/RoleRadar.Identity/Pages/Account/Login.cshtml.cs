@@ -59,6 +59,25 @@ public class LoginModel(
     {
         ReturnUrl ??= "/";
 
+        if (!RequiresTwoFactor)
+        {
+            // Razor Pages binds and validates both input models on every post. The password step's form has no code
+            // field, so binding has already recorded "The Code field is required" and the length message for it. With
+            // no TwoFactorInput.* value posted, MVC binds that model with an empty prefix, so the key is plain "Code"
+            // (not "TwoFactorInput.Code"); both forms are dropped. The page lists every ModelState error, so only this
+            // step's own errors may show. The Input entries stay, and the code step (RequiresTwoFactor) keeps its
+            // field messages.
+            var codeKeys = ModelState.Keys
+                .Where(k => k == nameof(TwoFactorModel.Code)
+                    || k == nameof(TwoFactorInput)
+                    || k.StartsWith(nameof(TwoFactorInput) + ".", StringComparison.Ordinal))
+                .ToList();
+            foreach (var key in codeKeys)
+            {
+                ModelState.Remove(key);
+            }
+        }
+
         if (RequiresTwoFactor)
         {
             if (string.IsNullOrWhiteSpace(TwoFactorInput.Code))
