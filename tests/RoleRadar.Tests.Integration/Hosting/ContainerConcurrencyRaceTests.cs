@@ -8,6 +8,7 @@ using Xunit;
 namespace RoleRadar.Tests.Integration.Hosting;
 
 [Collection("ContainerRaceCollection")]
+[Trait("Lane", "images")]
 public sealed class ContainerConcurrencyRaceTests
 {
     private readonly SharedMongoFixture _sharedMongo;

@@ -24,6 +24,7 @@ namespace RoleRadar.Tests.Integration.Containers;
 /// Driven by Playwright in real Chromium.
 /// </summary>
 [Collection("BenchmarkCollection")]
+[Trait("Lane", "real-stack")]
 public sealed class RealStackEndToEndTests
 {
     private const string DefaultIdentityImage = "roleradar-identity:local";

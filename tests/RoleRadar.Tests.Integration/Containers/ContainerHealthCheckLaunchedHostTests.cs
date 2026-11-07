@@ -4,6 +4,7 @@ using Xunit;
 namespace RoleRadar.Tests.Integration.Containers;
 
 [Collection("BenchmarkCollection")]
+[Trait("Lane", "images")]
 public sealed class ContainerHealthCheckLaunchedHostTests
 {
     [Theory]

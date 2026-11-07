@@ -12,7 +12,11 @@ import {
   COMPANY_STATUS_OPTIONS,
   OWNERSHIP_TYPE_OPTIONS,
   COMPANY_STATUS_METADATA,
+  FETCH_METHOD_OPTIONS,
   isCompanyStatus,
+  isFetchMethod,
+  isOwnershipType,
+  type FetchMethod,
 } from "../lib/company-enums.js";
 import {
   AppShell,
@@ -93,8 +97,20 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   const name = formData.get("name")?.toString()?.trim() || "";
-  const status = formData.get("status")?.toString()?.trim() || null;
-  const ownershipType = formData.get("ownershipType")?.toString()?.trim() || null;
+  const statusRaw = formData.get("status")?.toString()?.trim() || null;
+  const ownershipTypeRaw = formData.get("ownershipType")?.toString()?.trim() || null;
+  // Values come from the generated API unions; anything else is answered here like the API would (400 field error).
+  const status = statusRaw === null ? null : isCompanyStatus(statusRaw) ? statusRaw : undefined;
+  const ownershipType = ownershipTypeRaw === null ? null : isOwnershipType(ownershipTypeRaw) ? ownershipTypeRaw : undefined;
+  if (status === undefined || ownershipType === undefined) {
+    const enumErrors: Record<string, string> = {};
+    if (status === undefined) enumErrors.status = "Status is not recognised.";
+    if (ownershipType === undefined) enumErrors.ownershipType = "Ownership type is not recognised.";
+    return data<CompanyActionData>(
+      { ok: false, error: "Validation failed.", fieldErrors: enumErrors },
+      { status: 400 }
+    );
+  }
   const description = formData.get("description")?.toString()?.trim() || null;
   const headquarters = formData.get("headquarters")?.toString()?.trim() || null;
   const versionToken = formData.get("versionToken")?.toString()?.trim() || null;
@@ -229,7 +245,7 @@ export default function CompanyDetail() {
   const [newSourceUrl, setNewSourceUrl] = React.useState("");
   const [newAtsProvider, setNewAtsProvider] = React.useState("custom");
   const [newAtsTenant, setNewAtsTenant] = React.useState("");
-  const [newFetchMethod, setNewFetchMethod] = React.useState("api");
+  const [newFetchMethod, setNewFetchMethod] = React.useState<FetchMethod>("api");
 
   // Keep form in sync when company is reloaded or refreshed
   React.useEffect(() => {
@@ -422,7 +438,9 @@ export default function CompanyDetail() {
                   id="company-status-select"
                   name="status"
                   value={status}
-                  onChange={(e) => setStatus(e.target.value)}
+                  onChange={(e) => {
+                    if (isCompanyStatus(e.target.value)) setStatus(e.target.value);
+                  }}
                   aria-invalid={Boolean(fieldErrors.status)}
                   aria-describedby={fieldErrors.status ? "company-status-error" : undefined}
                 >
@@ -453,7 +471,9 @@ export default function CompanyDetail() {
                   id="company-ownership-select"
                   name="ownershipType"
                   value={ownershipType}
-                  onChange={(e) => setOwnershipType(e.target.value)}
+                  onChange={(e) => {
+                    if (isOwnershipType(e.target.value)) setOwnershipType(e.target.value);
+                  }}
                   aria-invalid={Boolean(fieldErrors.ownershipType)}
                   aria-describedby={fieldErrors.ownershipType ? "company-ownership-error" : undefined}
                 >
@@ -686,11 +706,15 @@ export default function CompanyDetail() {
                     <Select
                       id="new-fetch-method"
                       value={newFetchMethod}
-                      onChange={(e) => setNewFetchMethod(e.target.value)}
+                      onChange={(e) => {
+                        if (isFetchMethod(e.target.value)) setNewFetchMethod(e.target.value);
+                      }}
                     >
-                      <option value="api">API</option>
-                      <option value="browser">Browser</option>
-                      <option value="blocked">Blocked</option>
+                      {FETCH_METHOD_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
                     </Select>
                   </div>
                 </div>

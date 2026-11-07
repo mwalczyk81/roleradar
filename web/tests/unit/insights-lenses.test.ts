@@ -18,8 +18,8 @@ import {
   type LensKey,
   type LensContext,
 } from "../../app/lib/insights-lenses.js";
-import { DISPOSITION_VALUES } from "../../app/lib/dispositions.js";
-import { APPLICATION_OUTCOME_VALUES } from "../../app/lib/application-enums.js";
+import { DISPOSITION_ORDER } from "../../app/lib/dispositions.js";
+import { APPLICATION_OUTCOME_ORDER } from "../../app/lib/application-enums.js";
 
 const AS_OF = "2026-09-30";
 const NINETY: LensContext = { window: "90d", asOf: AS_OF };
@@ -243,7 +243,7 @@ describe("lens filters stay inside the 006 pipeline limits and use Domain values
   });
 
   it("every quoted literal in a filter is a Domain disposition or application status", () => {
-    const allowed = new Set<string>([...DISPOSITION_VALUES, ...APPLICATION_OUTCOME_VALUES]);
+    const allowed = new Set<string>([...DISPOSITION_ORDER, ...APPLICATION_OUTCOME_ORDER]);
     for (const filter of everyFilter) {
       for (const m of filter.matchAll(/'([^']*)'/g)) {
         expect(allowed.has(m[1]), `${m[1]} in ${filter}`).toBe(true);
@@ -255,7 +255,7 @@ describe("lens filters stay inside the 006 pipeline limits and use Domain values
     const source = fs.readFileSync(path.resolve(process.cwd(), "app/lib/insights-lenses.ts"), "utf8");
     expect(source).toMatch(/from "\.\/dispositions\.js"/);
     expect(source).toMatch(/from "\.\/application-enums\.js"/);
-    const domain = [...DISPOSITION_VALUES, ...APPLICATION_OUTCOME_VALUES].join("|");
+    const domain = [...DISPOSITION_ORDER, ...APPLICATION_OUTCOME_ORDER].join("|");
     expect(new RegExp(`'(${domain})'`).test(source)).toBe(false);
     expect(new RegExp(`value:\\s*"(${domain})"`).test(source)).toBe(false);
   });

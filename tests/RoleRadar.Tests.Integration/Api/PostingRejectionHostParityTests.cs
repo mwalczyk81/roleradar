@@ -15,6 +15,7 @@ namespace RoleRadar.Tests.Integration.Api;
 /// the same posting, application, event and audit records, apart from actor and timestamps. Two isolated
 /// databases on the Testcontainers replica set, equivalent fictional data.
 /// </summary>
+[Trait("Lane", "images")]
 public sealed class PostingRejectionHostParityTests(SharedMongoFixture sharedMongo)
 {
     private static readonly string[] AuditOperations = ["posting_transition", "application_event_append"];

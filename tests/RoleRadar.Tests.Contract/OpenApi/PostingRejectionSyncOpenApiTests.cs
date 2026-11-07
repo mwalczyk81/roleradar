@@ -53,7 +53,10 @@ public sealed class PostingRejectionSyncOpenApiTests
     public async Task GeneratedClientTypes_CarryTheSameMembers()
     {
         var root = FindRepoRoot();
-        var ts = await File.ReadAllTextAsync(Path.Combine(root, "contracts", "client", "api-types.ts"));
+        var raw = await File.ReadAllTextAsync(Path.Combine(root, "contracts", "client", "api-types.ts"));
+
+        // Generated enum members carry JSDoc such as "@enum {string}"; its braces would end the [^}]* matches below.
+        var ts = System.Text.RegularExpressions.Regex.Replace(raw, @"/\*\*[\s\S]*?\*/", string.Empty);
 
         Assert.Contains("PostingWarningDto", ts, StringComparison.Ordinal);
         Assert.Matches(@"TransitionPostingRequestDto:\s*\{[^}]*eventDate\??:", ts);

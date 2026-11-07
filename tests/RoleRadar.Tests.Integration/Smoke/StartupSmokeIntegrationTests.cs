@@ -4,6 +4,7 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Smoke;
 
+[Trait("Lane", "images")]
 public sealed class StartupSmokeIntegrationTests
 {
     private readonly SharedMongoFixture _sharedMongo;

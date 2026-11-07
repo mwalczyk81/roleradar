@@ -1,4 +1,15 @@
-export const DISPOSITION_VALUES = [
+import type { components } from "../../../contracts/client/api-types.js";
+import { exhaustiveOrder } from "./enum-order.js";
+
+type Schemas = components["schemas"];
+
+/** Allowed values come from the generated API contract; this file adds only order, labels and tones. */
+export type PostingDisposition = Schemas["PostingDetailDto"]["disposition"];
+
+export type ResurfacePolicy = Schemas["PostingDetailDto"]["resurfacePolicy"];
+
+/** UI order of the dispositions. A member missing from the generated type is a compile error here. */
+export const DISPOSITION_ORDER = exhaustiveOrder<PostingDisposition>()([
   "lead",
   "scored",
   "applied",
@@ -6,13 +17,11 @@ export const DISPOSITION_VALUES = [
   "screened_out",
   "closed",
   "unscored",
-] as const;
-
-export type PostingDisposition = (typeof DISPOSITION_VALUES)[number];
+]);
 
 /**
- * Named access to the dispositions the Insights lenses filter on. Typed against the Domain list above, so a rename
- * in the Domain enum (and its contract snapshot) breaks the build here instead of silently changing a filter.
+ * Named access to the dispositions the Insights lenses filter on. Typed against the generated union, so a rename
+ * in the Domain enum (and the regenerated contract) breaks the build here instead of silently changing a filter.
  */
 export const DISPOSITION = {
   Lead: "lead",
@@ -21,16 +30,15 @@ export const DISPOSITION = {
   Closed: "closed",
 } as const satisfies Record<string, PostingDisposition>;
 
-export const RESURFACE_POLICY_VALUES = ["never", "if_reopened"] as const;
-
-export type ResurfacePolicy = (typeof RESURFACE_POLICY_VALUES)[number];
+/** UI order of the resurface policies. */
+export const RESURFACE_POLICY_ORDER = exhaustiveOrder<ResurfacePolicy>()(["never", "if_reopened"]);
 
 export function isPostingDisposition(val: unknown): val is PostingDisposition {
-  return typeof val === "string" && (DISPOSITION_VALUES as readonly string[]).includes(val);
+  return typeof val === "string" && Object.hasOwn(DISPOSITION_METADATA, val);
 }
 
 export function isResurfacePolicy(val: unknown): val is ResurfacePolicy {
-  return typeof val === "string" && (RESURFACE_POLICY_VALUES as readonly string[]).includes(val);
+  return typeof val === "string" && Object.hasOwn(RESURFACE_POLICY_LABELS, val);
 }
 
 export interface DispositionMeta {

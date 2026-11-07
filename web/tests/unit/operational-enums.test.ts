@@ -3,7 +3,6 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   CRITERION_CATEGORY_VALUES,
-  SUPPORTED_ENTITY_ROUTE_TYPES,
   CRITERION_CATEGORY_METADATA,
   isCriterionCategory,
   isSupportedEntityRouteType,
@@ -20,11 +19,10 @@ describe("operational-enums.ts contract drift guard", () => {
 
     const json = JSON.parse(fs.readFileSync(targetPath, "utf8")) as {
       criterionCategories: string[];
-      supportedEntityRoutes: string[];
     };
 
+    // CriterionCategory is not in the REST contract (criteria come through OData), so the snapshot still guards it.
     expect([...CRITERION_CATEGORY_VALUES]).toEqual(json.criterionCategories);
-    expect([...SUPPORTED_ENTITY_ROUTE_TYPES]).toEqual(json.supportedEntityRoutes);
   });
 
   it("provides metadata for all criterion categories", () => {

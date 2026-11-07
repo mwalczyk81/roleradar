@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
@@ -26,6 +27,7 @@ public static class ExplicitTypeSchemaTransformers
                 DeclareInsightsWindowEnum(windowSchema);
             }
 
+            DeclareRegisteredEnums(schema, context.JsonTypeInfo.Type);
             return Task.CompletedTask;
         });
 
@@ -82,6 +84,39 @@ public static class ExplicitTypeSchemaTransformers
                 concrete.Required = true;
                 schema.Type = JsonSchemaType.String;
                 schema.Format = "date";
+            }
+        }
+    }
+
+    /// <summary>
+    /// Writes <c>enum</c> onto every DTO property the registry lists for this DTO, from the Domain enum's serialized
+    /// values (ADR 0035). A nullable property also allows null; an array property constrains its items.
+    /// </summary>
+    private static void DeclareRegisteredEnums(OpenApiSchema schema, Type dtoType)
+    {
+        if (schema.Properties is null)
+        {
+            return;
+        }
+
+        foreach (var entry in EnumContractRegistry.Entries)
+        {
+            foreach (var carrier in entry.CarriedBy.Where(c => c.Dto == dtoType))
+            {
+                var jsonName = JsonNamingPolicy.CamelCase.ConvertName(carrier.ClrProperty);
+                if (!schema.Properties.TryGetValue(jsonName, out var property) || property is not OpenApiSchema concrete)
+                {
+                    continue;
+                }
+
+                var target = concrete.Items as OpenApiSchema ?? concrete;
+                var values = new List<JsonNode>(EnumContractRegistry.SerializedValues(entry.EnumType).Select(v => (JsonNode)JsonValue.Create(v)!));
+                if (target.Type.HasValue && target.Type.Value.HasFlag(JsonSchemaType.Null))
+                {
+                    values.Add(JsonNullSentinel.JsonNull);
+                }
+
+                target.Enum = values;
             }
         }
     }

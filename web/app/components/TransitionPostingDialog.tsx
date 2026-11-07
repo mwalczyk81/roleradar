@@ -8,7 +8,7 @@ import {
   type PostingDisposition,
   type ResurfacePolicy,
   DISPOSITION_METADATA,
-  RESURFACE_POLICY_VALUES,
+  RESURFACE_POLICY_ORDER,
   RESURFACE_POLICY_LABELS,
   getValidTransitionTargets,
 } from "../lib/dispositions.js";
@@ -249,7 +249,7 @@ export function TransitionPostingDialog({
                 onChange={(e) => setResurfacePolicy(e.target.value)}
               >
                 <option value="">Keep current policy</option>
-                {RESURFACE_POLICY_VALUES.map((pol) => (
+                {RESURFACE_POLICY_ORDER.map((pol) => (
                   <option key={pol} value={pol}>
                     {RESURFACE_POLICY_LABELS[pol]} ({pol})
                   </option>

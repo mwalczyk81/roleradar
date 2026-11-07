@@ -18,6 +18,7 @@ namespace RoleRadar.Tests.Integration.Containers;
 /// log hygiene (no raw secret leakage), and fail-closed termination on missing secrets or TLS assets.
 /// </summary>
 [Collection("BenchmarkCollection")]
+[Trait("Lane", "web-container")]
 public sealed class WebContainerSmokeTests
 {
     private const string DefaultIdentityImageTag = "roleradar-identity:test";

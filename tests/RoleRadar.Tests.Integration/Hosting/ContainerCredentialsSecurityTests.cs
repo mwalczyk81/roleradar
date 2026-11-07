@@ -13,6 +13,7 @@ namespace RoleRadar.Tests.Integration.Hosting;
 /// (<c>--read-only --tmpfs /tmp --cap-drop ALL --security-opt no-new-privileges</c>).
 /// </summary>
 [Collection("ContainerIsolatedCollection")]
+[Trait("Lane", "images")]
 public sealed class ContainerCredentialsSecurityTests : IClassFixture<IsolatedContainerMongoFixture>
 {
     private readonly IsolatedContainerMongoFixture _mongo;

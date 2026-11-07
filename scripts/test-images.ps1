@@ -5,7 +5,9 @@ param(
     [string]$IdentityImage = "roleradar-identity:test",
     [string]$WebImage = "roleradar-web:test",
     [string]$Configuration = "Release",
-    [string]$Filter = "FullyQualifiedName~Hosting|FullyQualifiedName~ShippedHost|FullyQualifiedName~StartupSmoke|FullyQualifiedName~ContactNoLeak|FullyQualifiedName~CliComposition|FullyQualifiedName~WebContainer",
+    # Selected by the Lane trait (ADR 0036), never by class-name fragments: a new image-sensitive class carries [Trait("Lane", "images")]
+    # and TestLaneCoverageTests fails when one does not. The scan test has its own lane ("scan") because it needs real reports.
+    [string]$Filter = "Lane=images|Lane=web-container",
     [switch]$NoBuild
 )
 
