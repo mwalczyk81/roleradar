@@ -35,11 +35,22 @@ internal static class MongoContainerStartGate
         }
     }
 
-    private static async Task StartWithOneRestartAsync(IContainer container)
+    private static Task StartWithOneRestartAsync(IContainer container) =>
+        StartWithOneRestartAsync(
+            () => container.StartAsync(),
+            failure => DescribeFailureAsync(container, failure));
+
+    /// <summary>
+    /// The retry policy, separated from Docker so it can be tested without a real container: one restart after an
+    /// "is not running" failure, none after anything else.
+    /// </summary>
+    internal static async Task StartWithOneRestartAsync(
+        Func<Task> start,
+        Func<Exception, Task<string>> describeFailure)
     {
         try
         {
-            await container.StartAsync();
+            await start();
             return;
         }
         catch (Exception first) when (first.Message.Contains("is not running", StringComparison.OrdinalIgnoreCase))
@@ -47,24 +58,26 @@ internal static class MongoContainerStartGate
             // mongod occasionally dies while the replica set is being set up (the container then reports
             // "is not running"). Capture what Docker says about why, make the restart visible, and start the same
             // container once more. There are no further retries.
-            var diagnostics = await DescribeFailureAsync(container, first);
+            var diagnostics = await describeFailure(first);
             ReportRestart(diagnostics);
             var firstLogs = diagnostics;
             try
             {
-                await container.StartAsync();
+                await start();
             }
             catch (Exception second)
             {
+                // The restart failed too: explain both attempts (docker State and log tail each), not only the first.
+                var secondDiagnostics = await describeFailure(second);
                 throw new InvalidOperationException(
-                    $"MongoDB container failed to start twice. First: {first.Message}{Environment.NewLine}{firstLogs}{Environment.NewLine}Second: {second.Message}",
+                    $"MongoDB container failed to start twice.{Environment.NewLine}First attempt: {first.Message}{Environment.NewLine}{firstLogs}{Environment.NewLine}Second attempt: {second.Message}{Environment.NewLine}{secondDiagnostics}",
                     second);
             }
         }
         catch (Exception other)
         {
-            // Attach what the container itself logged so the cause is visible in the test failure.
-            throw new InvalidOperationException($"MongoDB container failed to start: {other.Message}{Environment.NewLine}{await TailLogsAsync(container)}", other);
+            // Attach docker State, memory and what the container logged, so the cause is visible in the test failure.
+            throw new InvalidOperationException($"MongoDB container failed to start: {other.Message}{Environment.NewLine}{await describeFailure(other)}", other);
         }
     }
 
@@ -98,11 +111,27 @@ internal static class MongoContainerStartGate
         {
             $"start error: {failure.Message}",
             $"concurrent container starts at this moment: {Volatile.Read(ref _startsInFlight)} (gate allows {MaxConcurrentStarts})",
-            $"docker State: {await RunDockerAsync("inspect", "--format", "{{json .State}}", container.Id)}",
+            $"docker State: {await StateAsync(container)}",
             $"docker memory (bytes): {await RunDockerAsync("info", "--format", "{{.MemTotal}}")}"
         };
         lines.Add(await TailLogsAsync(container));
         return string.Join(Environment.NewLine, lines);
+    }
+
+    /// <summary>The container's docker State; a container that was never created (for example an image that cannot be pulled) has no id, and that must not make the diagnostics themselves throw.</summary>
+    private static async Task<string> StateAsync(IContainer container)
+    {
+        string id;
+        try
+        {
+            id = container.Id;
+        }
+        catch (Exception ex)
+        {
+            return $"(container was never created: {ex.Message})";
+        }
+
+        return await RunDockerAsync("inspect", "--format", "{{json .State}}", id);
     }
 
     private static async Task<string> RunDockerAsync(params string[] args)

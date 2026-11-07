@@ -675,14 +675,10 @@ public sealed class BackupRestoreWipeIntegrationTests : IClassFixture<BackupInte
             var backupService = provider.GetRequiredService<IBackupArchiveService>();
             var backupTask = backupService.CreateBackupAsync(targetFile, "Passphrase123!", cancellationToken: cts.Token);
 
-            // Wait until child PID file is written
-            var sw = Stopwatch.StartNew();
-            while (!File.Exists(pidFile) && sw.ElapsedMilliseconds < 5000)
-            {
-                await Task.Delay(50);
-            }
-
-            Assert.True(File.Exists(pidFile), "Expected child PID file to be created by test process.");
+            // Wait until child PID file is written. The wait also watches the backup task, so a backup that ended before it
+            // launched a child is reported with its outcome rather than as a bare 5 s timeout (feature 010, research R14).
+            var pidWait = await BackupProcessWait.WaitForPidFileAsync(pidFile, backupTask, TimeSpan.FromSeconds(5));
+            Assert.True(pidWait.PidFileExists, "Expected child PID file to be created by test process: " + pidWait.Explanation);
             var childPid = int.Parse(await File.ReadAllTextAsync(pidFile), CultureInfo.InvariantCulture);
 
             // Verify child process is currently alive

@@ -6,6 +6,7 @@ import { startAppHarness, defaultStubState, type AppHarness, type StubState } fr
 import { startInsightsHarness, loadNoteFixture, loadSnapshot, type InsightsHarness } from "./support/insights-stub.js";
 import { assertNotRealStackProject } from "./support/isolation.js";
 import { styleAttributeElements } from "./support/style-census.js";
+import { settleForCapture } from "./support/capture-settle.js";
 
 /**
  * 009 phase 1: the before/after screenshot harness and the style-attribute census.
@@ -44,18 +45,10 @@ interface CensusEntry {
 }
 const census: Record<string, CensusEntry> = {};
 
-async function settle(page: Page): Promise<void> {
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.evaluate(async () => {
-    await document.fonts.ready;
-    const animations = document.getAnimations();
-    await Promise.all(animations.map((a) => a.finished));
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  });
-}
-
-async function capture(page: Page, name: string, theme: Theme): Promise<void> {
-  await settle(page);
+async function capture(page: Page, name: string, theme: Theme, keepScroll = false): Promise<void> {
+  // Waits on real conditions (scroll offset 0, geometry unchanged for several frames), see support/capture-settle.ts.
+  // A hover capture keeps the scroll position the hover left, so the pointer stays on its target.
+  await settleForCapture(page, { keepScroll });
   await expect(page).toHaveScreenshot(`${name}-${theme}.png`, { fullPage: true, animations: "disabled", caret: "hide" });
 }
 
@@ -86,6 +79,8 @@ test.describe("Visual baseline: app routes (fictional loopback stub)", () => {
     after?: (page: Page) => Promise<void>;
     /** Whether the route is part of the census (server-rendered HTML only; dialogs are not). */
     census?: boolean;
+    /** A pointer-dependent capture (hover): do not scroll to the top before capturing. */
+    hover?: boolean;
   }
 
   const routes: RouteCase[] = [
@@ -125,6 +120,7 @@ test.describe("Visual baseline: app routes (fictional loopback stub)", () => {
       // 009 phase 4 (J7): the role-title link under the pointer and under keyboard focus.
       name: "postings-role-link-hover",
       path: "/postings",
+      hover: true,
       after: async (page) => {
         await page.locator('table a[href^="/postings/"]').first().hover();
       },
@@ -139,6 +135,7 @@ test.describe("Visual baseline: app routes (fictional loopback stub)", () => {
     {
       name: "applications-title-link-hover",
       path: "/applications",
+      hover: true,
       after: async (page) => {
         await page.locator('table a[href^="/applications/"]').first().hover();
       },
@@ -410,7 +407,7 @@ test.describe("Visual baseline: app routes (fictional loopback stub)", () => {
 
         await page.goto(`${harness.baseUrl}${route.path}`, { waitUntil: "networkidle" });
         if (route.after) await route.after(page);
-        await capture(page, route.name, theme);
+        await capture(page, route.name, theme, route.hover === true);
       });
     }
   }
@@ -444,6 +441,7 @@ test.describe("Visual baseline: Insights and the wide-table note (fictional loop
     name: string;
     path: string;
     zeroedLens?: string;
+    hover?: boolean;
     after?: (page: Page) => Promise<void>;
   }
   const pages: InsightsCase[] = [
@@ -456,6 +454,7 @@ test.describe("Visual baseline: Insights and the wide-table note (fictional loop
     {
       name: "insights-drill-link-hover",
       path: `/insights?window=90d&asOf=${AS_OF}`,
+      hover: true,
       after: async (page) => {
         await page.locator('a[data-role="numerator"]').first().hover();
       },
@@ -486,7 +485,7 @@ test.describe("Visual baseline: Insights and the wide-table note (fictional loop
         insights.setZeroedLens(entry.zeroedLens ?? null);
         await page.goto(`${insights.baseUrl}${entry.path}`, { waitUntil: "networkidle" });
         if (entry.after) await entry.after(page);
-        await capture(page, entry.name, theme);
+        await capture(page, entry.name, theme, entry.hover === true);
         insights.setZeroedLens(null);
       });
     }

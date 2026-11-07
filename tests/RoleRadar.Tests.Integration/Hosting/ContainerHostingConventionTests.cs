@@ -4,6 +4,7 @@ using Xunit;
 
 namespace RoleRadar.Tests.Integration.Hosting;
 
+[Trait("Lane", "images")]
 public sealed class ContainerHostingConventionTests
 {
     private const string NonLoopbackUnreachableCredentialedUri =
@@ -104,10 +105,9 @@ public sealed class ContainerHostingConventionTests
 
         try
         {
-            // Allow container to boot
-            await Task.Delay(1000);
-
-            var stopwatch = Stopwatch.StartNew();
+            // Wait until the process can actually catch SIGTERM (a real condition, not a fixed delay: under a slow Docker
+            // daemon one second is not enough, and a signal sent before the handler exists is dropped by PID 1).
+            await ContainerSignalReadiness.WaitUntilSigtermCaughtAsync(containerName, TimeSpan.FromSeconds(60));
 
             // Send SIGTERM
             var killPsi = new ProcessStartInfo
@@ -120,6 +120,10 @@ public sealed class ContainerHostingConventionTests
             };
             using var killProcess = Process.Start(killPsi)!;
             await killProcess.WaitForExitAsync();
+
+            // The 5 s bound is on the process's shutdown. Start timing once the signal has been sent: the time the Docker
+            // daemon takes to answer the kill call itself (seconds on a saturated host) is not the application's.
+            var stopwatch = Stopwatch.StartNew();
 
             // Wait for exit
             var waitPsi = new ProcessStartInfo
@@ -138,9 +142,10 @@ public sealed class ContainerHostingConventionTests
             _ = int.TryParse(exitCodeStr, out var exitCode);
 
             // Container must exit cleanly within 5 seconds upon SIGTERM
-            Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5.0), $"SIGTERM shutdown took {stopwatch.Elapsed.TotalSeconds:F2}s, exceeding 5.0s bound.");
+            var diagnostics = await ContainerSignalReadiness.DescribeAsync(containerName);
+            Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5.0), $"SIGTERM shutdown took {stopwatch.Elapsed.TotalSeconds:F2}s, exceeding 5.0s bound. {diagnostics}");
             // Common exit codes for clean or SIGTERM termination: 0 or 143 (128 + 15)
-            Assert.True(exitCode == 0 || exitCode == 143, $"Unexpected exit code upon SIGTERM: {exitCode}");
+            Assert.True(exitCode == 0 || exitCode == 143, $"Unexpected exit code upon SIGTERM: {exitCode}. {diagnostics}");
         }
         finally
         {
@@ -168,11 +173,13 @@ public sealed class ContainerHostingConventionTests
         var containerName = $"test-sigterm-cli-{Guid.NewGuid():N}";
         var image = ContainerTestHarness.ResolveCliImage();
 
-        // Start container running a long-running or interactive command in background
+        // Start an interactive command in the background: `backup --passphrase-stdin` blocks reading the passphrase from the
+        // open stdin and never touches the database, so it cannot end by itself. It can only exit if SIGTERM is handled.
+        // (The earlier `status` command ended on its own after 3 to 6 s, which let the test pass with SIGTERM ignored.)
         var startPsi = new ProcessStartInfo
         {
             FileName = "docker",
-            Arguments = $"run -d -i --name {containerName} --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop ALL --security-opt no-new-privileges -e ROLERADAR_MONGO_CONNECTION_STRING=\"{NonLoopbackUnreachableCredentialedUri}\" {image} status",
+            Arguments = $"run -d -i --name {containerName} --read-only --tmpfs /tmp:rw,noexec,nosuid,size=64m --cap-drop ALL --security-opt no-new-privileges -e ROLERADAR_MONGO_CONNECTION_STRING=\"{NonLoopbackUnreachableCredentialedUri}\" {image} backup --passphrase-stdin",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false
@@ -184,9 +191,12 @@ public sealed class ContainerHostingConventionTests
 
         try
         {
-            var stopwatch = Stopwatch.StartNew();
+            // A signal sent to PID 1 before its process can catch it is dropped. Wait for the real condition (the
+            // handler is installed) instead of signalling right after `docker run -d` returns; a slow Docker daemon
+            // or host stretches that start-up from tenths of a second to many seconds.
+            await ContainerSignalReadiness.WaitUntilSigtermCaughtAsync(containerName, TimeSpan.FromSeconds(60));
 
-            // Send SIGTERM immediately while probe or command is active
+            // Send SIGTERM now that the process can catch it
             var killPsi = new ProcessStartInfo
             {
                 FileName = "docker",
@@ -197,6 +207,10 @@ public sealed class ContainerHostingConventionTests
             };
             using var killProcess = Process.Start(killPsi)!;
             await killProcess.WaitForExitAsync();
+
+            // The 5 s bound is on the process's shutdown. Start timing once the signal has been sent: the time the Docker
+            // daemon takes to answer the kill call itself (seconds on a saturated host) is not the application's.
+            var stopwatch = Stopwatch.StartNew();
 
             // Wait for exit
             var waitPsi = new ProcessStartInfo
@@ -214,9 +228,11 @@ public sealed class ContainerHostingConventionTests
             var exitCodeStr = (await waitProcess.StandardOutput.ReadToEndAsync()).Trim();
             _ = int.TryParse(exitCodeStr, out var exitCode);
 
-            // Container must terminate cleanly within 5 seconds upon SIGTERM
-            Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5.0), $"SIGTERM shutdown took {stopwatch.Elapsed.TotalSeconds:F2}s, exceeding 5.0s bound.");
-            Assert.True(exitCode == 0 || exitCode == 1 || exitCode == 143, $"Unexpected exit code upon SIGTERM: {exitCode}");
+            // Container must terminate within 5 seconds upon SIGTERM, with 0 or 143 (128 + 15). Exit code 1 is no longer
+            // accepted: it meant the command ended by itself, that is, SIGTERM had not been handled.
+            var diagnostics = await ContainerSignalReadiness.DescribeAsync(containerName);
+            Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5.0), $"SIGTERM shutdown took {stopwatch.Elapsed.TotalSeconds:F2}s, exceeding 5.0s bound. {diagnostics}");
+            Assert.True(exitCode == 0 || exitCode == 143, $"Unexpected exit code upon SIGTERM: {exitCode}. {diagnostics}");
         }
         finally
         {
