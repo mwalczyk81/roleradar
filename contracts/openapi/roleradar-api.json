@@ -488,6 +488,17 @@
         "type": "object",
         "properties": {
           "eventType": {
+            "enum": [
+              "applied",
+              "follow_up",
+              "interview",
+              "offer",
+              "offer_accepted",
+              "offer_declined",
+              "rejected",
+              "withdrawn",
+              "note"
+            ],
             "type": "string"
           },
           "eventDate": {
@@ -531,6 +542,11 @@
             "format": "uuid"
           },
           "status": {
+            "enum": [
+              "applied",
+              "rejected",
+              "closed"
+            ],
             "type": "string"
           },
           "appliedAt": {
@@ -553,6 +569,17 @@
         "type": "object",
         "properties": {
           "eventType": {
+            "enum": [
+              "applied",
+              "follow_up",
+              "interview",
+              "offer",
+              "offer_accepted",
+              "offer_declined",
+              "rejected",
+              "withdrawn",
+              "note"
+            ],
             "type": "string"
           },
           "eventDate": {
@@ -623,6 +650,11 @@
             ]
           },
           "fetchMethod": {
+            "enum": [
+              "api",
+              "browser",
+              "blocked"
+            ],
             "type": "string"
           },
           "active": {
@@ -652,9 +684,26 @@
             "type": "string"
           },
           "status": {
+            "enum": [
+              "target",
+              "watch",
+              "avoid",
+              "neutral"
+            ],
             "type": "string"
           },
           "ownershipType": {
+            "enum": [
+              "public",
+              "private",
+              "pe_backed",
+              "vc_backed",
+              "mutual",
+              "subsidiary",
+              "nonprofit",
+              "government",
+              "unknown"
+            ],
             "type": "string"
           },
           "description": {
@@ -902,9 +951,22 @@
             ]
           },
           "disposition": {
+            "enum": [
+              "lead",
+              "scored",
+              "applied",
+              "rejected",
+              "screened_out",
+              "closed",
+              "unscored"
+            ],
             "type": "string"
           },
           "resurfacePolicy": {
+            "enum": [
+              "never",
+              "if_reopened"
+            ],
             "type": "string"
           },
           "score": {
@@ -978,6 +1040,14 @@
         "type": "object",
         "properties": {
           "signalType": {
+            "enum": [
+              "repost",
+              "no_salary",
+              "parallel_posting",
+              "gone",
+              "phantom",
+              "deadline"
+            ],
             "type": "string"
           },
           "evidence": {
@@ -1019,6 +1089,11 @@
             "type": "string"
           },
           "resumeVariant": {
+            "enum": [
+              "tailored",
+              "as_is",
+              "ic_framed"
+            ],
             "type": "string",
             "default": "tailored"
           },
@@ -1138,6 +1213,15 @@
         "type": "object",
         "properties": {
           "toDisposition": {
+            "enum": [
+              "lead",
+              "scored",
+              "applied",
+              "rejected",
+              "screened_out",
+              "closed",
+              "unscored"
+            ],
             "type": "string"
           },
           "reason": {
@@ -1154,6 +1238,11 @@
             "type": "string"
           },
           "resurfacePolicy": {
+            "enum": [
+              "never",
+              "if_reopened",
+              null
+            ],
             "type": [
               "null",
               "string"
@@ -1208,6 +1297,12 @@
             ]
           },
           "fetchMethod": {
+            "enum": [
+              "api",
+              "browser",
+              "blocked",
+              null
+            ],
             "type": [
               "null",
               "string"
@@ -1238,12 +1333,31 @@
             ]
           },
           "status": {
+            "enum": [
+              "target",
+              "watch",
+              "avoid",
+              "neutral",
+              null
+            ],
             "type": [
               "null",
               "string"
             ]
           },
           "ownershipType": {
+            "enum": [
+              "public",
+              "private",
+              "pe_backed",
+              "vc_backed",
+              "mutual",
+              "subsidiary",
+              "nonprofit",
+              "government",
+              "unknown",
+              null
+            ],
             "type": [
               "null",
               "string"

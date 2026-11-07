@@ -16,12 +16,14 @@ import { ArrowLeft } from "lucide-react";
 import { formatDate } from "../lib/format-date.js";
 import {
   DISPOSITION_METADATA,
-  RESURFACE_POLICY_VALUES,
   RESURFACE_POLICY_LABELS,
   canCreateApplication,
+  isPostingDisposition,
+  isResurfacePolicy,
   type PostingDisposition,
   type ResurfacePolicy,
 } from "../lib/dispositions.js";
+import { isResumeVariant } from "../lib/application-enums.js";
 import type { components } from "../../../contracts/client/api-types.js";
 
 export type PostingDetailDto = components["schemas"]["PostingDetailDto"];
@@ -134,7 +136,19 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (intent === "create_application") {
     const submittedDate = String(formData.get("submittedDate") || "").trim();
-    const resumeVariant = String(formData.get("resumeVariant") || "tailored").trim();
+    const resumeVariantRaw = String(formData.get("resumeVariant") || "tailored").trim();
+    if (!isResumeVariant(resumeVariantRaw)) {
+      return data<TransitionActionError>(
+        {
+          ok: false,
+          errorCode: "VALIDATION_FAILED",
+          message: "Resume variant is not recognised.",
+          fieldErrors: { resumeVariant: "Resume variant is not recognised." },
+        },
+        { status: 400 }
+      );
+    }
+    const resumeVariant = resumeVariantRaw;
     const currentDisposition = String(formData.get("currentDisposition") || "").trim();
     const requiresOverride = canCreateApplication(currentDisposition).requiresOverride;
     const overrideDecided = formData.get("overrideDecided") === "on" || formData.get("overrideDecided") === "true";
@@ -242,7 +256,19 @@ export async function action({ request, params }: ActionFunctionArgs) {
     );
   }
 
-  const toDisposition = String(formData.get("toDisposition") || "");
+  const toDispositionRaw = String(formData.get("toDisposition") || "");
+  if (!isPostingDisposition(toDispositionRaw)) {
+    return data<TransitionActionError>(
+      {
+        ok: false,
+        errorCode: "VALIDATION_FAILED",
+        message: "Disposition is not recognised.",
+        fieldErrors: { toDisposition: "Disposition is not recognised." },
+      },
+      { status: 400 }
+    );
+  }
+  const toDisposition = toDispositionRaw;
   const reason = String(formData.get("reason") || "");
   const versionToken = String(formData.get("versionToken") || "");
 
@@ -256,7 +282,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   let resurfacePolicy: ResurfacePolicy | undefined = undefined;
   if (typeof resurfacePolicyRaw === "string" && resurfacePolicyRaw.trim().length > 0) {
     const trimmed = resurfacePolicyRaw.trim();
-    if (!RESURFACE_POLICY_VALUES.includes(trimmed as ResurfacePolicy)) {
+    if (!isResurfacePolicy(trimmed)) {
       return data<TransitionActionError>(
         {
           ok: false,
@@ -267,7 +293,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         { status: 400 }
       );
     }
-    resurfacePolicy = trimmed as ResurfacePolicy;
+    resurfacePolicy = trimmed;
   }
 
   const overrideReasonRaw = formData.get("overrideReason");

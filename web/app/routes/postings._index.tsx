@@ -8,9 +8,9 @@ import { useTheme } from "../lib/use-theme.js";
 import { AppShell, Toolbar, DataTable, Badge, Select, Input, Button, type DataTableColumn } from "../ui.js";
 import { formatDate } from "../lib/format-date.js";
 import {
-  DISPOSITION_VALUES,
+  DISPOSITION_ORDER,
   DISPOSITION_METADATA,
-  RESURFACE_POLICY_VALUES,
+  RESURFACE_POLICY_ORDER,
   RESURFACE_POLICY_LABELS,
   isPostingDisposition,
   isResurfacePolicy,
@@ -456,7 +456,7 @@ export default function PostingsIndex() {
               }}
             >
               <option value="">All Dispositions</option>
-              {DISPOSITION_VALUES.map((d) => (
+              {DISPOSITION_ORDER.map((d) => (
                 <option key={d} value={d}>
                   {DISPOSITION_METADATA[d].label} ({d})
                 </option>
@@ -478,7 +478,7 @@ export default function PostingsIndex() {
               }}
             >
               <option value="">All Policies</option>
-              {RESURFACE_POLICY_VALUES.map((pol) => (
+              {RESURFACE_POLICY_ORDER.map((pol) => (
                 <option key={pol} value={pol}>
                   {RESURFACE_POLICY_LABELS[pol]} ({pol})
                 </option>

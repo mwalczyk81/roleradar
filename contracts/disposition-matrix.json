@@ -1,17 +1,4 @@
 {
-  "dispositions": [
-    "lead",
-    "scored",
-    "applied",
-    "rejected",
-    "screened_out",
-    "closed",
-    "unscored"
-  ],
-  "resurfacePolicies": [
-    "never",
-    "if_reopened"
-  ],
   "transitions": [
     {
       "from": "lead",

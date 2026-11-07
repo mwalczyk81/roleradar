@@ -2,16 +2,22 @@ import { describe, it, expect } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 import {
-  DISPOSITION_VALUES,
-  RESURFACE_POLICY_VALUES,
+  DISPOSITION_ORDER,
+  RESURFACE_POLICY_ORDER,
   TRANSITIONS,
   getValidTransitionTargets,
   canCreateApplication,
   DISPOSITION_METADATA,
 } from "../../app/lib/dispositions.js";
+import { hasUniqueMembers } from "../../app/lib/enum-order.js";
 
-describe("dispositions.ts contract drift guard", () => {
-  it("matches contracts/disposition-matrix.json exactly", () => {
+describe("dispositions.ts (values come from the generated API types, ADR 0035)", () => {
+  it("lists every disposition and resurface policy once in the UI order lists", () => {
+    expect(hasUniqueMembers(DISPOSITION_ORDER)).toBe(true);
+    expect(hasUniqueMembers(RESURFACE_POLICY_ORDER)).toBe(true);
+  });
+
+  it("matches the transition table in contracts/disposition-matrix.json exactly", () => {
     const matrixPath = path.resolve(process.cwd(), "../contracts/disposition-matrix.json");
     const altPath = path.resolve(process.cwd(), "contracts/disposition-matrix.json");
     const targetPath = fs.existsSync(matrixPath) ? matrixPath : altPath;
@@ -20,16 +26,10 @@ describe("dispositions.ts contract drift guard", () => {
 
     const json = JSON.parse(fs.readFileSync(targetPath, "utf8"));
 
-    // 1. Dispositions match
-    expect([...DISPOSITION_VALUES]).toEqual(json.dispositions);
-
-    // 2. Resurface policies match
-    expect([...RESURFACE_POLICY_VALUES]).toEqual(json.resurfacePolicies);
-
-    // 3. Transitions match
+    // Transitions match (the transition table is behaviour, not enum membership)
     expect(TRANSITIONS).toEqual(json.transitions);
 
-    // 4. Invariant: Applied is NEVER a target disposition
+    // Invariant: Applied is NEVER a target disposition
     for (const t of TRANSITIONS) {
       expect(t.to).not.toBe("applied");
     }
@@ -66,7 +66,7 @@ describe("dispositions.ts contract drift guard", () => {
   });
 
   it("defines distinctive badge tones for each disposition", () => {
-    for (const disp of DISPOSITION_VALUES) {
+    for (const disp of DISPOSITION_ORDER) {
       const meta = DISPOSITION_METADATA[disp];
       expect(meta).toBeDefined();
       expect(meta.label).toBeTruthy();

@@ -206,7 +206,7 @@ describe("Company Detail Action (T041)", () => {
     const formData = new FormData();
     formData.append("_csrf", csrfToken);
     formData.append("name", "");
-    formData.append("status", "invalid-status");
+    formData.append("status", "neutral");
     formData.append("versionToken", versionToken);
 
     const request = new Request(`https://localhost:5003/companies/${companyId}`, {

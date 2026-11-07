@@ -478,7 +478,8 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         AppendApplicationEventRequestDto: {
-            eventType: string;
+            /** @enum {string} */
+            eventType: "applied" | "follow_up" | "interview" | "offer" | "offer_accepted" | "offer_declined" | "rejected" | "withdrawn" | "note";
             eventDate: string;
             notes?: null | string;
             eventSource?: null | string;
@@ -490,12 +491,14 @@ export interface components {
             postingId: string;
             /** Format: uuid */
             companyId: string;
-            status: string;
+            /** @enum {string} */
+            status: "applied" | "rejected" | "closed";
             appliedAt: string;
             events: components["schemas"]["ApplicationEventDto"][];
         };
         ApplicationEventDto: {
-            eventType: string;
+            /** @enum {string} */
+            eventType: "applied" | "follow_up" | "interview" | "offer" | "offer_accepted" | "offer_declined" | "rejected" | "withdrawn" | "note";
             eventDate: string;
             notes: null | string;
             eventSource?: null | string;
@@ -512,15 +515,18 @@ export interface components {
             atsProvider: string;
             atsTenant: null | string;
             sourceUrl: null | string;
-            fetchMethod: string;
+            /** @enum {string} */
+            fetchMethod: "api" | "browser" | "blocked";
             active: boolean;
         };
         CompanyDetailDto: {
             /** Format: uuid */
             id: string;
             name: string;
-            status: string;
-            ownershipType: string;
+            /** @enum {string} */
+            status: "target" | "watch" | "avoid" | "neutral";
+            /** @enum {string} */
+            ownershipType: "public" | "private" | "pe_backed" | "vc_backed" | "mutual" | "subsidiary" | "nonprofit" | "government" | "unknown";
             description: null | string;
             headquarters: null | string;
             categoryTags: string[];
@@ -578,8 +584,10 @@ export interface components {
             title: string;
             requisitionId: null | string;
             location: null | string;
-            disposition: string;
-            resurfacePolicy: string;
+            /** @enum {string} */
+            disposition: "lead" | "scored" | "applied" | "rejected" | "screened_out" | "closed" | "unscored";
+            /** @enum {string} */
+            resurfacePolicy: "never" | "if_reopened";
             /** Format: double */
             score: null | number;
             /** Format: uuid */
@@ -597,7 +605,8 @@ export interface components {
             applicationId?: null | string;
         };
         PostingSignalDto: {
-            signalType: string;
+            /** @enum {string} */
+            signalType: "repost" | "no_salary" | "parallel_posting" | "gone" | "phantom" | "deadline";
             evidence: string;
             /** Format: date-time */
             detectedAt: string;
@@ -610,8 +619,11 @@ export interface components {
             /** Format: uuid */
             postingId: string;
             submittedDate: string;
-            /** @default tailored */
-            resumeVariant: string;
+            /**
+             * @default tailored
+             * @enum {string}
+             */
+            resumeVariant: "tailored" | "as_is" | "ic_framed";
             /** Format: double */
             desiredSalaryMin?: null | number;
             /** Format: double */
@@ -642,12 +654,14 @@ export interface components {
             newPostings: number;
         };
         TransitionPostingRequestDto: {
-            toDisposition: string;
+            /** @enum {string} */
+            toDisposition: "lead" | "scored" | "applied" | "rejected" | "screened_out" | "closed" | "unscored";
             reason: string;
             /** Format: uuid */
             criterionId: null | string;
             versionToken: string;
-            resurfacePolicy?: null | string;
+            /** @enum {null|string} */
+            resurfacePolicy?: "never" | "if_reopened" | null;
             overrideReason?: null | string;
             eventDate?: null | string;
         };
@@ -658,15 +672,18 @@ export interface components {
             atsProvider?: null | string;
             atsTenant?: null | string;
             sourceUrl?: null | string;
-            fetchMethod?: null | string;
+            /** @enum {null|string} */
+            fetchMethod?: "api" | "browser" | "blocked" | null;
             active?: null | boolean;
             /** Format: uuid */
             versionToken?: null | string;
         };
         UpdateCompanyRequestDto: {
             name?: null | string;
-            status?: null | string;
-            ownershipType?: null | string;
+            /** @enum {null|string} */
+            status?: "target" | "watch" | "avoid" | "neutral" | null;
+            /** @enum {null|string} */
+            ownershipType?: "public" | "private" | "pe_backed" | "vc_backed" | "mutual" | "subsidiary" | "nonprofit" | "government" | "unknown" | null;
             description?: null | string;
             headquarters?: null | string;
             categoryTags?: null | string[];

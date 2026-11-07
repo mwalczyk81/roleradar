@@ -1,42 +1,23 @@
 /**
- * Application Outcome, Event Type, and Resume Variant Enums derived from Domain contract.
- * Backed by contracts/application-enums.json with bidirectional drift tests.
+ * Application outcome (the API calls it "status"), event type and resume variant. Allowed values come from the
+ * generated API contract (contracts/client/api-types.ts, ADR 0035); this file adds only labels, tones and order.
  */
+import type { components } from "../../../contracts/client/api-types.js";
+import { exhaustiveOrder } from "./enum-order.js";
 
-export const APPLICATION_OUTCOME_VALUES = [
-  "applied",
-  "rejected",
-  "closed",
-] as const;
+type Schemas = components["schemas"];
 
-export type ApplicationOutcome = (typeof APPLICATION_OUTCOME_VALUES)[number];
+/** The Domain enum ApplicationOutcome, exposed by the API as the application "status". */
+export type ApplicationOutcome = Schemas["ApplicationDetailDto"]["status"];
 
-/** Named access to the application status the Insights lenses filter on, typed against the Domain list above. */
+export type ApplicationEventType = Schemas["ApplicationEventDto"]["eventType"];
+
+export type ResumeVariant = Schemas["RecordApplicationRequestDto"]["resumeVariant"];
+
+/** Named access to the application status the Insights lenses filter on, typed against the generated union. */
 export const APPLICATION_STATUS = {
   Applied: "applied",
 } as const satisfies Record<string, ApplicationOutcome>;
-
-export const APPLICATION_EVENT_TYPE_VALUES = [
-  "applied",
-  "follow_up",
-  "interview",
-  "offer",
-  "offer_accepted",
-  "offer_declined",
-  "rejected",
-  "withdrawn",
-  "note",
-] as const;
-
-export type ApplicationEventType = (typeof APPLICATION_EVENT_TYPE_VALUES)[number];
-
-export const RESUME_VARIANT_VALUES = [
-  "tailored",
-  "as_is",
-  "ic_framed",
-] as const;
-
-export type ResumeVariant = (typeof RESUME_VARIANT_VALUES)[number];
 
 export interface OutcomeMetadata {
   label: string;
@@ -49,17 +30,35 @@ export const APPLICATION_OUTCOME_METADATA: Record<ApplicationOutcome, OutcomeMet
   closed: { label: "Closed", tone: "neutral" },
 };
 
-export const APPLICATION_OUTCOME_OPTIONS: readonly { value: ApplicationOutcome; label: string }[] = [
-  { value: "applied", label: "Applied" },
-  { value: "rejected", label: "Rejected" },
-  { value: "closed", label: "Closed" },
-];
+export const APPLICATION_OUTCOME_ORDER = exhaustiveOrder<ApplicationOutcome>()(["applied", "rejected", "closed"]);
 
-export const RESUME_VARIANT_OPTIONS: readonly { value: ResumeVariant; label: string }[] = [
-  { value: "tailored", label: "Tailored" },
-  { value: "as_is", label: "As Is" },
-  { value: "ic_framed", label: "IC Framed" },
-];
+export const APPLICATION_OUTCOME_OPTIONS: readonly { value: ApplicationOutcome; label: string }[] =
+  APPLICATION_OUTCOME_ORDER.map((value) => ({ value, label: APPLICATION_OUTCOME_METADATA[value].label }));
+
+export const RESUME_VARIANT_LABELS: Record<ResumeVariant, string> = {
+  tailored: "Tailored",
+  as_is: "As Is",
+  ic_framed: "IC Framed",
+};
+
+export const RESUME_VARIANT_ORDER = exhaustiveOrder<ResumeVariant>()(["tailored", "as_is", "ic_framed"]);
+
+export const RESUME_VARIANT_OPTIONS: readonly { value: ResumeVariant; label: string }[] = RESUME_VARIANT_ORDER.map(
+  (value) => ({ value, label: RESUME_VARIANT_LABELS[value] }),
+);
+
+/** UI order of the event types (declaration order of the Domain enum, note last). */
+export const APPLICATION_EVENT_TYPE_ORDER = exhaustiveOrder<ApplicationEventType>()([
+  "applied",
+  "follow_up",
+  "interview",
+  "offer",
+  "offer_accepted",
+  "offer_declined",
+  "rejected",
+  "withdrawn",
+  "note",
+]);
 
 export interface EventTypeMetadata {
   label: string;
@@ -118,26 +117,41 @@ export const APPLICATION_EVENT_TYPE_METADATA: Record<ApplicationEventType, Event
 /**
  * Event types that can be appended to an application timeline via POST /api/v1/applications/{id}/events.
  */
-export const APPENDABLE_EVENT_OPTIONS: readonly { value: ApplicationEventType; label: string }[] = [
-  { value: "follow_up", label: "Follow Up" },
-  { value: "interview", label: "Interview" },
-  { value: "offer", label: "Offer Received" },
-  { value: "offer_accepted", label: "Offer Accepted (Closes Application)" },
-  { value: "offer_declined", label: "Offer Declined (Closes Application)" },
-  { value: "rejected", label: "Rejected (Marks Application Rejected)" },
-  { value: "withdrawn", label: "Withdrawn (Closes Application)" },
-  { value: "applied", label: "Applied (Record submission note)" },
-  { value: "note", label: "Note" },
-];
+const APPENDABLE_EVENT_LABELS: Record<ApplicationEventType, string> = {
+  follow_up: "Follow Up",
+  interview: "Interview",
+  offer: "Offer Received",
+  offer_accepted: "Offer Accepted (Closes Application)",
+  offer_declined: "Offer Declined (Closes Application)",
+  rejected: "Rejected (Marks Application Rejected)",
+  withdrawn: "Withdrawn (Closes Application)",
+  applied: "Applied (Record submission note)",
+  note: "Note",
+};
+
+const APPENDABLE_EVENT_ORDER = exhaustiveOrder<ApplicationEventType>()([
+  "follow_up",
+  "interview",
+  "offer",
+  "offer_accepted",
+  "offer_declined",
+  "rejected",
+  "withdrawn",
+  "applied",
+  "note",
+]);
+
+export const APPENDABLE_EVENT_OPTIONS: readonly { value: ApplicationEventType; label: string }[] =
+  APPENDABLE_EVENT_ORDER.map((value) => ({ value, label: APPENDABLE_EVENT_LABELS[value] }));
 
 export function isApplicationOutcome(val: unknown): val is ApplicationOutcome {
-  return typeof val === "string" && (APPLICATION_OUTCOME_VALUES as readonly string[]).includes(val);
+  return typeof val === "string" && Object.hasOwn(APPLICATION_OUTCOME_METADATA, val);
 }
 
 export function isApplicationEventType(val: unknown): val is ApplicationEventType {
-  return typeof val === "string" && (APPLICATION_EVENT_TYPE_VALUES as readonly string[]).includes(val);
+  return typeof val === "string" && Object.hasOwn(APPLICATION_EVENT_TYPE_METADATA, val);
 }
 
 export function isResumeVariant(val: unknown): val is ResumeVariant {
-  return typeof val === "string" && (RESUME_VARIANT_VALUES as readonly string[]).includes(val);
+  return typeof val === "string" && Object.hasOwn(RESUME_VARIANT_LABELS, val);
 }

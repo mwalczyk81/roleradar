@@ -12,9 +12,11 @@ public sealed class OperationalEnumsContractSnapshotTests
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
+    // CriterionCategory is not exposed by the REST API schema (criteria are read through OData, ADR 0028), so its
+    // values cannot be generated into the contract and stay snapshotted here. The earlier supportedEntityRoutes list
+    // was a literal inside this test with no production source, so it guarded nothing and is gone.
     private sealed record OperationalEnumsSnapshot(
-        IReadOnlyList<string> CriterionCategories,
-        IReadOnlyList<string> SupportedEntityRoutes);
+        IReadOnlyList<string> CriterionCategories);
 
     [Fact]
     public async Task OperationalEnums_MatchesCommittedContractSnapshot()
@@ -26,11 +28,8 @@ public sealed class OperationalEnumsContractSnapshotTests
             .Select(c => c.ToSnakeCase())
             .ToArray();
 
-        var supportedEntityRoutes = new[] { "posting", "company", "application" };
-
         var snapshotObj = new OperationalEnumsSnapshot(
-            CriterionCategories: criterionCategories,
-            SupportedEntityRoutes: supportedEntityRoutes);
+            CriterionCategories: criterionCategories);
 
         var generatedJson = JsonSerializer.Serialize(snapshotObj, IndentedJsonOptions) + Environment.NewLine;
 

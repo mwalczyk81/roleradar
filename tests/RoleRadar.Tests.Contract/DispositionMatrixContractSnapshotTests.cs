@@ -18,9 +18,9 @@ public sealed class DispositionMatrixContractSnapshotTests
         string? RequiredPolicy,
         bool RequiresReason);
 
+    // Only the transition table is pinned: it is behaviour shared by Domain and web. The disposition and resurface
+    // policy values are generated into the OpenAPI schema (ADR 0035), so they are no longer snapshotted here.
     private sealed record DispositionMatrixSnapshot(
-        IReadOnlyList<string> Dispositions,
-        IReadOnlyList<string> ResurfacePolicies,
         IReadOnlyList<TransitionRuleSnapshot> Transitions);
 
     [Fact]
@@ -28,14 +28,6 @@ public sealed class DispositionMatrixContractSnapshotTests
     {
         var repoRoot = FindRepoRoot();
         var snapshotPath = Path.Combine(repoRoot, "contracts", "disposition-matrix.json");
-
-        var dispositions = Enum.GetValues<PostingDisposition>()
-            .Select(d => d.ToSnakeCase())
-            .ToArray();
-
-        var resurfacePolicies = Enum.GetValues<ResurfacePolicy>()
-            .Select(p => p.ToSnakeCase())
-            .ToArray();
 
         var transitions = new List<TransitionRuleSnapshot>();
 
@@ -70,10 +62,7 @@ public sealed class DispositionMatrixContractSnapshotTests
             }
         }
 
-        var snapshotObj = new DispositionMatrixSnapshot(
-            Dispositions: dispositions,
-            ResurfacePolicies: resurfacePolicies,
-            Transitions: transitions);
+        var snapshotObj = new DispositionMatrixSnapshot(Transitions: transitions);
 
         var generatedJson = JsonSerializer.Serialize(snapshotObj, IndentedJsonOptions) + Environment.NewLine;
 
