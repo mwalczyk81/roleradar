@@ -98,6 +98,9 @@ public sealed class MongoContainerStartGateDiagnosticsTests
     public async Task ExitedMongod_ReportsDockerStateAndTheLogLine_NotOnlyALogTail()
     {
         await using var container = new MongoDbBuilder("mongo:8.0.34")
+            // Same kernel workaround as the fixtures (SERVER-121912): without it mongod stops at its kernel check on Linux
+            // 6.19+ (exit 1) before it reaches the bad flag (exit 2), so the test would depend on the host kernel.
+            .WithEnvironment("GLIBC_TUNABLES", "glibc.pthread.rseq=1")
             .WithCommand("--definitely-not-a-mongod-flag")
             .Build();
 
