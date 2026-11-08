@@ -486,6 +486,15 @@ jobs:
       group: pages-publish
       cancel-in-progress: false
     steps:
+      # Needed only for pages/index.html (the landing page staged at the site root) and the site size script.
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            pages
+            web/scripts
+
       - name: Check whether the gh-pages branch exists
         id: pages
         shell: bash
@@ -531,9 +540,14 @@ jobs:
             rm -rf site/.git
           fi
           mkdir -p site/allure-history
+          cp pages/index.html site/index.html
           rm -rf site/allure
           cp -r publish-input/allure site/allure
           cp publish-input/allure-history/history.jsonl site/allure-history/history.jsonl
+          # GitHub rejects a file over 100 MB: bound the history by bytes (oldest runs first), then refuse to publish a tree
+          # with any file over 50 MB.
+          node web/scripts/site-limits.mjs trim-history site/allure-history/history.jsonl
+          node web/scripts/site-limits.mjs check-size site
 
       - name: Publish the site (the branch is replaced by one commit)
         uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0

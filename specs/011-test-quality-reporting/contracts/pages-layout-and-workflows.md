@@ -5,11 +5,12 @@
 | Path | Content | Written by |
 |---|---|---|
 | `metrics/metrics.jsonl` | append-only records; the job checks out gh-pages, appends with `web/scripts/metrics-record.mjs` and publishes the whole file | main CI publish job |
+| `index.html` | static landing page linking `allure/`, `coverage/` and `metrics/` | both publish jobs (copied from `pages/index.html`) |
 | `metrics/index.html` | trends page | main CI publish job (copied from `pages/metrics/`) |
 | `badges/coverage.svg` | coverage badge from ReportGenerator | main CI publish job |
 | `coverage/` | ReportGenerator HTML | main CI publish job |
 | `allure/` | combined Allure site (sanitized), replaced on every publish (Playwright results plus the Vitest and xUnit JUnit files) | main CI publish job and the nightly `publish-allure` job |
-| `allure-history/history.jsonl` | the Allure history file (capped by `historyLimit`), overwritten on every publish | main CI publish job and the nightly `publish-allure` job |
+| `allure-history/history.jsonl` | the Allure history file (capped by `historyLimit` and trimmed to 20 MiB, oldest runs first, before staging), overwritten on every publish | main CI publish job and the nightly `publish-allure` job |
 
 ## Trigger and publish matrix
 
