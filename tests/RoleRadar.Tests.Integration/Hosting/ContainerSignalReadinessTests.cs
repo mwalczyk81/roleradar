@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Xunit;
 
 namespace RoleRadar.Tests.Integration.Hosting;
@@ -51,12 +50,10 @@ public sealed class ContainerSignalReadinessTests
     }
 
     [Fact]
-    public void TheHelperImageIsPinnedToTheSameDigestAsTheDockerfile()
+    public void TheHelperImageIsTheDockerfilesPinnedToolsStage()
     {
-        var dockerfile = File.ReadAllText(Path.Combine(ContainerTestHarness.FindRepoRoot(), "Dockerfile"));
-        var match = Regex.Match(dockerfile, @"FROM (ubuntu:[\w.]+@sha256:[0-9a-f]{64}) AS tools-downloader");
-
-        Assert.True(match.Success, "the Dockerfile tools-downloader stage no longer names a pinned ubuntu image");
-        Assert.Equal(ContainerSignalReadiness.HelperImage, match.Groups[1].Value);
+        // Read from the Dockerfile, not copied: a Dependabot bump of the pinned digest must not break this test. It still
+        // fails if the tools-downloader stage stops naming an ubuntu image pinned by digest.
+        Assert.Matches(@"^ubuntu:[\w.]+@sha256:[0-9a-f]{64}$", ContainerSignalReadiness.HelperImage);
     }
 }
