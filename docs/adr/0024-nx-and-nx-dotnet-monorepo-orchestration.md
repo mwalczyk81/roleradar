@@ -169,6 +169,7 @@ The GitHub Actions CI pipeline (`.github/workflows/ci.yml`) is structured to exe
      - `Windows (Unit, Architecture & PSScriptAnalyzer)`
      - `Dependency Review`
      - `CodeQL`
+   - **Amended 2026-11-08**: read from the live ruleset, the required checks are the gate (`Ubuntu (Build, Testcontainers, >=85% Coverage & Pre-Commit)`), `CodeQL` and `Dependency Review`, plus a code-scanning rule on CodeQL. `Windows (Unit, Architecture & PSScriptAnalyzer)` is not listed separately because the gate already requires it (`windows-verify`). See `docs/repo-settings.md`.
    - Rather than altering the branch ruleset, the actual Ubuntu build, test, and container security workload runs under the renamed job `Ubuntu (Build, Testcontainers & Container Security)`, while this gate job assumes the exact check name `Ubuntu (Build, Testcontainers, >=85% Coverage & Pre-Commit)`.
    - In a single evaluation step, the gate checks the results of `changes` and all downstream jobs (`pre-commit`, `ubuntu-build-and-test`, `web`, `windows-verify`).
    - The gate strictly requires that `changes` is `success` (a failed or cancelled `changes` job causes downstream jobs to skip, which must not pass) and that every needed job result is either `success` or `skipped`. Any result of `failure` or `cancelled` fails the gate.

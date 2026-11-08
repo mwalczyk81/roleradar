@@ -4,14 +4,16 @@ This checklist records the GitHub repository settings required to enforce the [R
 
 ## 1. Branch Ruleset (`main`)
 
-- **Require a pull request before merging**: Enabled
-- **Require status checks to pass**:
-  - `Windows (Unit, Architecture & PSScriptAnalyzer)` (`ci.yml`)
-  - `Ubuntu (Build, Testcontainers, >=85% Coverage & Pre-Commit)` (`ci.yml`, job `ci-gate`)
-  - `Analyze (csharp)` (`codeql.yml`)
+Verified against the live ruleset `Main` on 2026-11-08 (read from the GitHub API).
+
+- **Require a pull request before merging**: Enabled, 1 approval (repository admins can bypass)
+- **Require status checks to pass**, with the branch up to date:
+  - `Ubuntu (Build, Testcontainers, >=85% Coverage & Pre-Commit)` (`ci.yml`, job `ci-gate`; it includes the Windows, web, real-stack e2e and Allure report jobs)
+  - `CodeQL` (code scanning)
   - `Dependency Review` (`dependency-review.yml`)
+- **Require code scanning results**: CodeQL, blocking on errors and on high or critical security alerts
 - **Require branches to be up to date before merging**: Enabled
-- **Require linear history**: Enabled (Squash or Rebase merge)
+- **Linear history**: not enforced by a rule; merges are squash merges by practice
 - **Block force pushes & deletions**: Enabled
 
 ### What the required checks are
