@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import React from "react";
-import { render } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 import { createRoutesStub } from "react-router";
 import App from "../../app/root.js";
 
@@ -99,7 +99,9 @@ describe("root document theme (009 US2)", () => {
 
     const view = await renderRoot(undefined);
     expect(document.documentElement.getAttribute("data-theme")).toBe("light");
-    expect(change).toBeDefined();
+    // useTheme subscribes to the system change in a passive effect, which can run after findByText has resolved when the
+    // machine is busy (Stryker's instrumented dry run in CI). Wait for the subscription instead of assuming it.
+    await waitFor(() => expect(change).toBeDefined());
     const { act } = await import("@testing-library/react");
     act(() => change?.({ matches: true }));
     expect(document.documentElement.getAttribute("data-theme")).toBe("dark");

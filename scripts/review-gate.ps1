@@ -45,6 +45,7 @@ $tempDir = Join-Path $tempBase "rr-review-$cloneGuid"
 $gateResults = [ordered]@{
     Restore = "FAIL"
     Format = "FAIL"
+    ScriptLint = "FAIL"
     Build = "FAIL"
     Typecheck = "FAIL"
     Tests = "FAIL"
@@ -55,23 +56,26 @@ $gateResults = [ordered]@{
     WebSmoke = "FAIL"
 }
 
-$testCounts = [ordered]@{
-    Unit = 0
-    Arch = 0
-    Contract = 0
-    Integration = 0
+# Per-lane results parsed from the test run's own "Failed: n, Passed: n, Skipped: n" lines (null until parsed).
+$laneCounts = [ordered]@{
+    Unit = $null
+    Architecture = $null
+    Contract = $null
+    Integration = $null
 }
 
 $coveragePct = 0.0
+$coverageSummary = $null
 $scanReports = 0
 $scanCritical = 0
 $scanTestCounts = [pscustomobject]@{ Failed = -1; Passed = 0; Skipped = -1 }
 $imageLaneCounts = [pscustomobject]@{ Failed = -1; Passed = 0; Skipped = -1 }
-$cliSizeMb = "N/A"
-$mcpSizeMb = "N/A"
-$identitySizeMb = "N/A"
-$webSizeMb = "N/A"
-$apiSizeMb = "N/A"
+# Image sizes in bytes as reported by docker image inspect (null until measured); sizes are rendered from the summary.
+$cliBytes = $null
+$mcpBytes = $null
+$identityBytes = $null
+$webBytes = $null
+$apiBytes = $null
 
 try {
     # 1. Clone repository to temp folder and overlay uncommitted working-tree changes
@@ -115,6 +119,11 @@ try {
     $null = & dotnet format RoleRadar.sln --verify-no-changes 2>&1
     if ($LASTEXITCODE -eq 0) { $gateResults.Format = "PASS" } else { throw "dotnet format check failed." }
 
+    # 3b. Script lint: PSScriptAnalyzer directly, with the settings file CI uses (Severity Warning and Error).
+    # -EnableExit makes the exit code the number of findings. CI pins the module at 1.25.0.
+    $lintOutput = & pwsh -NoProfile -Command "Invoke-ScriptAnalyzer -Path scripts -Recurse -Settings scripts/psscriptanalyzer-settings.psd1 -EnableExit" 2>&1
+    if ($LASTEXITCODE -eq 0) { $gateResults.ScriptLint = "PASS" } else { throw "PSScriptAnalyzer failed (module 1.25.0 required): $(@($lintOutput) -join "`n")" }
+
     # 4. Build with warnings as errors
     $null = & dotnet build RoleRadar.sln -c Release --no-restore -warnaserror 2>&1
     if ($LASTEXITCODE -eq 0) { $gateResults.Build = "PASS" } else { throw "dotnet build (-warnaserror) failed." }
@@ -150,14 +159,8 @@ try {
     }
 
     foreach ($line in $testOutput) {
-        if ($line -match 'Passed!\s+-\s+Failed:\s+0,\s+Passed:\s+(\d+).*RoleRadar[.]Tests[.]Unit[.]dll') {
-            $testCounts.Unit = [int]$Matches[1]
-        } elseif ($line -match 'Passed!\s+-\s+Failed:\s+0,\s+Passed:\s+(\d+).*RoleRadar[.]Tests[.]Architecture[.]dll') {
-            $testCounts.Arch = [int]$Matches[1]
-        } elseif ($line -match 'Passed!\s+-\s+Failed:\s+0,\s+Passed:\s+(\d+).*RoleRadar[.]Tests[.]Contract[.]dll') {
-            $testCounts.Contract = [int]$Matches[1]
-        } elseif ($line -match 'Passed!\s+-\s+Failed:\s+0,\s+Passed:\s+(\d+).*RoleRadar[.]Tests[.]Integration[.]dll') {
-            $testCounts.Integration = [int]$Matches[1]
+        if ("$line" -match '(?:Passed|Failed)!\s+-\s+Failed:\s+(\d+),\s+Passed:\s+(\d+),\s+Skipped:\s+(\d+).*RoleRadar[.]Tests[.](Unit|Architecture|Contract|Integration)[.]dll') {
+            $laneCounts[$Matches[4]] = [ordered]@{ passed = [int]$Matches[2]; failed = [int]$Matches[1]; skipped = [int]$Matches[3] }
         }
     }
 
@@ -176,6 +179,25 @@ try {
         $rawLineRate = $doc.DocumentElement.GetAttribute("line-rate")
         $rate = [double]::Parse($rawLineRate, [System.Globalization.CultureInfo]::InvariantCulture)
         $coveragePct = [math]::Round($rate * 100.0, 2)
+        $rawBranchRate = $doc.DocumentElement.GetAttribute("branch-rate")
+        $branchRate = 0.0
+        $branchKnown = [double]::TryParse($rawBranchRate, [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$branchRate)
+        $coverageProjects = [ordered]@{}
+        foreach ($package in @($doc.DocumentElement.SelectNodes("//package"))) {
+            $packageLine = 0.0
+            $packageBranch = 0.0
+            $lineKnown = [double]::TryParse($package.GetAttribute("line-rate"), [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$packageLine)
+            $packageBranchKnown = [double]::TryParse($package.GetAttribute("branch-rate"), [System.Globalization.NumberStyles]::Float, [System.Globalization.CultureInfo]::InvariantCulture, [ref]$packageBranch)
+            $coverageProjects[$package.GetAttribute("name")] = [ordered]@{
+                linePct = if ($lineKnown) { [math]::Round($packageLine * 100.0, 1) } else { $null }
+                branchPct = if ($packageBranchKnown) { [math]::Round($packageBranch * 100.0, 1) } else { $null }
+            }
+        }
+        $coverageSummary = [ordered]@{
+            overallLinePct = $coveragePct
+            overallBranchPct = if ($branchKnown) { [math]::Round($branchRate * 100.0, 1) } else { $null }
+            projects = $coverageProjects
+        }
         if ($coveragePct -ge 85.0) {
             $gateResults.Coverage = "PASS"
         }
@@ -202,11 +224,6 @@ try {
 
     if ($cliBytes -and $mcpBytes -and $identityBytes -and $webBytes -and $apiBytes) {
         $gateResults.Images = "PASS"
-        $cliSizeMb = "$([math]::Round([int64]$cliBytes / 1MB, 1)) MB"
-        $mcpSizeMb = "$([math]::Round([int64]$mcpBytes / 1MB, 1)) MB"
-        $identitySizeMb = "$([math]::Round([int64]$identityBytes / 1MB, 1)) MB"
-        $webSizeMb = "$([math]::Round([int64]$webBytes / 1MB, 1)) MB"
-        $apiSizeMb = "$([math]::Round([int64]$apiBytes / 1MB, 1)) MB"
     }
 
     # 7b. Container scan (feature 010, ADR 0036). Trivy runs on the images built above with the same pinned image and flags
@@ -324,26 +341,79 @@ finally {
 }
 
 $allPassed = @($gateResults.Values | Where-Object { $_ -ne "PASS" -and $_ -ne "SKIP" }).Count -eq 0
-$totalTests = $testCounts.Unit + $testCounts.Arch + $testCounts.Contract + $testCounts.Integration
 
-# Exactly concise summary (<= 15 lines)
-Write-Output "=== RoleRadar Review Gate Summary: $Branch ==="
-Write-Output "1. Locked Restore: $($gateResults.Restore)"
-Write-Output "2. Code Format:   $($gateResults.Format)"
-Write-Output "3. WarningsBuild: $($gateResults.Build)"
-Write-Output "4. Typecheck:     $($gateResults.Typecheck)"
-Write-Output "5. Tests:         $($gateResults.Tests) (Unit: $($testCounts.Unit), Arch: $($testCounts.Arch), Contract: $($testCounts.Contract), Integration: $($testCounts.Integration) | Total: $totalTests)"
-Write-Output "6. Domain+App Cov: $coveragePct% (Gate: >= 85%) -> $($gateResults.Coverage)"
-Write-Output "7. Image Builds:  $($gateResults.Images) (CLI: $cliSizeMb, MCP: $mcpSizeMb, Identity: $identitySizeMb, Web: $webSizeMb, API: $apiSizeMb)"
-Write-Output "8. Web image + smoke: $($gateResults.WebSmoke)"
-Write-Output "9. Container scan:    $($gateResults.Scan) (reports: $scanReports, CRITICAL: $scanCritical, HIGH: not scanned (policy CRITICAL); test passed: $($scanTestCounts.Passed), skipped: $($scanTestCounts.Skipped))"
-Write-Output "10. Images lane:      $($gateResults.ImageLane) (passed: $($imageLaneCounts.Passed), failed: $($imageLaneCounts.Failed), skipped: $($imageLaneCounts.Skipped))"
-if ($IncludeE2E) {
-    Write-Output "11. Real-stack E2E:   $($gateResults.RealStackE2E)"
+# One object, written once and rendered below, so no number is typed by hand (feature 011). The Markdown tables the
+# gate used to write were dropped with build-run-summary.ps1; CI builds its own summary (web/scripts/metrics-record.mjs).
+$imageSizes = [ordered]@{ cli = $cliBytes; mcp = $mcpBytes; identity = $identityBytes; web = $webBytes; api = $apiBytes }
+$imageList = @(foreach ($name in $imageSizes.Keys) {
+        if ($imageSizes[$name]) { [ordered]@{ name = $name; sizeBytes = [int64]$imageSizes[$name] } }
+    })
+$gateSummary = [ordered]@{
+    schemaVersion = 1
+    branch = $Branch
+    gates = $gateResults
+    tests = $laneCounts
+    coverage = $coverageSummary
+    images = $imageList
+    scan = [ordered]@{
+        reports = $scanReports
+        critical = $scanCritical
+        severitiesScanned = @("CRITICAL")
+        testPassed = $scanTestCounts.Passed
+        testSkipped = $scanTestCounts.Skipped
+    }
+    imageLane = [ordered]@{ passed = $imageLaneCounts.Passed; failed = $imageLaneCounts.Failed; skipped = $imageLaneCounts.Skipped }
 }
-Write-Output "Verdict: $(if ($allPassed) { 'ALL GATES PASSED' } else { 'GATE FAILURE' })"
-Write-Output "================================================="
+$summaryDirectory = Join-Path $repoRoot "TestResults"
+New-Item -ItemType Directory -Force -Path $summaryDirectory | Out-Null
+$gateSummary | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $summaryDirectory "gate-summary.json") -Encoding utf8NoBOM
 
-if (-not $allPassed) {
+# Console summary, within the 15-line budget. A value that is missing shows as "unavailable" and fails the gate; nothing
+# is ever defaulted.
+$invariant = [System.Globalization.CultureInfo]::InvariantCulture
+$script:anyUnavailable = $false
+function Get-Cell {
+    param([AllowNull()][object]$Value, [string]$Format = "0")
+    if ($null -eq $Value) { $script:anyUnavailable = $true; return "unavailable" }
+    return ([double]$Value).ToString($Format, $invariant)
+}
+function Get-LanePassed {
+    param([string]$Lane)
+    if ($null -eq $laneCounts[$Lane]) { return $null }
+    return $laneCounts[$Lane].passed
+}
+function Get-SizeMb {
+    param([string]$Name)
+    if (-not $imageSizes[$Name]) { return "N/A" }
+    return "$([math]::Round([int64]$imageSizes[$Name] / 1MB, 1).ToString($invariant)) MB"
+}
+
+$passedCounts = @("Unit", "Architecture", "Contract", "Integration" | ForEach-Object { Get-LanePassed $_ })
+$totalPassed = if (@($passedCounts | Where-Object { $null -eq $_ }).Count -eq 0) { ($passedCounts | Measure-Object -Sum).Sum } else { $null }
+$overallCoverage = if ($null -ne $coverageSummary) { $coverageSummary.overallLinePct } else { $null }
+$highText = "HIGH: not scanned (policy CRITICAL)"
+$consoleLines = @(
+    "=== RoleRadar Review Gate Summary: $Branch ==="
+    "1. Locked Restore: $($gateResults.Restore)"
+    "2. Code Format:   $($gateResults.Format)"
+    "3. WarningsBuild: $($gateResults.Build)"
+    "4. Typecheck:     $($gateResults.Typecheck)"
+    "5. Tests:         $($gateResults.Tests) (Unit: $(Get-Cell (Get-LanePassed 'Unit')), Arch: $(Get-Cell (Get-LanePassed 'Architecture')), Contract: $(Get-Cell (Get-LanePassed 'Contract')), Integration: $(Get-Cell (Get-LanePassed 'Integration')) | Total: $(Get-Cell $totalPassed))"
+    "6. Domain+App Cov: $(Get-Cell $overallCoverage '0.##')% (Gate: >= 85%) -> $($gateResults.Coverage)"
+    "7. Image Builds:  $($gateResults.Images) (CLI: $(Get-SizeMb 'cli'), MCP: $(Get-SizeMb 'mcp'), Identity: $(Get-SizeMb 'identity'), Web: $(Get-SizeMb 'web'), API: $(Get-SizeMb 'api'))"
+    "8. Web image + smoke: $($gateResults.WebSmoke)"
+    "9. Container scan:    $($gateResults.Scan) (reports: $(Get-Cell $scanReports), CRITICAL: $(Get-Cell $scanCritical), $highText; test passed: $(Get-Cell $scanTestCounts.Passed), skipped: $(Get-Cell $scanTestCounts.Skipped))"
+    "10. Images lane:      $($gateResults.ImageLane) (passed: $(Get-Cell $imageLaneCounts.Passed), failed: $(Get-Cell $imageLaneCounts.Failed), skipped: $(Get-Cell $imageLaneCounts.Skipped))"
+)
+if ($gateResults.Contains("RealStackE2E")) {
+    $consoleLines += "11. Real-stack E2E:   $($gateResults['RealStackE2E'])"
+}
+$consoleLines += "Script lint:        $($gateResults.ScriptLint)"
+$verdictFailed = $script:anyUnavailable -or -not $allPassed
+$consoleLines += "Verdict: $(if ($verdictFailed) { 'GATE FAILURE' } else { 'ALL GATES PASSED' })"
+$consoleLines += "================================================="
+$consoleLines | ForEach-Object { Write-Output $_ }
+
+if ($verdictFailed) {
     exit 1
 }

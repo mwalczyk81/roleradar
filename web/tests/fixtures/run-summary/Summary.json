@@ -1,0 +1,23 @@
+{
+  "summary": {
+    "generatedon": "2026-01-01T00:00:00Z",
+    "parser": "MultiReport (2x Cobertura)",
+    "assemblies": 2,
+    "classes": 10,
+    "files": 8,
+    "coveredlines": 900,
+    "uncoveredlines": 100,
+    "coverablelines": 1000,
+    "totallines": 2000,
+    "linecoverage": 90,
+    "coveredbranches": 80,
+    "totalbranches": 100,
+    "branchcoverage": 80
+  },
+  "coverage": {
+    "assemblies": [
+      { "name": "RoleRadar.Domain", "classes": 4, "coverage": 95, "coveredlines": 190, "coverablelines": 200, "totallines": 400, "branchcoverage": 70, "coveredbranches": 14, "totalbranches": 20 },
+      { "name": "RoleRadar.Application", "classes": 6, "coverage": 85, "coveredlines": 680, "coverablelines": 800, "totallines": 1600, "branchcoverage": 90, "coveredbranches": 72, "totalbranches": 80 }
+    ]
+  }
+}

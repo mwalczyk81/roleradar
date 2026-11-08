@@ -187,3 +187,17 @@ Thumbs.db
 
 # Kit CSS and fonts copied into the Identity host at build (ADR 0034)
 src/RoleRadar.Identity/wwwroot/ds/
+
+# StrykerJS output (web mutation testing)
+.stryker-tmp
+web/reports
+web/.stryker-tmp
+
+# Generated test output is never committed: CI creates it fresh and uploads it as workflow artifacts.
+*.trx
+allure-results/
+allure-report/
+allure-input/
+allure-sanitized/
+allure-merged/
+allure-history/

@@ -40,3 +40,5 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0034](./0034-identity-serves-kit-assets-and-csp.md) | Identity Serves the Kit Assets and a CSP for Its Sign-In Pages | Accepted | `009-ui-polish-theming` |
 | [ADR-0035](./0035-generated-enum-contract.md) | Enum Values in the API Contract Are Generated, Not Snapshotted | Accepted | `010-contracts-test-integrity` |
 | [ADR-0036](./0036-test-lanes-and-gate-scan.md) | Test Lanes by Trait, and a Gate That Scans Its Own Images | Accepted | `010-contracts-test-integrity` |
+| [ADR-0037](./0037-mutation-testing.md) | Nightly Mutation Testing for the Web Library, .NET Deferred | Accepted | `011-test-quality-reporting` |
+| [ADR-0038](./0038-reporting-stack.md) | Reporting From Pipeline Numbers, With One Combined Allure Report | Accepted | `011-test-quality-reporting` |

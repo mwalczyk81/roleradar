@@ -8,6 +8,9 @@ import {
   getValidTransitionTargets,
   canCreateApplication,
   DISPOSITION_METADATA,
+  RESURFACE_POLICY_LABELS,
+  isPostingDisposition,
+  isResurfacePolicy,
 } from "../../app/lib/dispositions.js";
 import { hasUniqueMembers } from "../../app/lib/enum-order.js";
 
@@ -98,5 +101,37 @@ describe("dispositions.ts (values come from the generated API types, ADR 0035)",
     expect(canCreateApplication("lead")).toEqual({ allowed: true, requiresOverride: false });
     expect(canCreateApplication("scored")).toEqual({ allowed: true, requiresOverride: false });
     expect(canCreateApplication("unscored")).toEqual({ allowed: true, requiresOverride: false });
+  });
+
+  it("isPostingDisposition accepts exactly the known dispositions and nothing inherited or untyped", () => {
+    for (const value of DISPOSITION_ORDER) {
+      expect(isPostingDisposition(value)).toBe(true);
+    }
+    for (const value of ["", "Lead", "unknown", "constructor", "__proto__", "toString", "hasOwnProperty"]) {
+      expect(isPostingDisposition(value), value).toBe(false);
+    }
+    for (const value of [null, undefined, 0, 1, true, {}, [], ["lead"]]) {
+      expect(isPostingDisposition(value)).toBe(false);
+    }
+  });
+
+  it("isResurfacePolicy accepts exactly the known policies and nothing inherited or untyped", () => {
+    for (const value of RESURFACE_POLICY_ORDER) {
+      expect(isResurfacePolicy(value)).toBe(true);
+    }
+    for (const value of ["", "Never", "always", "constructor", "__proto__", "toString"]) {
+      expect(isResurfacePolicy(value), value).toBe(false);
+    }
+    for (const value of [null, undefined, 0, true, {}, ["never"]]) {
+      expect(isResurfacePolicy(value)).toBe(false);
+    }
+  });
+
+  it("keeps each disposition's own value, the resurface policy order and its labels", () => {
+    for (const key of DISPOSITION_ORDER) {
+      expect(DISPOSITION_METADATA[key].value).toBe(key);
+    }
+    expect([...RESURFACE_POLICY_ORDER]).toEqual(["never", "if_reopened"]);
+    expect(RESURFACE_POLICY_LABELS).toEqual({ never: "Never", if_reopened: "If Reopened" });
   });
 });

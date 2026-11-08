@@ -27,4 +27,17 @@ describe("Shared Navigation Items", () => {
     expect(items[6]).toEqual({ label: "Insights", href: "/insights", active: true });
     expect(items.filter((i) => i.active)).toHaveLength(1);
   });
+
+  it("marks a nested path active for every section, and only that section", () => {
+    const sections = ["/postings", "/companies", "/applications", "/criteria", "/notes", "/search-runs", "/insights"];
+    sections.forEach((href, index) => {
+      const items = getNavItems(`${href}/abc-123`);
+      expect(items[index]?.active, `${href}/abc-123`).toBe(true);
+      expect(items.filter((item) => item.active)).toHaveLength(1);
+    });
+  });
+
+  it("does not mark a section active when its name only appears at the end of another path", () => {
+    expect(getNavItems("/other/postings").some((item) => item.active)).toBe(false);
+  });
 });
