@@ -8,7 +8,7 @@
 | `metrics/index.html` | trends page | main CI publish job (copied from `pages/metrics/`) |
 | `badges/coverage.svg` | coverage badge from ReportGenerator | main CI publish job |
 | `coverage/` | ReportGenerator HTML | main CI publish job |
-| `allure/` | combined Allure site (sanitized), replaced on every publish | main CI publish job and the nightly `publish-allure` job |
+| `allure/` | combined Allure site (sanitized), replaced on every publish (Playwright results plus the Vitest and xUnit JUnit files) | main CI publish job and the nightly `publish-allure` job |
 | `allure-history/history.jsonl` | the Allure history file (capped by `historyLimit`), overwritten on every publish | main CI publish job and the nightly `publish-allure` job |
 
 ## Trigger and publish matrix
@@ -36,4 +36,4 @@ Rules: `persist-credentials: false` on every checkout, including the read-only c
 
 ## Publishing and what the owner must enable
 
-All publishing is `peaceiris/actions-gh-pages` (v4.1.0, SHA pinned). `site-keep` (trends page, metrics history, coverage badge, Allure history) is copied with `keep_files: true`; `site-coverage` and `site-allure` each replace one directory (`destination_dir`). There is no skip logic: pushing to the branch works whether or not GitHub Pages is enabled, and the publish job summary says what the owner must enable (Settings > Pages > Source: Deploy from a branch, `gh-pages`, `/ (root)`). Real-stack Allure results are sanitized to pass/fail and timings before the publish input exists; real-stack traces stay in a 7-day CI artifact and never enter any `site-*` folder.
+Each publishing job (the main CI `metrics-and-pages` job and the nightly `publish-allure` job) checks out the current gh-pages tree (when the branch exists), assembles the whole site in `site/` (everything already published is copied first, then the parts this run regenerates are replaced) and publishes `site/` with one `peaceiris/actions-gh-pages` step (v4.1.0, SHA pinned) using `force_orphan: true`. The action then makes gh-pages a single new commit holding exactly `site/` and force-pushes it, so the branch never accumulates history; it does not clone the branch in that mode, so `keep_files` is not used. There is no skip logic: pushing to the branch works whether or not GitHub Pages is enabled, and the job summary says what the owner must enable (Settings > Pages > Source: Deploy from a branch, `gh-pages`, `/ (root)`). Real-stack Allure results are sanitized to pass/fail and timings before the publish input exists; real-stack traces stay in a 7-day CI artifact and never enter `site/`.

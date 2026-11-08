@@ -732,9 +732,9 @@ jobs:
   # branch. This is the only job here with write access, and it never runs on a pull request or a fork: the condition is
   # a push to main whose backend tests ran and whose gate passed. It publishes numbers read from this run's own outputs
   # (run-summary artifact, the job list of this run, the latest nightly mutation score with its own run date and commit).
-  # The current gh-pages tree is checked out first (when the branch exists); web/scripts/metrics-record.mjs appends to
-  # its metrics/metrics.jsonl and the new site goes to separate output folders, so peaceiris/actions-gh-pages only copies
-  # files. Pushing to the branch works whether or not GitHub Pages is enabled; the job summary says what to enable.
+  # The current gh-pages tree is checked out first (when the branch exists), the whole site is assembled in site/ from it
+  # and this run's outputs, and peaceiris/actions-gh-pages publishes site/ as one orphan commit. Pushing to the branch
+  # works whether or not GitHub Pages is enabled; the job summary says what to enable.
   metrics-and-pages:
     name: Publish metrics, coverage and trends (main only)
     runs-on: ubuntu-24.04
@@ -804,9 +804,42 @@ jobs:
           name: allure-history
           path: publish-input/allure-history
 
-      # Appends this run's record to the existing metrics.jsonl and writes the whole file to the output folder. Job
-      # durations come from the run's own job list (completed jobs only; this job is still running and is left out). The
-      # mutation score is the latest successful nightly's, with its own run date and commit; it is absent until one exists.
+      # The whole site is assembled in site/ on every run, because the deploy below replaces the branch with one commit:
+      # whatever is not in site/ is gone afterwards. Everything already on gh-pages is carried over first (so a run that has
+      # no new Allure report keeps the old one), then the parts this run regenerates are replaced: the trends page, the
+      # badge, the coverage report, the Allure report and its history. metrics.jsonl is appended in the next step.
+      - name: Stage the site
+        id: stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          if [ -d pages-work ]; then
+            cp -a pages-work/. site/
+            rm -rf site/.git
+          fi
+          mkdir -p site/metrics site/badges site/allure-history
+          cp -r pages/metrics/. site/metrics/
+          rm -rf site/coverage
+          cp -r publish-input/coverage site/coverage
+          badge=$(find site/coverage -name badge_linecoverage.svg | head -n 1)
+          if [ -z "${badge}" ]; then
+            echo "badge_linecoverage.svg is missing from the coverage report; nothing is published." >&2
+            exit 1
+          fi
+          cp "${badge}" site/badges/coverage.svg
+          if [ -f publish-input/allure/index.html ]; then
+            rm -rf site/allure
+            cp -r publish-input/allure site/allure
+          fi
+          if [ -f publish-input/allure-history/history.jsonl ]; then
+            cp publish-input/allure-history/history.jsonl site/allure-history/history.jsonl
+          fi
+
+      # Appends this run's record to the existing metrics.jsonl (from the gh-pages checkout, so nothing is lost) and writes
+      # the whole file into the site. Job durations come from the run's own job list (completed jobs only; this job is
+      # still running and is left out). The mutation score is the latest successful nightly's, with its own run date and
+      # commit; it is absent until one exists.
       - name: Build the metrics record
         shell: bash
         env:
@@ -827,65 +860,22 @@ jobs:
             --summary publish-input/run-summary.json \
             --jobs publish-input/jobs.json \
             --existing pages-work/metrics/metrics.jsonl \
-            --output site-keep/metrics/metrics.jsonl \
+            --output site/metrics/metrics.jsonl \
             "${mutation_args[@]}"
 
-      # Three output folders. site-keep holds files that are added or overwritten and never removed (the trends page, the
-      # metrics history, the badge, the Allure history). site-coverage and site-allure each replace one directory of the
-      # branch, so stale report files do not pile up.
-      - name: Stage the site
-        id: stage
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p site-keep/metrics site-keep/badges site-keep/allure-history site-coverage
-          cp -r pages/metrics/. site-keep/metrics/
-          cp -r publish-input/coverage/. site-coverage/
-          badge=$(find site-coverage -name badge_linecoverage.svg | head -n 1)
-          if [ -z "${badge}" ]; then
-            echo "badge_linecoverage.svg is missing from the coverage report; nothing is published." >&2
-            exit 1
-          fi
-          cp "${badge}" site-keep/badges/coverage.svg
-          if [ -f publish-input/allure/index.html ]; then
-            cp -r publish-input/allure site-allure
-            echo "allure=true" >> "$GITHUB_OUTPUT"
-          fi
-          if [ -f publish-input/allure-history/history.jsonl ]; then
-            cp publish-input/allure-history/history.jsonl site-keep/allure-history/history.jsonl
-          fi
-
-      - name: Publish metrics, badge, trends page and Allure history (existing files are kept)
+      # One deploy. force_orphan makes gh-pages a single new commit holding exactly site/ (the action does not clone the
+      # branch in that mode, so keep_files has nothing to keep and is not used) and force-pushes it, so the branch never
+      # accumulates history. Nothing is lost: everything worth keeping was carried into site/ above.
+      - name: Publish the site (the branch is replaced by one commit)
         uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
         with:
           github_token: ${{ github.token }}
-          publish_dir: site-keep
-          keep_files: true
+          publish_dir: site
+          force_orphan: true
           enable_jekyll: false
           user_name: github-actions[bot]
           user_email: 41898282+github-actions[bot]@users.noreply.github.com
-          commit_message: Publish metrics (${{ github.sha }})
-
-      - name: Publish the coverage report (replaces coverage/)
-        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
-        with:
-          github_token: ${{ github.token }}
-          publish_dir: site-coverage
-          destination_dir: coverage
-          user_name: github-actions[bot]
-          user_email: 41898282+github-actions[bot]@users.noreply.github.com
-          commit_message: Publish coverage report (${{ github.sha }})
-
-      - name: Publish the combined Allure report (replaces allure/)
-        if: steps.stage.outputs.allure == 'true'
-        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
-        with:
-          github_token: ${{ github.token }}
-          publish_dir: site-allure
-          destination_dir: allure
-          user_name: github-actions[bot]
-          user_email: 41898282+github-actions[bot]@users.noreply.github.com
-          commit_message: Publish Allure report (${{ github.sha }})
+          commit_message: Publish reports (${{ github.sha }})
 
       - name: Say what the owner must enable
         shell: bash
@@ -893,7 +883,7 @@ jobs:
           BRANCH_EXISTED: ${{ steps.pages.outputs.exists }}
         run: |
           {
-            echo "Published to the gh-pages branch (it $([ "${BRANCH_EXISTED}" = true ] && echo already existed || echo was created by this run))."
+            echo "Published to the gh-pages branch, which is now one commit (it $([ "${BRANCH_EXISTED}" = true ] && echo already existed || echo was created by this run))."
             echo "The branch is served only when Settings > Pages > Source is set to Deploy from a branch, gh-pages, / (root); pushing works either way."
           } >> "$GITHUB_STEP_SUMMARY"
 

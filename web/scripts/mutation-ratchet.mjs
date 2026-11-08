@@ -104,7 +104,12 @@ export function runScoreCheck(options) {
       throw new InputError(`Minimums file not found: ${minimumsPath}`);
     }
     if (!fs.existsSync(reportFile)) {
-      throw new InputError(`ReportFile not found: ${reportFile}`);
+      const message = `No Stryker report was produced: ${reportFile} does not exist, so there is no score to check. Stryker did not finish; read the "Run StrykerJS" step above this one for the reason (a failed initial test run writes no report).`;
+      const target = summaryPath ?? env["GITHUB_STEP_SUMMARY"];
+      if (target) {
+        fs.appendFileSync(target, `### Mutation testing\n\n${message}\n`);
+      }
+      throw new InputError(message);
     }
     const minimums = readMinimums(fs.readFileSync(minimumsPath, "utf8"), MINIMUMS_RELATIVE);
     const minimum = minimums[project];

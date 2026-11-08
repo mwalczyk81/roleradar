@@ -220,6 +220,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # tests/architecture/token-leakage.test.ts drives real Chromium, so this job needs the browser like the CI web job
+      # does (same step, same flags; no browser cache is used there either).
+      - name: Install Playwright Chromium with dependencies
+        run: pnpm --filter web exec playwright install --with-deps chromium
+
       - name: Run the Vitest suite
         env:
           ALLURE_RESULTS_DIR: ${{ github.workspace }}/allure-input/vitest
@@ -465,9 +470,10 @@ jobs:
           path: allure-history/history.jsonl
           retention-days: 1
 
-  # Publishes the combined report to the gh-pages branch (allure/ replaced, allure-history/ kept and overwritten) with
-  # peaceiris/actions-gh-pages. Schedule and manual dispatch only: the guard is exactly "not a pull request", so no pull
-  # request path reaches this write permission. Pushing works whether or not GitHub Pages is enabled.
+  # Publishes the combined report to the gh-pages branch with peaceiris/actions-gh-pages: the current tree is checked
+  # out, allure/ and allure-history/ are replaced in a copy, and the copy is deployed as one orphan commit. Schedule and
+  # manual dispatch only: the guard is exactly "not a pull request", so no pull request path reaches this write
+  # permission. Pushing works whether or not GitHub Pages is enabled.
   publish-allure:
     name: Publish the Allure report
     needs: [allure-report]
@@ -480,35 +486,62 @@ jobs:
       group: pages-publish
       cancel-in-progress: false
     steps:
+      - name: Check whether the gh-pages branch exists
+        id: pages
+        shell: bash
+        env:
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if git ls-remote --exit-code --heads "https://github.com/${REPOSITORY}.git" gh-pages > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the current gh-pages tree
+        if: steps.pages.outputs.exists == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: gh-pages
+          path: pages-work
+          persist-credentials: false
+
       - name: Download the combined Allure report
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: allure-report
-          path: site-allure
+          path: publish-input/allure
 
       - name: Download the updated Allure history
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: allure-history
-          path: site-keep/allure-history
+          path: publish-input/allure-history
 
-      - name: Publish the Allure history (existing files are kept)
+      # The deploy replaces the branch with one commit holding exactly site/, so everything already published (the trends
+      # page, metrics, badge and coverage report from the main CI publish) is carried over first, then the Allure report
+      # and its history are replaced.
+      - name: Stage the site
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p site
+          if [ -d pages-work ]; then
+            cp -a pages-work/. site/
+            rm -rf site/.git
+          fi
+          mkdir -p site/allure-history
+          rm -rf site/allure
+          cp -r publish-input/allure site/allure
+          cp publish-input/allure-history/history.jsonl site/allure-history/history.jsonl
+
+      - name: Publish the site (the branch is replaced by one commit)
         uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
         with:
           github_token: ${{ github.token }}
-          publish_dir: site-keep
-          keep_files: true
+          publish_dir: site
+          force_orphan: true
           enable_jekyll: false
-          user_name: github-actions[bot]
-          user_email: 41898282+github-actions[bot]@users.noreply.github.com
-          commit_message: Publish Allure history (${{ github.sha }})
-
-      - name: Publish the combined Allure report (replaces allure/)
-        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
-        with:
-          github_token: ${{ github.token }}
-          publish_dir: site-allure
-          destination_dir: allure
           user_name: github-actions[bot]
           user_email: 41898282+github-actions[bot]@users.noreply.github.com
           commit_message: Publish Allure report (${{ github.sha }})
@@ -517,6 +550,6 @@ jobs:
         shell: bash
         run: |
           {
-            echo "Published the Allure report to the gh-pages branch."
+            echo "Published the Allure report to the gh-pages branch, which is now one commit."
             echo "The branch is served only when Settings > Pages > Source is set to Deploy from a branch, gh-pages, / (root); pushing works either way."
           } >> "$GITHUB_STEP_SUMMARY"

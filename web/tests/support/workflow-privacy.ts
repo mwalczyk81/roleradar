@@ -6,7 +6,7 @@ import { parse } from "yaml";
 // checkAllurePrivacy returns one message per broken rule, so the same check can prove the real workflows pass and that
 // a broken copy is caught.
 
-type Step = { name?: string; uses?: string; run?: string; if?: string; with?: { name?: string; path?: string; publish_dir?: string; destination_dir?: string } };
+type Step = { name?: string; uses?: string; run?: string; if?: string; with?: { name?: string; path?: string; publish_dir?: string; force_orphan?: boolean | string } };
 type Job = { steps?: Step[] };
 type Workflow = { jobs?: Record<string, Job> };
 
@@ -86,47 +86,41 @@ export function checkAllurePrivacy(ciText: string, nightlyText: string): string[
     }
   }
 
-  // 5. Publish steps stage only the sanitized combined report. The publish input is what peaceiris/actions-gh-pages is
-  //    given (publish_dir): only the three output folders the staging step fills, and the Allure one only from the
-  //    allure-report artifact.
-  const publishFolders = new Set(["site-keep", "site-coverage", "site-allure"]);
+  // 5. Publish steps stage only the sanitized combined report. There is one deploy per publishing job
+  //    (peaceiris/actions-gh-pages with force_orphan, so the branch stays a single commit) and its publish_dir is site/,
+  //    which the staging step fills; the Allure part of site/ comes only from the allure-report artifact.
   const allowedDownloads = new Set(["run-summary", "coverage-report", "allure-report", "allure-history"]);
   const ciPublish = stepsOf(ci["metrics-and-pages"]);
+  const nightlyPublish = stepsOf(nightly["publish-allure"]);
   const stagedFromInput = ciPublish.map((step) => `${step.run ?? ""} ${JSON.stringify(step.with ?? {})}`).join(" ");
   if (/allure-input|allure-sanitized|allure-in-/.test(stagedFromInput)) {
     violations.push("the ci.yml publish job reads Allure inputs directly instead of the combined report artifact");
   }
-  for (const step of ciPublish.filter((candidate) => candidate.uses?.startsWith("actions/download-artifact@"))) {
-    if (!allowedDownloads.has(step.with?.name ?? "")) {
-      violations.push(`the ci.yml publish job downloads ${step.with?.name ?? "an artifact"}, which is not part of the publish input`);
-    }
-  }
-  const stageRun = ciPublish.find((step) => /site-allure/.test(step.run ?? ""))?.run ?? "";
-  if (!/cp -r publish-input\/allure site-allure/.test(stageRun)) {
-    violations.push("the ci.yml publish job must stage site-allure only from publish-input/allure (the allure-report artifact)");
-  }
-  const nightlyPublish = stepsOf(nightly["publish-allure"]);
   for (const [file, steps] of [["ci.yml", ciPublish], ["nightly-quality.yml", nightlyPublish]] as const) {
+    for (const step of steps.filter((candidate) => candidate.uses?.startsWith("actions/download-artifact@"))) {
+      if (!allowedDownloads.has(step.with?.name ?? "")) {
+        violations.push(`the ${file} publish job downloads ${step.with?.name ?? "an artifact"}, which is not part of the publish input`);
+      }
+    }
+    const stageRun = steps.find((step) => /site\/allure/.test(step.run ?? ""))?.run ?? "";
+    if (!/cp -r publish-input\/allure site\/allure/.test(stageRun)) {
+      violations.push(`the ${file} publish job must stage site/allure only from publish-input/allure (the allure-report artifact)`);
+    }
+    if (/allure-input|allure-sanitized|allure-in-/.test(stageRun)) {
+      violations.push(`the ${file} publish job stages Allure inputs directly instead of the combined report artifact`);
+    }
     const deploys = steps.filter((step) => step.uses?.startsWith("peaceiris/actions-gh-pages@"));
-    if (deploys.length === 0) {
-      violations.push(`${file} publish job has no peaceiris/actions-gh-pages step`);
+    if (deploys.length !== 1) {
+      violations.push(`${file} publish job must have exactly one peaceiris/actions-gh-pages step, found ${deploys.length}`);
     }
     for (const step of deploys) {
       const folder = step.with?.publish_dir ?? "";
-      if (!publishFolders.has(folder)) {
-        violations.push(`${file} publishes ${folder || "an unset folder"}, which is not one of the staged output folders`);
+      if (folder !== "site") {
+        violations.push(`${file} publishes ${folder || "an unset folder"}, which is not the staged site folder`);
       }
-      if (step.with?.destination_dir === "allure" && folder !== "site-allure") {
-        violations.push(`${file} publishes ${folder} into allure/ instead of site-allure`);
+      if (String(step.with?.force_orphan) !== "true") {
+        violations.push(`${file} must publish with force_orphan: true so gh-pages stays a single commit`);
       }
-    }
-  }
-  for (const step of nightlyPublish) {
-    if (step.uses?.startsWith("actions/download-artifact@") && !["allure-report", "allure-history"].includes(step.with?.name ?? "")) {
-      violations.push(`the nightly publish job downloads ${step.with?.name ?? "an artifact"} instead of the combined allure-report`);
-    }
-    if (step.uses?.startsWith("actions/download-artifact@") && step.with?.path === "site-allure" && step.with?.name !== "allure-report") {
-      violations.push("the nightly publish job fills site-allure from something other than the allure-report artifact");
     }
   }
   return violations;

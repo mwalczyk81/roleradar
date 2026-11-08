@@ -1,11 +1,12 @@
 // Fails when a required test source is missing from the combined Allure report (feature 011, FR-024, FR-025). CI-only
 // logic, tested by Vitest (tests/unit/check-combined-report.test.ts). It replaces scripts/check-combined-report.ps1.
 //
-// The merged results folder that feeds `allure generate` holds one JUnit file per .NET test project (<Name>.xml, written by
-// a plain `-junit` workflow step) and Allure result files from Vitest and Playwright (*-result.json with a framework
-// label). For every required source it checks that the input exists, is not empty and contains at least one test, and
-// prints a table of counts. A source can never drop out silently: a missing, empty or absent source fails the check and
-// is named. A missing .NET file also covers a test executable that ran but wrote no JUnit file.
+// The merged results folder that feeds `allure generate` holds one JUnit file per test project (<Name>.xml): the xUnit v3
+// projects, written by a plain `-junit` workflow step, and Vitest, written by Vitest's own junit reporter as Vitest.xml.
+// It also holds Allure result files from Playwright (*-result.json with a framework label). For every required source
+// the check requires that the input exists, is not empty and contains at least one test, and prints a table of counts.
+// A source can never drop out silently: a missing, empty or absent source fails the check and is named. A missing JUnit
+// file also covers a test executable that ran but wrote no file.
 //
 // With --report-directory it also reads the generated report's summary.json and fails when the report counts fewer tests
 // than the inputs hold. Retries of one Playwright test share a historyId and count once.
@@ -19,10 +20,9 @@ import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 
-const STACK_FRAMEWORKS = new Map([
-  ["vitest", "vitest"],
-  ["playwright", "playwright"],
-]);
+// Sources read from Allure result files (an Allure adapter wrote them). Everything else is a JUnit file named <Source>.xml:
+// the xUnit v3 projects and Vitest.
+const STACK_FRAMEWORKS = new Map([["playwright", "playwright"]]);
 
 /** @param {string} directory */
 function allureResults(directory) {
@@ -56,7 +56,9 @@ export function checkCombinedReport({ resultsDirectory, requiredSources, reportD
   const failures = [];
   /** @type {string[]} */
   const rows = [];
-  let inputTotal = 0;
+  // The report counts each distinct test once: Playwright retries share a historyId, and xUnit v3 writes every row of a
+  // theory under one name, which Allure folds into one test (plus retries). The inputs are counted the same way, by identity.
+  const identities = new Set();
   const results = allureResults(resultsDirectory);
 
   for (const source of sources) {
@@ -73,7 +75,9 @@ export function checkCombinedReport({ resultsDirectory, requiredSources, reportD
         failures.push(`MISSING ${source}: no ${framework} results in the merged results folder`);
         rows.push(`| ${source} | missing |`);
       } else {
-        inputTotal += ids.size;
+        for (const id of ids) {
+          identities.add(`${framework}:${id}`);
+        }
         rows.push(`| ${source} | ${ids.size} |`);
       }
       continue;
@@ -85,14 +89,17 @@ export function checkCombinedReport({ resultsDirectory, requiredSources, reportD
       rows.push(`| ${source} | missing |`);
       continue;
     }
-    const count = (fs.readFileSync(junitPath, "utf8").match(/<testcase[\s/>]/g) ?? []).length;
-    if (count === 0) {
+    const cases = fs.readFileSync(junitPath, "utf8").match(/<testcase\b[^>]*>/g) ?? [];
+    if (cases.length === 0) {
       failures.push(`EMPTY ${source}: ${source}.xml holds no test cases`);
       rows.push(`| ${source} | empty |`);
       continue;
     }
-    inputTotal += count;
-    rows.push(`| ${source} | ${count} |`);
+    const names = new Set(cases.map((tag) => `${/\bclassname="([^"]*)"/.exec(tag)?.[1] ?? ""}|${/\bname="([^"]*)"/.exec(tag)?.[1] ?? ""}`));
+    for (const name of names) {
+      identities.add(`junit:${name}`);
+    }
+    rows.push(`| ${source} | ${names.size} |`);
   }
 
   const lines = ["### Combined report inputs", "", "| Source | Tests |", "|---|---:|", ...rows, ""];
@@ -106,10 +113,10 @@ export function checkCombinedReport({ resultsDirectory, requiredSources, reportD
         const total = JSON.parse(fs.readFileSync(summaryPath, "utf8"))?.stats?.total;
         if (typeof total !== "number") {
           failures.push("summary.json has no stats.total");
-        } else if (total < inputTotal) {
-          failures.push(`report counts ${total} tests but the inputs hold ${inputTotal}`);
+        } else if (total < identities.size) {
+          failures.push(`report counts ${total} tests but the inputs hold ${identities.size}`);
         } else {
-          lines.push(`Report total ${total}, inputs ${inputTotal}.`, "");
+          lines.push(`Report total ${total}, inputs ${identities.size}.`, "");
         }
       } catch {
         failures.push("summary.json is not valid JSON");

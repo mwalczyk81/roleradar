@@ -122,12 +122,19 @@ describe("score mode", () => {
     expect(result.output).toContain("FAIL Domain: score 79.9 minimum 80");
   });
 
-  it("exits 2 when the report file is missing", () => {
+  it("exits 2 and says no report was produced, naming the file and the step to read, when the report file is missing", () => {
     const repo = initRepo({ Domain: 80 });
-    const result = run(repo, "Domain", path.join(repo, "out", "missing.json"));
+    const summary = path.join(repo, "summary.md");
+    const missing = path.join(repo, "out", "missing.json");
+    const result = run(repo, "Domain", missing, { summaryPath: summary });
 
     expect(result.exitCode).toBe(2);
-    expect(result.output).toContain("ReportFile");
+    expect(result.output).toContain("No Stryker report was produced");
+    expect(result.output).toContain(missing);
+    expect(result.output).toContain("Run StrykerJS");
+    expect(result.output).toContain("no score");
+    // The same explanation reaches the job summary, where it is read first, and no score file is invented.
+    expect(fs.readFileSync(summary, "utf8")).toContain("No Stryker report was produced");
   });
 
   it("exits 2 when the project has no committed minimum", () => {

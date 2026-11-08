@@ -244,11 +244,86 @@ function attachmentType(fileName) {
   return "application/octet-stream";
 }
 
-const LEAK_RULES = [
+// Rules for text that is not parsed as JSON (plain text, logs, and a .json file that is not valid JSON). A path may appear
+// with doubled backslashes there, so the Windows rule allows one to four. The UNC rule needs exactly two leading
+// backslashes, a host and one more backslash (or the escaped form: four, a host, two), so text that only contains
+// backslash-n sequences, such as "a\nfoo\nb" or "\\n\\nfoo", is not read as a path.
+const TEXT_LEAK_RULES = [
   ["windows-path", /(?<![A-Za-z0-9])[A-Za-z]:(?:\\{1,4}|\/)[A-Za-z0-9_.$]/],
   ["posix-home-path", /(?<![A-Za-z0-9_.:/-])\/(?:home|Users|root)\/[A-Za-z0-9_.-]/],
-  ["unc-path", /\\\\{1,2}[A-Za-z0-9_.-]+\\{1,2}[A-Za-z0-9_.$-]/],
+  ["unc-path", /(?<![\\A-Za-z0-9])(?:\\{2}([A-Za-z0-9_.-]+)\\[A-Za-z0-9_.$-]|\\{4}([A-Za-z0-9_.-]+)\\{2}[A-Za-z0-9_.$-])/g],
 ];
+
+// Rules for decoded string values of a parsed JSON file. After JSON.parse a path has single backslashes, so the Windows
+// rule allows one or two (a path quoted inside another string) and a UNC path starts with exactly two. A backslash-n in
+// a step name (the source text of an expect call) or a real line break is never a path.
+const DECODED_LEAK_RULES = [
+  ["windows-path", /(?<![A-Za-z0-9])[A-Za-z]:(?:\\{1,2}|\/)[A-Za-z0-9_.$]/],
+  ["posix-home-path", /(?<![A-Za-z0-9_.:/-])\/(?:home|Users|root)\/[A-Za-z0-9_.-]/],
+  ["unc-path", /(?<![\\A-Za-z0-9])\\{2}([A-Za-z0-9_.-]+)\\[A-Za-z0-9_.$-]/g],
+];
+
+// A host under a reserved name (RFC 2606: .example, .test, .invalid, .localhost) can never be a real machine, so a UNC-shaped
+// string naming one (a hostile fictional input in a test title) is not a leak.
+const RESERVED_HOST = /(?:^|\.)(?:example|test|invalid|localhost)$/i;
+
+/**
+ * Whether a rule matches the text. The UNC rule captures the host and ignores reserved fictional ones.
+ * @param {string} rule
+ * @param {RegExp} pattern
+ * @param {string} text
+ */
+function ruleMatches(rule, pattern, text) {
+  if (rule !== "unc-path") {
+    return pattern.test(text);
+  }
+  for (const match of text.matchAll(pattern)) {
+    const host = match[1] ?? match[2] ?? "";
+    if (!RESERVED_HOST.test(host)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Every string value and key of a parsed JSON document, at any depth (steps, statusDetails, parameters, labels).
+ * @param {unknown} node
+ * @returns {Generator<string>}
+ */
+function* decodedStrings(node) {
+  if (typeof node === "string") {
+    yield node;
+  } else if (Array.isArray(node)) {
+    for (const item of node) {
+      yield* decodedStrings(item);
+    }
+  } else if (node !== null && typeof node === "object") {
+    for (const [key, value] of Object.entries(node)) {
+      yield key;
+      yield* decodedStrings(value);
+    }
+  }
+}
+
+/**
+ * The names of the rules that match the file's text. A .json file that parses is checked as decoded values; anything
+ * else as raw text.
+ * @param {string} file
+ * @param {string} text
+ * @returns {string[]}
+ */
+function matchingRules(file, text) {
+  if (/\.json$/i.test(file)) {
+    try {
+      const strings = [...decodedStrings(JSON.parse(text))];
+      return DECODED_LEAK_RULES.filter(([rule, pattern]) => strings.some((value) => ruleMatches(rule, pattern, value))).map(([rule]) => rule);
+    } catch {
+      // Not valid JSON: fall through to the raw text rules.
+    }
+  }
+  return TEXT_LEAK_RULES.filter(([rule, pattern]) => ruleMatches(rule, pattern, text)).map(([rule]) => rule);
+}
 
 /**
  * @param {string} dir
@@ -283,10 +358,8 @@ export function findLeaks(dir, options = {}) {
     }
     const text = fs.readFileSync(file, "utf8");
     const relative = path.relative(dir, file).split(path.sep).join("/");
-    for (const [rule, pattern] of LEAK_RULES) {
-      if (pattern.test(text)) {
-        leaks.push({ file: relative, rule });
-      }
+    for (const rule of matchingRules(file, text)) {
+      leaks.push({ file: relative, rule });
     }
     if (names && new RegExp(names.source, names.flags.replace("g", "")).test(text)) {
       leaks.push({ file: relative, rule: "redacted-name" });

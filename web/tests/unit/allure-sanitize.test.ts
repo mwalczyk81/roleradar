@@ -132,6 +132,99 @@ describe("findLeaks", () => {
       expect(findLeaks(dir, { redact: [FIXTURE_USER] })).toEqual([]);
     });
   });
+
+  // The Vitest adapter records every expect(...) call as a step whose name is the source text of the call, so a step name
+  // can hold backslash-n sequences (the text of a string literal) or real line breaks. Raw JSON doubles each backslash,
+  // so a rule applied to the file text read two such sequences with a word between them as a UNC path. Result files are
+  // now scanned as decoded string values, at any depth.
+  describe("result files are scanned as decoded values", () => {
+    const sourceTextWithBackslashN = 'expect("### Combined report inputs\\n\\n| Source | Tests |\\n|---|---:|\\n| Unit | 3 |\\n| Architecture | 2 |")';
+    const realLineBreaks = "expect(received)\nfoo\nbar\n";
+    const resultWith = (nested: Record<string, unknown>): string =>
+      JSON.stringify({ name: "a test", status: "passed", steps: [{ name: "outer", steps: [nested] }] });
+
+    it("does not report backslash-n text or real line breaks in step names", () => {
+      withFiles(
+        {
+          "one-result.json": resultWith({ name: sourceTextWithBackslashN, status: "passed" }),
+          "two-result.json": resultWith({ name: realLineBreaks, status: "passed" }),
+          "three-result.json": JSON.stringify({ name: realLineBreaks, statusDetails: { message: sourceTextWithBackslashN, trace: realLineBreaks } }),
+        },
+        (dir) => {
+          expect(findLeaks(dir, { redact: [FIXTURE_USER] })).toEqual([]);
+        },
+      );
+    });
+
+    it("still reports a real UNC path, Windows path and home path in a nested step", () => {
+      withFiles(
+        {
+          "unc-result.json": resultWith({ name: "\\\\fileserver\\share\\project\\x.ts", status: "passed" }),
+          "windows-result.json": resultWith({ name: "step", status: "failed", statusDetails: { trace: `at C:\\Users\\${FIXTURE_USER}\\project\\x.ts:1` } }),
+          "home-result.json": resultWith({ name: "step", status: "passed", parameters: [{ name: "file", value: "/home/someone/project/x.ts" }] }),
+        },
+        (dir) => {
+          const found = findLeaks(dir, { redact: [FIXTURE_USER] }).map((leak) => `${leak.file}:${leak.rule}`);
+          expect(found).toContain("unc-result.json:unc-path");
+          expect(found).toContain("windows-result.json:windows-path");
+          expect(found).toContain("home-result.json:posix-home-path");
+        },
+      );
+    });
+
+    it("reports a path hidden next to backslash-n text in the same step", () => {
+      withFiles({ "mixed-result.json": resultWith({ name: `${sourceTextWithBackslashN} at \\\\fileserver\\share\\x.ts`, status: "passed" }) }, (dir) => {
+        expect(findLeaks(dir, {}).map((leak) => leak.rule)).toEqual(["unc-path"]);
+      });
+    });
+
+    it("keeps plain text files tight: a real UNC path is reported, backslash-n text is not", () => {
+      withFiles({ "log.txt": "failed at \\\\fileserver\\share\\x.ts" }, (dir) => {
+        expect(findLeaks(dir, {}).map((leak) => leak.rule)).toEqual(["unc-path"]);
+      });
+      withFiles({ "log.txt": "line one\\nfoo\\nbar and \\\\n\\\\nbaz" }, (dir) => {
+        expect(findLeaks(dir, {})).toEqual([]);
+      });
+    });
+
+    // Test titles may carry hostile fictional input, for example a UNC-shaped URL a security test must reject. A host under a
+    // reserved name (RFC 2606: .example, .test, .invalid, .localhost) can never be a real machine, so it is not a leak.
+    it("does not report a UNC-shaped string whose host is a reserved fictional name, in JSON values or in JUnit XML", () => {
+      const title = 'rejects "\\\\evil.example\\a"';
+      withFiles(
+        {
+          "one-result.json": resultWith({ name: title, status: "passed" }),
+          "Vitest.xml": `<testsuites><testsuite><testcase classname="tests/unit/x.test.ts" name="${title.replaceAll('"', "&quot;")}"></testcase></testsuite></testsuites>`,
+          "log.txt": `step ${title}`,
+        },
+        (dir) => {
+          expect(findLeaks(dir, {})).toEqual([]);
+        },
+      );
+    });
+
+    it("still reports a UNC path to a real-looking host, also when it sits next to a reserved fictional one", () => {
+      withFiles(
+        {
+          "real-result.json": resultWith({ name: "\\\\build01.corp.local\\share\\x.ts", status: "passed" }),
+          "mixed-result.json": resultWith({ name: 'rejects "\\\\evil.example\\a" at \\\\fileserver\\share\\x.ts', status: "passed" }),
+          "Unit.xml": '<testsuites><testsuite><testcase name="at \\\\fileserver\\share\\x.ts"></testcase></testsuite></testsuites>',
+        },
+        (dir) => {
+          const found = findLeaks(dir, {}).map((leak) => `${leak.file}:${leak.rule}`);
+          expect(found).toContain("real-result.json:unc-path");
+          expect(found).toContain("mixed-result.json:unc-path");
+          expect(found).toContain("Unit.xml:unc-path");
+        },
+      );
+    });
+
+    it("falls back to the raw text rules for a .json file that is not valid JSON", () => {
+      withFiles({ "broken.json": "{ not json at C:\\Users\\someone\\x" }, (dir) => {
+        expect(findLeaks(dir, {}).map((leak) => leak.rule)).toContain("windows-path");
+      });
+    });
+  });
 });
 
 describe("the command line", () => {
@@ -168,6 +261,34 @@ describe("the command line", () => {
       expect(run(["--input", path.join(root, "missing"), "--output", path.join(root, "out3"), "--lane", "fictional"]).status).toBe(2);
       expect(run(["--input", input, "--output", path.join(root, "out"), "--lane", "fictional"]).status).toBe(2);
       expect(run(["--input", input, "--output", path.join(input, "inside"), "--lane", "fictional"]).status).toBe(2);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps every test case of a Vitest JUnit file, with its file path as class name, and redacts the machine name", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "rr-allure-junit-"));
+    try {
+      const input = path.join(root, "in");
+      fs.mkdirSync(input);
+      const xml =
+        '<?xml version="1.0" encoding="UTF-8" ?>\n<testsuites name="vitest tests" tests="2">\n' +
+        '  <testsuite name="tests/unit/nav.test.ts" timestamp="2026-11-08T15:38:00.272Z" hostname="fv-az1234-567" tests="2">\n' +
+        '    <testcase classname="tests/unit/nav.test.ts" name="nav &gt; lists the items" time="0.002"></testcase>\n' +
+        '    <testcase classname="tests/unit/nav.test.ts" name="nav &gt; marks the active item" time="0.003"><failure message="at C:\\Users\\someone\\proj\\x.ts:1">trace</failure></testcase>\n' +
+        "  </testsuite>\n</testsuites>\n";
+      fs.writeFileSync(path.join(input, "Vitest.xml"), xml);
+
+      expect(run(["--input", input, "--output", path.join(root, "out"), "--lane", "fictional"]).status).toBe(0);
+
+      const out = fs.readFileSync(path.join(root, "out", "Vitest.xml"), "utf8");
+      expect(out).not.toContain("fv-az1234-567");
+      expect(out).toContain('hostname="[redacted]"');
+      expect(out).not.toContain("someone");
+      expect(out.match(/<testcase\b/g)).toHaveLength(2);
+      expect(out).toContain('classname="tests/unit/nav.test.ts"');
+      expect(out).toContain("nav &gt; marks the active item");
+      expect(run(["--check", path.join(root, "out")]).status).toBe(0);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

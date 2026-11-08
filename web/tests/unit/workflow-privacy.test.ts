@@ -48,15 +48,15 @@ describe("Allure privacy rules in the workflows", () => {
     expect(checkAllurePrivacy(ci, broken).join("\n")).toMatch(/must leak-check allure-merged and allure-report/);
   });
 
-  // The publish input is what peaceiris/actions-gh-pages is given: site-keep, site-coverage and site-allure. These
-  // tests put a scratch real-stack attachment on that path in different ways and expect the check to name each one.
+  // The publish input is what peaceiris/actions-gh-pages is given: the site/ folder the staging step fills. These tests put
+  // a scratch real-stack path on that input in different ways, and remove the force_orphan that keeps gh-pages one commit.
 
   it("catch a publish job that stages the raw real-stack input into the published Allure folder", () => {
-    const broken = ci.replace("cp -r publish-input/allure site-allure", "cp -r allure-input/allure-in-real-stack site-allure");
+    const broken = ci.replace("cp -r publish-input/allure site/allure", "cp -r allure-input/allure-in-real-stack site/allure");
     expect(broken).not.toBe(ci);
     const violations = checkAllurePrivacy(broken, nightly).join("\n");
     expect(violations).toMatch(/reads Allure inputs directly/);
-    expect(violations).toMatch(/must stage site-allure only from publish-input\/allure/);
+    expect(violations).toMatch(/must stage site\/allure only from publish-input\/allure/);
   });
 
   it("catch a publish job that downloads a raw stack artifact", () => {
@@ -65,15 +65,29 @@ describe("Allure privacy rules in the workflows", () => {
     expect(checkAllurePrivacy(broken, nightly).join("\n")).toMatch(/downloads allure-in-real-stack, which is not part of the publish input/);
   });
 
-  it("catch a deploy of a folder that is not one of the staged output folders", () => {
-    const broken = ci.replace("publish_dir: site-allure", "publish_dir: allure-input/real-stack");
+  it("catch a deploy of a folder that is not the staged site folder", () => {
+    const broken = ci.replace("publish_dir: site", "publish_dir: allure-input/real-stack");
     expect(broken).not.toBe(ci);
-    expect(checkAllurePrivacy(broken, nightly).join("\n")).toMatch(/publishes allure-input\/real-stack, which is not one of the staged output folders/);
+    expect(checkAllurePrivacy(broken, nightly).join("\n")).toMatch(/publishes allure-input\/real-stack, which is not the staged site folder/);
   });
 
-  it("catch a nightly publish job that fills the published Allure folder from a raw stack artifact", () => {
-    const broken = nightly.replace(/(download-artifact@[^\n]*\n\s+with:\n\s+name: )allure-report(\n\s+path: site-allure)/, "$1allure-in-real-stack$2");
+  it("catch a nightly publish job that stages the Allure folder from a raw stack artifact", () => {
+    const broken = nightly.replace(/(download-artifact@[^\n]*\n\s+with:\n\s+name: )allure-report(\n\s+path: publish-input\/allure)/, "$1allure-in-real-stack$2");
     expect(broken).not.toBe(nightly);
-    expect(checkAllurePrivacy(ci, broken).join("\n")).toMatch(/downloads allure-in-real-stack instead of the combined allure-report/);
+    expect(checkAllurePrivacy(ci, broken).join("\n")).toMatch(/nightly-quality.yml publish job downloads allure-in-real-stack, which is not part of the publish input/);
+  });
+
+  it("catch a publish job that loses force_orphan or adds a second deploy", () => {
+    const withoutOrphan = ci.replace("force_orphan: true", "force_orphan: false");
+    expect(withoutOrphan).not.toBe(ci);
+    expect(checkAllurePrivacy(withoutOrphan, nightly).join("\n")).toMatch(/ci.yml must publish with force_orphan: true/);
+
+    const marker = "      - name: Say what the owner must enable";
+    const secondDeploy = nightly.replace(
+      marker,
+      `      - name: A second deploy\n        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0\n        with:\n          publish_dir: site\n          force_orphan: true\n\n${marker}`,
+    );
+    expect(secondDeploy).not.toBe(nightly);
+    expect(checkAllurePrivacy(ci, secondDeploy).join("\n")).toMatch(/nightly-quality.yml publish job must have exactly one peaceiris\/actions-gh-pages step, found 2/);
   });
 });
