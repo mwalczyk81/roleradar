@@ -1,4 +1,4 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig, devices, type ReporterDescription } from "@playwright/test";
 
 export function getRealStackHostResolverRules(identityPort?: string, apiPort?: string): string {
   if (identityPort === "5001") {
@@ -13,6 +13,13 @@ export function getRealStackHostResolverRules(identityPort?: string, apiPort?: s
 // folder, which must be outside the repository. Unset, Playwright keeps its default snapshot location.
 const visualDir = process.env.ROLERADAR_VISUAL_DIR?.split("\\").join("/");
 
+const allureResultsDir = process.env.ALLURE_RESULTS_DIR;
+const e2eReporters: ReporterDescription[] = [
+  ["list"],
+  ...(process.env.CI ? [["html", { open: "never" }] satisfies ReporterDescription] : []),
+  ...(allureResultsDir ? [["allure-playwright", { resultsDir: allureResultsDir }] satisfies ReporterDescription] : []),
+];
+
 export default defineConfig({
   testDir: "./tests/e2e",
   ...(visualDir ? { snapshotPathTemplate: `${visualDir}/{platform}/{arg}{ext}` } : {}),
@@ -25,9 +32,14 @@ export default defineConfig({
   expect: {
     timeout: 5_000,
   },
+  // Failure evidence only (feature 011): a screenshot when a test fails, a trace on the first retry, no video. CI also
+  // writes the HTML report, and uploads these files only when a job fails (see ci.yml for the retention). When
+  // ALLURE_RESULTS_DIR is set, Allure result files are written there too for the combined report.
+  reporter: e2eReporters,
   use: {
     ignoreHTTPSErrors: true,
     trace: "on-first-retry",
+    screenshot: "only-on-failure",
   },
   projects: [
     {

@@ -13,6 +13,7 @@
     "test": "vitest run",
     "coverage": "vitest run --coverage",
     "test:coverage": "vitest run --coverage",
+    "mutation": "node scripts/stryker-run.mjs",
     "test:e2e": "playwright test",
     "test:e2e:real": "playwright test tests/e2e/real-stack.spec.ts --project=real-stack"
   },
@@ -35,6 +36,8 @@
     "@eslint/js": "10.0.1",
     "@playwright/test": "1.64.1",
     "@react-router/dev": "7.18.5",
+    "@stryker-mutator/core": "10.1.1",
+    "@stryker-mutator/vitest-runner": "10.1.1",
     "@testing-library/dom": "10.4.2",
     "@testing-library/react": "16.3.3",
     "@types/node": "22.20.5",
@@ -42,6 +45,9 @@
     "@types/react-dom": "19.3.0",
     "@types/selfsigned": "2.1.0",
     "@vitest/coverage-v8": "5.0.5",
+    "allure": "3.22.1",
+    "allure-playwright": "3.14.0",
+    "allure-vitest": "3.14.0",
     "axe-core": "4.14.0",
     "eslint": "10.14.0",
     "eslint-plugin-react": "7.37.5",
@@ -50,6 +56,7 @@
     "typescript": "5.9.3",
     "typescript-eslint": "8.72.1",
     "vite": "8.3.5",
-    "vitest": "5.0.5"
+    "vitest": "5.0.5",
+    "yaml": "2.9.1"
   }
 }

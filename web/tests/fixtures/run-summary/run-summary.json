@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "tests": {
+    "Unit": { "passed": 9, "failed": 2, "skipped": 1 },
+    "Contract": { "passed": 5, "failed": 0, "skipped": 0 }
+  },
+  "coverage": {
+    "overallLinePct": 90.0,
+    "overallBranchPct": 80.0,
+    "projects": {
+      "RoleRadar.Domain": { "linePct": 95.0, "branchPct": 70.0 },
+      "RoleRadar.Application": { "linePct": 85.0, "branchPct": 90.0 }
+    }
+  }
+}

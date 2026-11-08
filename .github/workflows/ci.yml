@@ -100,6 +100,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-action-pins.ps1
 
+      - name: Setup Node.js for the mutation minimum check
+        if: github.event_name == 'pull_request'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.x
+
+      - name: Mutation minimums may only rise (compared with the base branch)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          git fetch --no-tags --depth=1 origin "refs/heads/${BASE_REF}:refs/remotes/origin/${BASE_REF}"
+          node web/scripts/mutation-ratchet.mjs --base-ref "origin/${BASE_REF}"
+
       - name: Verify OpenAPI contract has zero drift
         run: git diff --exit-code -- contracts
 
@@ -122,17 +136,8 @@ jobs:
       - name: Run PSScriptAnalyzer on scripts/*.ps1
         shell: pwsh
         run: |
-          Set-StrictMode -Version Latest
-          $ErrorActionPreference = 'Stop'
-          if (-not (Get-Module -ListAvailable -Name PSScriptAnalyzer)) {
-              Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force -SkipPublisherCheck
-          }
-          $results = Invoke-ScriptAnalyzer -Path ./scripts -Recurse -Severity Warning,Error
-          if ($results) {
-              $results | Format-Table -AutoSize | Out-String | Write-Output
-              throw "PSScriptAnalyzer reported $(@($results).Count) issue(s)."
-          }
-          Write-Output "PSScriptAnalyzer passed with 0 issues."
+          Install-Module -Name PSScriptAnalyzer -RequiredVersion 1.25.0 -Scope CurrentUser -Force -SkipPublisherCheck
+          Invoke-ScriptAnalyzer -Path ./scripts -Recurse -Settings scripts/psscriptanalyzer-settings.psd1 -EnableExit
 
       - name: Restore with locked dependencies
         run: dotnet restore RoleRadar.sln --locked-mode
@@ -256,12 +261,37 @@ jobs:
 
       - name: Run full test suite (Unit, Architecture, Contract, Integration) with Coverage
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
-        run: dotnet test RoleRadar.sln -c Release --no-build --collect:"XPlat Code Coverage" --results-directory ./TestResults --filter "Lane!=scan&Lane!=web-container&Lane!=real-stack"
+        run: dotnet test RoleRadar.sln -c Release --no-build --collect:"XPlat Code Coverage" --logger "trx" --results-directory ./TestResults --filter "Lane!=scan&Lane!=web-container&Lane!=real-stack"
 
       - name: Verify dev stack safety canary remains untouched
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-devstack-canary.ps1 -Action Verify
+
+      # Native xUnit v3 JUnit output for the combined Allure report (path C, no csproj change). The fast lanes only:
+      # Integration needs Docker and runs in the nightly workflow, which adds it to the report. The main test run above
+      # is still what gates the build; this run only feeds the report.
+      - name: Write JUnit results for the combined report (Unit, Architecture, Contract)
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true')
+        shell: bash
+        run: |
+          mkdir -p allure-input/dotnet
+          worst=0
+          for project in Unit Architecture Contract; do
+            rc=0
+            "tests/RoleRadar.Tests.${project}/bin/Release/net10.0/RoleRadar.Tests.${project}" -junit "allure-input/dotnet/${project}.xml" || rc=$?
+            if [ "${rc}" -gt "${worst}" ]; then worst="${rc}"; fi
+          done
+          exit "${worst}"
+
+      - name: Upload JUnit results for the combined report
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: allure-in-dotnet
+          path: allure-input/dotnet/
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Verify >=85% line coverage across RoleRadar.Domain and RoleRadar.Application
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true'
@@ -273,7 +303,7 @@ jobs:
           dotnet tool run reportgenerator `
             "-reports:TestResults/**/coverage.cobertura.xml" `
             "-targetdir:TestResults/merged" `
-            "-reporttypes:Cobertura;MarkdownSummaryGithub" `
+            "-reporttypes:Cobertura;MarkdownSummaryGithub;Html;Badges;JsonSummary" `
             "-assemblyfilters:+RoleRadar.Domain;+RoleRadar.Application" `
             "-filefilters:-*.g.cs"
 
@@ -302,6 +332,17 @@ jobs:
           if ($pct -lt 85.0) {
               throw "Merged line coverage $pct% is below the mandatory 85.0% threshold."
           }
+
+      # The HTML report and the badge SVGs are generated from this run's coverage; nothing is committed. 14 days is enough
+      # to open the report from a pull request. The metrics-and-pages job downloads this artifact on main only.
+      - name: Upload coverage report (HTML and badges)
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-report
+          path: TestResults/merged/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Lint Dockerfiles with hadolint
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.images == 'true'
@@ -366,6 +407,30 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-images.ps1 -CliImage roleradar-cli:local -McpImage roleradar-mcp:local -IdentityImage roleradar-identity:local -WebImage roleradar-web:local -NoBuild
 
+      # Test counts per lane (TRX) and coverage (ReportGenerator's Summary.json), read from this run's own outputs by
+      # web/scripts/metrics-record.mjs. A missing input shows as "unavailable" and fails the step. Image sizes and scan
+      # counts are not part of this summary; the local review gate prints them.
+      - name: Setup Node.js for the run summary
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true')
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.x
+
+      - name: Run summary
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true')
+        run: node web/scripts/metrics-record.mjs summary --trx-directory TestResults --coverage-summary TestResults/merged/Summary.json --json-output TestResults/run-summary.json
+
+      # The normalized numbers (test counts per lane, coverage per project) feed the metrics record on main. They are
+      # small, so 14 days of retention costs nothing.
+      - name: Upload run summary numbers
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true')
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: run-summary
+          path: TestResults/run-summary.json
+          if-no-files-found: warn
+          retention-days: 14
+
   web:
     name: Web (Build, Lint & Test)
     runs-on: ubuntu-24.04
@@ -408,13 +473,52 @@ jobs:
         run: pnpm --filter web run build
 
       - name: Run E2E tests
+        env:
+          ALLURE_RESULTS_DIR: ${{ github.workspace }}/allure-input/playwright
         run: pnpm run test:e2e
 
+      # Failure evidence only: Playwright writes a screenshot (only-on-failure) and a trace (on first retry) under
+      # web/test-results, and CI writes the HTML report to web/playwright-report. Nothing is uploaded on a green run.
+      # This job uses fictional data only, so 14 days is enough to open a failed pull request run. The real-stack job
+      # below keeps 7 days because its traces can show real-looking sessions, and none of this reaches the published site.
+      - name: Upload e2e failure artifacts (screenshots, traces, HTML report)
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-e2e-failure
+          path: |
+            web/test-results/
+            web/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Run web coverage gate (>=80% lines, >=75% branches)
+        env:
+          ALLURE_RESULTS_DIR: ${{ github.workspace }}/allure-input/vitest
         run: pnpm run test:coverage
 
       - name: Run Nx affected (typecheck, lint)
         run: pnpm exec nx affected -t typecheck lint --exclude="RoleRadar.*"
+
+      # Allure results from the Vitest and Playwright runs above (fictional data only, so attachments stay; the final
+      # allure-report job sanitizes them before anything is published).
+      - name: Upload Vitest results for the combined report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: allure-in-vitest
+          path: allure-input/vitest/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload Playwright results for the combined report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: allure-in-playwright
+          path: allure-input/playwright/
+          if-no-files-found: ignore
+          retention-days: 14
 
   e2e-real-stack:
     name: Real-Stack E2E (Identity, API, Web, Mongo)
@@ -459,13 +563,345 @@ jobs:
 
       - name: Run Real-Stack Playwright E2E Suite
         shell: pwsh
+        env:
+          ALLURE_RESULTS_DIR: ${{ github.workspace }}/allure-input/real-stack
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/test-e2e-real.ps1 -NoBuild
+
+      # Real-stack results leave this job only after the sanitizer has removed every attachment (nested ones too) and
+      # every absolute path, user name and host name: pass or fail, names and timings only. The raw results, with their
+      # traces, are never uploaded here (traces exist only in the 7-day failure artifact below).
+      - name: Sanitize real-stack results (pass or fail and timings only)
+        if: always()
+        shell: bash
+        run: |
+          if [ -d allure-input/real-stack ]; then
+            node web/scripts/allure-sanitize.mjs --input allure-input/real-stack --output allure-sanitized/real-stack --lane real-stack
+          fi
+
+      - name: Upload sanitized real-stack results for the combined report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: allure-in-real-stack
+          path: allure-sanitized/real-stack/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Failure evidence only, kept 7 days (shorter than the 14 days of the fictional-data e2e job above): traces from
+      # this job can show real-looking sessions. Never uploaded on success, never downloaded by the publish job.
+      - name: Upload real-stack failure artifacts (screenshots, traces, HTML report)
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: real-stack-e2e-failure
+          path: |
+            web/test-results/
+            web/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # One combined Allure report per run, built by a final job that always runs, from the results the stack jobs above
+  # already produced (xUnit JUnit, Vitest, Playwright, real-stack). It runs no tests. Everything is sanitized first
+  # (scripts/allure-sanitize.mjs) and leak-checked before and after generating. On pull requests the report is an
+  # artifact only; on main it is handed to the publish job. It does not run for fork pull requests. A stack that failed
+  # is not required to be complete (a failed run still gets a report); a stack that succeeded must be, or this job fails.
+  allure-report:
+    name: Allure combined report
+    runs-on: ubuntu-24.04
+    needs: [changes, ubuntu-build-and-test, web, e2e-real-stack]
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.x
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          version: 10.4.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download the results of every stack job
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: allure-in-*
+          path: allure-input
+
+      - name: Sanitize and merge the results
+        id: merge
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p allure-merged
+          count=0
+          for dir in allure-input/allure-in-*; do
+            [ -d "$dir" ] || continue
+            name="${dir##*/allure-in-}"
+            lane=fictional
+            if [ "$name" = "real-stack" ]; then lane=real-stack; fi
+            node web/scripts/allure-sanitize.mjs --input "$dir" --output "allure-sanitized/$name" --lane "$lane"
+            cp -r "allure-sanitized/$name"/. allure-merged/
+            count=$((count + 1))
+          done
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          if [ "$count" -eq 0 ]; then
+            echo "No Allure inputs: no stack job produced results, so there is no combined report." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Check the merged results for absolute paths, user names and host names
+        if: steps.merge.outputs.count != '0'
+        run: node web/scripts/allure-sanitize.mjs --check allure-merged
+
+      # History is one file, allure-history/history.jsonl, in the gh-pages tree (web/allurerc.mjs explains the cap). It is
+      # read from the branch when it exists; a missing branch or file just starts a new history. Only the publish job
+      # on main writes it back.
+      - name: Restore Allure history from gh-pages
+        if: steps.merge.outputs.count != '0'
+        shell: bash
+        run: |
+          mkdir -p allure-history
+          if git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1 \
+            && git fetch --quiet --depth 1 origin gh-pages \
+            && git cat-file -e FETCH_HEAD:allure-history/history.jsonl 2> /dev/null; then
+            git show FETCH_HEAD:allure-history/history.jsonl > allure-history/history.jsonl
+            echo "Restored $(wc -l < allure-history/history.jsonl) Allure history run(s) from gh-pages."
+          else
+            echo "No Allure history on gh-pages yet; this run starts it."
+          fi
+
+      - name: Generate the combined report
+        if: steps.merge.outputs.count != '0'
+        env:
+          ALLURE_REPORT_DIR: ${{ github.workspace }}/allure-report
+          ALLURE_HISTORY_PATH: ${{ github.workspace }}/allure-history/history.jsonl
+        run: pnpm --filter web exec allure generate "${GITHUB_WORKSPACE}/allure-merged" --clean
+
+      # Which sources must be present: those whose stack job succeeded and actually ran.
+      - name: Check that no required source is missing from the report
+        if: steps.merge.outputs.count != '0'
+        shell: bash
+        env:
+          UBUNTU_RESULT: ${{ needs.ubuntu-build-and-test.result }}
+          WEB_RESULT: ${{ needs.web.result }}
+          BACKEND_RAN: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.backend == 'true' }}
+          WEB_RAN: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || needs.changes.outputs.web == 'true' }}
+        run: |
+          required=()
+          if [ "$UBUNTU_RESULT" = "success" ] && [ "$BACKEND_RAN" = "true" ]; then required+=(Unit Architecture Contract); fi
+          if [ "$WEB_RESULT" = "success" ] && [ "$WEB_RAN" = "true" ]; then required+=(Vitest Playwright); fi
+          if [ "${#required[@]}" -eq 0 ]; then
+            echo "No stack job both succeeded and ran, so no source is required to be present." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          list=$(IFS=,; echo "${required[*]}")
+          node web/scripts/check-combined-report.mjs --results-directory allure-merged --required "$list" --report-directory allure-report
+
+      - name: Check the generated report for absolute paths, user names and host names
+        if: steps.merge.outputs.count != '0'
+        run: node web/scripts/allure-sanitize.mjs --check allure-report
+
+      - name: Upload the combined report
+        if: steps.merge.outputs.count != '0'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: allure-report
+          path: allure-report/
+          retention-days: 14
+
+      # The updated history travels to the publish job as a one-day artifact; only main ever writes it to gh-pages.
+      - name: Upload the updated Allure history
+        if: steps.merge.outputs.count != '0' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: allure-history
+          path: allure-history/history.jsonl
+          retention-days: 1
+
+  # Metrics history, coverage report and badge, the trends page and the combined Allure report, published to the gh-pages
+  # branch. This is the only job here with write access, and it never runs on a pull request or a fork: the condition is
+  # a push to main whose backend tests ran and whose gate passed. It publishes numbers read from this run's own outputs
+  # (run-summary artifact, the job list of this run, the latest nightly mutation score with its own run date and commit).
+  # The current gh-pages tree is checked out first (when the branch exists); web/scripts/metrics-record.mjs appends to
+  # its metrics/metrics.jsonl and the new site goes to separate output folders, so peaceiris/actions-gh-pages only copies
+  # files. Pushing to the branch works whether or not GitHub Pages is enabled; the job summary says what to enable.
+  metrics-and-pages:
+    name: Publish metrics, coverage and trends (main only)
+    runs-on: ubuntu-24.04
+    needs: [changes, ubuntu-build-and-test, ci-gate, allure-report]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.ci-gate.result == 'success' && needs.changes.outputs.backend == 'true'
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    concurrency:
+      group: pages-publish
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.x
+
+      - name: Check whether the gh-pages branch exists
+        id: pages
+        shell: bash
+        run: |
+          if git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out the current gh-pages tree
+        if: steps.pages.outputs.exists == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: gh-pages
+          path: pages-work
+          persist-credentials: false
+
+      - name: Download the run summary numbers
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: run-summary
+          path: publish-input
+
+      - name: Download the coverage report
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: coverage-report
+          path: publish-input/coverage
+
+      # The combined report and its history are optional: a run in which no stack produced results has neither, and
+      # nothing is published for them.
+      - name: Download the combined Allure report
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: allure-report
+          path: publish-input/allure
+
+      - name: Download the updated Allure history
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: allure-history
+          path: publish-input/allure-history
+
+      # Appends this run's record to the existing metrics.jsonl and writes the whole file to the output folder. Job
+      # durations come from the run's own job list (completed jobs only; this job is still running and is left out). The
+      # mutation score is the latest successful nightly's, with its own run date and commit; it is absent until one exists.
+      - name: Build the metrics record
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          gh run view "${RUN_ID}" --repo "${REPOSITORY}" --json jobs > publish-input/jobs.json
+          mutation_args=()
+          nightly_id=$(gh run list --repo "${REPOSITORY}" --workflow nightly-quality.yml --status success --branch main --limit 1 --json databaseId --jq '.[0].databaseId // empty' 2> /dev/null || true)
+          if [ -n "${nightly_id}" ] && gh run download "${nightly_id}" --repo "${REPOSITORY}" --name mutation-web-lib --dir publish-input/nightly 2> /dev/null; then
+            score_file=$(find publish-input/nightly -name mutation-score.json | head -n 1)
+            if [ -n "${score_file}" ]; then mutation_args=(--mutation "${score_file}"); fi
+          fi
+          node web/scripts/metrics-record.mjs record \
+            --commit "${COMMIT_SHA}" \
+            --summary publish-input/run-summary.json \
+            --jobs publish-input/jobs.json \
+            --existing pages-work/metrics/metrics.jsonl \
+            --output site-keep/metrics/metrics.jsonl \
+            "${mutation_args[@]}"
+
+      # Three output folders. site-keep holds files that are added or overwritten and never removed (the trends page, the
+      # metrics history, the badge, the Allure history). site-coverage and site-allure each replace one directory of the
+      # branch, so stale report files do not pile up.
+      - name: Stage the site
+        id: stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p site-keep/metrics site-keep/badges site-keep/allure-history site-coverage
+          cp -r pages/metrics/. site-keep/metrics/
+          cp -r publish-input/coverage/. site-coverage/
+          badge=$(find site-coverage -name badge_linecoverage.svg | head -n 1)
+          if [ -z "${badge}" ]; then
+            echo "badge_linecoverage.svg is missing from the coverage report; nothing is published." >&2
+            exit 1
+          fi
+          cp "${badge}" site-keep/badges/coverage.svg
+          if [ -f publish-input/allure/index.html ]; then
+            cp -r publish-input/allure site-allure
+            echo "allure=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ -f publish-input/allure-history/history.jsonl ]; then
+            cp publish-input/allure-history/history.jsonl site-keep/allure-history/history.jsonl
+          fi
+
+      - name: Publish metrics, badge, trends page and Allure history (existing files are kept)
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
+        with:
+          github_token: ${{ github.token }}
+          publish_dir: site-keep
+          keep_files: true
+          enable_jekyll: false
+          user_name: github-actions[bot]
+          user_email: 41898282+github-actions[bot]@users.noreply.github.com
+          commit_message: Publish metrics (${{ github.sha }})
+
+      - name: Publish the coverage report (replaces coverage/)
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
+        with:
+          github_token: ${{ github.token }}
+          publish_dir: site-coverage
+          destination_dir: coverage
+          user_name: github-actions[bot]
+          user_email: 41898282+github-actions[bot]@users.noreply.github.com
+          commit_message: Publish coverage report (${{ github.sha }})
+
+      - name: Publish the combined Allure report (replaces allure/)
+        if: steps.stage.outputs.allure == 'true'
+        uses: peaceiris/actions-gh-pages@84c30a85c19949d7eee79c4ff27748b70285e453 # v4.1.0
+        with:
+          github_token: ${{ github.token }}
+          publish_dir: site-allure
+          destination_dir: allure
+          user_name: github-actions[bot]
+          user_email: 41898282+github-actions[bot]@users.noreply.github.com
+          commit_message: Publish Allure report (${{ github.sha }})
+
+      - name: Say what the owner must enable
+        shell: bash
+        env:
+          BRANCH_EXISTED: ${{ steps.pages.outputs.exists }}
+        run: |
+          {
+            echo "Published to the gh-pages branch (it $([ "${BRANCH_EXISTED}" = true ] && echo already existed || echo was created by this run))."
+            echo "The branch is served only when Settings > Pages > Source is set to Deploy from a branch, gh-pages, / (root); pushing works either way."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   ci-gate:
     name: Ubuntu (Build, Testcontainers, >=85% Coverage & Pre-Commit)
     runs-on: ubuntu-24.04
     if: always()
-    needs: [changes, pre-commit, ubuntu-build-and-test, web, windows-verify, e2e-real-stack]
+    needs: [changes, pre-commit, ubuntu-build-and-test, web, windows-verify, e2e-real-stack, allure-report]
     steps:
       - name: Verify status of all workflow jobs
         shell: bash
@@ -476,6 +912,7 @@ jobs:
           WEB_RESULT: ${{ needs.web.result }}
           WINDOWS_RESULT: ${{ needs.windows-verify.result }}
           E2E_RESULT: ${{ needs.e2e-real-stack.result }}
+          ALLURE_RESULT: ${{ needs.allure-report.result }}
         run: |
           echo "Evaluating CI job results:"
           echo "  changes:               $CHANGES_RESULT"
@@ -484,13 +921,14 @@ jobs:
           echo "  web:                   $WEB_RESULT"
           echo "  windows-verify:        $WINDOWS_RESULT"
           echo "  e2e-real-stack:        $E2E_RESULT"
+          echo "  allure-report:         $ALLURE_RESULT"
 
           if [ "$CHANGES_RESULT" != "success" ]; then
             echo "Error: The 'changes' job did not succeed (result: $CHANGES_RESULT)."
             exit 1
           fi
 
-          for result in "$CHANGES_RESULT" "$PRE_COMMIT_RESULT" "$UBUNTU_RESULT" "$WEB_RESULT" "$WINDOWS_RESULT" "$E2E_RESULT"; do
+          for result in "$CHANGES_RESULT" "$PRE_COMMIT_RESULT" "$UBUNTU_RESULT" "$WEB_RESULT" "$WINDOWS_RESULT" "$E2E_RESULT" "$ALLURE_RESULT"; do
             if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
               echo "Error: One or more required CI jobs did not succeed or skip (encountered: $result)."
               exit 1

@@ -1,0 +1,4 @@
+{
+  "summary": { "branchcoverage": 80 },
+  "coverage": { "assemblies": [ { "name": "RoleRadar.Domain", "coverage": 95, "branchcoverage": 70 } ] }
+}

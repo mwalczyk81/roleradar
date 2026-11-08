@@ -129,6 +129,8 @@ export default tseslint.config(
       ".react-router/**",
       "node_modules/**",
       "app/ds/**",
+      "reports/**",
+      ".stryker-tmp/**",
     ],
   }
 );
