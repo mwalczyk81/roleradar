@@ -49,6 +49,9 @@ jobs:
               - 'Directory.Packages.props'
               - 'global.json'
               - 'scripts/**'
+              - 'README.md'
+              - 'docs/api/**'
+              - 'specs/007-insights-dashboard/contracts/**'
             web:
               - '.github/workflows/**'
               - '.editorconfig'
@@ -58,6 +61,8 @@ jobs:
               - 'package.json'
               - 'pnpm-lock.yaml'
               - 'nx.json'
+              - 'pages/**'
+              - 'quality/**'
             images:
               - '.github/workflows/**'
               - '.dockerignore'
