@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Stage 1: Build RoleRadar.Identity
-FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:de4fe90a98845d75910b9769662465c84de1a934665c431279d1382b2bddc02b AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0-noble@sha256:212fe4cb74627d5adf9817a4088906ae3edff1bd853bb27565d4b46731efe61e AS build
 WORKDIR /src
 
 # Copy project files and restore with locked dependencies
@@ -22,7 +22,7 @@ RUN dotnet publish src/RoleRadar.Identity/RoleRadar.Identity.csproj -c Release -
 
 # Stage 2: Hardened Chiseled Runtime (roleradar-identity)
 # IMPORTANT (ADR-0016): This image bundles Duende IdentityServer Community Edition and MUST NEVER be published to an external registry.
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:c89a6a61f494f20a5ae302990e814627a8d91b332fd4a8e7c1707c2d4da9555d AS identity
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled@sha256:f2557fb81b1cfcfdfcde9d3bf247ed60b2cd38f00a88153f61e34737fab8ade7 AS identity
 WORKDIR /app
 COPY --from=build --chown=1654:1654 /empty-identity-data /data/identity
 COPY --from=build --chown=1654:1654 /app/identity /app
