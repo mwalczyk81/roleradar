@@ -11,7 +11,7 @@ import { countStyleObjects, scanKitStyleEmitters } from "../../scripts/kit-style
  * - `style={style}`: the caller's own `style` prop passed through. The app has none (the ESLint rule forbids it).
  * - `el.style.x = ...` and `style.setProperty(...)`: CSSOM writes, which the policy allows.
  *
- * The render side is guarded by tests/unit/kit-no-style-attributes.test.tsx (no kit component renders a style attribute);
+ * The render side is guarded by tests/tooling/kit-no-style-attributes.test.tsx (no kit component renders a style attribute);
  * this test only checks the source, so the two are not duplicates.
  */
 const KIT_SRC = path.resolve(__dirname, "../../app/ds/components/src");

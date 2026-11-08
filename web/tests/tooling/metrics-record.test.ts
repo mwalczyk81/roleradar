@@ -3,7 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import { appendRecord, buildRecord, buildRunSummary, durationsFromJobs, escapeMarkdown } from "../../scripts/metrics-record.mjs";
+import { appendRecord, buildPrComment, buildRecord, buildRunSummary, durationsFromJobs, escapeMarkdown } from "../../scripts/metrics-record.mjs";
 
 // Feature 011, story 2 (FR-013, FR-014, FR-017). One tool turns a run's own outputs into (1) the run-summary tables and a
 // normalized run-summary.json, and (2) one metrics record appended to the existing metrics.jsonl. Rules kept from the
@@ -334,3 +334,127 @@ describe("record command line", () => {
     expect(JSON.parse(last)).toMatchObject({ mutation: { "web-lib": 69.2, commit: COMMIT_A, runDate: "2026-02-02T03:00:00Z" } });
   });
 });
+
+// The sticky pull request comment (PR 61 addendum). The body is built only from run-summary.json (aggregate counts and
+// percentages), an optional mutation score file and a few URLs; it never reads a result file.
+describe("buildPrComment", () => {
+  const MARKER = "<!-- roleradar-ci-report -->";
+  const links = {
+    commit: COMMIT_A,
+    runUrl: "https://github.com/example-owner/roleradar/actions/runs/123",
+    artifactsUrl: "https://github.com/example-owner/roleradar/actions/runs/123#artifacts",
+  };
+  const mutation = { project: "web-lib", score: 81.13, runDate: "2026-02-02T03:00:00Z", commit: COMMIT_B };
+
+  it("starts with the hidden marker that finds the comment again", () => {
+    expect(buildPrComment({ summary: summaryFixture(), mutation: null, ...links }).startsWith(`${MARKER}\n`)).toBe(true);
+  });
+
+  it("shows tests per lane, coverage, the mutation score with its own date and commit, and the links", () => {
+    const body = buildPrComment({ summary: summaryFixture(), mutation, pagesUrl: "https://example-owner.github.io/roleradar/allure/", ...links });
+    expect(body).toContain("| Unit | 9 | 2 | 1 | 12 |");
+    expect(body).toContain("| Contract | 5 | 0 | 0 | 5 |");
+    expect(body).toContain("| RoleRadar.Domain | 95.0 | 70.0 |");
+    expect(body).toContain("| Overall | 90.0 | 80.0 |");
+    expect(body).toContain("web-lib");
+    expect(body).toContain("81.1");
+    expect(body).toContain("2026-02-02");
+    expect(body).toContain(COMMIT_B.slice(0, 7));
+    expect(body).toContain(`(${links.runUrl})`);
+    expect(body).toContain(`(${links.artifactsUrl})`);
+    expect(body).toContain("(https://example-owner.github.io/roleradar/allure/)");
+    expect(body).toContain(COMMIT_A.slice(0, 7));
+  });
+
+  it("says the mutation score is not available instead of inventing one", () => {
+    const body = buildPrComment({ summary: summaryFixture(), mutation: null, ...links });
+    expect(body).toMatch(/Mutation score: not available/);
+    expect(body).not.toContain("web-lib");
+  });
+
+  it("leaves the Pages link out when there is none", () => {
+    const body = buildPrComment({ summary: summaryFixture(), mutation: null, ...links });
+    expect(body).not.toContain("github.io");
+  });
+
+  it("says the run summary is unavailable when there is none, and still carries the links", () => {
+    const body = buildPrComment({ summary: null, mutation: null, ...links });
+    expect(body).toContain("Run summary: not available for this run");
+    expect(body).toContain(`(${links.runUrl})`);
+    expect(body).not.toContain("| Lane |");
+  });
+
+  it("shows a missing figure as unavailable and never as zero", () => {
+    const summary = summaryFixture() as { coverage: { overallLinePct: number | null } };
+    summary.coverage.overallLinePct = null;
+    const body = buildPrComment({ summary, mutation: null, ...links });
+    expect(body).toContain("| Overall | unavailable | 80.0 |");
+  });
+
+  it("escapes text from the inputs before it reaches Markdown", () => {
+    const summary = {
+      schemaVersion: 1,
+      tests: { "Evil|<img src=x onerror=alert(1)>[x](http://evil.example)": { passed: 1, failed: 0, skipped: 0 } },
+      coverage: { overallLinePct: 1, overallBranchPct: 1, projects: { "a`b\nc": { linePct: 1, branchPct: 1 } } },
+    };
+    const body = buildPrComment({ summary, mutation: { ...mutation, project: "p|<b>x</b>" }, ...links });
+    expect(body).not.toContain("<img");
+    expect(body).not.toContain("<b>");
+    expect(body).not.toContain("[x](http://evil.example)");
+    expect(body).toContain("&lt;img");
+  });
+
+  it("drops a link that is not https and a commit that is not a sha", () => {
+    const body = buildPrComment({ summary: summaryFixture(), mutation: null, commit: "not a sha", runUrl: "javascript:alert(1)", artifactsUrl: "http://example.com/x" });
+    expect(body).not.toContain("javascript:");
+    expect(body).not.toContain("http://example.com");
+    expect(body).not.toContain("not a sha");
+  });
+
+  it("carries only the known aggregate fields, nothing else from the summary", () => {
+    const summary = { ...summaryFixture(), token: "ghp_fixture_not_a_secret", paths: ["C:/Users/someone/x"], extra: { note: "internal" } };
+    const body = buildPrComment({ summary, mutation: null, ...links });
+    expect(body).not.toContain("ghp_fixture_not_a_secret");
+    expect(body).not.toContain("someone");
+    expect(body).not.toContain("internal");
+  });
+});
+
+describe("metrics-record comment", () => {
+  const run = (args: string[]) => spawnSync(process.execPath, [SCRIPT, "comment", ...args], { encoding: "utf8" });
+
+  it("writes the comment body to the output file from the summary file", () => {
+    const dir = tempDir();
+    const summary = write(dir, "run-summary.json", JSON.stringify(summaryFixture()));
+    const output = path.join(dir, "out", "comment.md");
+    const result = run(["--summary", summary, "--commit", COMMIT_A, "--run-url", "https://github.com/example-owner/roleradar/actions/runs/1", "--output", output]);
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    const body = fs.readFileSync(output, "utf8");
+    expect(body.startsWith("<!-- roleradar-ci-report -->")).toBe(true);
+    expect(body).toContain("| Unit | 9 | 2 | 1 | 12 |");
+  });
+
+  it("still writes a comment when the summary file does not exist (a run with no backend lanes)", () => {
+    const dir = tempDir();
+    const output = path.join(dir, "comment.md");
+    const result = run(["--summary", path.join(dir, "missing.json"), "--commit", COMMIT_A, "--output", output]);
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(fs.readFileSync(output, "utf8")).toContain("Run summary: not available for this run");
+  });
+
+  it("includes the mutation score from a mutation file", () => {
+    const dir = tempDir();
+    const summary = write(dir, "run-summary.json", JSON.stringify(summaryFixture()));
+    const score = write(dir, "mutation-score.json", JSON.stringify(mutationFixture));
+    const output = path.join(dir, "comment.md");
+    const result = run(["--summary", summary, "--mutation", score, "--commit", COMMIT_A, "--output", output]);
+    expect(result.status, result.stdout + result.stderr).toBe(0);
+    expect(fs.readFileSync(output, "utf8")).toContain("69.2");
+  });
+
+  it("fails when no output file is named", () => {
+    expect(run(["--commit", COMMIT_A]).status).toBe(2);
+  });
+});
+
+const mutationFixture = { project: "web-lib", score: 69.2, runDate: "2026-02-02T03:00:00Z", commit: "a".repeat(40) };

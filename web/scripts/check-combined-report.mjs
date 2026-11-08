@@ -1,5 +1,5 @@
 // Fails when a required test source is missing from the combined Allure report (feature 011, FR-024, FR-025). CI-only
-// logic, tested by Vitest (tests/unit/check-combined-report.test.ts). It replaces scripts/check-combined-report.ps1.
+// logic, tested by Vitest (tests/tooling/check-combined-report.test.ts). It replaces scripts/check-combined-report.ps1.
 //
 // The merged results folder that feeds `allure generate` holds one JUnit file per test project (<Name>.xml): the xUnit v3
 // projects, written by a plain `-junit` workflow step, and Vitest, written by Vitest's own junit reporter as Vitest.xml.

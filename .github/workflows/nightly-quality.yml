@@ -3,7 +3,7 @@ name: Nightly quality
 # Mutation testing for the web pure-logic library (StrykerJS, Vitest runner), run nightly and on manual dispatch.
 # It never runs on pushes or on ordinary pull requests. The one pull request trigger is a validation run that fires
 # only when this file itself changes, only for pull requests from this repository, publishes nothing and receives no
-# secret. web/tests/unit/workflow-triggers.test.ts fails if this trigger block or the secret guards drift.
+# secret. web/tests/tooling/workflow-triggers.test.ts fails if this trigger block or the secret guards drift.
 #
 # .NET mutation testing (Domain, Application) is deferred: Stryker.NET does not work with xUnit v3 on this stack.
 # See specs/011-test-quality-reporting/research.md D1 for the evidence and the revisit trigger.

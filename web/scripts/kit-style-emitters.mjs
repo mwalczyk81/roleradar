@@ -6,7 +6,7 @@
 //   - CSSOM writes (`el.style.left = ...`, `el.style.setProperty(...)`), which the policy allows.
 //
 // Usage: node web/scripts/kit-style-emitters.mjs   (prints JSON: { total, perFile, files }; exit code 1 when total > 0)
-// The render-side guard is web/tests/unit/kit-no-style-attributes.test.tsx; this script only reads source.
+// The render-side guard is web/tests/tooling/kit-no-style-attributes.test.tsx; this script only reads source.
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";

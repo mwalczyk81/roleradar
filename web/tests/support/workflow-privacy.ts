@@ -7,7 +7,7 @@ import { parse } from "yaml";
 // a broken copy is caught.
 
 type Step = { name?: string; uses?: string; run?: string; if?: string; with?: { name?: string; path?: string; publish_dir?: string; force_orphan?: boolean | string } };
-type Job = { steps?: Step[] };
+type Job = { steps?: Step[]; if?: string; permissions?: Record<string, string> };
 type Workflow = { jobs?: Record<string, Job> };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -123,5 +123,48 @@ export function checkAllurePrivacy(ciText: string, nightlyText: string): string[
       }
     }
   }
+
+  // 6. The sticky pull request comment (job pr-report) is built only from the run summary, never from result files, and
+  //    only that job may write pull requests.
+  const prJob = ci["pr-report"];
+  const prSteps = stepsOf(prJob);
+  if (!prJob) {
+    violations.push("ci.yml has no pr-report job (the sticky pull request comment)");
+  } else {
+    const workflowPermissions = permissionsOf(ciText);
+    if (workflowPermissions["pull-requests"] !== undefined) {
+      violations.push("ci.yml grants pull-requests at workflow level; only the pr-report job may");
+    }
+    if (prJob.permissions?.["pull-requests"] !== "write") {
+      violations.push("the ci.yml pr-report job must have job-scoped permissions: pull-requests: write");
+    }
+    for (const [name, job] of Object.entries(ci)) {
+      if (name !== "pr-report" && job.permissions?.["pull-requests"] === "write") {
+        violations.push(`ci.yml job ${name} has pull-requests: write; only pr-report may`);
+      }
+    }
+    for (const step of prSteps.filter((candidate) => candidate.uses?.startsWith("actions/download-artifact@"))) {
+      if (step.with?.name !== "run-summary") {
+        violations.push(`the ci.yml pr-report job downloads ${step.with?.name ?? "an artifact"}; the comment may be built only from run-summary`);
+      }
+    }
+    const prText = prSteps.map((step) => `${step.run ?? ""} ${JSON.stringify(step.with ?? {})}`).join("\n");
+    if (/allure-input|allure-sanitized|allure-merged|allure-report\b|allure-in-|TestResults|\.trx\b|real-stack/.test(prText.replace(/pull request report/g, ""))) {
+      violations.push("the ci.yml pr-report job reads result files; the comment body must be built only from the run summary");
+    }
+    if (!prSteps.some((step) => /metrics-record\.mjs comment\b/.test(step.run ?? ""))) {
+      violations.push("the ci.yml pr-report job must build the comment with metrics-record.mjs comment");
+    }
+    const jobIf = prJob.if ?? "";
+    const gateText = prSteps.map((step) => step.run ?? "").join("\n");
+    if (!/head\.repo\.full_name|HEAD_REPO/.test(`${jobIf}\n${gateText}`) || !/dependabot\[bot\]/.test(`${jobIf}\n${gateText}`)) {
+      violations.push("the ci.yml pr-report job must comment only for same-repository pull requests not opened by dependabot[bot]");
+    }
+  }
   return violations;
+}
+
+function permissionsOf(text: string): Record<string, unknown> {
+  const doc: unknown = parse(text);
+  return isRecord(doc) && isRecord(doc["permissions"]) ? doc["permissions"] : {};
 }

@@ -926,3 +926,119 @@ jobs:
           done
 
           echo "All required CI jobs succeeded or were cleanly skipped."
+
+  # One sticky comment on the pull request with the numbers of this run: tests per lane and coverage (from the run-summary
+  # artifact only), the latest nightly mutation score when there is one, and links to the run, its artifacts and the Pages
+  # report. The body is built by web/scripts/metrics-record.mjs comment from aggregate numbers; no result file is read, so
+  # nothing from the real-stack lane can reach it (web/tests/support/workflow-privacy.ts binds this). Only this job holds
+  # pull-requests: write. It never fails the run: when it may not or cannot comment it says so in the job summary.
+  pr-report:
+    name: Pull request report
+    runs-on: ubuntu-24.04
+    needs: [changes, ubuntu-build-and-test, web, allure-report, ci-gate]
+    if: always() && github.event_name == 'pull_request'
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: write
+    steps:
+      - name: Decide whether this run may comment
+        id: gate
+        shell: bash
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          REPOSITORY: ${{ github.repository }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          if [ "${HEAD_REPO}" != "${REPOSITORY}" ]; then
+            echo "No pull request comment: the pull request comes from a fork, whose token cannot write comments." >> "$GITHUB_STEP_SUMMARY"
+            echo "comment=false" >> "$GITHUB_OUTPUT"
+          elif [ "${ACTOR}" = "dependabot[bot]" ]; then
+            echo "No pull request comment: Dependabot runs get a read-only token." >> "$GITHUB_STEP_SUMMARY"
+            echo "comment=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "comment=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout repository
+        if: steps.gate.outputs.comment == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        if: steps.gate.outputs.comment == 'true'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.x
+
+      - name: Download the run summary numbers
+        if: steps.gate.outputs.comment == 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: run-summary
+          path: report-input
+
+      # The mutation score is the latest successful nightly's, with its own date and commit; absent until one exists.
+      - name: Build the comment
+        if: steps.gate.outputs.comment == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          SERVER_URL: ${{ github.server_url }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          mutation_args=()
+          nightly_id=$(gh run list --repo "${REPOSITORY}" --workflow nightly-quality.yml --status success --branch main --limit 1 --json databaseId --jq '.[0].databaseId // empty' 2> /dev/null || true)
+          if [ -n "${nightly_id}" ] && gh run download "${nightly_id}" --repo "${REPOSITORY}" --name mutation-web-lib --dir report-input/nightly 2> /dev/null; then
+            score_file=$(find report-input/nightly -name mutation-score.json | head -n 1)
+            if [ -n "${score_file}" ]; then mutation_args=(--mutation "${score_file}"); fi
+          fi
+          # The Pages report is linked only when it answers (Pages enabled and a report published from main).
+          owner="${REPOSITORY%%/*}"
+          name="${REPOSITORY#*/}"
+          pages_url="https://${owner,,}.github.io/${name}/allure/"
+          pages_args=()
+          if curl -fsI --max-time 10 "${pages_url}index.html" > /dev/null 2>&1; then pages_args=(--pages-url "${pages_url}"); fi
+          node web/scripts/metrics-record.mjs comment \
+            --summary report-input/run-summary.json \
+            --commit "${COMMIT_SHA}" \
+            --run-url "${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}" \
+            --artifacts-url "${SERVER_URL}/${REPOSITORY}/actions/runs/${RUN_ID}#artifacts" \
+            --output report-input/comment.md \
+            "${pages_args[@]}" \
+            "${mutation_args[@]}"
+
+      # --edit-last --create-if-none edits the last comment of the current user (the bot) or creates one. A gh without
+      # those flags falls back to finding the comment by its hidden marker.
+      - name: Post or update the comment
+        if: steps.gate.outputs.comment == 'true'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if gh pr comment --help | grep -q -- '--create-if-none'; then
+            gh pr comment "${PR_NUMBER}" --repo "${REPOSITORY}" --body-file report-input/comment.md --edit-last --create-if-none
+          else
+            comment_id=$(gh api --paginate "repos/${REPOSITORY}/issues/${PR_NUMBER}/comments" --jq '.[] | select(.user.login == "github-actions[bot]" and (.body | startswith("<!-- roleradar-ci-report -->"))) | .id' | head -n 1)
+            if [ -n "${comment_id}" ]; then
+              gh api --method PATCH "repos/${REPOSITORY}/issues/comments/${comment_id}" --field body=@report-input/comment.md > /dev/null
+            else
+              gh pr comment "${PR_NUMBER}" --repo "${REPOSITORY}" --body-file report-input/comment.md
+            fi
+          fi
+          echo "Pull request comment posted or updated." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Say when the comment could not be posted
+        if: failure() && steps.gate.outputs.comment == 'true'
+        shell: bash
+        run: echo "The pull request comment could not be posted or updated (see the steps above). The run summary and artifacts are unaffected." >> "$GITHUB_STEP_SUMMARY"

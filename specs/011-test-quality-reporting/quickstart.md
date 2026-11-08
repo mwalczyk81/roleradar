@@ -15,7 +15,7 @@ Run from the repo root. Report numbers from command output only.
 1. Run the web Stryker command from `nightly-quality.yml` locally (or dispatch the workflow). Expect an HTML report and `mutation-score.json`. .NET mutation is deferred (research.md D1).
 2. `node web/scripts/mutation-ratchet.mjs --base-ref origin/main` passes; lower a floor in a scratch change and expect exit 1.
 3. Open the pull request. The validation run of `nightly-quality.yml` (path-filtered, same-repo only, no publish, no secrets) uploads both reports and the summary says the dashboard publish was skipped. After merge, dispatch it once more, with the secret added, to check the dashboard publish.
-4. `pnpm --filter web exec vitest run tests/unit/workflow-triggers.test.ts` passes (trigger block is exactly schedule, dispatch and the path-filtered same-repo pull request).
+4. `pnpm --filter web exec vitest run tests/tooling/workflow-triggers.test.ts` passes (trigger block is exactly schedule, dispatch and the path-filtered same-repo pull request).
 
 ## Story 2: reporting
 1. Open a CI or gate run summary: tables for tests per lane, coverage, images, scans.

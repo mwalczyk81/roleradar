@@ -90,4 +90,40 @@ describe("Allure privacy rules in the workflows", () => {
     expect(secondDeploy).not.toBe(nightly);
     expect(checkAllurePrivacy(ci, secondDeploy).join("\n")).toMatch(/nightly-quality.yml publish job must have exactly one peaceiris\/actions-gh-pages step, found 2/);
   });
+
+  // The sticky pull request comment: built only from the run summary, written by one job-scoped permission.
+
+  it("catch a pr-report job whose comment is built from a result file", () => {
+    const broken = ci.replace("--output report-input/comment.md", "--output report-input/comment.md --extra allure-sanitized/real-stack");
+    expect(broken).not.toBe(ci);
+    expect(checkAllurePrivacy(broken, nightly).join("\n")).toMatch(/pr-report job reads result files/);
+  });
+
+  it("catch a pr-report job that downloads a result artifact", () => {
+    const start = ci.indexOf("  pr-report:");
+    expect(start).toBeGreaterThan(0);
+    const broken = ci.slice(0, start) + ci.slice(start).replace(/name: run-summary/, "name: allure-in-real-stack");
+    expect(broken).not.toBe(ci);
+    expect(checkAllurePrivacy(broken, nightly).join("\n")).toMatch(/pr-report job downloads allure-in-real-stack/);
+  });
+
+  it("catch pull-requests: write granted workflow-wide or to another job", () => {
+    const wide = ci.replace("permissions:\n  contents: read\n", "permissions:\n  contents: read\n  pull-requests: write\n");
+    expect(wide).not.toBe(ci);
+    expect(checkAllurePrivacy(wide, nightly).join("\n")).toMatch(/grants pull-requests at workflow level/);
+
+    const other = ci.replace("      contents: write\n      actions: read\n    concurrency:\n      group: pages-publish", "      contents: write\n      pull-requests: write\n    concurrency:\n      group: pages-publish");
+    expect(other).not.toBe(ci);
+    expect(checkAllurePrivacy(other, nightly).join("\n")).toMatch(/job metrics-and-pages has pull-requests: write; only pr-report may/);
+  });
+
+  it("catch a pr-report job that loses its job-scoped permission or its fork and dependabot guard", () => {
+    const noPermission = ci.replace("      pull-requests: write\n", "      pull-requests: read\n");
+    expect(noPermission).not.toBe(ci);
+    expect(checkAllurePrivacy(noPermission, nightly).join("\n")).toMatch(/job-scoped permissions: pull-requests: write/);
+
+    const noGuard = ci.replaceAll("dependabot[bot]", "someone");
+    expect(noGuard).not.toBe(ci);
+    expect(checkAllurePrivacy(noGuard, nightly).join("\n")).toMatch(/same-repository pull requests not opened by dependabot/);
+  });
 });

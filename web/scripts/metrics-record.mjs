@@ -1,5 +1,5 @@
 // Run summary and metrics record (feature 011, FR-013, FR-014, FR-017). CI-only logic, tested by Vitest
-// (tests/unit/metrics-record.test.ts). It replaces scripts/build-run-summary.ps1 and scripts/append-metrics-record.ps1.
+// (tests/tooling/metrics-record.test.ts). It replaces scripts/build-run-summary.ps1 and scripts/append-metrics-record.ps1.
 //
 //  summary  Reads the run's own outputs (TRX files for test counts per lane, ReportGenerator's Summary.json for coverage),
 //           prints Markdown tables to stdout and appends them to GITHUB_STEP_SUMMARY, and writes a normalized
@@ -358,6 +358,70 @@ export function appendRecord(existingText, recordLine, commit) {
   return { text: `${existingText}${prefix}${recordLine}\n`, appended: true };
 }
 
+const figure = (value, digits = 0) => (typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : UNAVAILABLE);
+
+export const PR_COMMENT_MARKER = "<!-- roleradar-ci-report -->";
+
+/** An https URL without whitespace or markup characters, or undefined. */
+function safeUrl(value) {
+  return typeof value === "string" && /^https:\/\/[^\s<>()"'`\\]+$/.test(value) ? value : undefined;
+}
+
+const shortSha = (value) => (typeof value === "string" && /^[0-9a-f]{40}$/.test(value) ? value.slice(0, 7) : undefined);
+
+/**
+ * The body of the sticky pull request comment. Built only from the run summary (aggregate counts and percentages), an
+ * optional mutation score file and a few URLs. Every value is escaped; unknown fields are never copied.
+ * @param {{ summary: Record<string, any> | null, mutation?: { project?: string, score?: number, runDate?: string, commit?: string } | null,
+ *           commit?: string, runUrl?: string, artifactsUrl?: string, pagesUrl?: string }} input
+ * @returns {string}
+ */
+export function buildPrComment({ summary, mutation, commit, runUrl, artifactsUrl, pagesUrl }) {
+  const lines = [PR_COMMENT_MARKER, "## CI report", ""];
+  const sha = shortSha(commit);
+  if (sha) {
+    lines.push(`Commit \`${sha}\``, "");
+  }
+
+  const tests = summary?.tests;
+  if (!summary || !tests || typeof tests !== "object") {
+    lines.push("Run summary: not available for this run (the backend lanes did not produce one).", "");
+  } else {
+    lines.push("### Tests per lane", "", "| Lane | Passed | Failed | Skipped | Total |", "|---|---:|---:|---:|---:|");
+    for (const lane of Object.keys(tests).sort((a, b) => a.localeCompare(b))) {
+      const counts = tests[lane] ?? {};
+      const numbers = ["passed", "failed", "skipped"].map((field) => counts[field]);
+      const total = numbers.every((n) => typeof n === "number") ? numbers.reduce((a, b) => a + b, 0) : null;
+      lines.push(`| ${escapeMarkdown(lane)} | ${[...numbers, total].map((n) => figure(n)).join(" | ")} |`);
+    }
+    lines.push("");
+    const coverage = summary.coverage;
+    if (coverage && typeof coverage === "object") {
+      lines.push("### Coverage", "", "| Project | Line % | Branch % |", "|---|---:|---:|");
+      for (const [name, project] of Object.entries(coverage.projects ?? {})) {
+        lines.push(`| ${escapeMarkdown(name)} | ${figure(project?.linePct, 1)} | ${figure(project?.branchPct, 1)} |`);
+      }
+      lines.push(`| Overall | ${figure(coverage.overallLinePct, 1)} | ${figure(coverage.overallBranchPct, 1)} |`, "");
+    }
+  }
+
+  const date = typeof mutation?.runDate === "string" && /^\d{4}-\d{2}-\d{2}/.test(mutation.runDate) ? mutation.runDate.slice(0, 10) : undefined;
+  if (mutation && typeof mutation.score === "number" && Number.isFinite(mutation.score) && mutation.project && date && shortSha(mutation.commit)) {
+    lines.push(`Mutation score: ${escapeMarkdown(mutation.project)} ${(Math.round(mutation.score * 10) / 10).toFixed(1)}% (latest nightly, ${date}, commit \`${shortSha(mutation.commit)}\`)`, "");
+  } else {
+    lines.push("Mutation score: not available yet (it comes from the latest nightly run).", "");
+  }
+
+  const links = [["Run", runUrl], ["Artifacts", artifactsUrl], ["Pages report (latest from main)", pagesUrl]]
+    .map(([label, url]) => [label, safeUrl(url)])
+    .filter(([, url]) => url !== undefined)
+    .map(([label, url]) => `[${label}](${url})`);
+  if (links.length > 0) {
+    lines.push(links.join(" | "), "");
+  }
+  return `${lines.join("\n").trimEnd()}\n`;
+}
+
 /** @param {string[]} argv */
 function parseArguments(argv) {
   /** @type {Record<string, string>} */
@@ -440,7 +504,35 @@ export function main(argv) {
     }
   }
 
-  process.stderr.write("usage: metrics-record.mjs summary|record ...\n");
+  if (command === "comment") {
+    if (!args["output"]) {
+      process.stderr.write("usage: comment --output <file> [--summary <file>] [--mutation <file>] [--commit <sha>] [--run-url <url>] [--artifacts-url <url>] [--pages-url <url>]\n");
+      return 2;
+    }
+    // A missing or unreadable summary is not an error here: a run in which the backend lanes did not run has none,
+    // and the comment says so. The body is built from these inputs only, never from result files.
+    const readOptional = (/** @type {string | undefined} */ file) => {
+      if (!file || !fs.existsSync(file)) return null;
+      try {
+        return JSON.parse(fs.readFileSync(file, "utf8"));
+      } catch {
+        return null;
+      }
+    };
+    const body = buildPrComment({
+      summary: readOptional(args["summary"]),
+      mutation: readOptional(args["mutation"]),
+      commit: args["commit"],
+      runUrl: args["run-url"],
+      artifactsUrl: args["artifacts-url"],
+      pagesUrl: args["pages-url"],
+    });
+    fs.mkdirSync(path.dirname(args["output"]), { recursive: true });
+    fs.writeFileSync(args["output"], body);
+    return 0;
+  }
+
+  process.stderr.write("usage: metrics-record.mjs summary|record|comment ...\n");
   return 2;
 }
 

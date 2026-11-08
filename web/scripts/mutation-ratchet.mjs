@@ -1,5 +1,5 @@
 // Mutation-score ratchet and report (feature 011, FR-007, FR-011). CI-only logic, tested by Vitest
-// (tests/unit/mutation-ratchet.test.ts). It replaces scripts/check-mutation-minimum.ps1 and write-mutation-summary.ps1.
+// (tests/tooling/mutation-ratchet.test.ts). It replaces scripts/check-mutation-minimum.ps1 and write-mutation-summary.ps1.
 //
 // Two modes.
 //  Score:   --project <name> --report <Stryker mutation.json>. Counts mutants by status, writes a Markdown table (stdout, and
