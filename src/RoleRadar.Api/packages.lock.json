@@ -186,7 +186,7 @@
       "roleradar.infrastructure": {
         "type": "Project",
         "dependencies": {
-          "Geralt": "[4.4.0, )",
+          "Geralt": "[4.5.0, )",
           "MongoDB.Driver": "[3.13.0, )",
           "RoleRadar.Application": "[1.0.0, )",
           "RoleRadar.Domain": "[1.0.0, )"
@@ -194,9 +194,9 @@
       },
       "Geralt": {
         "type": "CentralTransitive",
-        "requested": "[4.4.0, )",
-        "resolved": "4.4.0",
-        "contentHash": "fQ0rNmRFrGkdQNW0IJwfA8VqDwPTDEVmxHme5Acet+70AeKcd9LDTXj8MXFPCHRPiNo3le+lFUW32+tEmITIOQ==",
+        "requested": "[4.5.0, )",
+        "resolved": "4.5.0",
+        "contentHash": "Wi9Hu/x65xkiZUMBRPT1U3UCUlmsUszJgcBlywHnT2ZLiQgpU/bBmcHHI//u3Lk8xkPfdBYLRc7YokZuB7rIFQ==",
         "dependencies": {
           "libsodium": "[1.0.22, 1.0.23)"
         }
