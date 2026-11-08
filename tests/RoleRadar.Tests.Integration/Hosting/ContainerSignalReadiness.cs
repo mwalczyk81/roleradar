@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace RoleRadar.Tests.Integration.Hosting;
 
@@ -14,8 +15,22 @@ namespace RoleRadar.Tests.Integration.Hosting;
 /// </summary>
 internal static class ContainerSignalReadiness
 {
-    /// <summary>The ubuntu image the Dockerfile already pins for its <c>tools-downloader</c> stage; a test keeps them equal.</summary>
-    public const string HelperImage = "ubuntu:26.04@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944";
+    private static readonly Lazy<string> DockerfileHelperImage = new(ReadHelperImageFromDockerfile);
+
+    /// <summary>
+    /// The ubuntu image the Dockerfile pins for its <c>tools-downloader</c> stage, read from the Dockerfile at run time so the
+    /// digest lives in one place: a Dependabot bump of that stage cannot leave a second copy behind and break this test.
+    /// </summary>
+    public static string HelperImage => DockerfileHelperImage.Value;
+
+    private static string ReadHelperImageFromDockerfile()
+    {
+        var dockerfile = File.ReadAllText(Path.Combine(ContainerTestHarness.FindRepoRoot(), "Dockerfile"));
+        var match = Regex.Match(dockerfile, @"FROM (ubuntu:[\w.]+@sha256:[0-9a-f]{64}) AS tools-downloader");
+        return match.Success
+            ? match.Groups[1].Value
+            : throw new InvalidOperationException("the Dockerfile tools-downloader stage no longer names a pinned ubuntu image");
+    }
 
     /// <summary>SIGTERM is signal 15; bit n-1 of the SigCgt mask stands for signal n.</summary>
     private const ulong SigtermBit = 1UL << 14;
