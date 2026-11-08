@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
   "minimums": {
-    "web-lib": 0
+    "web-lib": 81
   }
 }

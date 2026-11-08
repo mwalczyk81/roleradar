@@ -61,7 +61,29 @@ Every number in this file must come from a command or workflow run named next to
 
 ## D5. First scores and survivors
 
-**Baseline status: PENDING.** The baseline is filled from the pull request validation run (task T022, owned by the review step after the PR is opened): run URL, commit, date, and for web lib score, killed, survived, no coverage, timeout, ignored, plus the job duration. .NET is deferred (D1) and has no score. Everything below is **local, not CI, not the baseline**: Windows 11, 24 logical cores, StrykerJS and the Vitest runner 10.1.1, Vitest 5.0.5, 2026-11-07. Wall times vary with machine load and are not a CI prediction.
+*(Superseded by the baseline below.)* **Baseline status was pending when this was written.** The baseline is filled from the pull request validation run (task T022, owned by the review step after the PR is opened): run URL, commit, date, and for web lib score, killed, survived, no coverage, timeout, ignored, plus the job duration. .NET is deferred (D1) and has no score. Everything below is **local, not CI, not the baseline**: Windows 11, 24 logical cores, StrykerJS and the Vitest runner 10.1.1, Vitest 5.0.5, 2026-11-07. Wall times vary with machine load and are not a CI prediction.
+**Baseline (T022, recorded 2026-11-08, CI): run [42505489951](https://github.com/mwalczyk81/roleradar/actions/runs/42505489951)**, nightly-quality validation run on pull request commit `21b6a2c` (the score file carries the merge commit `de2385c7069604cda190dc4a070c838f44c7be54`, run date 2026-11-08T17:54:41Z), conclusion success. Job "Mutation testing (web lib)": 17:32:46 to 17:54:44, **22 minutes** (timeout-minutes is still 60; the measured value would allow about 35 with headroom, left for the owner to set). Web lib score **81.1**: killed 1,286, survived 276, no coverage 28, timeout 21, ignored 0, 10 runtime errors not scored, 1,621 mutants in 14 modules (artifact `mutation-web-lib`, `mutation-score.json`).
+
+| Module | Score (CI) |
+|---|---|
+| application-enums | 52.7 |
+| company-enums | 25.0 |
+| dispositions | 99.4 |
+| enum-order | 100 |
+| format-date | 100 |
+| insights-lenses | 85.0 |
+| insights-stats | 91.7 |
+| insights-view | 77.7 |
+| markdown-limits | 86.2 |
+| markdown-url | 84.4 |
+| nav | 100 |
+| odata-client | 87.5 |
+| operational-enums | 95.7 |
+| theme | 71.0 |
+
+**CI equals local.** The local Linux container run of 2026-11-08 (same tree minus the later commits; 692 s) gave the same score and counts, and a mutant-by-mutant comparison of the two `mutation.json` files (matched on file and mutant id, 1,621 mutants each) found **0 status differences**. So the survivor list below stands. From the CI report, the lines with the most survivors or uncovered mutants: `insights-view.ts:284` (10), `insights-view.ts:323` (9), `company-enums.ts:76` (6), `insights-lenses.ts:315` (6), `insights-view.ts:331` and `:317` (5 each), `theme.ts:70` (5), `company-enums.ts:69`, `insights-view.ts:198`, `:199`, `:319` and `odata-client.ts:27` (4 each). They fall in the "candidate gap, not triaged" rows below (insights-view, insights-lenses, theme cookie validation, label and tone text in the enum modules). The earlier local Windows runs (below) are not the baseline. Not done in T022: the SC-004 log grep was not run here.
+
+**Floor (T023):** `quality/mutation-minimums.json` `web-lib` is 81 (81.1 rounded down). `mutation-ratchet.mjs` against the CI report: exit 0 (`PASS web-lib: score 81.1 minimum 81`); against a scratch report of 80.9: exit 1 (`FAIL … below the committed minimum`); `--base-ref` with a scratch ref holding 81 and a working-tree floor of 80: exit 1 (`lowered from 81 to 80`); with the real file against `origin/main`: exit 0, because `origin/main` has no minimums file yet (first introduction). The scratch ref was built with git plumbing and deleted; the scratch edits are reverted.
 
 ### Local runs (T016)
 
