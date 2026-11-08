@@ -4,9 +4,9 @@
     "net10.0": {
       "Geralt": {
         "type": "Direct",
-        "requested": "[4.4.0, )",
-        "resolved": "4.4.0",
-        "contentHash": "fQ0rNmRFrGkdQNW0IJwfA8VqDwPTDEVmxHme5Acet+70AeKcd9LDTXj8MXFPCHRPiNo3le+lFUW32+tEmITIOQ==",
+        "requested": "[4.5.0, )",
+        "resolved": "4.5.0",
+        "contentHash": "Wi9Hu/x65xkiZUMBRPT1U3UCUlmsUszJgcBlywHnT2ZLiQgpU/bBmcHHI//u3Lk8xkPfdBYLRc7YokZuB7rIFQ==",
         "dependencies": {
           "libsodium": "[1.0.22, 1.0.23)"
         }
