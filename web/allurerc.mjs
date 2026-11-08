@@ -12,6 +12,10 @@
 // historyLimit caps the history file at the most recent N runs, one JSON line per run. Measured on the real suite
 // (2,146 tests) with the artifacts of a validation run: 1.86 MB per run, so about 56 MB at the limit of 30, roughly a
 // month of nightlies. Busy days on main shorten that window, since every publishing run adds one line (research.md D16).
+//
+// The count cap alone is not enough: the nightly's repeated Playwright runs make its line about 4.0 MB, so 30 runs could
+// pass GitHub's 100 MB file limit. The publish jobs therefore also trim the staged file to 20 MiB, oldest runs first
+// (scripts/site-limits.mjs, research.md D18), so the effective window is about 5 nightly-sized to 10 CI-sized runs.
 
 import process from "node:process";
 import { defineConfig } from "allure";

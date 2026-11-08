@@ -819,6 +819,7 @@ jobs:
             rm -rf site/.git
           fi
           mkdir -p site/metrics site/badges site/allure-history
+          cp pages/index.html site/index.html
           cp -r pages/metrics/. site/metrics/
           rm -rf site/coverage
           cp -r publish-input/coverage site/coverage
@@ -835,6 +836,10 @@ jobs:
           if [ -f publish-input/allure-history/history.jsonl ]; then
             cp publish-input/allure-history/history.jsonl site/allure-history/history.jsonl
           fi
+          # GitHub rejects a file over 100 MB: bound the history by bytes (oldest runs first), then refuse to publish a tree
+          # with any file over 50 MB.
+          node web/scripts/site-limits.mjs trim-history site/allure-history/history.jsonl
+          node web/scripts/site-limits.mjs check-size site
 
       # Appends this run's record to the existing metrics.jsonl (from the gh-pages checkout, so nothing is lost) and writes
       # the whole file into the site. Job durations come from the run's own job list (completed jobs only; this job is
