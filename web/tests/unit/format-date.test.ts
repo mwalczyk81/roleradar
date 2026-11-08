@@ -24,6 +24,17 @@ describe("formatDate unit tests", () => {
   });
 });
 
+describe("formatDate and formatShortDate runtime guard", () => {
+  // The signature is typed, but values arrive from JSON at runtime. A truthy non-string must give "", not a date.
+  // Reflect.apply passes the untyped value without a cast.
+  it("returns an empty string for a truthy non-string value", () => {
+    expect(Reflect.apply(formatDate, undefined, [5])).toBe("");
+    expect(Reflect.apply(formatDate, undefined, [{ iso: "2026-01-01" }])).toBe("");
+    expect(Reflect.apply(formatShortDate, undefined, [5])).toBe("");
+    expect(Reflect.apply(formatShortDate, undefined, [{ iso: "2026-01-01" }])).toBe("");
+  });
+});
+
 describe("formatShortDate unit tests", () => {
   it("writes the UTC month and day as 'Jul 6', never locale formatted", () => {
     expect(formatShortDate("2026-07-06T09:00:00Z")).toBe("Jul 6");

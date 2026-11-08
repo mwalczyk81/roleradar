@@ -59,4 +59,18 @@ describe("operational-enums.ts contract drift guard", () => {
     expect(getEntityRoute(null, "p-1")).toBe(null);
     expect(getEntityRoute("posting", null)).toBe(null);
   });
+
+  it("getEntityRoute ignores case and surrounding whitespace in the type", () => {
+    expect(getEntityRoute("  Company  ", "c-1")).toBe("/companies/c-1");
+    expect(getEntityRoute("POSTING", "p-1")).toBe("/postings/p-1");
+    expect(getEntityRoute(" \tApplication\n ", "a-1")).toBe("/applications/a-1");
+  });
+
+  it("keeps the label and tone shown for each criterion category", () => {
+    expect(CRITERION_CATEGORY_METADATA).toEqual({
+      hard_skip: { label: "Hard Skip", tone: "danger" },
+      weight: { label: "Weighted", tone: "primary" },
+      preference: { label: "Preference", tone: "neutral" },
+    });
+  });
 });
