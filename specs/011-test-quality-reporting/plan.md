@@ -79,7 +79,7 @@ quality/
 web/
 ├── stryker.config.mjs                       # StrykerJS, vitest runner, mutate subset of web/app/lib
 ├── package.json                             # + pinned @stryker-mutator/* devDependencies
-├── playwright.config.ts                     # + screenshot only-on-failure; trace stays on-first-retry
+├── playwright.config.ts                     # + screenshot only-on-failure; trace retain-on-failure (was on-first-retry)
 ├── scripts/allure-sanitize.mjs              # strips attachments from real-stack results (Story 2b)
 ├── scripts/mutation-ratchet.mjs             # Stryker score, table, floor check, floors never lowered vs base ref
 ├── scripts/metrics-record.mjs               # run summary tables and the one-line metrics record (no network)

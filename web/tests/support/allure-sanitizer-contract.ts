@@ -5,8 +5,8 @@ import { createHash } from "node:crypto";
 
 // Feature 011, story 2b (FR-028, FR-029). The contract every Allure sanitizer must meet before a report is published.
 // checkSanitizer builds a fictional results folder, runs the sanitizer on it and returns one message per broken rule,
-// so the same checks can prove the real sanitizer passes and that a broken one (a no-op, or one that only looks at
-// top-level attachments) is caught. Fictional names only; nothing here is a real user, host or path.
+// so the same checks can prove the real sanitizer passes and that a broken one (a no-op, one that only looks at
+// top-level attachments, or one that publishes real-stack traces) is caught. Fictional names only; nothing here is a real user, host or path.
 
 export type Lane = "fictional" | "real-stack";
 
@@ -17,6 +17,8 @@ export const FIXTURE_HOST = "FIXTUREHOST";
 
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01, 0x02, 0x03]);
 const ZIP_BYTES = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x0a, 0x0b, 0x0c]);
+
+const PLAYWRIGHT_TRACE_TYPE = "application/vnd.allure.playwright-trace";
 
 type Attachment = { name: string; source: string; type: string };
 
@@ -50,6 +52,7 @@ export const NESTED_SOURCES = {
   midScreenshot: "22222222-mid-attachment.png",
   topLog: "33333333-top-attachment.txt",
   containerShot: "44444444-container-attachment.png",
+  playwrightTrace: "55555555-playwright-trace-attachment.zip",
 };
 
 function writeFixture(inputDir: string): void {
@@ -71,7 +74,10 @@ function writeFixture(inputDir: string): void {
             steps: [
               {
                 name: "deeper step",
-                steps: [{ name: "trace", attachments: [{ name: "trace", source: NESTED_SOURCES.deepTrace, type: "application/zip" }] }],
+                steps: [
+                  { name: "trace", attachments: [{ name: "trace", source: NESTED_SOURCES.deepTrace, type: "application/zip" }] },
+                  { name: "playwright trace", attachments: [{ name: "trace", source: NESTED_SOURCES.playwrightTrace, type: PLAYWRIGHT_TRACE_TYPE }] },
+                ],
               },
             ],
           },
@@ -96,6 +102,7 @@ function writeFixture(inputDir: string): void {
   fs.writeFileSync(path.join(inputDir, "bbbb-result.json"), JSON.stringify(passing));
   fs.writeFileSync(path.join(inputDir, "cccc-container.json"), JSON.stringify(container));
   fs.writeFileSync(path.join(inputDir, NESTED_SOURCES.deepTrace), ZIP_BYTES);
+  fs.writeFileSync(path.join(inputDir, NESTED_SOURCES.playwrightTrace), ZIP_BYTES);
   fs.writeFileSync(path.join(inputDir, NESTED_SOURCES.midScreenshot), PNG_BYTES);
   fs.writeFileSync(path.join(inputDir, NESTED_SOURCES.containerShot), PNG_BYTES);
   fs.writeFileSync(
@@ -241,9 +248,16 @@ export async function checkSanitizer(sanitize: SanitizeFunction, lane: Lane): Pr
         violations.push(`real-stack output still has attachment file(s): ${attachmentFiles.join(", ")}`);
       }
     } else {
-      // Fictional lane: a trace archive is never published, screenshots and text are kept (nested ones too).
+      // Fictional lane: an archive of an unknown type is never published; a Playwright trace under the size caps, screenshots
+      // and text are kept (nested ones too).
       if (outputNames.includes(NESTED_SOURCES.deepTrace) || allText.includes(NESTED_SOURCES.deepTrace)) {
-        violations.push("a trace archive nested three steps deep reached the output");
+        violations.push("an archive of an unknown type nested three steps deep reached the output");
+      }
+      const traceInOutput = outputFiles.find((file) => path.basename(file) === NESTED_SOURCES.playwrightTrace);
+      if (!traceInOutput || !remaining.some((attachment) => attachment.source === NESTED_SOURCES.playwrightTrace && attachment.type === PLAYWRIGHT_TRACE_TYPE)) {
+        violations.push("a small Playwright trace nested three steps deep was not kept with its reference");
+      } else if (!fs.readFileSync(traceInOutput).equals(ZIP_BYTES)) {
+        violations.push("a kept Playwright trace was altered");
       }
       for (const kept of [NESTED_SOURCES.midScreenshot, NESTED_SOURCES.containerShot, NESTED_SOURCES.topLog]) {
         if (!outputNames.includes(kept) || !remaining.some((attachment) => attachment.source === kept)) {

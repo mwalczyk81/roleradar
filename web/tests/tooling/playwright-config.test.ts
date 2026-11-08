@@ -67,10 +67,10 @@ describe("Playwright failure artifacts", () => {
     return (loadCi().jobs[job]?.steps ?? []).filter((step) => typeof step.uses === "string" && step.uses.startsWith("actions/upload-artifact@"));
   }
 
-  it("keeps screenshots on failure only, traces on first retry, and no video", () => {
+  it("keeps screenshots and traces for failed runs only, and no video", () => {
     const use = playwrightConfig.use ?? {};
     expect(use.screenshot).toBe("only-on-failure");
-    expect(use.trace).toBe("on-first-retry");
+    expect(use.trace).toBe("retain-on-failure");
     expect(use.video === undefined || use.video === "off").toBe(true);
   });
 

@@ -91,7 +91,7 @@ The owner wants one readable report per gate or CI run, and a history of the key
 4. **Given** GitHub Pages is not enabled or the gh-pages branch does not exist, **When** the main run completes, **Then** publishing is skipped without failing the workflow and the summary states what to switch on.
 5. **Given** a pull request run (including from a fork), **When** it completes, **Then** nothing is published to gh-pages and no write permission is granted to that job.
 6. **Given** a number that cannot be read (missing report, unparsable output), **When** the summary is built, **Then** the table shows the value as unavailable and the step fails visibly; it never shows a stale or default number.
-7. **Given** an end-to-end test fails in CI, **When** the job ends, **Then** the Playwright screenshots and traces of the failing tests are uploaded as artifacts, traces being captured on the first retry only.
+7. **Given** an end-to-end test fails in CI, **When** the job ends, **Then** the Playwright screenshots and traces of the failing tests are uploaded as artifacts, traces being kept for every failed run (revised 2026-11-08, see ADR 0038).
 8. **Given** the end-to-end suite passes, **When** the job ends, **Then** no screenshot or trace artifact is uploaded.
 9. **Given** a failure artifact from the real-stack run, **When** it is stored, **Then** its retention is 7 days; from fictional-data runs it is 14 days.
 
@@ -207,7 +207,7 @@ The owner wants the review gate to run the same PowerShell script analysis as CI
 - **FR-018**: A small static page on gh-pages MUST read the data file and show trends for test counts, coverage and mutation score. It MUST treat the data as untrusted text, handle malformed lines, and load no third-party scripts that are not pinned and integrity-checked.
 - **FR-019**: When GitHub Pages or the gh-pages branch is unavailable, publishing MUST be skipped without failing the workflow, and the summary MUST state the exact settings the owner must change.
 - **FR-020**: Publishing to gh-pages MUST run only for main, in a job with the minimum write permission; pull request and fork runs MUST NOT publish.
-- **FR-021**: On a CI end-to-end failure the system MUST upload Playwright screenshots and traces as artifacts; traces MUST be captured on the first retry only; nothing MUST be uploaded when the suite passes. Retention MUST be 7 days for anything from the real-stack run and 14 days for fictional-data runs.
+- **FR-021**: On a CI end-to-end failure the system MUST upload Playwright screenshots and traces as artifacts; traces MUST be kept for every failed run (revised 2026-11-08 from first retry only: a flaky test that fails once and passes on the retry now keeps the trace of the failed attempt); nothing MUST be uploaded when the suite passes. Retention MUST be 7 days for anything from the real-stack run and 14 days for fictional-data runs.
 
 **Allure combined report (Story 2b)**
 

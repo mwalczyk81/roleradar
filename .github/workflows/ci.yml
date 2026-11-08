@@ -482,7 +482,7 @@ jobs:
           ALLURE_RESULTS_DIR: ${{ github.workspace }}/allure-input/playwright
         run: pnpm run test:e2e
 
-      # Failure evidence only: Playwright writes a screenshot (only-on-failure) and a trace (on first retry) under
+      # Failure evidence only: Playwright writes a screenshot (only-on-failure) and a trace (retain-on-failure) under
       # web/test-results, and CI writes the HTML report to web/playwright-report. Nothing is uploaded on a green run.
       # This job uses fictional data only, so 14 days is enough to open a failed pull request run. The real-stack job
       # below keeps 7 days because its traces can show real-looking sessions, and none of this reaches the published site.

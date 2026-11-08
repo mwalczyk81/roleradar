@@ -4,9 +4,18 @@
 //  - Real-stack results (lane "real-stack") lose every attachment. Playwright nests attachments inside result steps, so
 //    the walk is recursive over every object and array at any depth, not just the top-level attachments list. The
 //    referenced files are never copied. Only pass or fail, names and timings remain.
-//  - Fictional results keep screenshots and plain-text attachments (also nested ones). Trace archives, video and any
-//    other type are dropped: traces stay in the 7 or 14 day CI artifact and never reach the published site. The leaf
-//    step that only carried a trace is removed with it, so no empty "trace" step is left in the report.
+//  - Fictional results keep screenshots and plain-text attachments (also nested ones). Playwright traces
+//    (application/vnd.allure.playwright-trace) are kept too, so the published report can offer the trace zip, under two caps:
+//    a trace file larger than 3 MiB is dropped, and when the kept traces of one sanitized result set would total more than
+//    15 MiB the largest are dropped first (ties: the later file name goes first) until they fit. A dropped trace is replaced
+//    in place by a small plain-text note attachment on the same step, saying it was dropped for size (or missing) and that
+//    the trace is in the CI artifact, so the report never silently lacks one. A kept trace keeps its step; the empty-step
+//    removal below no longer applies to it. Video and any other type are dropped.
+//  - Traces are zip files and cannot be scrubbed or leak-checked from here (the leak check reads text files only). That is
+//    acceptable for the fictional lane, which runs on fictional data on a CI runner, and is the reason real-stack traces never
+//    pass through this rule.
+//  - Real-stack results never keep a trace: no kept traces, no notes, and the step that only carried a trace is removed with
+//    it, so no empty "trace" step is left in the report.
 //  - Every lane: the host label is removed, one lane label is set, and every string has absolute paths (Windows, POSIX,
 //    UNC, file URLs) replaced by "[path]/<file name>" and user and host names redacted. Text attachments are scrubbed
 //    the same way. Repository-relative paths and public URLs are left alone.
@@ -26,6 +35,9 @@ import { fileURLToPath } from "node:url";
 const PATH_TOKEN = "[path]";
 const REDACTED_TOKEN = "[redacted]";
 const LANES = new Set(["fictional", "real-stack"]);
+export const TRACE_MAX_BYTES = 3 * 1024 * 1024;
+export const TRACE_TOTAL_MAX_BYTES = 15 * 1024 * 1024;
+const PLAYWRIGHT_TRACE_TYPE = "application/vnd.allure.playwright-trace";
 const KEPT_ATTACHMENT_TYPES = new Set(["image/png", "image/jpeg", "image/gif", "image/webp", "text/plain", "text/markdown", "application/json"]);
 const TEXT_ATTACHMENT_TYPES = new Set(["text/plain", "text/markdown", "application/json"]);
 const SIDE_FILES = new Set(["environment.properties", "categories.json", "executor.json"]);
@@ -116,17 +128,102 @@ function scrubValue(value, options) {
 }
 
 /**
+ * @typedef {{ keep: boolean, reason: "size" | "budget" | "missing", bytes: number }} TraceDecision
+ * @typedef {{ lane: Lane, keep: Set<string>, stats: { dropped: number }, traces: Map<string, TraceDecision>, notes: Map<string, string>, keptTraces: Set<string>, droppedTraces: Set<string> }} WalkContext
+ */
+
+/** @param {number} bytes */
+function mib(bytes) {
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MiB`;
+}
+
+/**
+ * Every Playwright trace source referenced anywhere in a parsed result or container, at any depth.
+ * @param {unknown} value
+ * @param {Set<string>} into
+ */
+function collectTraceSources(value, into) {
+  if (Array.isArray(value)) {
+    for (const item of value) collectTraceSources(item, into);
+  } else if (isRecord(value)) {
+    for (const [key, child] of Object.entries(value)) {
+      if (key === "attachments" && Array.isArray(child)) {
+        for (const attachment of child) {
+          if (isRecord(attachment) && attachment["type"] === PLAYWRIGHT_TRACE_TYPE && typeof attachment["source"] === "string" && attachment["source"] !== "") {
+            into.add(attachment["source"]);
+          }
+        }
+      }
+      collectTraceSources(child, into);
+    }
+  }
+  return into;
+}
+
+/**
+ * Decides which traces are published: at most TRACE_MAX_BYTES each, and at most TRACE_TOTAL_MAX_BYTES together, dropping the
+ * largest first (ties: the later file name first). A file that is not in the input folder is dropped as missing.
+ * @param {string} input
+ * @param {Set<string>} sources
+ * @returns {Map<string, TraceDecision>}
+ */
+function planTraces(input, sources) {
+  /** @type {Map<string, TraceDecision>} */
+  const plan = new Map();
+  /** @type {Array<{ source: string, name: string, bytes: number }>} */
+  const candidates = [];
+  for (const source of sources) {
+    const name = path.basename(source);
+    const file = path.join(input, name);
+    if (!fs.existsSync(file) || !fs.statSync(file).isFile()) {
+      plan.set(source, { keep: false, reason: "missing", bytes: 0 });
+      continue;
+    }
+    const bytes = fs.statSync(file).size;
+    if (bytes > TRACE_MAX_BYTES) {
+      plan.set(source, { keep: false, reason: "size", bytes });
+    } else {
+      candidates.push({ source, name, bytes });
+    }
+  }
+  candidates.sort((left, right) => right.bytes - left.bytes || (left.name < right.name ? 1 : left.name > right.name ? -1 : 0));
+  let total = candidates.reduce((sum, candidate) => sum + candidate.bytes, 0);
+  for (const candidate of candidates) {
+    if (total > TRACE_TOTAL_MAX_BYTES) {
+      total -= candidate.bytes;
+      plan.set(candidate.source, { keep: false, reason: "budget", bytes: candidate.bytes });
+    } else {
+      plan.set(candidate.source, { keep: true, reason: "size", bytes: candidate.bytes });
+    }
+  }
+  return plan;
+}
+
+/**
+ * The text of the note that replaces a dropped trace.
+ * @param {TraceDecision} decision
+ */
+function traceNote(decision) {
+  const where = "The trace is in the CI artifact of this run (allure-in-playwright, or allure-in-playwright-repeat for the nightly repeat run).";
+  if (decision.reason === "missing") {
+    return `The Playwright trace for this test was not found among the results, so it is not part of this report. ${where}\n`;
+  }
+  if (decision.reason === "budget") {
+    return `The Playwright trace for this test (${mib(decision.bytes)}) was dropped from the published report for size: the report keeps at most ${mib(TRACE_TOTAL_MAX_BYTES).replace(".0", "")} of traces in total, largest first. ${where}\n`;
+  }
+  return `The Playwright trace for this test (${mib(decision.bytes)}) was dropped from the published report for size: the limit is ${mib(TRACE_MAX_BYTES).replace(".0", "")} per trace. ${where}\n`;
+}
+
+/**
  * Walks every object and array at any depth and filters each "attachments" list, so attachments nested in steps (or in
  * a container's befores and afters) are handled the same as top-level ones.
  * @param {unknown} value
- * @param {Lane} lane
- * @param {Set<string>} keep sources to copy
- * @param {{ dropped: number }} stats
+ * @param {WalkContext} context
  * @returns {unknown}
  */
-function filterAttachments(value, lane, keep, stats) {
+function filterAttachments(value, context) {
   if (Array.isArray(value)) {
-    return value.map((item) => filterAttachments(item, lane, keep, stats));
+    return value.map((item) => filterAttachments(item, context));
   }
   if (!isRecord(value)) {
     return value;
@@ -135,35 +232,54 @@ function filterAttachments(value, lane, keep, stats) {
   const copy = {};
   for (const [key, child] of Object.entries(value)) {
     if (key === "attachments" && Array.isArray(child)) {
-      copy[key] = child.filter((attachment) => {
-        const type = isRecord(attachment) && typeof attachment["type"] === "string" ? attachment["type"] : "";
-        const source = isRecord(attachment) && typeof attachment["source"] === "string" ? attachment["source"] : "";
-        const keepIt = lane === "fictional" && source !== "" && KEPT_ATTACHMENT_TYPES.has(type);
-        if (keepIt) {
-          keep.add(source);
-        } else {
-          stats.dropped += 1;
-        }
-        return keepIt;
-      });
+      copy[key] = child.map((attachment) => filterAttachment(attachment, context)).filter((attachment) => attachment !== null);
     } else if (key === "steps" && Array.isArray(child)) {
-      // A trace is recorded as its own leaf step whose only content is the trace attachment. Once the attachment is
-      // dropped the step is an empty "unknown" entry, so it is removed with it.
+      // In the real-stack lane a trace is recorded as its own leaf step whose only content is the trace attachment. Once the
+      // attachment is dropped the step is an empty "unknown" entry, so it is removed with it. In the fictional lane the trace
+      // is kept, or replaced by a note, so the step still carries an attachment and stays.
       copy[key] = child
         .filter((step) => {
-          if (!isTraceOnlyStep(step)) return true;
-          stats.dropped += /** @type {unknown[]} */ (/** @type {Record<string, unknown>} */ (step)["attachments"]).length;
+          if (context.lane !== "real-stack" || !isTraceOnlyStep(step)) return true;
+          context.stats.dropped += /** @type {unknown[]} */ (/** @type {Record<string, unknown>} */ (step)["attachments"]).length;
           return false;
         })
-        .map((step) => filterAttachments(step, lane, keep, stats));
+        .map((step) => filterAttachments(step, context));
     } else {
-      copy[key] = filterAttachments(child, lane, keep, stats);
+      copy[key] = filterAttachments(child, context);
     }
   }
   return copy;
 }
 
-const PLAYWRIGHT_TRACE_TYPE = "application/vnd.allure.playwright-trace";
+/**
+ * The attachment to publish in place of this one, or null to drop it.
+ * @param {unknown} attachment
+ * @param {WalkContext} context
+ * @returns {unknown}
+ */
+function filterAttachment(attachment, context) {
+  const type = isRecord(attachment) && typeof attachment["type"] === "string" ? attachment["type"] : "";
+  const source = isRecord(attachment) && typeof attachment["source"] === "string" ? attachment["source"] : "";
+  if (context.lane === "fictional" && source !== "" && type === PLAYWRIGHT_TRACE_TYPE) {
+    const decision = context.traces.get(source);
+    if (decision?.keep) {
+      context.keep.add(source);
+      context.keptTraces.add(source);
+      return attachment;
+    }
+    const noteName = `${path.basename(source).replace(/\.[^.]*$/, "").replace(/[^A-Za-z0-9._-]/g, "_")}-trace-dropped-attachment.txt`;
+    context.notes.set(noteName, traceNote(decision ?? { keep: false, reason: "missing", bytes: 0 }));
+    context.droppedTraces.add(source);
+    return { name: "trace dropped", source: noteName, type: "text/plain" };
+  }
+  const keepIt = context.lane === "fictional" && source !== "" && KEPT_ATTACHMENT_TYPES.has(type);
+  if (keepIt) {
+    context.keep.add(source);
+    return attachment;
+  }
+  context.stats.dropped += 1;
+  return null;
+}
 
 /**
  * A leaf step with no children and no parameters whose attachments are all Playwright traces.
@@ -201,7 +317,7 @@ function normalizeLabels(parsed, lane) {
 
 /**
  * @param {{ inputDir: string, outputDir: string, lane: Lane, redact?: string[] }} options
- * @returns {Promise<{ results: number, attachmentsKept: number, attachmentsDropped: number }>}
+ * @returns {Promise<{ results: number, attachmentsKept: number, attachmentsDropped: number, tracesKept: number, tracesDropped: number }>}
  */
 export async function sanitizeResults({ inputDir, outputDir, lane, redact = [] }) {
   if (!LANES.has(lane)) {
@@ -222,8 +338,26 @@ export async function sanitizeResults({ inputDir, outputDir, lane, redact = [] }
   fs.mkdirSync(output, { recursive: true });
 
   const options = { redact };
-  const keep = new Set();
-  const stats = { dropped: 0 };
+  /** @type {Set<string>} */
+  const traceSources = new Set();
+  if (lane === "fictional") {
+    for (const name of fs.readdirSync(input)) {
+      if ((name.endsWith("-result.json") || name.endsWith("-container.json")) && fs.statSync(path.join(input, name)).isFile()) {
+        collectTraceSources(JSON.parse(fs.readFileSync(path.join(input, name), "utf8")), traceSources);
+      }
+    }
+  }
+  /** @type {WalkContext} */
+  const context = {
+    lane,
+    keep: new Set(),
+    stats: { dropped: 0 },
+    traces: planTraces(input, traceSources),
+    notes: new Map(),
+    keptTraces: new Set(),
+    droppedTraces: new Set(),
+  };
+  const { keep, stats } = context;
   let results = 0;
 
   for (const name of fs.readdirSync(input).sort()) {
@@ -233,7 +367,7 @@ export async function sanitizeResults({ inputDir, outputDir, lane, redact = [] }
     }
     if (name.endsWith("-result.json") || name.endsWith("-container.json")) {
       const parsed = JSON.parse(fs.readFileSync(source, "utf8"));
-      const filtered = filterAttachments(parsed, lane, keep, stats);
+      const filtered = filterAttachments(parsed, context);
       const scrubbed = scrubValue(filtered, options);
       if (isRecord(scrubbed) && name.endsWith("-result.json")) {
         normalizeLabels(scrubbed, lane);
@@ -265,7 +399,16 @@ export async function sanitizeResults({ inputDir, outputDir, lane, redact = [] }
     }
     kept += 1;
   }
-  return { results, attachmentsKept: kept, attachmentsDropped: stats.dropped };
+  for (const [noteName, note] of context.notes) {
+    fs.writeFileSync(path.join(output, noteName), scrubText(note, options));
+  }
+  return {
+    results,
+    attachmentsKept: kept,
+    attachmentsDropped: stats.dropped,
+    tracesKept: context.keptTraces.size,
+    tracesDropped: context.droppedTraces.size,
+  };
 }
 
 /** @param {string} fileName @returns {string} */
@@ -451,7 +594,7 @@ async function main() {
   }
   try {
     const stats = await sanitizeResults({ inputDir: args.input, outputDir: args.output, lane: /** @type {Lane} */ (args.lane), redact: args.redact });
-    process.stdout.write(`sanitized ${stats.results} result(s); attachments kept ${stats.attachmentsKept}, dropped ${stats.attachmentsDropped}\n`);
+    process.stdout.write(`sanitized ${stats.results} result(s); attachments kept ${stats.attachmentsKept}, dropped ${stats.attachmentsDropped}; traces kept ${stats.tracesKept}, dropped for size ${stats.tracesDropped}\n`);
     return 0;
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);

@@ -32,13 +32,16 @@ export default defineConfig({
   expect: {
     timeout: 5_000,
   },
-  // Failure evidence only (feature 011): a screenshot when a test fails, a trace on the first retry, no video. CI also
-  // writes the HTML report, and uploads these files only when a job fails (see ci.yml for the retention). When
-  // ALLURE_RESULTS_DIR is set, Allure result files are written there too for the combined report.
+  // Failure evidence only (feature 011): a screenshot and a trace for every failed run, no video. "retain-on-failure"
+  // records every run and keeps the trace of each failed one, so a test that fails once and passes on the retry still
+  // leaves the trace of the failed attempt ("retain-on-first-failure" would record only the first run and keep nothing
+  // when the retry is the one that fails; "on-first-retry" kept no trace of the first failure). CI also writes the HTML
+  // report, and uploads these files only when a job fails (see ci.yml for the retention). When ALLURE_RESULTS_DIR is
+  // set, Allure result files are written there too; the sanitizer decides which traces reach the published report.
   reporter: e2eReporters,
   use: {
     ignoreHTTPSErrors: true,
-    trace: "on-first-retry",
+    trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
   projects: [
