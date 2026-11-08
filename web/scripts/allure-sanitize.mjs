@@ -5,7 +5,8 @@
 //    the walk is recursive over every object and array at any depth, not just the top-level attachments list. The
 //    referenced files are never copied. Only pass or fail, names and timings remain.
 //  - Fictional results keep screenshots and plain-text attachments (also nested ones). Trace archives, video and any
-//    other type are dropped: traces stay in the 7 or 14 day CI artifact and never reach the published site.
+//    other type are dropped: traces stay in the 7 or 14 day CI artifact and never reach the published site. The leaf
+//    step that only carried a trace is removed with it, so no empty "trace" step is left in the report.
 //  - Every lane: the host label is removed, one lane label is set, and every string has absolute paths (Windows, POSIX,
 //    UNC, file URLs) replaced by "[path]/<file name>" and user and host names redacted. Text attachments are scrubbed
 //    the same way. Repository-relative paths and public URLs are left alone.
@@ -145,11 +146,43 @@ function filterAttachments(value, lane, keep, stats) {
         }
         return keepIt;
       });
+    } else if (key === "steps" && Array.isArray(child)) {
+      // A trace is recorded as its own leaf step whose only content is the trace attachment. Once the attachment is
+      // dropped the step is an empty "unknown" entry, so it is removed with it.
+      copy[key] = child
+        .filter((step) => {
+          if (!isTraceOnlyStep(step)) return true;
+          stats.dropped += /** @type {unknown[]} */ (/** @type {Record<string, unknown>} */ (step)["attachments"]).length;
+          return false;
+        })
+        .map((step) => filterAttachments(step, lane, keep, stats));
     } else {
       copy[key] = filterAttachments(child, lane, keep, stats);
     }
   }
   return copy;
+}
+
+const PLAYWRIGHT_TRACE_TYPE = "application/vnd.allure.playwright-trace";
+
+/**
+ * A leaf step with no children and no parameters whose attachments are all Playwright traces.
+ * @param {unknown} step
+ */
+function isTraceOnlyStep(step) {
+  if (!isRecord(step)) {
+    return false;
+  }
+  const attachments = step["attachments"];
+  const children = step["steps"];
+  const parameters = step["parameters"];
+  return (
+    Array.isArray(attachments) &&
+    attachments.length > 0 &&
+    attachments.every((attachment) => isRecord(attachment) && attachment["type"] === PLAYWRIGHT_TRACE_TYPE) &&
+    (children === undefined || (Array.isArray(children) && children.length === 0)) &&
+    (parameters === undefined || (Array.isArray(parameters) && parameters.length === 0))
+  );
 }
 
 /**

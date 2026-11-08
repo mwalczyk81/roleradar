@@ -186,6 +186,8 @@ Each new test file was run against the source with one mutation applied by hand,
 - **Nuance**: a test that fails then passes on retry leaves a green job, so nothing uploads. That flake evidence is what the Allure history and the nightly repeat run are for (story 2b).
 
 **Implemented (2026-11-07)**: `web/playwright.config.ts` sets `screenshot: "only-on-failure"`, keeps `trace: "on-first-retry"` and no video, and writes the HTML report in CI. `ci.yml` uploads `web/test-results` and `web/playwright-report` with `if: failure()` only: `web-e2e-failure` for 14 days (fictional data) and `real-stack-e2e-failure` for 7 days (traces from the real stack can show real-looking sessions), both explained in comments. Six Vitest tests (`playwright-config.test.ts`) check the config values, both upload steps (failure-only, retention, paths), the comments, and that the publish job downloads no e2e or real-stack artifact. **Not run here**: no failing e2e test was run (T034 is reserved for the validation run).
+**T034 result (2026-11-08, from the CI run pages, read by the owner)**: scratch run [42508478049](https://github.com/mwalczyk81/roleradar/actions/runs/42508478049) on `f7fb4d5` (draft PR 62, closed and deleted; the scratch commit never reached main) against reference run [42508232818](https://github.com/mwalczyk81/roleradar/actions/runs/42508232818) on `139ce96`. The scratch job "web" failed at the e2e step. Artifact `web-e2e-failure` was present, expiring 2026-11-22 (14 days), holding `test-results` (first attempt: `error-context.md` and screenshots; the `-retry1` folder: `error-context.md`, a screenshot and `trace.zip`) and the full `playwright-report`. `allure-in-real-stack` expires 2026-11-15 (7 days). No `real-stack-e2e-failure` artifact (that job passed). The reference run has neither `web-e2e-failure` nor `real-stack-e2e-failure`. `ci-gate` was red, and the "Pull request report" job still ran and posted its comment on PR 62. This matches the container run of the same patch (screenshot per failed attempt, trace only on the first retry, no video).
+
 
 ## D10. Allure (IN scope; adapter verification is the first task and a stop point)
 
@@ -200,6 +202,12 @@ Each new test file was run against the source with one mutation applied by hand,
   - Nightly flake detection: `playwright test --repeat-each=5` in the nightly e2e job, results feed the same report; ordinary CI keeps `retries: 1`.
 - **Decided by the owner (was an open point)**: FR-024, one report per publishing run, assembled by a final always-running job from existing jobs' results; the CI schedule is not moved. The nightly workflow therefore runs the three stacks itself as jobs of its own run (Integration needs Docker and costs once per day); that is not an extra run for the report, it is the nightly's own test jobs. The adapter question is still settled at the T038 stop point.
 - **Supersedes** the earlier recommendation to skip Allure; the owner's addendum puts it in scope.
+
+**T047 result (2026-11-08, from the same two runs)**: the "Allure combined report" job succeeded although the web job was red, and both leak checks passed. The report holds results from three readers: 890 passed JUnit cases (xUnit and Vitest), and Playwright with 177 passed, 75 skipped and 2 failed (both attempts of the scratch test) plus 4 retry results. The scratch test failed with `Locator: getByText('This text does not exist on the page')`, and the failed results carry the screenshot attachments and the error-context. Run URLs as in D9.
+
+**Correction to the expectation: the published report has no trace.** `allure-sanitize.mjs` drops trace archives from fictional results by design (its header comment; traces stay in the 14-day CI artifacts and never reach the published site). The raw `allure-in-playwright` results do contain the trace (type `application/vnd.allure.playwright-trace`). So the trace is read from the `web-e2e-failure` artifact (`trace.zip` in the `-retry1` folder), not from the Allure report. The first sentence of D10 and the owner read list said otherwise and are corrected.
+
+**Empty trace step (fixed in the sanitizer, 2026-11-08)**: allure-playwright records a trace as a leaf step named `trace` with no status and the trace as its only attachment, so after the attachment was dropped the retry result showed an empty step with status unknown. The sanitizer now removes a leaf step (no children, no parameters) whose attachments are all Playwright traces, counting the attachments as dropped. Four tests, written first (3 red): removed from a fictional and from a real-stack result, removed when nested, kept when the step has a child, another attachment that stays, or a different dropped type. Checked on the real artifact of run 42508478049: 1 trace step before, 0 steps named `trace` after, leak check clean.
 
 ## D11. Property tests (FsCheck 3.6.0, existing)
 
@@ -234,7 +242,7 @@ Two ADRs written during implementation: (1) mutation testing scope (web lib only
 
 ## Allure evaluation notes for the record
 
-What Allure adds beyond D6 to D8: one view across xUnit, Vitest and Playwright; attachments (screenshots, traces) for failures; flaky-test detection from history. Costs: a Java or Node runtime in CI, adapter maintenance for xUnit v3, history storage on gh-pages growing per run, and a new publication surface that needs the privacy controls above. Verdict is deferred to the stop-point report; the spec has Allure in scope regardless.
+What Allure adds beyond D6 to D8: one view across xUnit, Vitest and Playwright; attachments (screenshots for failures; traces stay in the CI artifact, the sanitizer drops them from the published report); flaky-test detection from history. Costs: a Java or Node runtime in CI, adapter maintenance for xUnit v3, history storage on gh-pages growing per run, and a new publication surface that needs the privacy controls above. Verdict is deferred to the stop-point report; the spec has Allure in scope regardless.
 
 ## Baseline (T001, measured 2026-11-07 on branch 011-test-quality-reporting before any code change)
 
@@ -460,7 +468,7 @@ Two workflows run on the pull request: `ci.yml` and `nightly-quality.yml` (it ru
 - **`ci.yml` > job "Ubuntu (Build, Testcontainers & Container Security)"**: step "Run summary" in the job summary: the tests-per-lane table and the coverage table must show numbers, no `unavailable`, and the ReportGenerator summary below it. The `coverage-report` and `run-summary` artifacts exist.
 - **`ci.yml` > job "Allure combined report"**: same inputs table as above for the sources whose jobs ran (no `Integration` in the ordinary report), `Report total N, inputs M`, and the `allure-report` artifact.
 - **`ci.yml` > job "Publish metrics, coverage and trends (main only)"**: it must be skipped on a pull request. Its first real run is after merge: its summary should say the branch "already existed" or "was created by this run", and the commits `Publish metrics`, `Publish coverage report` and `Publish Allure report` appear on `gh-pages`.
-- **The scratch-failure checks** (T034, T047): Claude prepares the scratch change in the working tree; the owner pushes it and reverts it. Read the CI run page for screenshot and trace artifacts (14-day retention, 7 for real-stack) and that a run without the scratch failure uploaded none; open the Allure artifact and see the failing test with its screenshot and trace.
+- **The scratch-failure checks** (T034, T047): Claude prepares the scratch change in the working tree; the owner pushes it and reverts it. Read the CI run page for screenshot and trace artifacts (14-day retention, 7 for real-stack) and that a run without the scratch failure uploaded none; open the Allure artifact and see the failing test with its screenshot (the trace is in the `web-e2e-failure` artifact, not in the published report).
 
 ## Final gates (2026-11-08, after the consolidation)
 

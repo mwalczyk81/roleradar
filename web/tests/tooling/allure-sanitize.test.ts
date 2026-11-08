@@ -294,3 +294,59 @@ describe("the command line", () => {
     }
   });
 });
+
+// allure-playwright records a trace as its own leaf step ("trace") whose only content is the trace attachment. The
+// sanitizer drops the attachment, which used to leave an empty step with status "unknown" in the published report.
+describe("the empty trace step", () => {
+  const TRACE_TYPE = "application/vnd.allure.playwright-trace";
+
+  const traceStep = { name: "trace", status: "unknown", steps: [], attachments: [{ name: "trace", source: "trace.zip", type: TRACE_TYPE }] };
+  const screenshotStep = { name: "screenshot", status: "passed", steps: [], attachments: [{ name: "screenshot", source: "shot.png", type: "image/png" }] };
+  const plainStep = { name: "expect.toBeVisible", status: "failed", steps: [], attachments: [] };
+
+  async function stepNames(lane: Lane, steps: unknown[]): Promise<string[]> {
+    const input = fs.mkdtempSync(path.join(os.tmpdir(), "rr-trace-in-"));
+    const output = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "rr-trace-out-")), "out");
+    try {
+      fs.writeFileSync(path.join(input, "t-result.json"), JSON.stringify({ uuid: "t", name: "a test", status: "failed", labels: [], steps }));
+      fs.writeFileSync(path.join(input, "trace.zip"), Buffer.from([0x50, 0x4b]));
+      fs.writeFileSync(path.join(input, "shot.png"), Buffer.from([0x89, 0x50]));
+      await sanitizeResults({ inputDir: input, outputDir: output, lane });
+      const parsed = JSON.parse(fs.readFileSync(path.join(output, "t-result.json"), "utf8")) as { steps: Array<{ name: string }> };
+      expect(fs.existsSync(path.join(output, "trace.zip"))).toBe(false);
+      return parsed.steps.map((step) => step.name);
+    } finally {
+      fs.rmSync(input, { recursive: true, force: true });
+    }
+  }
+
+  it("is removed from a fictional result, and the screenshot and the other steps stay", async () => {
+    expect(await stepNames("fictional", [plainStep, traceStep, screenshotStep])).toEqual(["expect.toBeVisible", "screenshot"]);
+  });
+
+  it("is removed from a real-stack result as well", async () => {
+    expect(await stepNames("real-stack", [plainStep, traceStep])).toEqual(["expect.toBeVisible"]);
+  });
+
+  it("is removed when nested inside another step", async () => {
+    const nested = { name: "After Hooks", status: "passed", steps: [traceStep, plainStep], attachments: [] };
+    const input = fs.mkdtempSync(path.join(os.tmpdir(), "rr-trace-in-"));
+    const output = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "rr-trace-out-")), "out");
+    try {
+      fs.writeFileSync(path.join(input, "t-result.json"), JSON.stringify({ uuid: "t", name: "a test", status: "failed", labels: [], steps: [nested] }));
+      fs.writeFileSync(path.join(input, "trace.zip"), Buffer.from([0x50, 0x4b]));
+      await sanitizeResults({ inputDir: input, outputDir: output, lane: "fictional" });
+      const parsed = JSON.parse(fs.readFileSync(path.join(output, "t-result.json"), "utf8")) as { steps: Array<{ steps: Array<{ name: string }> }> };
+      expect(parsed.steps[0]?.steps.map((step) => step.name)).toEqual(["expect.toBeVisible"]);
+    } finally {
+      fs.rmSync(input, { recursive: true, force: true });
+    }
+  });
+
+  it("does not remove a step that has children, other attachments or a different dropped type", async () => {
+    const withChild = { name: "has a child", status: "passed", steps: [plainStep], attachments: [{ name: "trace", source: "trace.zip", type: TRACE_TYPE }] };
+    const withShot = { name: "trace and shot", status: "passed", steps: [], attachments: [{ name: "trace", source: "trace.zip", type: TRACE_TYPE }, { name: "s", source: "shot.png", type: "image/png" }] };
+    const video = { name: "video step", status: "passed", steps: [], attachments: [{ name: "video", source: "trace.zip", type: "video/webm" }] };
+    expect(await stepNames("fictional", [withChild, withShot, video])).toEqual(["has a child", "trace and shot", "video step"]);
+  });
+});
