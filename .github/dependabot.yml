@@ -36,6 +36,23 @@ updates:
       - dependency-name: "node"
         update-types: ["version-update:semver-major"]
 
+  # Compose files: the Mongo image in deploy/docker-compose.yml and in the demo stack (feature 012, ADR 0039) is pinned by
+  # tag. Dependabot reads Dockerfiles with the "docker" entry above and compose files with this one.
+  - package-ecosystem: "docker-compose"
+    directories:
+      - "/deploy"
+      - "/deploy/demo"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      docker-compose:
+        patterns:
+          - "*"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:

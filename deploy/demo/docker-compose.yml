@@ -1,0 +1,275 @@
+# RoleRadar demo stack (feature 012, ADR 0039, docs/demo.md).
+#
+# Standalone on purpose: it is not an overlay of the real compose files, so nothing from the real stack (its external
+# Mongo volume, its Mongo container name, host port 27017) can reach it. Its own project name, volumes, images and database name keep it apart from the real stack:
+#
+#   docker compose -p roleradar-demo -f deploy/demo/docker-compose.yml up --build --wait
+#   docker compose -p roleradar-demo -f deploy/demo/docker-compose.yml --profile tools run --rm demo-cli demo credentials
+#   docker compose -p roleradar-demo -f deploy/demo/docker-compose.yml down -v      # removes ONLY the roleradar-demo-* volumes
+#
+# No secret is committed. The TLS key, the OIDC client secrets, the session key and the demo account's password and
+# TOTP key are generated at run time into the roleradar-demo-* volumes. The only demo values in this file are
+# non-secret: the demo database name, the Mongo host name and the fixed demo user id (the API's allowed subject).
+#
+# *.localhost names resolve to loopback in Chrome, Edge and Firefox without hosts-file entries; inside the compose
+# network identity.localhost and api.localhost are network aliases of the identity and api services.
+# Requires Docker Engine 26+ and Docker Compose 2.26+ (volume "subpath" mounts), see docs/demo.md.
+
+name: roleradar-demo
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+
+x-dotnet-env: &dotnet-env
+  DOTNET_EnableDiagnostics: "0"
+  DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+  DOTNET_gcServer: "0"
+
+services:
+  # One-shot: a throwaway TLS certificate and key for identity.localhost, api.localhost and localhost (PFX for Kestrel,
+  # PEM for Node and OpenSSL). Reuses the pinned Mongo image, which ships openssl. Nothing key-like is committed.
+  demo-certs:
+    image: mongo:8.0.34
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -e
+        cd /certs
+        if [ -f cert.pfx ] && [ -f cert.pem ] && [ -f key.pem ]; then echo "demo certificates already exist"; exit 0; fi
+        openssl req -x509 -newkey rsa:2048 -nodes -days 30 -keyout key.pem -out cert.pem -subj "/CN=localhost" \
+          -addext "subjectAltName=DNS:identity.localhost,DNS:api.localhost,DNS:localhost,IP:127.0.0.1"
+        openssl pkcs12 -export -out cert.pfx -inkey key.pem -in cert.pem -passout pass:
+        chmod 644 key.pem cert.pem cert.pfx
+        echo "demo certificates created"
+    volumes:
+      - demo-certs:/certs
+    restart: "no"
+
+  # One-shot: generated OIDC client secrets and session key, the Identity configuration file that carries them, and
+  # ownership of the Identity data volume for the images' user (uid 1654). Nothing generated is printed.
+  demo-secrets:
+    image: mongo:8.0.34
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        set -e
+        cd /secrets
+        if [ ! -f identity.appsettings.json ]; then
+          head -c 24 /dev/urandom | base64 | tr -d '/+=\n' > web-client.secret
+          head -c 24 /dev/urandom | base64 | tr -d '/+=\n' > headless-client.secret
+          head -c 32 /dev/urandom | base64 | tr -d '\n' > session.key
+          printf '{"Clients":{"Web":{"Secret":"%s"},"Headless":{"Secret":"%s"}}}' "$$(cat web-client.secret)" "$$(cat headless-client.secret)" > identity.appsettings.json
+          chmod 644 web-client.secret headless-client.secret session.key identity.appsettings.json
+          echo "demo secrets created"
+        else
+          echo "demo secrets already exist"
+        fi
+        chown -R 1654:1654 /identity-data
+    volumes:
+      - demo-secrets:/secrets
+      - demo-identity:/identity-data
+    restart: "no"
+
+  demo-mongo:
+    image: mongo:8.0.34
+    environment:
+      # Work around MongoDB SERVER-121912 rseq/TCMalloc startup abort on Linux kernels 6.19+ and 7.0.0-7.0.13.
+      GLIBC_TUNABLES: glibc.pthread.rseq=1
+    command: ["mongod", "--replSet", "rs0", "--bind_ip", "127.0.0.1,demo-mongo"]
+    volumes:
+      - demo-mongo-data:/data/db
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'try { if (rs.status().ok === 1) quit(0); } catch(e) {} try { rs.initiate({ _id: \"rs0\", members: [{ _id: 0, host: \"127.0.0.1:27017\" }] }); quit(0); } catch(e) { quit(1); }'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  # One-shot: guard, fictional data through the real repositories, and the demo account with a generated, discarded
+  # password and TOTP key. Prints counts only.
+  demo-seed:
+    build:
+      context: ../..
+      target: cli
+    image: roleradar-demo-cli:local
+    <<: *hardening
+    command: ["demo", "seed"]
+    environment:
+      <<: *dotnet-env
+      ROLERADAR_DEMO: "1"
+      ROLERADAR_MONGO_CONNECTION_STRING: mongodb://demo-mongo:27017/?directConnection=true
+      ROLERADAR_MONGO_DATABASE: roleradar-demo
+      ROLERADAR_IDENTITY_DB: Data Source=/data/identity/identity.db
+    volumes:
+      - demo-identity:/data/identity:rw
+    depends_on:
+      demo-mongo:
+        condition: service_healthy
+      demo-secrets:
+        condition: service_completed_successfully
+    restart: "no"
+
+  # Interactive helper (profile "tools"): demo credentials, demo totp.
+  demo-cli:
+    profiles: ["tools"]
+    image: roleradar-demo-cli:local
+    <<: *hardening
+    environment:
+      <<: *dotnet-env
+      ROLERADAR_DEMO: "1"
+      ROLERADAR_MONGO_CONNECTION_STRING: mongodb://demo-mongo:27017/?directConnection=true
+      ROLERADAR_MONGO_DATABASE: roleradar-demo
+      ROLERADAR_IDENTITY_DB: Data Source=/data/identity/identity.db
+    volumes:
+      - demo-identity:/data/identity:rw
+    depends_on:
+      demo-seed:
+        condition: service_completed_successfully
+    restart: "no"
+
+  identity:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile.identity
+    image: roleradar-demo-identity:local
+    <<: *hardening
+    ports:
+      - "127.0.0.1:5101:5101"
+    environment:
+      <<: *dotnet-env
+      # The environment name "Demo" is not the developer environment: the hosts only branch on that one name, so Demo
+      # takes the Production code paths (DemoEnvironmentParityTests). It loads appsettings.Demo.json, mounted below, which carries the generated secrets.
+      ASPNETCORE_ENVIRONMENT: Demo
+      ROLERADAR_IDENTITY_DB: Data Source=/data/identity/identity.db
+      ROLERADAR_IDENTITY_ISSUER_URI: https://identity.localhost:5101
+      Clients__Web__RedirectUri: https://localhost:5103/auth/callback
+      Clients__Web__PostLogoutRedirectUri: https://localhost:5103/auth/logout
+      ROLERADAR_HEADLESS_ALLOWED_SUBJECT: roleradar-headless
+      Kestrel__Endpoints__LoopbackHealth__Url: http://127.0.0.1:8080
+      Kestrel__Endpoints__Https__Url: https://*:5101
+      Kestrel__Endpoints__Https__Certificate__Path: /certs/cert.pfx
+      Kestrel__Endpoints__Https__Certificate__Password: ""
+    volumes:
+      - demo-identity:/data/identity:rw
+      - demo-certs:/certs:ro
+      - type: volume
+        source: demo-secrets
+        target: /app/appsettings.Demo.json
+        read_only: true
+        volume:
+          subpath: identity.appsettings.json
+    networks:
+      default:
+        aliases:
+          - identity.localhost
+    depends_on:
+      demo-certs:
+        condition: service_completed_successfully
+      demo-secrets:
+        condition: service_completed_successfully
+      demo-seed:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "/app/RoleRadar.Identity", "--healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 6s
+
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile.api
+    image: roleradar-demo-api:local
+    <<: *hardening
+    ports:
+      - "127.0.0.1:5102:5102"
+    environment:
+      <<: *dotnet-env
+      ROLERADAR_DEMO: "1"
+      ROLERADAR_MONGO_CONNECTION_STRING: mongodb://demo-mongo:27017/?directConnection=true
+      ROLERADAR_MONGO_DATABASE: roleradar-demo
+      ROLERADAR_OIDC_AUTHORITY: https://identity.localhost:5101
+      ROLERADAR_OIDC_AUDIENCE: roleradar.api
+      # The fixed, non-secret demo user id (the Identity user's sub claim) and the headless client's subject name.
+      Owner__AllowedSubjects__0: 019b4c2e-7a10-7d3f-8c5e-2b9a6f41d0e7
+      Owner__AllowedSubjects__1: roleradar-headless
+      SSL_CERT_FILE: /certs/cert.pem
+      Kestrel__Endpoints__LoopbackHealth__Url: http://127.0.0.1:8080
+      Kestrel__Endpoints__Https__Url: https://*:5102
+      Kestrel__Endpoints__Https__Certificate__Path: /certs/cert.pfx
+      Kestrel__Endpoints__Https__Certificate__Password: ""
+    volumes:
+      - demo-certs:/certs:ro
+    networks:
+      default:
+        aliases:
+          - api.localhost
+    depends_on:
+      demo-mongo:
+        condition: service_healthy
+      demo-seed:
+        condition: service_completed_successfully
+      identity:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/app/RoleRadar.Api", "--healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 6s
+
+  web:
+    build:
+      context: ../..
+      dockerfile: deploy/Dockerfile.web
+    image: roleradar-demo-web:local
+    <<: *hardening
+    ports:
+      - "127.0.0.1:5103:5103"
+    environment:
+      NODE_ENV: production
+      PORT: "5103"
+      NODE_EXTRA_CA_CERTS: /certs/cert.pem
+      ROLERADAR_IDENTITY_ISSUER_URI: https://identity.localhost:5101
+      ROLERADAR_API_BASE_URL: https://api.localhost:5102
+      ROLERADAR_WEB_REDIRECT_URI: https://localhost:5103/auth/callback
+      ROLERADAR_WEB_POST_LOGOUT_URI: https://localhost:5103/auth/logout
+      HTTPS_CERT_PATH: /certs/cert.pem
+      HTTPS_CERT_KEY_PATH: /certs/key.pem
+    # The web image has a shell, so the generated client secret and session key are exported from the secrets volume.
+    entrypoint: ["sh", "-c", "export ROLERADAR_WEB_CLIENT_SECRET=\"$$(cat /secrets/web-client.secret)\" SESSION_ENCRYPTION_KEY=\"$$(cat /secrets/session.key)\"; exec node build/server-dist/server.js"]
+    volumes:
+      - demo-certs:/certs:ro
+      - demo-secrets:/secrets:ro
+    depends_on:
+      demo-certs:
+        condition: service_completed_successfully
+      demo-secrets:
+        condition: service_completed_successfully
+      identity:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.env.NODE_TLS_REJECT_UNAUTHORIZED='0'; fetch('https://127.0.0.1:5103/health').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 6s
+
+volumes:
+  demo-mongo-data:
+    name: roleradar-demo-mongo
+  demo-identity:
+    name: roleradar-demo-identity
+  demo-certs:
+    name: roleradar-demo-certs
+  demo-secrets:
+    name: roleradar-demo-secrets

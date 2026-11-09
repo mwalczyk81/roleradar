@@ -42,3 +42,4 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0036](./0036-test-lanes-and-gate-scan.md) | Test Lanes by Trait, and a Gate That Scans Its Own Images | Accepted | `010-contracts-test-integrity` |
 | [ADR-0037](./0037-mutation-testing.md) | Nightly Mutation Testing for the Web Library, .NET Deferred | Accepted | `011-test-quality-reporting` |
 | [ADR-0038](./0038-reporting-stack.md) | Reporting From Pipeline Numbers, With One Combined Allure Report | Accepted | `011-test-quality-reporting` |
+| [ADR-0039](./0039-demo-stack-and-guard.md) | A Separate Demo Stack With a Guard and Generated Credentials | Accepted | `012-front-door` |

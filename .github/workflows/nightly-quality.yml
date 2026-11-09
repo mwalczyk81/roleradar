@@ -350,6 +350,64 @@ jobs:
   # The final job always runs and builds one combined report from whatever the jobs above produced, so a failed stack
   # still yields a report. It runs no tests. Inputs are sanitized and leak-checked before and after generating. On the
   # pull request validation path the report is an artifact only; nothing is published from a pull request.
+  # Feature 012 (ADR 0039, research R-010): the documented demo command on Linux. It proves the stack builds, the seed
+  # step exits 0 with its counts, the three hosts answer, and the sign-in redirect points at identity.localhost. It does
+  # not sign in: `demo credentials` refuses non-interactive output by design, so sign-in is checked by the owner and by
+  # the screenshot run. Every request uses explicit curl --resolve flags, so nothing depends on the runner's resolver.
+  # Every compose command carries -p roleradar-demo, so only the demo project's own containers and volumes are touched.
+  demo-smoke:
+    name: Demo stack smoke
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: read
+    env:
+      DEMO_COMPOSE: docker compose -p roleradar-demo -f deploy/demo/docker-compose.yml
+      DEMO_RESOLVE: --resolve identity.localhost:5101:127.0.0.1 --resolve api.localhost:5102:127.0.0.1 --resolve localhost:5103:127.0.0.1
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Start the demo with the documented command
+        run: $DEMO_COMPOSE up --build --wait
+
+      - name: Seed step exited 0 and printed its counts only
+        run: |
+          code="$($DEMO_COMPOSE ps -a --format '{{.ExitCode}}' demo-seed)"
+          test "$code" = "0"
+          $DEMO_COMPOSE logs --no-color demo-seed | tee seed.log
+          grep -F "Demo seed: created 14 companies, 48 postings, 20 applications" seed.log
+          if grep -Eiq 'password|otpauth|secret' seed.log; then echo "seed output must hold no credential"; exit 1; fi
+
+      - name: Hosts answer through explicit resolve flags
+        run: |
+          test "$(curl -ksS $DEMO_RESOLVE -o /dev/null -w '%{http_code}' https://localhost:5103/health)" = "200"
+          test "$(curl -ksS $DEMO_RESOLVE -o /dev/null -w '%{http_code}' https://api.localhost:5102/health)" = "200"
+          curl -ksS $DEMO_RESOLVE https://identity.localhost:5101/.well-known/openid-configuration | grep -F '"issuer":"https://identity.localhost:5101"'
+
+      - name: Sign-in redirect points at the identity host
+        run: |
+          location="$(curl -ksS $DEMO_RESOLVE -o /dev/null -w '%{redirect_url}' https://localhost:5103/)"
+          case "$location" in
+            https://identity.localhost:5101/connect/authorize*) echo "redirect ok" ;;
+            *) echo "unexpected redirect"; exit 1 ;;
+          esac
+
+      - name: Mongo is not published on the host
+        run: |
+          test -z "$(docker port roleradar-demo-demo-mongo-1)"
+
+      - name: Show service logs on failure
+        if: failure()
+        run: $DEMO_COMPOSE logs --no-color --tail 80
+
+      - name: Remove the demo (project-scoped)
+        if: always()
+        run: $DEMO_COMPOSE down -v
+
   allure-report:
     name: Allure combined report
     needs: [tests-dotnet, tests-vitest, tests-playwright, e2e-repeat]

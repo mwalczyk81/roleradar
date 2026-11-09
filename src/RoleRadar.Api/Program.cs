@@ -122,22 +122,31 @@ public partial class Program
             });
 
         builder.Services.AddRoleRadarApplication();
+        var mongoConnectionString = builder.Configuration.GetConnectionString("MongoConnection")
+            ?? RoleRadar.Infrastructure.Mongo.MongoConnectionStringSource.Resolve(Environment.GetEnvironmentVariable);
+        var mongoDatabaseName = builder.Configuration["DatabaseName"]
+            ?? Environment.GetEnvironmentVariable("ROLERADAR_MONGO_DATABASE");
+
         builder.Services.AddRoleRadarInfrastructure(options =>
         {
-            var connectionString = builder.Configuration.GetConnectionString("MongoConnection")
-                ?? RoleRadar.Infrastructure.Mongo.MongoConnectionStringSource.Resolve(Environment.GetEnvironmentVariable);
-            if (!string.IsNullOrWhiteSpace(connectionString))
+            if (!string.IsNullOrWhiteSpace(mongoConnectionString))
             {
-                options.ConnectionString = connectionString.Trim();
+                options.ConnectionString = mongoConnectionString.Trim();
             }
 
-            var databaseName = builder.Configuration["DatabaseName"]
-                ?? Environment.GetEnvironmentVariable("ROLERADAR_MONGO_DATABASE");
-            if (!string.IsNullOrWhiteSpace(databaseName))
+            if (!string.IsNullOrWhiteSpace(mongoDatabaseName))
             {
-                options.DatabaseName = databaseName.Trim();
+                options.DatabaseName = mongoDatabaseName.Trim();
             }
         });
+
+        // Demo mode (feature 012, ADR 0039): refuse to start unless demo mode and the database agree. A no-op for any
+        // ordinary configuration.
+        var defaults = new RoleRadar.Infrastructure.Mongo.MongoOptions();
+        DemoStartupCheck.Enforce(
+            Environment.GetEnvironmentVariable(RoleRadar.Infrastructure.Mongo.DemoModeGuard.DemoModeVariable),
+            string.IsNullOrWhiteSpace(mongoDatabaseName) ? defaults.DatabaseName : mongoDatabaseName.Trim(),
+            string.IsNullOrWhiteSpace(mongoConnectionString) ? defaults.ConnectionString : mongoConnectionString.Trim());
 
         builder.Services.AddOpenApi(options =>
         {

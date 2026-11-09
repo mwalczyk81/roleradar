@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/mwalczyk81/roleradar/blob/main/SECURITY.md
+    about: Please report vulnerabilities privately through GitHub Private Vulnerability Reporting, as SECURITY.md describes, not in a public issue.

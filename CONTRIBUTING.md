@@ -2,6 +2,16 @@
 
 RoleRadar is governed by the [RoleRadar Constitution](./.specify/memory/constitution.md). Every contribution must adhere to Principles I through IX.
 
+Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md). All documentation is indexed in [docs/README.md](docs/README.md).
+
+## Try the demo first
+
+The quickest way to see the app is the demo over fictional data ([docs/demo.md](docs/demo.md)):
+
+```bash
+docker compose -p roleradar-demo -f deploy/demo/docker-compose.yml up --build --wait
+```
+
 ## Non-Negotiable Rules
 
 1. **Privacy First (Principle I)**:
@@ -61,19 +71,20 @@ dotnet test RoleRadar.sln -c Release
 Before submitting a pull request, run the cross-platform review gate script to execute all verification gates against a clean clone:
 
 ```powershell
-pwsh ./scripts/review-gate.ps1 [-Branch <branch-name>]
+pwsh ./scripts/review-gate.ps1
 ```
 
-`review-gate.ps1` performs the following automated checks without printing noisy build logs:
+`-Branch <branch-name>` checks out another branch in the clone, and `-IncludeE2E` adds the real-stack Playwright suite. `review-gate.ps1` performs the following automated checks without printing noisy build logs:
 
 1. Clones the repository to an isolated temporary directory.
 2. Restores dependencies with `--locked-mode`.
 3. Verifies code formatting with `dotnet format --verify-no-changes`.
 4. Compiles the solution with warnings as errors (`-warnaserror`).
-5. Executes all tests (`Unit`, `Architecture`, `Contract`, `Integration`) via `scripts/test-all.ps1`.
+5. Type-checks the web app and executes all tests (`Unit`, `Architecture`, `Contract`, `Integration`) via `scripts/test-all.ps1`.
 6. Computes CI-equivalent merged `RoleRadar.Domain` + `RoleRadar.Application` coverage (enforcing `>= 85%`).
-7. Builds both Linux container images (`roleradar-cli` and `roleradar-mcp`) and measures image sizes.
-8. Prints a concise summary table (max 15 lines) and cleans up the temporary clone.
+7. Builds the five Linux container images (CLI, MCP, Identity, web and API), measures their sizes and smoke-tests the web image.
+8. Scans the images it built with the pinned Trivy and runs the scan test, which cannot pass on a skipped scan ([ADR 0036](docs/adr/0036-test-lanes-and-gate-scan.md)).
+9. Prints a concise summary table and cleans up the temporary clone.
 
 ## Test Data Isolation & Developer Stack Protection
 
@@ -96,41 +107,6 @@ RoleRadar enforces strict isolation so tests can never corrupt, modify, or delet
    - `scripts/review-gate.ps1` and CI execute `scripts/verify-devstack-canary.ps1` before and after test execution.
    - If a dev stack is reachable on port 27017, the canary records all database names and collection document counts, and fails the verification gate if any database outside `rrtest_` prefixes was created, dropped, or modified.
 
-## Backup & Recovery Workflow
+## Backup and Restore
 
-RoleRadar provides encrypted backup and restore covering all 12 schema collections (`AES-256-GCM` with PBKDF2 key derivation):
-
-### Creating a Backup
-
-```powershell
-# Using the helper script (with environment passphrase)
-$env:BACKUP_PW = "YourSecurePassphraseHere"
-pwsh ./scripts/backup.ps1 ./backup.rrbak -PassphraseEnv BACKUP_PW
-
-# Or interactively (prompts securely for passphrase)
-pwsh ./scripts/backup.ps1 ./backup.rrbak
-
-# Or using the containerized CLI
-pwsh ./scripts/roleradar-docker.ps1 backup /data/backup/backup.rrbak --passphrase-env BACKUP_PW
-```
-
-### Restoring from a Backup
-
-1. **Standard Safe Restore (Empty Target)**:
-   By default, `restore` checks target database collections and refuses to overwrite existing data:
-
-   ```powershell
-   pwsh ./scripts/restore.ps1 ./backup.rrbak -PassphraseEnv BACKUP_PW
-   ```
-
-2. **Force Overwrite Restore (`--force-overwrite`)**:
-   If restoring over existing collections, `--force-overwrite` runs `mongorestore --drop`. To protect developer data, restoring into the default database `roleradar` requires explicit confirmation via `ROLERADAR_CONFIRM_OVERWRITE_DEFAULT=1`:
-
-   ```powershell
-   $env:ROLERADAR_CONFIRM_OVERWRITE_DEFAULT = "1"
-   pwsh ./scripts/restore.ps1 ./backup.rrbak -PassphraseEnv BACKUP_PW -ForceOverwrite
-   ```
-
-### Container Bind-Mount Permissions & Non-Matching Host Users
-
-RoleRadar container images specify an unprivileged non-root user (`USER 1654:1654`). On Linux and macOS hosts, `scripts/roleradar-docker.ps1` and the test harness dynamically pass `--user "$(id -u):$(id -g)"` whenever a host directory is bind-mounted writable (`:rw`), such as the backup destination (`/data/backup`). This ensures files written to the host match the host user's UID and GID so that runner-owned directories (even with restricted `0700` permissions) can receive backups and be cleanly managed or deleted by host processes without permission errors. On Windows and Docker Desktop, user translation is handled transparently.
+Encrypted backup, the two-pass restore and the overwrite safeguards are described in [docs/operations/backup-restore.md](docs/operations/backup-restore.md).

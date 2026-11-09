@@ -1,250 +1,133 @@
 # RoleRadar
 
-RoleRadar is a local-first, privacy-focused career memory and job search copilot datastore designed to give AI agents persistent, structured memory across applications, conversations, and interviews. RoleRadar operates entirely within your local security boundary: MongoDB binds exclusively to loopback (`127.0.0.1:27017`), the MCP server communicates over pure `stdio` child processes without opening any network listeners, and all backup archives are encrypted at rest with libsodium (`Geralt` 4.4.0 `IncrementalXChaCha20Poly1305` + `Argon2id`). Passphrases are never passed as command-line arguments, accepted only via interactive prompts, environment variables, or standard input, and are immediately zeroed in memory after use. No proprietary credentials, private notes, or real personal identities are ever stored in the repository.
+Long-term memory for AI agents over MCP, and a job-search tracker with a web UI, on one local data store.
+Local-first by design: everything stays on your machine, every write is audited, and nothing is ever hard-deleted.
+
+[![CI](https://github.com/mwalczyk81/roleradar/actions/workflows/ci.yml/badge.svg)](https://github.com/mwalczyk81/roleradar/actions/workflows/ci.yml)
+[![Coverage](https://mwalczyk81.github.io/roleradar/badges/coverage.svg)](https://mwalczyk81.github.io/roleradar/)
+[![Mutation score](https://badge-api.stryker-mutator.io/github.com/mwalczyk81/roleradar/main?module=web-lib)](https://dashboard.stryker-mutator.io/reports/github.com/mwalczyk81/roleradar/main?module=web-lib)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/insights-dark.png">
+  <img alt="The Insights page over the fictional demo data: a postings funnel and an applications funnel, every count a drill-down link" src="docs/images/insights-light.png">
+</picture>
+
+## Try the demo
+
+You need Docker with Compose v2 ([versions](docs/demo.md#what-you-need)). Four steps:
+
+1. Clone the repository.
+
+   ```bash
+   git clone https://github.com/mwalczyk81/roleradar.git
+   cd roleradar
+   ```
+
+2. Start the demo stack. The first run builds four images, which takes a few minutes; later starts take about a minute.
+
+   ```bash
+   docker compose -p roleradar-demo -f deploy/demo/docker-compose.yml up --build --wait
+   ```
+
+3. Get the throwaway sign-in. It prints a username, a generated password and a TOTP secret, once, to your terminal.
+
+   ```bash
+   docker compose -p roleradar-demo -f deploy/demo/docker-compose.yml --profile tools run --rm demo-cli demo credentials
+   ```
+
+4. Open <https://localhost:5103> and sign in with those values and a code from your authenticator app (or from `demo totp`).
+
+The demo uses self-signed certificates, so your browser warns: accept the warning once for each origin, `localhost:5103` and `identity.localhost:5101`.
+**All demo data is fictional.** The companies, postings, notes and the account are invented and never leave your machine.
+The demo is a separate Compose project on its own ports and volumes; remove it with `down -v` and the same `-p roleradar-demo`. Details, the guard that keeps it away from real data, and more pictures: [docs/demo.md](docs/demo.md).
+
+## Architecture
 
 ```mermaid
-flowchart TD
-    subgraph Client["AI Agents & Hosts"]
-        ClaudeCode["Claude Code (stdio)"]
-        ClaudeDesktop["Claude Desktop (stdio)"]
-        Cowork["Cowork Task (stdio)"]
-        UserCLI["Developer CLI (roleradar)"]
-    end
-
-    subgraph HostApp["RoleRadar Local Host (net10.0)"]
-        McpServer["RoleRadar.Mcp.Stdio<br/>(12 Tools, Zero Delete Tools, stderr logging)"]
-        CliApp["RoleRadar.Cli<br/>(import, backup, restore, wipe, status)"]
-        AppLayer["RoleRadar.Application<br/>(Audit, Logging, Transactions)"]
-        InfraLayer["RoleRadar.Infrastructure<br/>(Geralt SecretStream, Mongo Drivers)"]
-    end
-
-    subgraph Storage["Persistent Local Storage (Loopback Only)"]
-        Mongo["MongoDB 8.0 (127.0.0.1:27017, rs0)<br/>Database: roleradar"]
-        MongoVolume[("Docker Volume: roleradar-mongo-data")]
-        BackupFile[("Encrypted Backup Archive (*.rrbak)<br/>Argon2id + XChaCha20-Poly1305")]
-    end
-
-    ClaudeCode <-->|JSON-RPC via stdio| McpServer
-    ClaudeDesktop <-->|JSON-RPC via stdio| McpServer
-    Cowork <-->|JSON-RPC via stdio| McpServer
-    UserCLI <--> CliApp
-
-    McpServer --> AppLayer
-    CliApp --> AppLayer
-    AppLayer --> InfraLayer
-    InfraLayer -->|Direct ReplicaSet| Mongo
-    Mongo --> MongoVolume
-    InfraLayer -.->|Streaming Encrypted Dump/Restore| BackupFile
+flowchart LR
+    agent["AI agent<br/>Claude Code, Claude Desktop"] -->|"JSON-RPC over stdio"| mcp["MCP server<br/>12 tools, no delete tool"]
+    owner["Owner terminal"] --> cli["CLI<br/>import, backup, reconcile"]
+    browser["Browser"] --> web["Web UI<br/>React Router v7 SSR"]
+    web -->|"OIDC sign-in"| identity["Identity<br/>Duende, password and TOTP"]
+    web -->|"bearer token"| api["API<br/>REST commands, OData reads"]
+    mcp --> app["Application<br/>handlers, audit, transactions"]
+    cli --> app
+    api --> app
+    api --> seam["OData read seam<br/>owner-scoped"]
+    app --> infra["Infrastructure<br/>Mongo repositories"]
+    seam --> infra
+    infra --> mongo[("MongoDB replica set<br/>loopback only")]
+    cli -.-> backup[("Encrypted backup<br/>XChaCha20-Poly1305, Argon2id")]
 ```
 
----
+Dependencies point one way: Domain, then Application, then Infrastructure, then the thin hosts (MCP server, CLI, API). Architecture tests fail the build if a layer reaches the wrong way or a command handler is registered without the transaction-and-audit decorator. Reads in the web UI go through one owner-scoped OData seam ([ADR 0028](docs/adr/0028-odata-read-seam-and-query-execution.md)); commands go through the same Application handlers the MCP tools use.
 
-## Quickstart (Under 10 Minutes)
+## How it was built
 
-### 1. Prerequisites
+RoleRadar is built spec first with [GitHub Spec Kit](https://github.com/github/spec-kit). Every feature has a spec, a plan and a task list under [specs/](specs/), written before any code and kept in step with it.
 
-- [.NET 10 SDK](https://dotnet.microsoft.com/) (`10.0.100` or newer)
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine with Docker Compose v2
-- PowerShell 7 (`pwsh`)
+- A [constitution](.specify/memory/constitution.md) of nine principles (privacy first, tests first, enforced layering, named seams only, untrusted posting text, stdout hygiene, durable data, ADRs for decisions, .NET 10 with UUIDv7 and UTC).
+- About forty [architecture decision records](docs/adr/README.md), one per library choice or design decision, including the ones that were rejected.
+- Tests first and shown failing, architecture tests for the layering, contract tests for the API and MCP schemas, and integration tests against throwaway Mongo containers only.
+- A human review gate. Each phase stops for the owner's review, and the gate script rebuilds and retests a clean clone before a pull request.
 
-### 2. Start Services
+**AI agents wrote much of the code, the tests and these docs, under that process.** The owner set the requirements, reviewed every phase stop and pull request, and made the calls recorded in the ADRs. The process is the point: specs, tests and gates are what keep agent-written code honest.
 
-Clone the repository and start the persistent, loopback-bound MongoDB replica set:
+A worked example from spec to pull request is feature 008, rejecting an applied posting: [spec, plan and tasks](specs/008-posting-application-rejection-sync/), [ADR 0033](docs/adr/0033-posting-rejection-syncs-to-application.md) and [pull request #53](https://github.com/mwalczyk81/roleradar/pull/53).
+
+The fast test loop (architecture, unit and contract tests):
+
+```powershell
+pwsh ./scripts/test-fast.ps1
+```
+
+The review gate (clean clone, format, build with warnings as errors, every test lane, coverage, image build and scan):
+
+```powershell
+pwsh ./scripts/review-gate.ps1
+```
+
+## Evidence
+
+The [reports site](https://mwalczyk81.github.io/roleradar/) publishes the combined Allure test report, line coverage, trends over time and the mutation report from the nightly run.
+
+- Domain and Application line coverage is held at 85 percent or more by the review gate and CI.
+- Mutation testing covers the web library code with a committed floor of 81 ([ADR 0037](docs/adr/0037-mutation-testing.md)).
+- Every image the gate builds is scanned with a pinned Trivy, and the gate cannot pass on a skipped scan ([ADR 0036](docs/adr/0036-test-lanes-and-gate-scan.md)).
+
+## Status and limits
+
+- **Local-first by design.** Mongo binds to loopback, the MCP server opens no network listener, and backups are encrypted at rest. There is no hosted version.
+- **Hosting is parked.** Hosting would need a managed Mongo, a container runtime, a real identity provider and account management ([ADR 0011](docs/adr/0011-hosted-mongodb-selection-and-compatibility.md), [ADR 0012](docs/adr/0012-azure-container-runtime-target.md), both proposed only).
+- **Single owner.** One owner id scopes every collection and every read; there are no other users.
+- **Pre-1.0.** The first release is v0.1.0; interfaces can still change.
+
+## Documentation
+
+- [docs/README.md](docs/README.md) indexes everything under `docs/`, including the [ADR index](docs/adr/README.md) and the [demo](docs/demo.md).
+- [MCP client registration](docs/mcp-clients.md), [MCP tools](docs/mcp-tools.md), [CLI reference](docs/cli-reference.md), [Insights](docs/insights.md), [backup and restore](docs/operations/backup-restore.md).
+- [Changelog](CHANGELOG.md): what changed in each release.
+
+## Quickstart on the real stack
+
+You need the .NET 10 SDK, Docker with Compose v2 and PowerShell 7. This starts the loopback Mongo replica set, checks it and imports fictional notes:
 
 ```powershell
 git clone https://github.com/mwalczyk81/roleradar.git
 cd roleradar
-
-# Start local MongoDB replica set (rs0 on 127.0.0.1:27017)
 pwsh ./scripts/start-services.ps1
-```
-
-Verify service readiness:
-
-```powershell
 dotnet run --project src/RoleRadar.Cli -- status
-```
-
-Expected output:
-
-```text
-RoleRadar Store: Ready
-Endpoint:        127.0.0.1:27017 (rs0)
-Replica Set:     rs0
-Latency:         115.69 ms
-```
-
-### 3. Import Fictional Notes
-
-RoleRadar ships with fictional test fixtures to populate initial memory without using real identities:
-
-```powershell
-# 1. Preview changes without writing to database
-dotnet run --project src/RoleRadar.Cli -- import tests/fixtures/fictional-memory-primary.md --dry-run
-
-# 2. Perform the import
 dotnet run --project src/RoleRadar.Cli -- import tests/fixtures/fictional-memory-primary.md --default-date 2026-03-01
 ```
 
----
+Then register the MCP server with your client ([docs/mcp-clients.md](docs/mcp-clients.md)).
 
-## Insights Page
+## CLI and MCP reference
 
-The web app has a read-only Insights page at `/insights` (signed-in owner only). It shows two funnels, each over one cohort: postings first seen in the window (leads, reviewed, applied-to) and applications applied in the window (applied, responded, interviewed, offers). Stat tiles give the application, screen-out, interview, rejection, offer and ghost rates plus open applications and median days to first response, with applications per week and search-run yield as charts that each have a table view. Every percentage is shown as "x of y", and a denominator under 10 is marked "small sample".
-
-- **Windows**: the default is the last 90 days (90 whole UTC days ending today); the toggle switches to all time. The window is in the page address, so a view can be shared.
-- **Drill-down**: every count links to the Postings or Applications list with the same filter and window, so the number on the page and the number of rows in the list agree. The dashboard and its links are built from one shared filter module.
-- **First run on existing data**: flag-dependent numbers show "needs backfill" until the owner runs the `reconcile-read-models` steps in [docs/operations/reconcile-read-models.md](docs/operations/reconcile-read-models.md).
-- **Notes**: the note detail page renders the body as locked-down Markdown (no raw HTML, no images, http and https links only).
-
-Validation steps are in [specs/007-insights-dashboard/quickstart.md](specs/007-insights-dashboard/quickstart.md). Decisions are recorded in ADRs [0029](docs/adr/0029-insights-counts-via-shared-lens-module.md) (counts and lens module), [0030](docs/adr/0030-insights-stats-read-in-memory.md) (stats read), [0031](docs/adr/0031-insights-derived-read-model-flags.md) (derived flags) and [0032](docs/adr/0032-markdown-rendering-of-notes.md) (Markdown).
-
-## MCP Client Registration
-
-Build the MCP stdio server binaries:
-
-```powershell
-dotnet publish src/RoleRadar.Mcp.Stdio -c Release -o ./dist/mcp
-```
-
-The compiled binary will be located at `./dist/mcp/RoleRadar.Mcp.Stdio.exe` (or `RoleRadar.Mcp.Stdio.dll` run via `dotnet`).
-
-### Claude Code CLI
-
-Register RoleRadar into Claude Code (the target path must be absolute because Claude Code launches MCP servers from arbitrary working directories):
-
-```powershell
-claude mcp add roleradar -e ROLERADAR_MONGO_CONNECTION_STRING="mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true" -e ROLERADAR_MONGO_DATABASE="roleradar" -- dotnet C:/Users/<username>/source/repos/roleradar/dist/mcp/RoleRadar.Mcp.Stdio.dll
-```
-
-Or using the published Windows executable directly:
-
-```powershell
-claude mcp add roleradar -e ROLERADAR_MONGO_CONNECTION_STRING="mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true" -e ROLERADAR_MONGO_DATABASE="roleradar" -- C:/Users/<username>/source/repos/roleradar/dist/mcp/RoleRadar.Mcp.Stdio.exe
-```
-
-### Claude Desktop
-
-Add RoleRadar to your Claude Desktop configuration (`%APPDATA%\Claude\claude_desktop_config.json`):
-
-```json
-{
-  "mcpServers": {
-    "roleradar": {
-      "command": "dotnet",
-      "args": [
-        "C:/Users/<username>/source/repos/roleradar/dist/mcp/RoleRadar.Mcp.Stdio.dll"
-      ],
-      "env": {
-        "ROLERADAR_MONGO_CONNECTION_STRING": "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true",
-        "ROLERADAR_MONGO_DATABASE": "roleradar"
-      }
-    }
-  }
-}
-```
-
-### Cowork / Scheduled Task
-
-To launch RoleRadar in headless agentic workflows or scheduled background automation, execute:
-
-```powershell
-$env:ROLERADAR_MONGO_CONNECTION_STRING = "mongodb://127.0.0.1:27017/?replicaSet=rs0&directConnection=true"
-$env:ROLERADAR_MONGO_DATABASE = "roleradar"
-dotnet C:/Users/<username>/source/repos/roleradar/dist/mcp/RoleRadar.Mcp.Stdio.dll
-```
-
-Standard input/output will process JSON-RPC MCP messages, while diagnostic logs are routed exclusively to standard error to prevent protocol stream corruption.
-
----
-
-## MCP Tool Surface
-
-RoleRadar exposes exactly 12 high-level memory tools across notes and job search tracking with **zero hard-delete tools**:
-
-| Tool Name | Purpose |
-| :--- | :--- |
-| `note_create` | Creates a durable markdown note with title, body, area label, tags, and provenance marker. |
-| `note_get` | Reads a single note by its unique id, including archived notes, returning character-paged body, pagination metadata, and version token. |
-| `note_append` | Atomically appends markdown text to the end of an existing note inside a snapshot transaction without requiring a version token. |
-| `note_replace_section` | Replaces the markdown content under a specific heading in an existing note under optimistic concurrency control, preserving prior body in revision history. |
-| `note_search` | Searches notes by plain text query across title, body, and tags, with optional filtering by area, tags, provenance, and archived status. |
-| `note_archive` | Archives a note under optimistic concurrency control, hiding it from default search while preserving all content and revision history. |
-| `company_record` | Creates a new company target with initial research status, or updates status and research metadata of an existing company. |
-| `posting_record` | Records a newly discovered job posting, deduping against company+title, canonical URL, and requisition ID. |
-| `posting_transition` | Evaluates and applies state transitions to an active posting under optimistic concurrency control, supporting screening out, closing, or advancing. |
-| `tracker_query` | Queries the job search pipeline across postings, applications, and companies with multi-field filtering, state filtering, and cursor pagination. |
-| `tracker_log` | Records operational screening criteria revisions and search run execution batches linked to report notes. |
-| `application_record` | Creates or updates a job application, appends timeline events, records resume variant pointers and desired salary, and supports atomic reopen-and-apply override for decided postings. |
-
----
-
-## CLI Reference
-
-RoleRadar includes the `roleradar` command-line utility (`src/RoleRadar.Cli`):
-
-### `roleradar status`
-
-Checks datastore readiness, round-trip ping latency, and cluster configuration.
-
-- `--json`: Emit machine-readable JSON status output.
-
-### `roleradar import <files...>`
-
-Imports markdown documents into memory, preserving exact headings, sections, code blocks, and tags.
-
-- `--dry-run`: Parse and reconcile notes against database without committing writes or audit entries.
-- `--verbose`, `-v`: Output verbose diagnostic reconciliation logs to standard error.
-- `--json`: Output full reconciliation summaries as JSON.
-- `--default-date <YYYY-MM-DD>`: Fallback date for undated headings and tags.
-- `--source-id <id>`: Custom provenance identifier for imported documents.
-- `--area <area>`: Target area category (default: `imported`).
-
-### `roleradar backup [destination]`
-
-Creates a compressed, streaming passphrase-encrypted archive (`.rrbak`) of the database.
-
-- `[destination]`: Target directory or file path (defaults to current directory).
-- `--passphrase-env <VAR>`: Read encryption passphrase from the specified environment variable.
-- `--passphrase-stdin`: Read encryption passphrase from standard input.
-
-> [!NOTE]
-> CLI arguments like `--passphrase <value>` are explicitly forbidden for security.
-> **Backup Consistency Note**: Backups are guaranteed consistent only when no writes occur during the dump because MongoDB's `--oplog` flag cannot be replayed together with namespace filtering (`--nsInclude`).
-
-### `roleradar reconcile-read-models`
-
-Backfills the derived, denormalised fields the OData read models rely on (postings, applications, criteria). It is a dry run unless `--confirm RECONCILE-READ-MODELS` is passed. Only the owner runs it on real data, in the order given in [docs/operations/reconcile-read-models.md](docs/operations/reconcile-read-models.md); automated agents and CI never do.
-
-### Running on the real stack (Windows)
-
-The bare `roleradar ...` commands above assume the CLI is on your path and can reach Mongo. On the Docker Compose stack use these forms from PowerShell at the repository root, after rebuilding the image (`docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.apps.yml --profile apps build cli`):
-
-```powershell
-# Backup: runs the built Release CLI on the host, which dumps through `docker compose exec mongo mongodump`.
-pwsh ./scripts/backup.ps1 <destination>
-
-# Reconcile: runs in the CLI image on the compose network, where the hostname "mongo" resolves.
-docker run --rm --network deploy_default -e "ROLERADAR_MONGO_CONNECTION_STRING=mongodb://mongo:27017/?directConnection=true" -e ROLERADAR_MONGO_DATABASE=roleradar roleradar-cli:local reconcile-read-models [--confirm RECONCILE-READ-MODELS]
-```
-
-`scripts/roleradar-docker.ps1` builds the same container command. It adds `--network <name>` only when `ROLERADAR_DOCKER_NETWORK` is set (for example `deploy_default`), and uses `ROLERADAR_CLI_IMAGE` for the image (default `roleradar-cli:test`). Full run order and safety rules: [docs/operations/reconcile-read-models.md](docs/operations/reconcile-read-models.md).
-
-### `roleradar restore <archive-path>`
-
-Performs a strict two-pass verification and restore of an encrypted archive. Pass 1 validates the header, authentication tags, and archive magic numbers. Pass 2 restores data to MongoDB.
-
-- `--passphrase-env <VAR>`: Read decryption passphrase from the specified environment variable.
-- `--passphrase-stdin`: Read decryption passphrase from standard input.
-- `--force-overwrite`: Required if the target database contains existing collections or notes.
-
-### `roleradar wipe`
-
-Resets and drops all notes, revisions, and audit collections in the database.
-
-- `--confirm WIPE-ALL-ROLERADAR-DATA`: Mandatory safety token to confirm destruction.
-
----
+- CLI: `status`, `import`, `backup`, `restore`, `wipe` (needs a confirmation token), `reconcile-read-models` (dry run unless confirmed), and `demo` (demo stack only). Full options: [docs/cli-reference.md](docs/cli-reference.md).
+- MCP tools: `note_create`, `note_get`, `note_append`, `note_replace_section`, `note_search`, `note_archive`, `company_record`, `posting_record`, `posting_transition`, `tracker_query`, `tracker_log`, `application_record`. No tool deletes anything. Details: [docs/mcp-tools.md](docs/mcp-tools.md).
 
 ## Environment Variables
 
@@ -257,10 +140,9 @@ Resets and drops all notes, revisions, and audit collections in the database.
 | `ROLERADAR_BACKUP_RESTORE_COMMAND` | `docker compose -f <compose> exec -T mongo mongorestore --archive --gzip --oplogReplay --nsInclude "<db>.*"` | Command executed to consume the restored plaintext stream. |
 | `ROLERADAR_LOG_LEVEL` | `Warning` | Minimum logging verbosity for CLI (`Trace`, `Debug`, `Information`, `Warning`, `Error`). |
 
----
+## Security and contributing
 
-## Development & Security Guidelines
-
-- Real names, personal addresses, and sensitive personal data must **never** be committed to this repository. See [docs/denylist.example.txt](docs/denylist.example.txt) for configuration of the pre-commit and pre-push sanitization hooks.
-- Container images run as unprivileged `USER 1654:1654`. On Linux and macOS hosts, `scripts/roleradar-docker.ps1` and test runners dynamically map `--user "$(id -u):$(id -g)"` for writable volume mounts so files written to host directories match host runner ownership.
-- Contribution guidelines and pull request conventions are detailed in [CONTRIBUTING.md](CONTRIBUTING.md).
+- Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+- Real names, addresses and other personal data must never be committed; the pre-commit hooks scan for them against a private local list ([docs/denylist.example.txt](docs/denylist.example.txt)).
+- How to contribute: [CONTRIBUTING.md](CONTRIBUTING.md). Everyone taking part follows the [code of conduct](CODE_OF_CONDUCT.md).
+- Licensed under the [MIT License](LICENSE).

@@ -84,6 +84,117 @@ public class OwnerProvisioningService(IdentityAppDbContext dbContext)
         return new OwnerProvisioningResult(user.Id, normalizedUsername, authenticatorKey, otpAuthUri);
     }
 
+    /// <summary>Whether a user with this id exists.</summary>
+    public async Task<bool> UserExistsAsync(Guid userId, CancellationToken cancellationToken = default) =>
+        await _dbContext.Users.AnyAsync(u => u.Id == userId, cancellationToken);
+
+    /// <summary>A new random Base32 authenticator key (160 bits), as the interactive provisioning generates.</summary>
+    public static string GenerateAuthenticatorKey() => GenerateBase32Secret(20);
+
+    /// <summary>The stored authenticator key of a user, or null when there is none.</summary>
+    public async Task<string?> GetAuthenticatorKeyAsync(Guid userId, CancellationToken cancellationToken = default)
+    {
+        var token = await _dbContext.UserTokens.AsNoTracking().FirstOrDefaultAsync(
+            t => t.UserId == userId && t.LoginProvider == "[AspNetUserStore]" && t.Name == "AuthenticatorKey",
+            cancellationToken);
+        return token?.Value;
+    }
+
+    /// <summary>
+    /// Creates a user with a caller-chosen id, password and authenticator key and two-factor already on. Used by the
+    /// demo only (feature 012); the interactive <see cref="ProvisionOwnerAsync"/> stays the production path.
+    /// Refuses when any user already exists.
+    /// </summary>
+    public async Task<OwnerProvisioningResult> ProvisionOwnerWithIdAsync(
+        Guid userId,
+        string username,
+        string password,
+        string authenticatorKey,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+        ArgumentException.ThrowIfNullOrWhiteSpace(authenticatorKey);
+
+        if (await OwnerExistsAsync(cancellationToken))
+        {
+            throw new InvalidOperationException("An owner account has already been provisioned.");
+        }
+
+        var normalizedUsername = username.Trim();
+        var user = new IdentityUser<Guid>
+        {
+            Id = userId,
+            UserName = normalizedUsername,
+            NormalizedUserName = normalizedUsername.ToUpperInvariant(),
+            SecurityStamp = Guid.NewGuid().ToString("D"),
+            ConcurrencyStamp = Guid.NewGuid().ToString("D"),
+            LockoutEnabled = true,
+            TwoFactorEnabled = true
+        };
+        user.PasswordHash = _hasher.HashPassword(user, password);
+
+        _dbContext.Users.Add(user);
+        _dbContext.UserTokens.Add(new IdentityUserToken<Guid>
+        {
+            UserId = user.Id,
+            LoginProvider = "[AspNetUserStore]",
+            Name = "AuthenticatorKey",
+            Value = authenticatorKey
+        });
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        var otpAuthUri = $"otpauth://totp/RoleRadar:{Uri.EscapeDataString(normalizedUsername)}?secret={authenticatorKey}&issuer=RoleRadar";
+        return new OwnerProvisioningResult(user.Id, normalizedUsername, authenticatorKey, otpAuthUri);
+    }
+
+    /// <summary>
+    /// Replaces a user's password and authenticator key, rotates the security stamp, turns two-factor on and clears any
+    /// lockout. Returns false when the user does not exist. Used by the demo only.
+    /// </summary>
+    public async Task<bool> ResetCredentialsAsync(
+        Guid userId,
+        string password,
+        string authenticatorKey,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+        ArgumentException.ThrowIfNullOrWhiteSpace(authenticatorKey);
+
+        var user = await _dbContext.Users.FindAsync([userId], cancellationToken: cancellationToken);
+        if (user is null)
+        {
+            return false;
+        }
+
+        user.PasswordHash = _hasher.HashPassword(user, password);
+        user.SecurityStamp = Guid.NewGuid().ToString("D");
+        user.TwoFactorEnabled = true;
+        user.AccessFailedCount = 0;
+        user.LockoutEnd = null;
+
+        var token = await _dbContext.UserTokens.FirstOrDefaultAsync(
+            t => t.UserId == userId && t.LoginProvider == "[AspNetUserStore]" && t.Name == "AuthenticatorKey",
+            cancellationToken);
+        if (token is null)
+        {
+            _dbContext.UserTokens.Add(new IdentityUserToken<Guid>
+            {
+                UserId = userId,
+                LoginProvider = "[AspNetUserStore]",
+                Name = "AuthenticatorKey",
+                Value = authenticatorKey
+            });
+        }
+        else
+        {
+            token.Value = authenticatorKey;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     public async Task<bool> VerifyTotpAndActivateAsync(
         Guid userId,
         string totpCode,

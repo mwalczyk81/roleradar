@@ -1,0 +1,27 @@
+# Broken front door fixture
+
+Every link below is broken on purpose: the link check must report each one (feature 012, SC-006).
+
+## Real heading
+
+[a missing file](./does-not-exist.md)
+
+[a missing anchor in this file](#no-such-heading)
+
+[a missing anchor in another file](../../../../README.md#no-such-section-anywhere)
+
+![a missing image](./missing-image.png)
+
+<img src="./missing-img-tag.png" alt="missing">
+
+<picture><source srcset="./missing-source.png" media="(prefers-color-scheme: dark)"><img src="./missing-picture.png" alt="x"></picture>
+
+![plain http badge](http://img.shields.io/badge/x-y-blue.svg)
+
+![badge on a host that is not allowlisted](https://badges.invalid.example/x.svg)
+
+[this anchor is fine](#real-heading)
+
+```text
+[inside a code block, not a link](./also-missing.md)
+```
