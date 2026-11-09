@@ -34,6 +34,9 @@ public sealed class AuditLogEntry
 
     public AuditDetails? Details { get; }
 
+    /// <summary>The request, tool call or CLI run that wrote this entry (feature 013). Absent on older entries.</summary>
+    public string? RequestCorrelationId { get; }
+
     private AuditLogEntry(
         Guid id,
         string ownerId,
@@ -49,7 +52,8 @@ public sealed class AuditLogEntry
         DateTime occurredAtUtc,
         AuditContentSummary? beforeSummary,
         AuditContentSummary? afterSummary,
-        AuditDetails? details)
+        AuditDetails? details,
+        string? requestCorrelationId)
     {
         Id = id;
         OwnerId = ownerId;
@@ -66,6 +70,7 @@ public sealed class AuditLogEntry
         BeforeSummary = beforeSummary;
         AfterSummary = afterSummary;
         Details = details;
+        RequestCorrelationId = string.IsNullOrWhiteSpace(requestCorrelationId) ? null : requestCorrelationId;
     }
 
     public static AuditLogEntry Create(
@@ -79,7 +84,8 @@ public sealed class AuditLogEntry
         string? resolvedDefaultDate,
         DateTime occurredAtUtc,
         AuditContentSummary? beforeSummary,
-        AuditContentSummary afterSummary)
+        AuditContentSummary afterSummary,
+        string? requestCorrelationId = null)
     {
         var validOwner = new OwnerId(ownerId).Value;
         if (string.IsNullOrWhiteSpace(actor))
@@ -163,7 +169,8 @@ public sealed class AuditLogEntry
             occurredAtUtc: EnsureUtc(occurredAtUtc),
             beforeSummary: beforeSummary,
             afterSummary: afterSummary,
-            details: null);
+            details: null,
+            requestCorrelationId: requestCorrelationId);
     }
 
     public static AuditLogEntry CreateForTracking(
@@ -174,7 +181,8 @@ public sealed class AuditLogEntry
         Guid entityId,
         Guid resultingVersionToken,
         DateTime occurredAtUtc,
-        AuditDetails details)
+        AuditDetails details,
+        string? requestCorrelationId = null)
     {
         var validOwner = new OwnerId(ownerId).Value;
         if (string.IsNullOrWhiteSpace(actor))
@@ -219,7 +227,8 @@ public sealed class AuditLogEntry
             occurredAtUtc: EnsureUtc(occurredAtUtc),
             beforeSummary: null,
             afterSummary: null,
-            details: details);
+            details: details,
+            requestCorrelationId: requestCorrelationId);
     }
 
     public static AuditLogEntry CreateForCreate(
@@ -300,7 +309,8 @@ public sealed class AuditLogEntry
         AuditContentSummary? afterSummary,
         string? entityType = null,
         Guid? entityId = null,
-        AuditDetails? details = null) =>
+        AuditDetails? details = null,
+        string? requestCorrelationId = null) =>
         new(
             id,
             ownerId,
@@ -316,7 +326,8 @@ public sealed class AuditLogEntry
             occurredAtUtc,
             beforeSummary,
             afterSummary,
-            details);
+            details,
+            requestCorrelationId);
 
     private static DateTime EnsureUtc(DateTime value) =>
         value.Kind == DateTimeKind.Utc ? value : DateTime.SpecifyKind(value, DateTimeKind.Utc);

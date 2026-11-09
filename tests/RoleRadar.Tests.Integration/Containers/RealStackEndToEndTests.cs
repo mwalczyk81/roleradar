@@ -402,24 +402,24 @@ public sealed class RealStackEndToEndTests
             var auditCollection = domainDb.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
             var allAuditLogs = await auditCollection.Find(Builders<BsonDocument>.Filter.Empty).ToListAsync();
 
-            // A. Posting disposition transition: exactly one entry, actor == "api-user"
+            // A. Posting disposition transition: exactly one entry, actor == the harness owner subject (feature 013)
             var transitionEntry = Assert.Single(allAuditLogs, d =>
                 d.Contains("operation") && d["operation"].AsString == "posting_transition");
             Assert.Equal("posting", transitionEntry.GetValue("entity_type", "").AsString);
-            Assert.Equal("api-user", transitionEntry.GetValue("actor", "").AsString);
+            Assert.Equal(ownerSub, transitionEntry.GetValue("actor", "").AsString);
             Assert.Equal(posting1Id, transitionEntry.GetValue("entity_id").AsGuid);
 
-            // B. Application creation: exactly one entry, actor == "api-user"
+            // B. Application creation: exactly one entry, actor == the harness owner subject (feature 013)
             var appCreateEntry = Assert.Single(allAuditLogs, d =>
                 d.Contains("operation") && d["operation"].AsString == "application_create");
             Assert.Equal("application", appCreateEntry.GetValue("entity_type", "").AsString);
-            Assert.Equal("api-user", appCreateEntry.GetValue("actor", "").AsString);
+            Assert.Equal(ownerSub, appCreateEntry.GetValue("actor", "").AsString);
 
-            // C. Company update: exactly one entry, actor == "api-user"
+            // C. Company update: exactly one entry, actor == the harness owner subject (feature 013)
             var compUpdateEntry = Assert.Single(allAuditLogs, d =>
                 d.Contains("operation") && d["operation"].AsString == "company_update");
             Assert.Equal("company", compUpdateEntry.GetValue("entity_type", "").AsString);
-            Assert.Equal("api-user", compUpdateEntry.GetValue("actor", "").AsString);
+            Assert.Equal(ownerSub, compUpdateEntry.GetValue("actor", "").AsString);
             Assert.Equal(company1Id, compUpdateEntry.GetValue("entity_id").AsGuid);
         }
         finally

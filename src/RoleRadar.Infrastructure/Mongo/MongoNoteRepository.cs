@@ -20,6 +20,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
     private readonly MongoReadinessProbe _readinessProbe;
     private readonly ILogger<MongoNoteRepository> _logger;
     private readonly Func<string, CancellationToken, Task>? _faultInjectionHook;
+    private readonly IRequestContext? _requestContext;
     private readonly AppendOnlyMongoCollection _revisionsCollection;
     private readonly AppendOnlyMongoCollection _auditsCollection;
     private readonly SemaphoreSlim _indexInitLock = new(1, 1);
@@ -30,7 +31,8 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
         IOptions<MongoOptions> options,
         MongoReadinessProbe readinessProbe,
         ILogger<MongoNoteRepository> logger,
-        Func<string, CancellationToken, Task>? faultInjectionHook = null)
+        Func<string, CancellationToken, Task>? faultInjectionHook = null,
+        IRequestContext? requestContext = null)
     {
         ArgumentNullException.ThrowIfNull(client);
         ArgumentNullException.ThrowIfNull(options);
@@ -43,6 +45,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
         _readinessProbe = readinessProbe;
         _logger = logger;
         _faultInjectionHook = faultInjectionHook;
+        _requestContext = requestContext;
         _revisionsCollection = new AppendOnlyMongoCollection(_database, MongoBootstrapAndIndexes.NoteRevisionsCollectionName);
         _auditsCollection = new AppendOnlyMongoCollection(_database, MongoBootstrapAndIndexes.AuditLogCollectionName);
     }
@@ -532,8 +535,8 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             priorVersionToken: doc["prior_version_token"].AsBsonBinaryData.ToGuid(GuidRepresentation.Standard),
             createdAtUtc: doc["created_at"].ToUniversalTime());
 
-    private static BsonDocument MapAuditToDocument(AuditLogEntry entry) =>
-        new()
+    private BsonDocument MapAuditToDocument(AuditLogEntry entry) =>
+        WithRequestCorrelationId(entry, new()
         {
             { "_id", new BsonBinaryData(entry.Id, GuidRepresentation.Standard) },
             { "owner_id", entry.OwnerId },
@@ -559,7 +562,18 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
                     : BsonNull.Value
             },
             { "after_summary", entry.AfterSummary is not null ? MapSummaryToDocument(entry.AfterSummary) : BsonNull.Value }
-        };
+        });
+
+    private BsonDocument WithRequestCorrelationId(AuditLogEntry entry, BsonDocument doc)
+    {
+        var requestCorrelationId = _requestContext?.CorrelationId ?? entry.RequestCorrelationId;
+        if (!string.IsNullOrWhiteSpace(requestCorrelationId))
+        {
+            doc["request_correlation_id"] = requestCorrelationId;
+        }
+
+        return doc;
+    }
 
     private static BsonDocument MapSummaryToDocument(AuditContentSummary summary) =>
         new()
@@ -615,7 +629,10 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
                 ? MapDocumentToSummary(afterVal.AsBsonDocument)
                 : null,
             entityType: entityType,
-            entityId: entityId);
+            entityId: entityId,
+            requestCorrelationId: doc.TryGetValue("request_correlation_id", out var corrVal) && corrVal.IsString
+                ? corrVal.AsString
+                : null);
     }
 
     private sealed class AmbientTransactionScope(MongoNoteTransactionContext context)
@@ -648,7 +665,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
 
             await parent.AuditsCollection.InsertOneAsync(
                 Session,
-                MapAuditToDocument(auditEntry),
+                parent.MapAuditToDocument(auditEntry),
                 cancellationToken: cancellationToken);
 
             return Result<NoteWriteOutcome>.Success(new NoteWriteOutcome(note, auditEntry));
@@ -734,7 +751,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
 
             await parent.AuditsCollection.InsertOneAsync(
                 Session,
-                MapAuditToDocument(auditEntry),
+                parent.MapAuditToDocument(auditEntry),
                 cancellationToken: cancellationToken);
 
             return Result<NoteWriteOutcome>.Success(new NoteWriteOutcome(note, auditEntry));
@@ -802,7 +819,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
 
             await parent.AuditsCollection.InsertOneAsync(
                 Session,
-                MapAuditToDocument(auditEntry),
+                parent.MapAuditToDocument(auditEntry),
                 cancellationToken: cancellationToken);
 
             return Result<NoteWriteOutcome>.Success(new NoteWriteOutcome(updatedNote, auditEntry, priorBodyRevision));
@@ -844,7 +861,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
 
             await parent.AuditsCollection.InsertOneAsync(
                 Session,
-                MapAuditToDocument(auditEntry),
+                parent.MapAuditToDocument(auditEntry),
                 cancellationToken: cancellationToken);
 
             return Result<NoteWriteOutcome>.Success(new NoteWriteOutcome(archivedNote, auditEntry));
@@ -902,7 +919,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
 
                 await parent.AuditsCollection.InsertOneAsync(
                     Session,
-                    MapAuditToDocument(createAudit),
+                    parent.MapAuditToDocument(createAudit),
                     cancellationToken: cancellationToken);
 
                 return Result<NoteWriteOutcome>.Success(new NoteWriteOutcome(createdNote, createAudit));
@@ -991,7 +1008,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
 
             await parent.AuditsCollection.InsertOneAsync(
                 Session,
-                MapAuditToDocument(overwriteAudit),
+                parent.MapAuditToDocument(overwriteAudit),
                 cancellationToken: cancellationToken);
 
             return Result<NoteWriteOutcome>.Success(new NoteWriteOutcome(storedNote, overwriteAudit, priorRevision));

@@ -32,7 +32,13 @@ public static partial class UnknownArgumentValidationFilter
         {
             // One correlation id per tool call (feature 013): every record the call writes carries it.
             var logger = context.Services?.GetService<ILoggerFactory>()?.CreateLogger("RoleRadar.Mcp.Stdio.ToolCall") ?? NullLogger.Instance;
-            using var scope = logger.BeginScope(new Dictionary<string, object?> { [CorrelationId.ScopeKey] = CorrelationId.New() });
+            var correlationId = CorrelationId.New();
+            if (context.Services?.GetService<McpRequestContext>() is { } requestContext)
+            {
+                requestContext.CorrelationId = correlationId;
+            }
+
+            using var scope = logger.BeginScope(new Dictionary<string, object?> { [CorrelationId.ScopeKey] = correlationId });
             return await ExecuteAsync(
                 context.Params,
                 async p => await next(context, cancellationToken),

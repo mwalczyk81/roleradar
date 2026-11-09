@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
@@ -27,6 +28,9 @@ public static class Program
             var databaseName = Environment.GetEnvironmentVariable("ROLERADAR_MONGO_DATABASE");
 
             builder.Services.AddRoleRadarApplication();
+            builder.Services.AddScoped<McpRequestContext>();
+            builder.Services.Replace(ServiceDescriptor.Scoped<RoleRadar.Application.Abstractions.IRequestContext>(
+                sp => sp.GetRequiredService<McpRequestContext>()));
             builder.Services.AddRoleRadarInfrastructure(options =>
             {
                 if (!string.IsNullOrWhiteSpace(connectionString))

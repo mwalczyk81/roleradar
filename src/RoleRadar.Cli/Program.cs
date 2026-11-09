@@ -1,5 +1,6 @@
 using System.CommandLine;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
 using RoleRadar.Application;
@@ -99,6 +100,7 @@ public static class Program
         var backupRestoreCommand = Environment.GetEnvironmentVariable("ROLERADAR_BACKUP_RESTORE_COMMAND");
 
         services.AddRoleRadarApplication();
+        services.Replace(ServiceDescriptor.Scoped<RoleRadar.Application.Abstractions.IRequestContext, RunRequestContext>());
         services.AddRoleRadarInfrastructure(options =>
         {
             if (!string.IsNullOrWhiteSpace(connectionString))

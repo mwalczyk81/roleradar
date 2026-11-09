@@ -30,7 +30,7 @@ public sealed class ApiMcpParityIntegrationTests(IsolatedContainerMongoFixture m
     private readonly IsolatedContainerMongoFixture _mongo = mongoFixture;
 
     [Fact]
-    public async Task McpCreatedData_IsVisibleViaRestApi_And_ApiWritesEmitMcpOperationNamesWithApiUserActor()
+    public async Task McpCreatedData_IsVisibleViaRestApi_And_ApiWritesEmitMcpOperationNamesWithTheSubjectAsActor()
     {
         var dbName = $"rrtest_api_mcp_parity_{Guid.CreateVersion7():N}";
         var mcpEnv = new Dictionary<string, string>
@@ -148,14 +148,14 @@ public sealed class ApiMcpParityIntegrationTests(IsolatedContainerMongoFixture m
         });
         Assert.Equal(HttpStatusCode.OK, transitionResp.StatusCode);
 
-        // 5. Verify append-only audit log entries have operation names matching MCP tools and actor "api-user"
+        // 5. Verify append-only audit log entries have operation names matching MCP tools and the token subject as actor (feature 013, FR-015)
         using var scope = app.Services.CreateScope();
         var noteRepo = scope.ServiceProvider.GetRequiredService<INoteRepository>();
         var auditsResult = await noteRepo.GetAuditEntriesAsync(OwnerId.Default.Value);
         Assert.True(auditsResult.IsSuccess);
 
         var apiAudits = auditsResult.Value!
-            .Where(a => a.Actor == "api-user")
+            .Where(a => a.Actor == AllowedSubject)
             .ToArray();
 
         Assert.Contains(apiAudits, a => a.Operation == "company_update" && a.EntityId == companyId);

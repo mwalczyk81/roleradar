@@ -1,3 +1,4 @@
+using RoleRadar.Api.Authentication;
 using RoleRadar.Api.Envelopes;
 using RoleRadar.Api.Models;
 using RoleRadar.Application.Abstractions;
@@ -9,8 +10,6 @@ namespace RoleRadar.Api.Endpoints;
 
 public static class CompaniesEndpoints
 {
-    public const string ApiActor = "api-user";
-
     public static RouteGroupBuilder MapCompaniesEndpoints(this RouteGroupBuilder group)
     {
         var readGroup = group.MapGroup(string.Empty)
@@ -43,6 +42,7 @@ public static class CompaniesEndpoints
         Guid id,
         UpdateCompanyRequestDto request,
         IOwnerIdProvider ownerIdProvider,
+        HttpActorAccessor actor,
         ICompanyRepository companyRepository,
         ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto> commandHandler,
         CancellationToken cancellationToken)
@@ -85,7 +85,7 @@ public static class CompaniesEndpoints
             CareerSources: careerSources,
             VersionToken: request.VersionToken ?? existing.VersionToken,
             OwnerId: ownerId,
-            Actor: ApiActor);
+            Actor: actor.Subject);
 
         var result = await commandHandler.HandleAsync(command, cancellationToken);
         if (!result.IsSuccess)

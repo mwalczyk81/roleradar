@@ -444,6 +444,38 @@ public sealed class AuditSchemaAndOperationsContractTests : IAsyncLifetime
     }
 
 
+    [Fact]
+    public async Task ShippedHosts_StampARequestCorrelationId_PerToolCall_AndPerCliRun()
+    {
+        // Feature 013 (FR-017, plan D6): the MCP server resolves each tool call in its own scope, so two calls carry two
+        // different ids; the CLI stamps its run id.
+        var env = _fixture.CreateProcessEnvironment(_databaseName);
+        var auditCol = _database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
+        var idPattern = new System.Text.RegularExpressions.Regex("^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$");
+
+        await using (var mcpClient = await McpProcessClient.StartAsync(McpHostLocator.GetMcpDllPath(), env))
+        {
+            foreach (var name in new[] { "Correlation Corp One", "Correlation Corp Two" })
+            {
+                var result = await mcpClient.CallToolAsync("company_record", new { name, ownershipType = "public", status = "target" });
+                Assert.True(result.GetProperty("ok").GetBoolean());
+            }
+        }
+
+        var creates = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("operation", "company_create")).ToListAsync();
+        Assert.Equal(2, creates.Count);
+        var mcpIds = creates.Select(c => c.TryGetValue("request_correlation_id", out var v) && v.IsString ? v.AsString : string.Empty).ToArray();
+        Assert.All(mcpIds, id => Assert.Matches(idPattern, id));
+        Assert.Equal(2, mcpIds.Distinct(StringComparer.Ordinal).Count());
+
+        var (exitCode, _, _) = await RunCliAsync(GetCliDllPath(), "contact add --name \"Fictional Correlation Contact\" --json", env);
+        Assert.Equal(0, exitCode);
+        var contactAdd = await auditCol.Find(Builders<BsonDocument>.Filter.Eq("operation", "contact_add")).SingleAsync();
+        Assert.True(contactAdd.TryGetValue("request_correlation_id", out var cliId) && cliId.IsString, "CLI audit entry has no request_correlation_id");
+        Assert.Matches(idPattern, cliId!.AsString);
+        Assert.DoesNotContain(cliId.AsString, mcpIds);
+    }
+
     private static string GetCliDllPath()
     {
         var path = Path.Combine(AppContext.BaseDirectory, "RoleRadar.Cli.dll");

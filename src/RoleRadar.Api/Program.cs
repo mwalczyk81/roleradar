@@ -71,6 +71,8 @@ public partial class Program
         builder.Services.AddHttpContextAccessor();
         builder.Services.Configure<OwnerSecurityOptions>(builder.Configuration.GetSection(OwnerSecurityOptions.SectionName));
         builder.Services.TryAddScoped<IOwnerIdProvider, HttpUserOwnerIdProvider>();
+        builder.Services.AddScoped<HttpActorAccessor>();
+        builder.Services.Replace(ServiceDescriptor.Scoped<IRequestContext, HttpRequestContext>());
         builder.Services.AddSingleton<IAuthorizationHandler, OwnerAllowlistHandler>();
         builder.Services.AddSingleton<IAuthorizationHandler, ScopeAuthorizationHandler>();
         builder.Services.AddHostedService<RoleRadar.Api.OData.ReadIndexStartupService>();

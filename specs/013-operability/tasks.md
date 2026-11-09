@@ -272,7 +272,7 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
 
 ### Tests first (US2)
 
-- [ ] T044 [P] [US2] Write the contract tests in `tests/RoleRadar.Tests.Contract/Api/ApiActorContractTests.cs` (FR-015, SC-004). For each API write, call `ApiContractTestHost` with a test JWT whose `sub` is a fictional v7 id. The writes are the two `RecordApplicationCommand` paths in `ApplicationsEndpoints.cs` (`:79`, `:124`), the company record and the posting transition. Read the newest `audit_log` entry and assert that `actor` equals the subject and is never `api-user`, `agent` or `system`. Show red.
+- [X] T044 [P] [US2] Write the contract tests in `tests/RoleRadar.Tests.Contract/Api/ApiActorContractTests.cs` (FR-015, SC-004). For each API write, call `ApiContractTestHost` with a test JWT whose `sub` is a fictional v7 id. The writes are the two `RecordApplicationCommand` paths in `ApplicationsEndpoints.cs` (`:79`, `:124`), the company record and the posting transition. Read the newest `audit_log` entry and assert that `actor` equals the subject and is never `api-user`, `agent` or `system`. Show red.
 - [ ] T045 [P] [US2] Write the integration tests in `tests/RoleRadar.Tests.Integration/Cli/CliActorIntegrationTests.cs` (FR-016). Run these commands against Testcontainers Mongo:
   - `contact add` and `contact redact`;
   - `import` (`src/RoleRadar.Cli/Commands/ImportCommand.cs`);
@@ -280,14 +280,14 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
   - `demo seed`, against its own guarded throwaway database, as the 012 tests do.
 
   Assert that every new audit entry's actor starts with `cli-` or equals `demo-seed`, and that none is empty or a placeholder. Green after T043 is acceptable, since this test pins the behavior. Record whether it was red or green on its first run.
-- [ ] T046 [P] [US2] Write the tests that pin request correlation on audit entries (FR-017). Show red.
+- [X] T046 [P] [US2] Write the tests that pin request correlation on audit entries (FR-017). Show red.
   - Add `tests/RoleRadar.Tests.Contract/Audit/RequestCorrelationAuditContractTests.cs`. With a scoped `IRequestContext` holding `CorrelationId = "test-corr-0001"`:
     - Both choke points write `request_correlation_id: "test-corr-0001"`: `MongoTrackingTransactionContext.AppendAuditEntryAsync` and `MongoNoteRepository.MapAuditToDocument`.
     - The field is absent when the context is null.
     - `AuditLogEntry.Rehydrate` reads it back.
     - The existing `details.after.correlation_id` is unchanged (FR-008).
   - In `tests/RoleRadar.Tests.Contract/Api/ApiActorContractTests.cs`, add one more case: an API write sent with `X-Correlation-ID: test-corr-0002` stores that value.
-- [ ] T047 [P] [US2] Write the contract tests in `tests/RoleRadar.Tests.Contract/Identity/SignInEventContractTests.cs` (FR-018, FR-019, SC-005, SC-011). Use a fictional owner with a TOTP key on `IdentityContractTestServer`, and capture logs with `FormatterLogCapture` and the production formatter. Show red.
+- [X] T047 [P] [US2] Write the contract tests in `tests/RoleRadar.Tests.Contract/Identity/SignInEventContractTests.cs` (FR-018, FR-019, SC-005, SC-011). Use a fictional owner with a TOTP key on `IdentityContractTestServer`, and capture logs with `FormatterLogCapture` and the production formatter. Show red.
   - **Non-vacuous capture first:** before the event and no-username checks, assert that at least one line was captured and that the expected event line is present.
   - A wrong password for an existing user writes exactly one `SignInFailed` (5002) with `subject`.
   - An unknown username writes exactly one `SignInFailed` with no `subject`.
@@ -329,13 +329,13 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
 
 ### Implementation (US2)
 
-- [ ] T051 [US2] Add `src/RoleRadar.Api/Authentication/HttpActorAccessor.cs`, a scoped service that returns the authenticated `sub` claim (`MapInboundClaims=false` is already set). T044 green, and both updated tests green.
+- [X] T051 [US2] Add `src/RoleRadar.Api/Authentication/HttpActorAccessor.cs`, a scoped service that returns the authenticated `sub` claim (`MapInboundClaims=false` is already set). T044 green, and both updated tests green.
   - Pass `Actor: actor.Subject` at the 4 command calls in `src/RoleRadar.Api/Endpoints/ApplicationsEndpoints.cs`, `CompaniesEndpoints.cs` and `PostingsEndpoints.cs`.
   - Delete the three `ApiActor = "api-user"` constants.
   - Update the existing tests that assert the old actor (one of the intended changes in SC-008):
     - `tests/RoleRadar.Tests.Integration/Api/ApiMcpParityIntegrationTests.cs:158` (and its comment at `:151`) now expects the test subject;
     - `tests/RoleRadar.Tests.Integration/Containers/RealStackEndToEndTests.cs:374-387` now expects the harness owner's subject for the posting transition and the application creation.
-- [ ] T052 [US2] Add `src/RoleRadar.Application/Abstractions/IRequestContext.cs` (`string? CorrelationId { get; }`), registered scoped, and stamp it on audit entries. T046 green. `DerivedFieldWriterArchitectureTests` and `LayeringAndAppendOnlyArchitectureTests` stay green.
+- [X] T052 [US2] Add `src/RoleRadar.Application/Abstractions/IRequestContext.cs` (`string? CorrelationId { get; }`), registered scoped, and stamp it on audit entries. T046 green. `DerivedFieldWriterArchitectureTests` and `LayeringAndAppendOnlyArchitectureTests` stay green.
   - Wire it in the hosts:
     - API: `src/RoleRadar.Api/Observability/HttpRequestContext.cs`, set by `CorrelationMiddleware`.
     - CLI: `src/RoleRadar.Cli/RunRequestContext.cs`, using the same run id as the T030 scope.
@@ -345,7 +345,7 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
   - Add an optional `RequestCorrelationId` to `src/RoleRadar.Domain/Audit/AuditLogEntry.cs`, in the factories and in `Rehydrate`.
   - Add `request_correlation_id` to `TrackingBsonFieldNames`, and stamp it in `src/RoleRadar.Infrastructure/Mongo/MongoTrackingTransactionContext.cs` and `src/RoleRadar.Infrastructure/Mongo/MongoNoteRepository.cs`.
   - Change no handler.
-- [ ] T053 [US2] Add the four `LoggerMessage` events (5001 `SignInSucceeded`, 5002 `SignInFailed`, 5003 `AccountLockedOut`, 5004 `OneTimeCodeFailed`) to `src/RoleRadar.Observability/SecurityEvents.cs`. Raise them in `src/RoleRadar.Identity/Pages/Account/Login.cshtml.cs` at each outcome of the password step (`:144-169`) and the TOTP step (`:81-136`). T047 green, and T020 stays green.
+- [X] T053 [US2] Add the four `LoggerMessage` events (5001 `SignInSucceeded`, 5002 `SignInFailed`, 5003 `AccountLockedOut`, 5004 `OneTimeCodeFailed`) to `src/RoleRadar.Observability/SecurityEvents.cs`. Raise them in `src/RoleRadar.Identity/Pages/Account/Login.cshtml.cs` at each outcome of the password step (`:144-169`) and the TOTP step (`:81-136`). T047 green, and T020 stays green.
   - On a failed password, call `FindByNameAsync` and pass `subject` only when it returns non-null.
   - Never pass the username, password or code to any logger.
   - Do not raise Duende `UserLoginFailureEvent`.
@@ -569,3 +569,18 @@ Within each story, tests come before implementation, and each test task is shown
   - Callers: new `src/RoleRadar.Mcp.Stdio/Tools/McpActor.cs` (`"mcp-stdio"`) is used by `TrackingMcpTools` and `NoteMcpTools`; `ContactCommand.cs` in the CLI names `cli-user`. The API's `ApiActor` constants are untouched (T051).
   - 231 test call sites (compiler error CS7036; 11 more CS1503 errors disappeared with them) were updated mechanically by appending a named `Actor:` argument with the value the old default supplied (`mcp-stdio`, `cli-import`, `agent`, `system`), so no expectation changed. They are in 15 Contract, 8 Integration and 9 Unit files (85, 44 and 102 sites).
   - US2a checkpoint: `dotnet build RoleRadar.sln -c Release -warnaserror` 0 warnings, 0 errors; `test-fast.ps1` Architecture 65/65, Unit 847/847, Contract 226/226. Not run: the Integration lane (it compiles but was not executed, it needs Docker and is the US2b/review-gate lane).
+- US2b part 1 (T044, T046, T051, T052, 2026-11-09), numbers from command output:
+  - T044 red first: `ApiActorContractTests` 5 failed, 0 passed. Four failed with actor `"api-user"` instead of the subject; `ApiWrite_WithCorrelationHeader_StoresItOnTheAuditEntry` failed because `request_correlation_id` was absent.
+  - T046 red first: `RequestCorrelationAuditContractTests` 3 failed, 4 passed (`TrackingChokePoint_StampsTheRequestCorrelationId`, `TrackingChokePoint_KeepsTheExistingDetailsAfterCorrelationId` and `NoteChokePoint_StampsTheRequestCorrelationId_AndReadsItBack` failed). **Started green:** the three "field absent without a context" cases and `Rehydrate_ReadsTheRequestCorrelationIdBack`, because I added an inert skeleton first (the `IRequestContext` interface, the `AuditLogEntry.RequestCorrelationId` property and optional constructor parameters that did nothing) so the tests compiled and failed on assertions instead of on missing types.
+  - After T051 and T052: both files 12 of 12 green.
+  - T052 MCP per-call scope: confirmed with `AuditSchemaAndOperationsContractTests.ShippedHosts_StampARequestCorrelationId_PerToolCall_AndPerCliRun` (two `company_record` calls to the shipped MCP server store two different ids; a CLI `contact add` stores its run id). **That test was written after the implementation and was not run red.** It passed 1 of 1 on its first run, so the server does resolve each tool call in its own scope and no extra scope in the call filter was needed.
+  - Implementation: `HttpActorAccessor` (scoped, the `sub` claim) is passed as `Actor: actor.Subject` at the four API command calls, and the three `ApiActor = "api-user"` constants are gone. `IRequestContext` (Application) has a `NullRequestContext` default registered with `TryAddScoped`, and each host replaces it: `HttpRequestContext` (API, reads the id `CorrelationMiddleware` stored), `RunRequestContext` (CLI, `Program.RunId`), `McpRequestContext` (MCP, set per tool call by the call filter). Infrastructure stamps `request_correlation_id` in `MongoTrackingTransactionContext.AppendAuditEntryAsync` and `MongoNoteRepository.MapAuditToDocument`, and `MongoCompanyRepository` passes the context to the transaction context it creates. `MapDocumentToAudit` reads the field back. `IMongoClient`, `MongoReadinessProbe` and the singleton `MongoTrackingContextFactory` take no request context. No handler changed.
+  - T051 existing tests updated (the intended SC-008 change): `ApiMcpParityIntegrationTests` now expects the token subject (test renamed `..._ApiWritesEmitMcpOperationNamesWithTheSubjectAsActor`), and `RealStackEndToEndTests` expects the harness owner's subject (`ownerSub`) for the transition, application creation and company update entries. The parity test passed 1 of 1. The real-stack test was **not run** (images lane; it compiles).
+  - Part 1 checkpoint: `dotnet build RoleRadar.sln -c Release -warnaserror` 0 warnings, 0 errors; `test-fast.ps1` Architecture 65/65, Unit 847/847, Contract 239/239 (226 before, plus 5 + 7 + 1 new).
+- US2b part 2 (T047, T053, 2026-11-09), numbers from command output:
+  - Before part 2: `HttpActorAccessor` now reads only the `sub` claim (the `ClaimTypes.NameIdentifier` fallback is gone). `.editorconfig` sets `CA1848` and `CA2254` to `error`. A temporary `TempDirectLogProbe.cs` with `logger.LogInformation(...)` and `logger.LogWarning(value)` failed `dotnet build src/RoleRadar.Api -warnaserror` with 4 errors (CA1848 twice, CA2254, CA1873); it was removed, and the full solution builds with 0 warnings and 0 errors. `BeginScope` calls are unchanged. A few test files that log directly keep a file-level `#pragma warning disable CA1848, CA1873` from US1, which overrides the editorconfig severity in those files.
+  - T047 red first: `SignInEventContractTests` 5 failed, 0 passed. Each failed at `AssertCaptureIsNotVacuous` on the "expected event present" step, after the line count and the login `RequestCompleted` assertions had passed, so the capture was non-vacuous and only the event was missing. Green after T053: 5 of 5, and `IdentityRedaction` and `IdentityCorrelation` stay green (10 of 10 together).
+  - T053: `src/RoleRadar.Observability/SecurityEvents.cs` holds the four `LoggerMessage` events (5001, 5002, 5003, 5004), each taking only `subject`. 5002 for an attempt that matched no account is a second method, `UnmatchedAccountEvents.SignInFailed(logger)`, with the same id and name and no `subject` property at all (not a null one). It is a separate class because the generator rejects two methods with one event id in one class. `Login.cshtml.cs` calls `FindByNameAsync` after the password check and passes the subject only when a user is returned; no username, password or code is passed to any logger; Duende `UserLoginFailureEvent` is not raised; the lockout policy is unchanged.
+  - Lockout reporting decision: an attempt that comes back locked out at the password step writes `SignInFailed` then `AccountLockedOut`, because Identity does not say whether that attempt or an earlier one started the lockout. At the code step the two cases are distinguishable: a code attempt on an already locked account writes only `AccountLockedOut`, and a wrong code that triggers the lockout writes `OneTimeCodeFailed` then `AccountLockedOut`. The fallback branch with no two-factor cookie writes the unmatched `SignInFailed`.
+  - Two existing unit tests (`LoginModelPasswordStepErrorTests`, `LoginModelRazorPageTests`) now pass `NullLogger<LoginModel>.Instance` to the new constructor parameter; no expectation changed.
+  - Part 2 checkpoint: `dotnet build RoleRadar.sln -c Release -warnaserror` 0 warnings, 0 errors; `test-fast.ps1` Architecture 65/65, Unit 847/847, Contract 244/244 (239 plus the 5 new).

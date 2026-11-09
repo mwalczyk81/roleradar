@@ -36,7 +36,7 @@ public static class DependencyInjection
             var client = sp.GetRequiredService<IMongoClient>();
             var opts = sp.GetRequiredService<IOptions<MongoOptions>>().Value;
             var database = client.GetDatabase(opts.DatabaseName);
-            return new Mongo.Repositories.MongoCompanyRepository(client, database);
+            return new Mongo.Repositories.MongoCompanyRepository(client, database, sp.GetService<IRequestContext>());
         });
         services.TryAddScoped<IPostingRepository>(sp =>
         {
@@ -85,7 +85,9 @@ public static class DependencyInjection
             var contacts = sp.GetRequiredService<IContactRepository>();
             var searchRuns = sp.GetRequiredService<ISearchRunRepository>();
             var auditLog = database.GetCollection<MongoDB.Bson.BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
-            return new Mongo.Repositories.MongoTrackingTransactionContext(client, companies, postings, criteria, applications, contacts, searchRuns, auditLog);
+            return new Mongo.Repositories.MongoTrackingTransactionContext(
+                client, companies, postings, criteria, applications, contacts, searchRuns, auditLog,
+                requestContext: sp.GetService<IRequestContext>());
         });
         services.AddOptions<Backup.BackupOptions>();
         services.TryAddScoped<IBackupArchiveService, Backup.SecretStreamBackupArchiveService>();

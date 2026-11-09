@@ -12,14 +12,16 @@ public sealed class MongoCompanyRepository : ICompanyRepository
     private readonly IMongoCollection<BsonDocument> _companies;
     private readonly IMongoCollection<BsonDocument> _careerSources;
     private readonly IMongoCollection<BsonDocument> _auditLog;
+    private readonly IRequestContext? _requestContext;
 
-    public MongoCompanyRepository(IMongoClient client, IMongoDatabase database)
+    public MongoCompanyRepository(IMongoClient client, IMongoDatabase database, IRequestContext? requestContext = null)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _companies = database.GetCollection<BsonDocument>(TrackingMongoOptions.CompaniesCollectionName);
         _careerSources = database.GetCollection<BsonDocument>(TrackingMongoOptions.CareerSourcesCollectionName);
         _auditLog = database.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
+        _requestContext = requestContext;
     }
 
     public async Task<Result<Company?>> GetByIdAsync(string ownerId, Guid id, CancellationToken cancellationToken = default)
@@ -203,7 +205,18 @@ public sealed class MongoCompanyRepository : ICompanyRepository
             var criterionRepo = new MongoCriterionRepository(_client, _database);
             var applicationRepo = new MongoApplicationRepository(_client, _database);
             var contactRepo = new MongoContactRepository(_client, _database);
-            var context = new MongoTrackingTransactionContext(this, postingRepo, criterionRepo, applicationRepo, contactRepo, _auditLog, session);
+            var context = new MongoTrackingTransactionContext(
+                client: null,
+                companies: this,
+                postings: postingRepo,
+                criteria: criterionRepo,
+                applications: applicationRepo,
+                contacts: contactRepo,
+                searchRuns: null,
+                auditCollection: _auditLog,
+                notesCollection: null,
+                session: session,
+                requestContext: _requestContext);
             var result = await work(context, cancellationToken);
 
             if (result.IsSuccess)

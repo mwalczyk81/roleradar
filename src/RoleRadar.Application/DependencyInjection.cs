@@ -16,6 +16,9 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton<IUtcClock>(SystemUtcClock.Instance);
 
+        // No request context unless the host replaces it (API, CLI and MCP do; feature 013, plan D6).
+        services.TryAddScoped<IRequestContext, NullRequestContext>();
+
         // US1 & US4 Validators
         services.AddSingleton<ICommandValidator<CreateNoteCommand>, CreateNoteCommandValidator>();
         services.AddSingleton<ICommandValidator<AppendToNoteCommand>, AppendToNoteCommandValidator>();
