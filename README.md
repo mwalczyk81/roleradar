@@ -5,7 +5,7 @@ Local-first by design: everything stays on your machine, every write is audited,
 
 [![CI](https://github.com/mwalczyk81/roleradar/actions/workflows/ci.yml/badge.svg)](https://github.com/mwalczyk81/roleradar/actions/workflows/ci.yml)
 [![Coverage](https://mwalczyk81.github.io/roleradar/badges/coverage.svg)](https://mwalczyk81.github.io/roleradar/)
-[![Mutation score](https://badge-api.stryker-mutator.io/github.com/mwalczyk81/roleradar/main?module=web-lib)](https://dashboard.stryker-mutator.io/reports/github.com/mwalczyk81/roleradar/main?module=web-lib)
+[![Mutation score](https://img.shields.io/endpoint?url=https%3A%2F%2Fbadge-api.stryker-mutator.io%2Fgithub.com%2Fmwalczyk81%2Froleradar%2Fmain%3Fmodule%3Dweb-lib)](https://dashboard.stryker-mutator.io/reports/github.com/mwalczyk81/roleradar/main?module=web-lib)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![.NET 10](https://img.shields.io/badge/.NET-10-512BD4.svg)](https://dotnet.microsoft.com/)
 
