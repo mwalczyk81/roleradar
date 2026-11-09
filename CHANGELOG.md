@@ -21,7 +21,7 @@ The first release. Entries are grouped by capability; the specs and pull request
 - **Insights.** A dashboard with a postings funnel and an applications funnel, rate tiles and trend charts, where every count links to the list it counts. Note bodies render as locked-down Markdown (007, #51).
 - **Rejection sync.** Rejecting an applied posting records the rejection on its application, idempotently, with warnings for the edge cases (008, #53).
 - **Quality reporting.** Mutation testing of the web library code with a committed floor, a combined Allure report, coverage and trends published to a reports site, a pull-request summary comment and property tests (011, #61, #63, #66).
-- **One-command demo and front door.** A separate Compose project over a fictional data set, with a throwaway sign-in generated at run time and a guard that keeps it away from real data; reviewed screenshots, a rewritten README, a documentation index, a code of conduct and this changelog (012).
+- **One-command demo and front door.** A separate Compose project over a fictional data set, with a throwaway sign-in generated at run time and a guard that keeps it away from real data; reviewed screenshots, a rewritten README, a documentation index, a code of conduct and this changelog (012, #68).
 
 ### Changed
 
