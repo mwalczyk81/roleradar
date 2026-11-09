@@ -27,7 +27,7 @@ docker compose -p roleradar-demo -f deploy/demo/docker-compose.yml up --build --
    - Always run `pre-commit run --all-files` before opening a pull request.
 2. **Test-First Development (Principle II)**:
    - Write unit, architecture, contract, or integration tests **first** and verify they fail before writing production implementation code.
-   - Integration and contract tests use `Testcontainers.MongoDb` (`mongo:8.0.34` replica set `rs0`) and must never connect to or mutate a developer's running local containers.
+   - Integration and contract tests use `Testcontainers.MongoDb` (the `mongo` image tag from `deploy/docker-compose.yml`, replica set `rs0`) and must never connect to or mutate a developer's running local containers.
    - Line coverage across `RoleRadar.Domain` and `RoleRadar.Application` must remain `>= 85%`.
 3. **Test-Enforced Layering & Named Seams (Principles III & IV)**:
    - `Domain` -> `Application` -> `Infrastructure` -> `Mcp.Stdio` / `Cli`.

@@ -32,7 +32,7 @@ public sealed class ODataApplicationsTests : IAsyncLifetime
     private const string OwnerB = "apps-owner-bbb";
     private const string OwnerC = "apps-owner-ccc"; // owns only the legacy document used by the reconcile test
 
-    private readonly MongoDbContainer _container = new MongoDbBuilder("mongo:8.0.34")
+    private readonly MongoDbContainer _container = new MongoDbBuilder(MongoTestImage.Tag)
         .WithEnvironment("GLIBC_TUNABLES", "glibc.pthread.rseq=1")
         .WithReplicaSet("rs0")
         .Build();

@@ -29,7 +29,7 @@ public sealed class ODataPostingsIsolationTests : IAsyncLifetime
     private const string OwnerA = "owner-alpha-1111";
     private const string OwnerB = "owner-beta-2222";
 
-    private readonly MongoDbContainer _container = new MongoDbBuilder("mongo:8.0.34")
+    private readonly MongoDbContainer _container = new MongoDbBuilder(MongoTestImage.Tag)
         .WithEnvironment("GLIBC_TUNABLES", "glibc.pthread.rseq=1")
         .WithReplicaSet("rs0")
         .Build();
