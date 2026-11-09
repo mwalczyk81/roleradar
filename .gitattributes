@@ -10,3 +10,6 @@
 # Preserve exact byte sequences (CRLF, LF, UTF-8 BOM) in test fixtures for byte-exact import tests
 tests/**/fixtures/** -text
 tests/fixtures/** -text
+
+# Screenshots are binary.
+docs/images/*.png binary

@@ -1,0 +1,31 @@
+{
+  "images": [
+    "insights-light.png",
+    "insights-dark.png",
+    "insights-drilldown-light.png",
+    "insights-drilldown-dark.png",
+    "postings-list-light.png",
+    "postings-list-dark.png",
+    "posting-detail-light.png",
+    "posting-detail-dark.png",
+    "application-timeline-light.png",
+    "application-timeline-dark.png",
+    "company-light.png",
+    "company-dark.png",
+    "note-light.png",
+    "note-dark.png"
+  ],
+  "hero": {
+    "image": {
+      "view": "insights",
+      "light": "insights-light.png",
+      "dark": "insights-dark.png"
+    },
+    "records": {
+      "company": "Harborlight Systems",
+      "posting": "Head of Software Development",
+      "note": "Compensation research method",
+      "drilldown": "interviewed"
+    }
+  }
+}

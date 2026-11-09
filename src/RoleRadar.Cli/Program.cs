@@ -39,6 +39,7 @@ public static class Program
             rootCommand.Add(VerifyCommand.Create(services));
             rootCommand.Add(ReconcileReadModelsCommand.Create(services));
             rootCommand.Add(RoleRadar.Cli.Commands.Identity.IdentityCommand.Create(services));
+            rootCommand.Add(RoleRadar.Cli.Demo.DemoCommand.Create(services));
 
             var parseResult = rootCommand.Parse(args);
 

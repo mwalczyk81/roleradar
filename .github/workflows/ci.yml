@@ -172,7 +172,7 @@ jobs:
               Install-Module -Name Pester -RequiredVersion 5.9.1 -Scope CurrentUser -Force -SkipPublisherCheck
           }
           Import-Module Pester -RequiredVersion 5.9.1
-          Invoke-Pester -Path tests/RoleRadar.Tests.Unit/Scripts/ScriptPortability.Tests.ps1 -CI
+          Invoke-Pester -Path tests/RoleRadar.Tests.Unit/Scripts/ScriptPortability.Tests.ps1, tests/RoleRadar.Tests.Unit/Scripts/DenylistCheckModes.Tests.ps1 -CI
 
   macos-verify:
     name: macOS (Unit, Architecture & Script Portability)
