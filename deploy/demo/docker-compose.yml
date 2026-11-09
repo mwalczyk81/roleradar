@@ -35,7 +35,7 @@ services:
   # One-shot: a throwaway TLS certificate and key for identity.localhost, api.localhost and localhost (PFX for Kestrel,
   # PEM for Node and OpenSSL). Reuses the pinned Mongo image, which ships openssl. Nothing key-like is committed.
   demo-certs:
-    image: mongo:8.0.34
+    image: mongo:9.0.4
     entrypoint: ["sh", "-c"]
     command:
       - |
@@ -54,7 +54,7 @@ services:
   # One-shot: generated OIDC client secrets and session key, the Identity configuration file that carries them, and
   # ownership of the Identity data volume for the images' user (uid 1654). Nothing generated is printed.
   demo-secrets:
-    image: mongo:8.0.34
+    image: mongo:9.0.4
     entrypoint: ["sh", "-c"]
     command:
       - |
@@ -77,7 +77,7 @@ services:
     restart: "no"
 
   demo-mongo:
-    image: mongo:8.0.34
+    image: mongo:9.0.4
     environment:
       # Work around MongoDB SERVER-121912 rseq/TCMalloc startup abort on Linux kernels 6.19+ and 7.0.0-7.0.13.
       GLIBC_TUNABLES: glibc.pthread.rseq=1
