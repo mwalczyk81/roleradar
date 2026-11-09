@@ -25,7 +25,7 @@ COPY src/ src/
 RUN dotnet publish src/RoleRadar.Mcp.Stdio/RoleRadar.Mcp.Stdio.csproj -c Release --no-restore -o /app/mcp && \
     dotnet publish src/RoleRadar.Cli/RoleRadar.Cli.csproj -c Release --no-restore -o /app/cli
 
-# Stage 2: Download MongoDB Database Tools 100.19.1 and extract Kerberos shared libraries
+# Stage 2: Download MongoDB Database Tools 100.20.1 and extract Kerberos shared libraries
 FROM ubuntu:26.04@sha256:6a06111c3b0a8600feadb270aec771dc239bf407b25625f93f44ab00e11f4d3c AS tools-downloader
 ARG TARGETARCH
 # hadolint ignore=DL3008
@@ -36,14 +36,14 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN set -eux; \
     if [ "$TARGETARCH" = "arm64" ]; then \
         TOOL_ARCH="arm64"; \
-        TOOL_SHA256="ebf518d9a303b36e612e40be106cd0ecc7135dc15d098626f81ac3ee8654a821"; \
+        TOOL_SHA256="7644e12e351bceea542921e60769e3ed658fc770dc09eed07bc5cc2a1ca2ca41"; \
         LIB_ARCH="aarch64-linux-gnu"; \
     else \
         TOOL_ARCH="x86_64"; \
-        TOOL_SHA256="f34b84a67ab96b4ff52571ec5d15e2148d96cb140b1ea9ef8c29ac33c48e3480"; \
+        TOOL_SHA256="20f43dcaa37f5a4841ac5a91da685a488a5ebbd81113c018e25a6b544cc350ea"; \
         LIB_ARCH="x86_64-linux-gnu"; \
     fi; \
-    curl -sSL "https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2404-${TOOL_ARCH}-100.19.1.tgz" -o tools.tgz; \
+    curl -sSL "https://fastdl.mongodb.org/tools/db/mongodb-database-tools-ubuntu2404-${TOOL_ARCH}-100.20.1.tgz" -o tools.tgz; \
     echo "${TOOL_SHA256}  tools.tgz" | sha256sum -c -; \
     tar -xzf tools.tgz --strip-components=1; \
     mkdir -p /out/usr/local/bin /out/usr/lib /out/usr/lib/${LIB_ARCH} /out/var/lib/dpkg; \

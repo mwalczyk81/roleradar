@@ -12,7 +12,7 @@ public sealed class MongoContainerStartGateDiagnosticsTests
     [Fact]
     public async Task FailureDiagnostics_IncludeDockerState_LogTail_AndConcurrentStarts()
     {
-        await using var container = new MongoDbBuilder("mongo:8.0.34")
+        await using var container = new MongoDbBuilder(MongoTestImage.Tag)
             .WithEnvironment("GLIBC_TUNABLES", "glibc.pthread.rseq=1") // same kernel workaround as ODataTestHost; mongod 8.0 exits on Linux 6.19+ without it
             .Build();
         await MongoContainerStartGate.StartAsync(container);
@@ -97,7 +97,7 @@ public sealed class MongoContainerStartGateDiagnosticsTests
     [Fact]
     public async Task ExitedMongod_ReportsDockerStateAndTheLogLine_NotOnlyALogTail()
     {
-        await using var container = new MongoDbBuilder("mongo:8.0.34")
+        await using var container = new MongoDbBuilder(MongoTestImage.Tag)
             // Same kernel workaround as the fixtures (SERVER-121912): without it mongod stops at its kernel check on Linux
             // 6.19+ (exit 1) before it reaches the bad flag (exit 2), so the test would depend on the host kernel.
             .WithEnvironment("GLIBC_TUNABLES", "glibc.pthread.rseq=1")

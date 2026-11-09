@@ -36,7 +36,7 @@ internal sealed class ODataTestHost : IAsyncDisposable
     {
         _databaseName = databaseName;
         _owners = owners;
-        _container = new MongoDbBuilder("mongo:8.0.34")
+        _container = new MongoDbBuilder(MongoTestImage.Tag)
             .WithEnvironment("GLIBC_TUNABLES", "glibc.pthread.rseq=1")
             .WithReplicaSet("rs0")
             .Build();

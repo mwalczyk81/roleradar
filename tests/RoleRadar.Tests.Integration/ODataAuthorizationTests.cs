@@ -24,7 +24,7 @@ public sealed class ODataAuthorizationTestsFixture : IAsyncLifetime
     public const string ValidOwnerSub = "valid-owner-subject-1234";
     public const string InvalidOwnerSub = "attacker-subject-5678";
 
-    private readonly MongoDbContainer _container = new MongoDbBuilder("mongo:8.0.34")
+    private readonly MongoDbContainer _container = new MongoDbBuilder(MongoTestImage.Tag)
         .WithEnvironment("GLIBC_TUNABLES", "glibc.pthread.rseq=1")
         .WithReplicaSet("rs0")
         .Build();

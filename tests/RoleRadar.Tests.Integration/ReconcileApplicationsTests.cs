@@ -16,7 +16,7 @@ public sealed class ReconcileApplicationsTests : IAsyncLifetime
 {
     private const string Owner = "owner-reconcile-apps";
 
-    private readonly MongoDbContainer _container = new MongoDbBuilder("mongo:8.0.34")
+    private readonly MongoDbContainer _container = new MongoDbBuilder(MongoTestImage.Tag)
         .WithEnvironment("GLIBC_TUNABLES", "glibc.pthread.rseq=1")
         .WithReplicaSet("rs0")
         .Build();

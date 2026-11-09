@@ -111,7 +111,7 @@ public sealed class RealStackEndToEndTests
                 "-e GLIBC_TUNABLES=glibc.pthread.rseq=1 " +
                 $"-v {mongoVolumeName}:/data/db " +
                 "-p 127.0.0.1::27018 " +
-                "mongo:8.0.34 mongod --replSet rs0 --port 27018 --bind_ip 127.0.0.1,mongo";
+                $"{MongoTestImage.Tag} mongod --replSet rs0 --port 27018 --bind_ip 127.0.0.1,mongo";
 
             var startMongo = await RunDockerAsync(runMongoCmd, repoRoot, 45);
             Assert.True(startMongo.ExitCode == 0, $"Failed starting mongo container:\n{startMongo.StdErr}");

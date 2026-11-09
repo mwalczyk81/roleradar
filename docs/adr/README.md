@@ -43,3 +43,4 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0037](./0037-mutation-testing.md) | Nightly Mutation Testing for the Web Library, .NET Deferred | Accepted | `011-test-quality-reporting` |
 | [ADR-0038](./0038-reporting-stack.md) | Reporting From Pipeline Numbers, With One Combined Allure Report | Accepted | `011-test-quality-reporting` |
 | [ADR-0039](./0039-demo-stack-and-guard.md) | A Separate Demo Stack With a Guard and Generated Credentials | Accepted | `012-front-door` |
+| [ADR-0040](./0040-mongodb-9-and-one-image-source.md) | MongoDB 9.0, With One Source for the Image Tag | Accepted | `chore/mongo-9-upgrade` |
