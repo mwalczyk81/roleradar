@@ -229,7 +229,7 @@ describe("root README shape (FR-017, FR-018, SC-008)", () => {
     for (const badge of [
       "https://github.com/mwalczyk81/roleradar/actions/workflows/ci.yml/badge.svg",
       "https://mwalczyk81.github.io/roleradar/badges/coverage.svg",
-      "https://badge-api.stryker-mutator.io/github.com/mwalczyk81/roleradar/main?module=web-lib",
+      "https://img.shields.io/endpoint?url=https%3A%2F%2Fbadge-api.stryker-mutator.io%2Fgithub.com%2Fmwalczyk81%2Froleradar%2Fmain%3Fmodule%3Dweb-lib",
     ]) {
       expect(top).toContain(badge);
     }

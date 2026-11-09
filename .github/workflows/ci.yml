@@ -63,6 +63,14 @@ jobs:
               - 'nx.json'
               - 'pages/**'
               - 'quality/**'
+              # web/tests/tooling/front-door-links.test.ts reads these (and follows their links), so a change to any of
+              # them must run the web job; a README-only change used to skip it and leave the test silently stale.
+              - 'README.md'
+              - 'CONTRIBUTING.md'
+              - 'CODE_OF_CONDUCT.md'
+              - 'SECURITY.md'
+              - 'CHANGELOG.md'
+              - 'docs/**'
             images:
               - '.github/workflows/**'
               - '.dockerignore'
