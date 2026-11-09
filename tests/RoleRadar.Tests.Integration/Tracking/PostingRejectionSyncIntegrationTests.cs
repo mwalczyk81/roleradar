@@ -39,7 +39,8 @@ public sealed class PostingRejectionSyncIntegrationTests(SharedMongoFixture shar
                 .HandleAsync(new RecordApplicationCommand(
                     PostingId: viaManualEvent.PostingId,
                     Action: "append_event",
-                    Event: new ApplicationEventInputDto("rejected", "2026-09-15", "web", "Rejected by email")));
+                    Event: new ApplicationEventInputDto("rejected", "2026-09-15", "web", "Rejected by email"),
+                    Actor: "agent"));
             Assert.True(manual.IsSuccess, manual.Error?.Message);
         }
 
@@ -206,7 +207,8 @@ public sealed class PostingRejectionSyncIntegrationTests(SharedMongoFixture shar
             .HandleAsync(new RecordApplicationCommand(
                 PostingId: seeded.PostingId,
                 Action: "append_event",
-                Event: new ApplicationEventInputDto("rejected", "2026-09-12", "web", "Rejected by email")));
+                Event: new ApplicationEventInputDto("rejected", "2026-09-12", "web", "Rejected by email"),
+                Actor: "agent"));
         Assert.True(manual.IsSuccess, manual.Error?.Message);
 
         var posting = await host.PostingDocAsync(seeded.PostingId);

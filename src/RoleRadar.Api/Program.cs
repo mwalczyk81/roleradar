@@ -10,12 +10,14 @@ using Microsoft.OData.ModelBuilder;
 using RoleRadar.Api.Authentication;
 using RoleRadar.Api.Endpoints;
 using RoleRadar.Api.Filters;
+using RoleRadar.Api.Observability;
 using RoleRadar.Api.OpenApi;
 using RoleRadar.Application;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Reading.Models;
 using RoleRadar.Domain.Common;
 using RoleRadar.Infrastructure;
+using RoleRadar.Observability;
 
 namespace RoleRadar.Api;
 
@@ -60,6 +62,9 @@ public partial class Program
             Args = args ?? [],
             ApplicationName = typeof(Program).Assembly.GetName().Name
         });
+
+        // Logging first, so providers a test adds through configureBuilder are kept (feature 013, ADR 0041).
+        builder.Logging.ClearProviders().AddRoleRadarLogging("api", LogStream.Split, builder.Configuration);
 
         configureBuilder?.Invoke(builder);
 
@@ -174,6 +179,7 @@ public partial class Program
         // Intentionally zero CORS middleware registered (server-to-server only per ADR-0018 / FR-009)
         var app = builder.Build();
 
+        app.UseMiddleware<CorrelationMiddleware>();
         app.UseAuthentication();
         app.UseAuthorization();
 

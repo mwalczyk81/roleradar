@@ -17,7 +17,8 @@ namespace RoleRadar.Tests.Contract.Identity;
 
 internal static class IdentityContractTestServer
 {
-    public static async Task<(WebApplication App, HttpClient Client, CookieContainer Cookies, string DbDir)> StartHostAsync()
+    public static async Task<(WebApplication App, HttpClient Client, CookieContainer Cookies, string DbDir)> StartHostAsync(
+        Action<WebApplicationBuilder>? configure = null)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "rrtest_identity_contract_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -35,6 +36,7 @@ internal static class IdentityContractTestServer
                     ["Clients:Web:RedirectUri"] = "https://localhost:5003/auth/callback",
                     ["Clients:Web:PostLogoutRedirectUri"] = "https://localhost:5003/auth/logout",
                 });
+                configure?.Invoke(builder);
             });
 
         await app.StartAsync();

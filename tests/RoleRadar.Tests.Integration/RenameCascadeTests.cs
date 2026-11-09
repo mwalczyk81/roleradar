@@ -60,7 +60,8 @@ public sealed class RenameCascadeTests : IAsyncLifetime
         // 1. Create company
         var compRes = await companyHandler.HandleAsync(new RecordCompanyCommand(
             Name: "Old Company Name",
-            OwnerId: TestOwnerId));
+            OwnerId: TestOwnerId,
+            Actor: "system"));
         Assert.True(compRes.IsSuccess, compRes.Error?.Message);
         Assert.NotNull(compRes.Value?.Company);
         var companyId = compRes.Value.Company.Id;
@@ -70,7 +71,8 @@ public sealed class RenameCascadeTests : IAsyncLifetime
         var postRes = await postingHandler.HandleAsync(new RecordPostingCommand(
             CompanyId: companyId,
             Title: "Backend Engineer",
-            OwnerId: TestOwnerId));
+            OwnerId: TestOwnerId,
+            Actor: "mcp-stdio"));
         Assert.True(postRes.IsSuccess, postRes.Error?.Message);
         Assert.NotNull(postRes.Value?.Posting);
         var postingId = postRes.Value.Posting.Id;
@@ -81,7 +83,8 @@ public sealed class RenameCascadeTests : IAsyncLifetime
             Action: "create",
             SubmittedDate: "2026-11-01",
             ResumeVariant: "tailored",
-            OwnerId: TestOwnerId));
+            OwnerId: TestOwnerId,
+            Actor: "agent"));
         Assert.True(appRes.IsSuccess, appRes.Error?.Message);
         var applicationId = appRes.Value!.ApplicationId;
 
@@ -90,7 +93,8 @@ public sealed class RenameCascadeTests : IAsyncLifetime
             Id: companyId,
             VersionToken: versionToken,
             Name: "New Company Name",
-            OwnerId: TestOwnerId));
+            OwnerId: TestOwnerId,
+            Actor: "system"));
         Assert.True(renameRes.IsSuccess, renameRes.Error?.Message);
 
         // 5. Verify denormalized company_name updated on postings collection
@@ -118,14 +122,16 @@ public sealed class RenameCascadeTests : IAsyncLifetime
 
         var compRes = await companyHandler.HandleAsync(new RecordCompanyCommand(
             Name: "Apex Systems",
-            OwnerId: TestOwnerId));
+            OwnerId: TestOwnerId,
+            Actor: "system"));
         Assert.True(compRes.IsSuccess);
         var companyId = compRes.Value!.Company.Id;
 
         var postRes = await postingHandler.HandleAsync(new RecordPostingCommand(
             CompanyId: companyId,
             Title: "Initial Job Title",
-            OwnerId: TestOwnerId));
+            OwnerId: TestOwnerId,
+            Actor: "mcp-stdio"));
         Assert.True(postRes.IsSuccess);
         Assert.NotNull(postRes.Value?.Posting);
         var postingId = postRes.Value.Posting.Id;
@@ -136,7 +142,8 @@ public sealed class RenameCascadeTests : IAsyncLifetime
             Action: "create",
             SubmittedDate: "2026-11-01",
             ResumeVariant: "tailored",
-            OwnerId: TestOwnerId));
+            OwnerId: TestOwnerId,
+            Actor: "agent"));
         Assert.True(appRes.IsSuccess);
         var applicationId = appRes.Value!.ApplicationId;
 
@@ -150,7 +157,8 @@ public sealed class RenameCascadeTests : IAsyncLifetime
             PostingId: postingId,
             VersionToken: currentVersionToken,
             Title: "Promoted Staff Engineer",
-            OwnerId: TestOwnerId));
+            OwnerId: TestOwnerId,
+            Actor: "mcp-stdio"));
         Assert.True(updatePostRes.IsSuccess, updatePostRes.Error?.Message);
 
         // Verify application posting_title updated
@@ -172,14 +180,15 @@ public sealed class RenameCascadeTests : IAsyncLifetime
         var postingHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordPostingCommand, PostingRecordResultDto>>();
         var appHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordApplicationCommand, ApplicationRecordResultDto>>();
 
-        var compRes = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: companyName, OwnerId: TestOwnerId));
+        var compRes = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: companyName, OwnerId: TestOwnerId, Actor: "system"));
         Assert.True(compRes.IsSuccess, compRes.Error?.Message);
         Assert.NotNull(compRes.Value?.Company);
 
         var postRes = await postingHandler.HandleAsync(new RecordPostingCommand(
             CompanyId: compRes.Value.Company.Id,
             Title: postingTitle,
-            OwnerId: TestOwnerId));
+            OwnerId: TestOwnerId,
+            Actor: "mcp-stdio"));
         Assert.True(postRes.IsSuccess, postRes.Error?.Message);
         Assert.NotNull(postRes.Value?.Posting);
 
@@ -188,7 +197,8 @@ public sealed class RenameCascadeTests : IAsyncLifetime
             Action: "create",
             SubmittedDate: "2026-11-01",
             ResumeVariant: "tailored",
-            OwnerId: TestOwnerId));
+            OwnerId: TestOwnerId,
+            Actor: "agent"));
         Assert.True(appRes.IsSuccess, appRes.Error?.Message);
 
         return (compRes.Value.Company.Id, postRes.Value.Posting.Id, appRes.Value!.ApplicationId, compRes.Value.Company.VersionToken);

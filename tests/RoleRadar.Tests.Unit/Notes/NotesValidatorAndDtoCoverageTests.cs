@@ -18,14 +18,14 @@ public sealed class NotesValidatorAndDtoCoverageTests
         Assert.Throws<ArgumentNullException>(() => validator.Validate(null!));
 
         // Id empty
-        Assert.NotNull(validator.Validate(new ArchiveNoteCommand(Guid.Empty)));
+        Assert.NotNull(validator.Validate(new ArchiveNoteCommand(Guid.Empty, Actor: "mcp-stdio")));
 
         // ExpectedVersionToken empty
-        Assert.NotNull(validator.Validate(new ArchiveNoteCommand(Guid.CreateVersion7(), ExpectedVersionToken: Guid.Empty)));
+        Assert.NotNull(validator.Validate(new ArchiveNoteCommand(Guid.CreateVersion7(), ExpectedVersionToken: Guid.Empty, Actor: "mcp-stdio")));
 
         // Valid
-        Assert.Null(validator.Validate(new ArchiveNoteCommand(Guid.CreateVersion7())));
-        Assert.Null(validator.Validate(new ArchiveNoteCommand(Guid.CreateVersion7(), ExpectedVersionToken: Guid.CreateVersion7())));
+        Assert.Null(validator.Validate(new ArchiveNoteCommand(Guid.CreateVersion7(), Actor: "mcp-stdio")));
+        Assert.Null(validator.Validate(new ArchiveNoteCommand(Guid.CreateVersion7(), ExpectedVersionToken: Guid.CreateVersion7(), Actor: "mcp-stdio")));
     }
 
     [Fact]
@@ -39,20 +39,20 @@ public sealed class NotesValidatorAndDtoCoverageTests
         var token = Guid.CreateVersion7();
 
         // Id empty
-        Assert.NotNull(validator.Validate(new ReplaceNoteSectionCommand(Guid.Empty, "## Target", "Body", token)));
+        Assert.NotNull(validator.Validate(new ReplaceNoteSectionCommand(Guid.Empty, "## Target", "Body", token, Actor: "mcp-stdio")));
 
         // Heading empty
-        Assert.NotNull(validator.Validate(new ReplaceNoteSectionCommand(id, "", "Body", token)));
-        Assert.NotNull(validator.Validate(new ReplaceNoteSectionCommand(id, "   ", "Body", token)));
+        Assert.NotNull(validator.Validate(new ReplaceNoteSectionCommand(id, "", "Body", token, Actor: "mcp-stdio")));
+        Assert.NotNull(validator.Validate(new ReplaceNoteSectionCommand(id, "   ", "Body", token, Actor: "mcp-stdio")));
 
         // NewSectionBody null
-        Assert.NotNull(validator.Validate(new ReplaceNoteSectionCommand(id, "## Target", null!, token)));
+        Assert.NotNull(validator.Validate(new ReplaceNoteSectionCommand(id, "## Target", null!, token, Actor: "mcp-stdio")));
 
         // VersionToken empty
-        Assert.NotNull(validator.Validate(new ReplaceNoteSectionCommand(id, "## Target", "Body", Guid.Empty)));
+        Assert.NotNull(validator.Validate(new ReplaceNoteSectionCommand(id, "## Target", "Body", Guid.Empty, Actor: "mcp-stdio")));
 
         // Valid
-        Assert.Null(validator.Validate(new ReplaceNoteSectionCommand(id, "## Target", "Valid new body", token)));
+        Assert.Null(validator.Validate(new ReplaceNoteSectionCommand(id, "## Target", "Valid new body", token, Actor: "mcp-stdio")));
     }
 
     [Fact]
@@ -63,13 +63,13 @@ public sealed class NotesValidatorAndDtoCoverageTests
         Assert.Throws<ArgumentNullException>(() => validator.Validate(null!));
 
         // Empty file paths
-        Assert.NotNull(validator.Validate(new ImportMarkdownCommand([])));
+        Assert.NotNull(validator.Validate(new ImportMarkdownCommand([], Actor: "cli-import")));
 
         // Null or whitespace file path
-        Assert.NotNull(validator.Validate(new ImportMarkdownCommand([""])));
+        Assert.NotNull(validator.Validate(new ImportMarkdownCommand([""], Actor: "cli-import")));
 
         // Non-existent file path
-        Assert.NotNull(validator.Validate(new ImportMarkdownCommand(["C:\\non_existent_folder\\does_not_exist.md"])));
+        Assert.NotNull(validator.Validate(new ImportMarkdownCommand(["C:\\non_existent_folder\\does_not_exist.md"], Actor: "cli-import")));
 
         // Colliding source filenames
         var tempFile1 = Path.GetTempFileName();
@@ -81,7 +81,7 @@ public sealed class NotesValidatorAndDtoCoverageTests
 
         try
         {
-            var collidingRes = validator.Validate(new ImportMarkdownCommand([tempFile1, tempFile2]));
+            var collidingRes = validator.Validate(new ImportMarkdownCommand([tempFile1, tempFile2], Actor: "cli-import"));
             Assert.NotNull(collidingRes);
             Assert.Contains("colliding", collidingRes.Value.Message);
 
@@ -90,7 +90,7 @@ public sealed class NotesValidatorAndDtoCoverageTests
             File.WriteAllText(otherTemp, "test");
             try
             {
-                var multiSourceRes = validator.Validate(new ImportMarkdownCommand([tempFile1, otherTemp], SourceFileId: "custom-id"));
+                var multiSourceRes = validator.Validate(new ImportMarkdownCommand([tempFile1, otherTemp], SourceFileId: "custom-id", Actor: "cli-import"));
                 Assert.NotNull(multiSourceRes);
                 Assert.Contains("--source-id", multiSourceRes.Value.Message);
             }
@@ -100,22 +100,22 @@ public sealed class NotesValidatorAndDtoCoverageTests
             }
 
             // Area empty or too long
-            Assert.NotNull(validator.Validate(new ImportMarkdownCommand([tempFile1], Area: "")));
-            Assert.NotNull(validator.Validate(new ImportMarkdownCommand([tempFile1], Area: new string('a', Note.MaxAreaChars + 1))));
+            Assert.NotNull(validator.Validate(new ImportMarkdownCommand([tempFile1], Area: "", Actor: "cli-import")));
+            Assert.NotNull(validator.Validate(new ImportMarkdownCommand([tempFile1], Area: new string('a', Note.MaxAreaChars + 1), Actor: "cli-import")));
 
             // Tags count too many
             var tooManyTags = Enumerable.Range(0, Note.MaxTagCount + 1).Select(i => $"tag{i}").ToList();
-            Assert.NotNull(validator.Validate(new ImportMarkdownCommand([tempFile1], Tags: tooManyTags)));
+            Assert.NotNull(validator.Validate(new ImportMarkdownCommand([tempFile1], Tags: tooManyTags, Actor: "cli-import")));
 
             // Tag empty or too long
-            Assert.NotNull(validator.Validate(new ImportMarkdownCommand([tempFile1], Tags: [""])));
-            Assert.NotNull(validator.Validate(new ImportMarkdownCommand([tempFile1], Tags: [new string('t', Note.MaxTagChars + 1)])));
+            Assert.NotNull(validator.Validate(new ImportMarkdownCommand([tempFile1], Tags: [""], Actor: "cli-import")));
+            Assert.NotNull(validator.Validate(new ImportMarkdownCommand([tempFile1], Tags: [new string('t', Note.MaxTagChars + 1)], Actor: "cli-import")));
 
             // Invalid default date
-            Assert.NotNull(validator.Validate(new ImportMarkdownCommand([tempFile1], DefaultDate: "bad-date")));
+            Assert.NotNull(validator.Validate(new ImportMarkdownCommand([tempFile1], DefaultDate: "bad-date", Actor: "cli-import")));
 
             // Valid
-            Assert.Null(validator.Validate(new ImportMarkdownCommand([tempFile1], Area: "imported", Tags: ["tag1"], DefaultDate: "2026-10-18")));
+            Assert.Null(validator.Validate(new ImportMarkdownCommand([tempFile1], Area: "imported", Tags: ["tag1"], DefaultDate: "2026-10-18", Actor: "cli-import")));
         }
         finally
         {

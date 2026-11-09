@@ -136,7 +136,7 @@ internal sealed class PostingRejectionSyncHost : IAsyncDisposable
         using var scope = Services.CreateScope();
         var sp = scope.ServiceProvider;
         var company = await sp.GetRequiredService<ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto>>()
-            .HandleAsync(new RecordCompanyCommand(Name: $"Harbor Analytics {Guid.NewGuid():N}"));
+            .HandleAsync(new RecordCompanyCommand(Name: $"Harbor Analytics {Guid.NewGuid():N}", Actor: "system"));
         Assert.True(company.IsSuccess, company.Error?.Message);
 
         var posting = await sp.GetRequiredService<ICommandHandler<RecordPostingCommand, PostingRecordResultDto>>()
@@ -144,7 +144,8 @@ internal sealed class PostingRejectionSyncHost : IAsyncDisposable
                 CompanyId: company.Value!.Company.Id,
                 Title: title,
                 RequisitionId: $"HAR-{Guid.NewGuid():N}"[..12],
-                AtsTenant: "harbor"));
+                AtsTenant: "harbor",
+                Actor: "mcp-stdio"));
         Assert.True(posting.IsSuccess, posting.Error?.Message);
         var postingId = posting.Value!.Posting!.Id;
 
@@ -153,7 +154,8 @@ internal sealed class PostingRejectionSyncHost : IAsyncDisposable
                 PostingId: postingId,
                 Action: "create",
                 SubmittedDate: "2026-09-01",
-                ResumeVariant: "tailored"));
+                ResumeVariant: "tailored",
+                Actor: "agent"));
         Assert.True(application.IsSuccess, application.Error?.Message);
 
         var stored = await sp.GetRequiredService<IPostingRepository>().GetByIdAsync(RoleRadar.Domain.Common.OwnerId.Default.Value, postingId);

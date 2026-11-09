@@ -8,6 +8,7 @@ import {
 } from "../lib/session.server.js";
 import { validateCsrfToken } from "../lib/csrf.server.js";
 import { getEndSessionUrl } from "../lib/oidc.server.js";
+import { log } from "../lib/log.server.js";
 
 export async function action({ request }: ActionFunctionArgs) {
   if (request.method !== "POST") {
@@ -41,7 +42,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const endSessionUrl = await getEndSessionUrl(idTokenHint);
     redirectUrl = endSessionUrl.toString();
   } catch {
-    console.warn("[WARN] Failed to resolve end-session URL; falling back to /postings.");
+    log.warn("Failed to resolve end-session URL; falling back to /postings.");
     redirectUrl = "/postings";
   }
 

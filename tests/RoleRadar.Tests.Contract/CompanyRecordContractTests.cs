@@ -81,7 +81,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
                     FetchMethod: "api",
                     Notes: "Greenhouse public API boards.greenhouse.io/v1/boards/acmesoftware/jobs")
             ],
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var result = await handler.HandleAsync(command);
 
@@ -123,7 +124,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
             Description: new string('x', 301),
             OwnershipType: "private",
             Status: "neutral",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var result = await handler.HandleAsync(command);
 
@@ -151,7 +153,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
                     Slug: "careers",
                     FetchMethod: "api")
             ],
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var createRes = await handler.HandleAsync(createCmd);
         Assert.True(createRes.IsSuccess);
@@ -174,7 +177,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
                     FetchMethod: "browser",
                     Notes: "Requires JS evaluation")
             ],
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var upsertRes = await handler.HandleAsync(upsertCmd);
         Assert.True(upsertRes.IsSuccess);
@@ -203,7 +207,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
                 new CareerSourceInputDto(AtsType: "Lever", Tenant: "persists", Slug: "jobs"),
                 new CareerSourceInputDto(AtsType: "Ashby", Tenant: "persists", Slug: "careers")
             ],
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var createRes = await handler.HandleAsync(createCmd);
         Assert.True(createRes.IsSuccess);
@@ -218,7 +223,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
             Status: "target",
             VersionToken: versionToken,
             CareerSources: null,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var updateRes = await handler.HandleAsync(updateCmd);
         Assert.True(updateRes.IsSuccess);
@@ -251,7 +257,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
                     Slug: "portal",
                     FetchMethod: "browser")
             ],
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var createRes = await handler.HandleAsync(createCmd);
         Assert.True(createRes.IsSuccess);
@@ -280,7 +287,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
                     IsActive: false,
                     VersionToken: sourceVersion)
             ],
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var retireRes = await handler.HandleAsync(retireCmd);
         Assert.True(retireRes.IsSuccess);
@@ -334,7 +342,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
                     FetchMethod: "api",
                     IsActive: true)
             ],
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var reactivateRes = await handler.HandleAsync(reactivateCmd);
         Assert.True(reactivateRes.IsSuccess);
@@ -354,7 +363,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
             Name: "Stale Token Corp",
             OwnershipType: "private",
             Status: "neutral",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var createRes = await handler.HandleAsync(createCmd);
         Assert.True(createRes.IsSuccess);
@@ -367,7 +377,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
             OwnershipType: "private",
             Status: "target",
             VersionToken: Guid.CreateVersion7(),
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var updateRes = await handler.HandleAsync(updateCmd);
         Assert.False(updateRes.IsSuccess);
@@ -385,7 +396,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
             OwnershipType: "private",
             Status: "neutral",
             CategoryTags: ["initial"],
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var createRes = await handler.HandleAsync(createCmd);
         Assert.True(createRes.IsSuccess);
@@ -400,7 +412,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
             Status: "target",
             CategoryTags: ["initial", "updated"],
             VersionToken: initialToken,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var updateRes = await handler.HandleAsync(updateCmd);
         Assert.True(updateRes.IsSuccess);
@@ -425,7 +438,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
         var createCommand = new RecordCompanyCommand(
             Name: "Stripe, Inc.",
             OwnershipType: "private",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
         var createResult = await handler.HandleAsync(createCommand);
         Assert.True(createResult.IsSuccess);
         Assert.NotNull(createResult.Value);
@@ -438,7 +452,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
         var reencounterCommand = new RecordCompanyCommand(
             Name: "  stripe, inc.  ",
             OwnershipType: "private",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
         var reencounterResult = await handler.HandleAsync(reencounterCommand);
 
         Assert.True(reencounterResult.IsSuccess);
@@ -457,7 +472,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
             Name: "Stripe, Inc.",
             OwnershipType: "private",
             VersionToken: Guid.NewGuid(),
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
         var wrongTokenResult = await handler.HandleAsync(wrongTokenCommand);
         Assert.False(wrongTokenResult.IsSuccess);
         Assert.Equal(ErrorCode.StaleVersionToken, wrongTokenResult.Error!.Value.Code);
@@ -478,7 +494,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
             Headquarters: "Boston, MA",
             Status: "watch",
             CategoryTags: ["enterprise", "security"],
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var createRes = await handler.HandleAsync(createCmd);
         Assert.True(createRes.IsSuccess);
@@ -497,7 +514,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
                     Slug: "careers",
                     FetchMethod: "api")
             ],
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var updateRes = await handler.HandleAsync(updateCmd);
         Assert.True(updateRes.IsSuccess, updateRes.Error?.Message);
@@ -541,7 +559,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
             OwnershipType: "pe_backed",
             Status: "watch",
             CategoryTags: ["saas"],
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var createRes = await handler.HandleAsync(createCmd);
         Assert.True(createRes.IsSuccess);
@@ -553,7 +572,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
             Id: companyId,
             Status: "target",
             VersionToken: initialToken,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var updateRes = await handler.HandleAsync(updateCmd);
         Assert.True(updateRes.IsSuccess);
@@ -579,7 +599,8 @@ public sealed class CompanyRecordContractTests : IAsyncLifetime
         // Create company without status or ownershipType
         var createCmd = new RecordCompanyCommand(
             Name: "Default Status Corp",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "system");
 
         var createRes = await handler.HandleAsync(createCmd);
         Assert.True(createRes.IsSuccess);

@@ -84,7 +84,8 @@ public sealed class PostingSignalContractTests : IAsyncLifetime
             SourceKind: "ats",
             Url: "https://signals.corp.internal/jobs/cloud-101",
             Signals: signals,
-            OwnerId: ownerId);
+            OwnerId: ownerId,
+            Actor: "mcp-stdio");
 
         var result = await handler.HandleAsync(command);
 
@@ -126,7 +127,8 @@ public sealed class PostingSignalContractTests : IAsyncLifetime
             {
                 new SignalInputDto("unknown_type", "Valid evidence text")
             },
-            OwnerId: ownerId);
+            OwnerId: ownerId,
+            Actor: "mcp-stdio");
 
         var result = await handler.HandleAsync(command);
 
@@ -153,7 +155,8 @@ public sealed class PostingSignalContractTests : IAsyncLifetime
             {
                 new SignalInputDto("repost", longEvidence)
             },
-            OwnerId: ownerId);
+            OwnerId: ownerId,
+            Actor: "mcp-stdio");
 
         var result = await handler.HandleAsync(command);
 
@@ -183,7 +186,8 @@ public sealed class PostingSignalContractTests : IAsyncLifetime
             {
                 new SignalInputDto("repost", "First repost notice", "2026-10-18T10:00:00Z")
             },
-            OwnerId: ownerId));
+            OwnerId: ownerId,
+            Actor: "mcp-stdio"));
 
         Assert.True(initialCreate.IsSuccess);
         Assert.Equal("created", initialCreate.Value!.Status);
@@ -203,7 +207,8 @@ public sealed class PostingSignalContractTests : IAsyncLifetime
             {
                 new SignalInputDto("gone", "Now 404", "2026-10-18T13:00:00Z")
             },
-            OwnerId: ownerId));
+            OwnerId: ownerId,
+            Actor: "mcp-stdio"));
 
         Assert.True(dedupMatchWithNewSignal.IsSuccess);
         Assert.Equal("already_tracked", dedupMatchWithNewSignal.Value!.Status);
@@ -222,7 +227,8 @@ public sealed class PostingSignalContractTests : IAsyncLifetime
             {
                 new SignalInputDto("gone", "Now 404", "2026-10-18T13:00:00Z")
             },
-            OwnerId: ownerId));
+            OwnerId: ownerId,
+            Actor: "mcp-stdio"));
 
         Assert.True(resubmissionSameDay.IsSuccess);
         Assert.Equal("already_tracked", resubmissionSameDay.Value!.Status);

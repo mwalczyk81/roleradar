@@ -1,5 +1,6 @@
 import createClient, { type Client } from "openapi-fetch";
 import type { paths } from "../../../contracts/client/api-types.js";
+import { getRequestContext } from "./request-context.server.js";
 
 export interface UiError {
   errorCode: string;
@@ -44,10 +45,28 @@ export function getApiBaseUrl(): string {
   return process.env.ROLERADAR_API_BASE_URL ?? "https://localhost:5002";
 }
 
+export const CORRELATION_HEADER = "X-Correlation-ID";
+
+/** Adds the current request's X-Correlation-ID (feature 013) to outbound headers. Outside a request, adds nothing. */
+export function withCorrelationHeader(headers: Headers): Headers {
+  const correlationId = getRequestContext()?.correlationId;
+  if (correlationId) {
+    headers.set(CORRELATION_HEADER, correlationId);
+  }
+  return headers;
+}
+
+/** The fetch every web-to-API call goes through. Reads globalThis.fetch per call so tests can stub it. */
+export function apiFetch(request: Request): Promise<Response> {
+  withCorrelationHeader(request.headers);
+  return globalThis.fetch(request);
+}
+
 export function createApiClient(accessToken?: string): Client<paths> {
   const baseUrl = getApiBaseUrl();
   return createClient<paths>({
     baseUrl,
+    fetch: apiFetch,
     headers: accessToken
       ? {
           Authorization: `Bearer ${accessToken}`,
@@ -96,18 +115,12 @@ export async function fetchOData<T>(
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${path}${queryString ? `?${queryString}` : ""}`;
 
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-  };
+  const headers = new Headers({ Accept: "application/json" });
   if (accessToken) {
-    headers.Authorization = `Bearer ${accessToken}`;
+    headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
-  const response = await fetch(url, {
-    method: "GET",
-    headers,
-    signal,
-  });
+  const response = await apiFetch(new Request(url, { method: "GET", headers, signal }));
 
   if (!response.ok) {
     let errorMsg = `OData request failed with status ${response.status}`;

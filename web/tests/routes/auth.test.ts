@@ -5,7 +5,17 @@ import { loader as callbackLoader } from "../../app/routes/auth.callback.js";
 import { action as logoutAction } from "../../app/routes/auth.logout.js";
 import * as oidc from "../../app/lib/oidc.server.js";
 import { callLoader, callAction } from "../test-helpers.js";
-import {
+
+// Feature 013: the routes log through the structured logger (warn and above go to stderr), so the tests capture
+// stderr lines instead of spying on console.warn. Each captured line is one log record.
+function captureStderrLines(): string[] {
+  const lines: string[] = [];
+  vi.spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
+    lines.push(...String(chunk).split("\n").filter((line) => line.length > 0));
+    return true;
+  });
+  return lines;
+}import {
   getAuthStateCookieName,
   getCodeVerifierCookieName,
 } from "../../app/lib/auth-guard.server.js";
@@ -166,7 +176,7 @@ describe("auth routes", () => {
     });
 
     it("handles callback replay when transient state cookie is missing: logs single clean line without stack trace and returns replay prompt", async () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const warnLines = captureStderrLines();
 
       // No transient cookies (e.g. reloaded after first exchange consumed them)
       const request = new Request(
@@ -176,16 +186,16 @@ describe("auth routes", () => {
       const result = await callLoader(callbackLoader, request);
 
       expect(result).toEqual({ replay: true });
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      const logMessage = warnSpy.mock.calls[0][0];
-      expect(logMessage).toContain("[WARN]");
+      expect(warnLines).toHaveLength(1);
+      const logMessage = warnLines[0];
+      expect(logMessage).toMatch(/ warn web /);
       expect(logMessage).toContain("replay");
       expect(logMessage).not.toContain("Error:");
       expect(logMessage).not.toContain("    at ");
     });
 
     it("handles callback replay when exchangeCodeForTokens fails: logs single clean line without stack trace and returns replay prompt", async () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const warnLines = captureStderrLines();
 
       vi.spyOn(oidc, "exchangeCodeForTokens").mockRejectedValueOnce(
         new Error("invalid_grant: authorization code has already been redeemed")
@@ -207,9 +217,9 @@ describe("auth routes", () => {
       const result = await callLoader(callbackLoader, request);
 
       expect(result).toEqual({ replay: true });
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      const logMessage = warnSpy.mock.calls[0][0];
-      expect(logMessage).toContain("[WARN]");
+      expect(warnLines).toHaveLength(1);
+      const logMessage = warnLines[0];
+      expect(logMessage).toMatch(/ warn web /);
       expect(logMessage).toContain("invalid_grant");
       expect(logMessage).not.toContain("    at ");
     });
@@ -314,7 +324,7 @@ describe("auth routes", () => {
     });
 
     it("when getEndSessionUrl fails, logs single WARN line without tokens and falls back to /postings", async () => {
-      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const warnLines = captureStderrLines();
 
       const sessionId = crypto.randomUUID();
       const csrfToken = "valid-csrf-token-123";
@@ -356,9 +366,9 @@ describe("auth routes", () => {
       expect(setCookie).toContain("Max-Age=0");
 
       // Verify single clean WARN line logged with zero tokens leaked
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-      const logMessage = warnSpy.mock.calls[0][0];
-      expect(logMessage).toContain("[WARN]");
+      expect(warnLines).toHaveLength(1);
+      const logMessage = warnLines[0];
+      expect(logMessage).toMatch(/ warn web /);
       expect(logMessage).not.toContain("sensitive-access-token");
       expect(logMessage).not.toContain("sensitive-refresh-token");
       expect(logMessage).not.toContain("sensitive-id-token");

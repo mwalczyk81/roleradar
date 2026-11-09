@@ -12,6 +12,13 @@ public sealed record ErrorEnvelope(
     string Message,
     IReadOnlyList<ErrorFieldDetail>? Details = null)
 {
+    /// <summary>
+    /// The request's X-Correlation-ID (feature 013, contracts/http-correlation-and-errors.md). Filled from the current
+    /// request by <see cref="ErrorResults"/>, so every producer of an envelope carries it without passing it along.
+    /// </summary>
+    [System.ComponentModel.DataAnnotations.Required]
+    public string CorrelationId { get; init; } = ErrorResults.CurrentCorrelationId();
+
     public static ErrorEnvelope Validation(string message, IReadOnlyList<ErrorFieldDetail>? details = null) =>
         new(false, "validation_error", message, details);
 

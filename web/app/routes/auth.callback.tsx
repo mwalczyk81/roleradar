@@ -16,6 +16,7 @@ import {
   getCodeVerifierCookieName,
   sanitizeReturnTo,
 } from "../lib/auth-guard.server.js";
+import { log } from "../lib/log.server.js";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -48,7 +49,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   if (!expectedState || !codeVerifier || expectedState !== state) {
-    console.warn("[WARN] OIDC callback replay or expired authorization state; prompting user to sign in again.");
+    log.warn("OIDC callback replay or expired authorization state; prompting user to sign in again.");
     return { replay: true };
   }
 
@@ -115,8 +116,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       headers,
     });
   } catch (err) {
-    console.warn(
-      `[WARN] OIDC callback token exchange failed (code replay or expired): ${
+    log.warn(
+      `OIDC callback token exchange failed (code replay or expired): ${
         err instanceof Error ? err.message : String(err)
       }`
     );

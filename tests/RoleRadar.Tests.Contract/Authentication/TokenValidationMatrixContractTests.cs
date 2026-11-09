@@ -91,7 +91,8 @@ public sealed class TokenValidationMatrixContractTests : IAsyncLifetime
             Description: "Fictional company for scope enforcement contract tests",
             OwnershipType: "private",
             Status: "neutral",
-            Headquarters: "Seattle, WA"));
+            Headquarters: "Seattle, WA",
+            Actor: "system"));
         Assert.True(seedRes.IsSuccess);
         _seededCompanyId = seedRes.Value!.Company.Id;
     }

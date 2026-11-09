@@ -85,7 +85,8 @@ public sealed class ApplicationRecordContractTests : IAsyncLifetime
             ResumeVariant: "tailored",
             ResumePointer: "local://resumes/swe-2026.pdf",
             ConfirmationCode: "CONF-987",
-            OwnerId: ownerId);
+            OwnerId: ownerId,
+            Actor: "agent");
 
         var result = await handler.HandleAsync(command);
 
@@ -134,7 +135,8 @@ public sealed class ApplicationRecordContractTests : IAsyncLifetime
             SubmittedDate: "2026-10-18",
             ResumeVariant: "as_is",
             OverrideDecided: false,
-            OwnerId: ownerId);
+            OwnerId: ownerId,
+            Actor: "agent");
 
         var result = await handler.HandleAsync(command);
 
@@ -173,7 +175,8 @@ public sealed class ApplicationRecordContractTests : IAsyncLifetime
             ResumeVariant: "ic_framed",
             OverrideDecided: true,
             OverrideReason: "Reopened by hiring manager outreach directly on LinkedIn",
-            OwnerId: ownerId);
+            OwnerId: ownerId,
+            Actor: "agent");
 
         var result = await handler.HandleAsync(command);
 
@@ -215,7 +218,8 @@ public sealed class ApplicationRecordContractTests : IAsyncLifetime
             Action: "create",
             SubmittedDate: "2026-10-18",
             ResumeVariant: "tailored",
-            OwnerId: ownerId);
+            OwnerId: ownerId,
+            Actor: "agent");
 
         var result = await handler.HandleAsync(command);
 
@@ -245,7 +249,8 @@ public sealed class ApplicationRecordContractTests : IAsyncLifetime
                 EventDate: "2026-10-18",
                 EventSource: "email",
                 Notes: "Received initial offer letter with $220k base"),
-            OwnerId: ownerId);
+            OwnerId: ownerId,
+            Actor: "agent");
 
         var result = await handler.HandleAsync(command);
 
@@ -280,7 +285,8 @@ public sealed class ApplicationRecordContractTests : IAsyncLifetime
                 EventDate: "2026-10-18",
                 EventSource: "portal",
                 Notes: "Team moved forward with internal candidate"),
-            OwnerId: ownerId);
+            OwnerId: ownerId,
+            Actor: "agent");
 
         var result = await handler.HandleAsync(command);
 
@@ -320,7 +326,8 @@ public sealed class ApplicationRecordContractTests : IAsyncLifetime
                 EventDate: "2026-10-18",
                 EventSource: "recruiter_call",
                 Notes: $"Candidate completed {eventType}"),
-            OwnerId: ownerId);
+            OwnerId: ownerId,
+            Actor: "agent");
 
         var result = await handler.HandleAsync(command);
 
@@ -366,7 +373,8 @@ public sealed class ApplicationRecordContractTests : IAsyncLifetime
                 EventDate: "2026-10-18",
                 EventSource: "email",
                 Notes: "Follow-up email received post-closure"),
-            OwnerId: ownerId);
+            OwnerId: ownerId,
+            Actor: "agent");
 
         var result = await handler.HandleAsync(command);
 

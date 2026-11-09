@@ -215,18 +215,6 @@
           "Microsoft.Extensions.Options.ConfigurationExtensions": "10.0.14"
         }
       },
-      "Microsoft.Extensions.Logging.Console": {
-        "type": "Transitive",
-        "resolved": "10.0.14",
-        "contentHash": "8Qx57p3sUAajSZHLQf8eihZqMtSIeI4fZ1JVpL4fvg4QqSbbgJkN0X0owX1cVJJRW2Xw4uqtVv9F7LgdXOBQHQ==",
-        "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.14",
-          "Microsoft.Extensions.Logging": "10.0.14",
-          "Microsoft.Extensions.Logging.Abstractions": "10.0.14",
-          "Microsoft.Extensions.Logging.Configuration": "10.0.14",
-          "Microsoft.Extensions.Options": "10.0.14"
-        }
-      },
       "Microsoft.Extensions.Logging.Debug": {
         "type": "Transitive",
         "resolved": "10.0.14",
@@ -335,6 +323,12 @@
           "RoleRadar.Domain": "[1.0.0, )"
         }
       },
+      "roleradar.observability": {
+        "type": "Project",
+        "dependencies": {
+          "Microsoft.Extensions.Logging.Console": "[10.0.14, )"
+        }
+      },
       "Geralt": {
         "type": "CentralTransitive",
         "requested": "[4.5.0, )",
@@ -375,6 +369,19 @@
         "contentHash": "SwcbEBtkECq3D2oywvHkm46fyrX9Dd2JPWphDnHUc2+cUWR1Mdo41atAjh/9iZjgQxuvbKfZKXqostT/LZfefA==",
         "dependencies": {
           "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.14"
+        }
+      },
+      "Microsoft.Extensions.Logging.Console": {
+        "type": "CentralTransitive",
+        "requested": "[10.0.14, )",
+        "resolved": "10.0.14",
+        "contentHash": "8Qx57p3sUAajSZHLQf8eihZqMtSIeI4fZ1JVpL4fvg4QqSbbgJkN0X0owX1cVJJRW2Xw4uqtVv9F7LgdXOBQHQ==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.14",
+          "Microsoft.Extensions.Logging": "10.0.14",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.14",
+          "Microsoft.Extensions.Logging.Configuration": "10.0.14",
+          "Microsoft.Extensions.Options": "10.0.14"
         }
       },
       "Microsoft.Extensions.Options": {

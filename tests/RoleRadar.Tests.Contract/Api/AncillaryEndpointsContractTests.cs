@@ -28,7 +28,8 @@ public sealed class AncillaryEndpointsContractTests(SharedMongoFixture sharedMon
             Area: "prep",
             ProvenanceKind: "stated",
             ProvenanceDate: "2026-10-25",
-            ProvenanceQualifier: null));
+            ProvenanceQualifier: null,
+            Actor: "mcp-stdio"));
         Assert.True(noteRes.IsSuccess);
         var noteId = noteRes.Value!.Id;
 

@@ -133,6 +133,7 @@ public sealed record PostingRecordResultDto(
     IReadOnlyList<PostingDifference>? Differences = null);
 
 public sealed record RecordPostingCommand(
+    string Actor,
     Guid? PostingId = null,
     Guid? VersionToken = null,
     Guid? CompanyId = null,
@@ -155,7 +156,6 @@ public sealed record RecordPostingCommand(
     Guid? ScreeningNoteId = null,
     Guid? DuplicateOfId = null,
     IReadOnlyList<SignalInputDto>? Signals = null,
-    string Actor = "mcp-stdio",
     string? OwnerId = null,
     bool? CompHighPriority = null) : ICommand<PostingRecordResultDto>;
 
@@ -164,6 +164,12 @@ public sealed class RecordPostingCommandValidator : ICommandValidator<RecordPost
     public ResultError? Validate(RecordPostingCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        var actorError = CommandActor.Validate(command.Actor);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
 
         // Explicit update mode
         if (command.PostingId.HasValue)

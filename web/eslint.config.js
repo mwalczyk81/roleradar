@@ -123,6 +123,21 @@ export default tseslint.config(
     },
   },
   {
+    // 013 US1: the app and the server log through app/lib/log.server.ts (structured, scrubbed, correlated). Direct
+    // console calls are allowed only in the dev launcher and root tool configs, in tests (which stub output) and in the
+    // CI-only scripts.
+    files: ["**/*.{ts,tsx,js,mjs}"],
+    rules: {
+      "no-console": "error",
+    },
+  },
+  {
+    files: ["dev.js", "*.config.{ts,js,mjs}", "tests/**", "scripts/**"],
+    rules: {
+      "no-console": "off",
+    },
+  },
+  {
     ignores: [
       "dist/**",
       "build/**",

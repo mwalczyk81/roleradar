@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { parse as parseCookie } from "cookie";
+import { log } from "./log.server.js";
 
 export interface UserSession {
   sessionId: string;
@@ -86,16 +87,16 @@ export function getSessionEncryptionKey(): Buffer {
       return cachedKey;
     }
     const msg =
-      "[FATAL] RoleRadar Web refused to start: SESSION_ENCRYPTION_KEY is required outside Development.";
-    console.error(msg);
+      "RoleRadar Web refused to start: SESSION_ENCRYPTION_KEY is required outside Development.";
+    log.fatal(msg);
     throw new Error(msg);
   }
 
   const buf = Buffer.from(raw.trim(), "base64");
   if (buf.length !== 32) {
     const msg =
-      "[FATAL] RoleRadar Web refused to start: SESSION_ENCRYPTION_KEY must be exactly 32 bytes base64.";
-    console.error(msg);
+      "RoleRadar Web refused to start: SESSION_ENCRYPTION_KEY must be exactly 32 bytes base64.";
+    log.fatal(msg);
     throw new Error(msg);
   }
 

@@ -149,7 +149,8 @@ public sealed class NoteHandlersUnitTests
             Tags: ["limit"],
             ProvenanceKind: "stated",
             ProvenanceDate: "2026-10-17",
-            ProvenanceQualifier: null));
+            ProvenanceQualifier: null,
+            Actor: "mcp-stdio"));
         Assert.True(created.IsSuccess);
         var noteId = created.Value!.Id;
         var initialToken = created.Value.VersionToken;
@@ -157,14 +158,16 @@ public sealed class NoteHandlersUnitTests
         // 1. Append with textToAppend > 8 MiB -> ValidationError
         var appendInputTooLarge = await appendHandler.HandleAsync(new AppendToNoteCommand(
             Id: noteId,
-            TextToAppend: new string('Y', Note.MaxBodyBytes + 1)));
+            TextToAppend: new string('Y', Note.MaxBodyBytes + 1),
+            Actor: "mcp-stdio"));
         Assert.False(appendInputTooLarge.IsSuccess);
         Assert.Equal(ErrorCode.ValidationError, appendInputTooLarge.Error!.Value.Code);
 
         // 2. Append where textToAppend is small (200 bytes) but resulting body > 8 MiB -> ValidationError
         var appendResultTooLarge = await appendHandler.HandleAsync(new AppendToNoteCommand(
             Id: noteId,
-            TextToAppend: new string('Y', 200)));
+            TextToAppend: new string('Y', 200),
+            Actor: "mcp-stdio"));
         Assert.False(appendResultTooLarge.IsSuccess);
         Assert.Equal(ErrorCode.ValidationError, appendResultTooLarge.Error!.Value.Code);
         Assert.Single(repo.Audits); // Only the initial create audit entry exists
@@ -174,7 +177,8 @@ public sealed class NoteHandlersUnitTests
             Id: noteId,
             Heading: "SectionA",
             NewSectionBody: "## SectionA\n" + new string('Z', Note.MaxBodyBytes),
-            VersionToken: initialToken));
+            VersionToken: initialToken,
+            Actor: "mcp-stdio"));
         Assert.False(replaceInputTooLarge.IsSuccess);
         Assert.Equal(ErrorCode.ValidationError, replaceInputTooLarge.Error!.Value.Code);
 
@@ -183,7 +187,8 @@ public sealed class NoteHandlersUnitTests
             Id: noteId,
             Heading: "SectionA",
             NewSectionBody: "## SectionA\n" + new string('Z', 200),
-            VersionToken: initialToken));
+            VersionToken: initialToken,
+            Actor: "mcp-stdio"));
         Assert.False(replaceResultTooLarge.IsSuccess);
         Assert.Equal(ErrorCode.ValidationError, replaceResultTooLarge.Error!.Value.Code);
         Assert.Empty(repo.Revisions);
@@ -204,7 +209,8 @@ public sealed class NoteHandlersUnitTests
             Tags: ["interview"],
             ProvenanceKind: "researched",
             ProvenanceDate: "2026-10-17",
-            ProvenanceQualifier: null));
+            ProvenanceQualifier: null,
+            Actor: "mcp-stdio"));
 
         var getHandler = new GetNoteQueryHandler(repo);
         var found = await getHandler.HandleAsync(new GetNoteQuery(created.Value!.Id));
@@ -228,7 +234,8 @@ public sealed class NoteHandlersUnitTests
             Tags: ["paged"],
             ProvenanceKind: "stated",
             ProvenanceDate: "2026-10-17",
-            ProvenanceQualifier: null));
+            ProvenanceQualifier: null,
+            Actor: "mcp-stdio"));
 
         var page1 = await getHandler.HandleAsync(new GetNoteQuery(largeCreated.Value!.Id));
         Assert.True(page1.IsSuccess);
@@ -288,7 +295,8 @@ public sealed class NoteHandlersUnitTests
             Tags: ["unicode"],
             ProvenanceKind: "stated",
             ProvenanceDate: "2026-10-17",
-            ProvenanceQualifier: null));
+            ProvenanceQualifier: null,
+            Actor: "mcp-stdio"));
 
         // Request offset = 0, maxChars = 5 -> naive slice [0..5) would end at index 4 (high surrogate of 🚀)!
         // Must back off by 1 char to return "abcd" (4 chars) with nextOffset = 4.
@@ -334,7 +342,8 @@ public sealed class NoteHandlersUnitTests
             Tags: ["unicode"],
             ProvenanceKind: "stated",
             ProvenanceDate: "2026-10-17",
-            ProvenanceQualifier: null));
+            ProvenanceQualifier: null,
+            Actor: "mcp-stdio"));
 
         var defaultPage1 = await getHandler.HandleAsync(new GetNoteQuery(boundaryCreated.Value!.Id));
         Assert.True(defaultPage1.IsSuccess);
@@ -381,7 +390,8 @@ public sealed class NoteHandlersUnitTests
             Tags: null,
             ProvenanceKind: "stated",
             ProvenanceDate: "2026-10-17",
-            ProvenanceQualifier: null));
+            ProvenanceQualifier: null,
+            Actor: "mcp-stdio"));
 
         var appendHandler = new AppendToNoteCommandHandler(repo, new FixedUtcClock(FixedNow.AddMinutes(5)));
         var appended = await appendHandler.HandleAsync(new AppendToNoteCommand(
@@ -398,7 +408,8 @@ public sealed class NoteHandlersUnitTests
 
         var missingAppend = await appendHandler.HandleAsync(new AppendToNoteCommand(
             Id: Guid.CreateVersion7(),
-            TextToAppend: "Line 2.\n"));
+            TextToAppend: "Line 2.\n",
+            Actor: "mcp-stdio"));
         Assert.False(missingAppend.IsSuccess);
         Assert.Equal(ErrorCode.NotFound, missingAppend.Error!.Value.Code);
     }
@@ -416,7 +427,8 @@ public sealed class NoteHandlersUnitTests
             Tags: ["test"],
             ProvenanceKind: "stated",
             ProvenanceDate: "2026-10-17",
-            ProvenanceQualifier: null));
+            ProvenanceQualifier: null,
+            Actor: "mcp-stdio"));
 
         var replaceHandler = new ReplaceNoteSectionCommandHandler(repo, new FixedUtcClock(FixedNow.AddMinutes(10)));
 
@@ -425,7 +437,8 @@ public sealed class NoteHandlersUnitTests
             Id: created.Value!.Id,
             Heading: "Gamma",
             NewSectionBody: "## Gamma\nNew.\n",
-            VersionToken: created.Value.VersionToken));
+            VersionToken: created.Value.VersionToken,
+            Actor: "mcp-stdio"));
         Assert.False(missingSection.IsSuccess);
         Assert.Equal(ErrorCode.SectionNotFound, missingSection.Error!.Value.Code);
 
@@ -434,7 +447,8 @@ public sealed class NoteHandlersUnitTests
             Id: created.Value.Id,
             Heading: "Alpha",
             NewSectionBody: "## Alpha\nUpdated alpha.\n",
-            VersionToken: created.Value.VersionToken));
+            VersionToken: created.Value.VersionToken,
+            Actor: "mcp-stdio"));
         Assert.True(replaced.IsSuccess);
         Assert.Equal(1, replaced.Value!.RevisionCount);
         Assert.Single(repo.Revisions);
@@ -445,7 +459,8 @@ public sealed class NoteHandlersUnitTests
             Id: created.Value.Id,
             Heading: "Alpha",
             NewSectionBody: "## Alpha\nSecond update with stale token.\n",
-            VersionToken: created.Value.VersionToken));
+            VersionToken: created.Value.VersionToken,
+            Actor: "mcp-stdio"));
         Assert.False(stale.IsSuccess);
         Assert.Equal(ErrorCode.StaleVersionToken, stale.Error!.Value.Code);
     }
@@ -463,7 +478,8 @@ public sealed class NoteHandlersUnitTests
             Tags: ["kafka", "backend"],
             ProvenanceKind: "stated",
             ProvenanceDate: "2026-10-17",
-            ProvenanceQualifier: null));
+            ProvenanceQualifier: null,
+            Actor: "mcp-stdio"));
 
         var searchHandler = new SearchNotesQueryHandler(repo);
         var searchResult = await searchHandler.HandleAsync(new SearchNotesQuery(
@@ -491,11 +507,12 @@ public sealed class NoteHandlersUnitTests
             Tags: ["unit"],
             ProvenanceKind: "stated",
             ProvenanceDate: "2026-10-17",
-            ProvenanceQualifier: null));
+            ProvenanceQualifier: null,
+            Actor: "mcp-stdio"));
         Assert.True(created.IsSuccess);
 
         var archiveHandler = new ArchiveNoteCommandHandler(repo, clock);
-        var archiveResult = await archiveHandler.HandleAsync(new ArchiveNoteCommand(created.Value!.Id));
+        var archiveResult = await archiveHandler.HandleAsync(new ArchiveNoteCommand(created.Value!.Id, Actor: "mcp-stdio"));
 
         Assert.True(archiveResult.IsSuccess);
         Assert.NotNull(archiveResult.Value);
@@ -508,6 +525,50 @@ public sealed class NoteHandlersUnitTests
         Assert.Equal("# Archive Me\nKeep body verbatim.\n", noteInRepo.Body);
         Assert.Equal(2, repo.Audits.Count); // 1 create + 1 archive
         Assert.Equal(AuditOperation.NoteArchive, repo.Audits[1].Operation);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task ArchiveNoteCommandHandler_BlankActor_ReturnsValidationErrorAndWritesNothing(string actor)
+    {
+        // Feature 013 (ADR 0041, plan D5): a blank actor is a ValidationError result, never a silent default.
+        var repo = new InMemoryFakeNoteRepository();
+        var clock = new FixedUtcClock(FixedNow);
+        var handler = new ArchiveNoteCommandHandler(repo, clock);
+
+        var result = await handler.HandleAsync(new ArchiveNoteCommand(Guid.NewGuid(), Actor: actor));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, result.Error!.Value.Code);
+        Assert.Contains("actor", result.Error.Value.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(repo.Audits);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task CreateNoteCommandHandler_BlankActor_ReturnsValidationErrorAndWritesNothing(string actor)
+    {
+        var repo = new InMemoryFakeNoteRepository();
+        var clock = new FixedUtcClock(FixedNow);
+        var handler = new CreateNoteCommandHandler(repo, clock);
+
+        var result = await handler.HandleAsync(new CreateNoteCommand(
+            Title: "Blank Actor Target",
+            Body: "# Heading\nBody.\n",
+            Area: "general",
+            Tags: ["unit"],
+            ProvenanceKind: "stated",
+            ProvenanceDate: "2026-10-17",
+            ProvenanceQualifier: null,
+            Actor: actor));
+
+        Assert.False(result.IsSuccess);
+        Assert.Equal(ErrorCode.ValidationError, result.Error!.Value.Code);
+        Assert.Contains("actor", result.Error.Value.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(repo.Notes);
+        Assert.Empty(repo.Audits);
     }
 
     private sealed class FixedUtcClock(DateTime utcNow) : IUtcClock

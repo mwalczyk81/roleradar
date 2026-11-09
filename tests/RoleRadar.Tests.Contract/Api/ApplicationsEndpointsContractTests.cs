@@ -21,12 +21,13 @@ public sealed class ApplicationsEndpointsContractTests(SharedMongoFixture shared
         var companyHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto>>();
         var postingHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordPostingCommand, PostingRecordResultDto>>();
 
-        var companyRes = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: "stratos-tech"));
+        var companyRes = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: "stratos-tech", Actor: "system"));
         var postingRes = await postingHandler.HandleAsync(new RecordPostingCommand(
             CompanyId: companyRes.Value!.Company.Id,
             Title: "Lead .NET Architect",
             RequisitionId: "STR-900",
-            AtsTenant: "stratos"));
+            AtsTenant: "stratos",
+            Actor: "mcp-stdio"));
 
         var postingId = postingRes.Value!.Posting!.Id;
 

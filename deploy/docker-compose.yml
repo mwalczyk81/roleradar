@@ -1,8 +1,16 @@
+# Feature 013 (FR-032): cap every container's log so local logs cannot grow without limit (10 MB x 3 files).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   mongo:
     image: mongo:9.0.4
     container_name: roleradar-mongo
     restart: unless-stopped
+    logging: *default-logging
     environment:
       # Work around MongoDB SERVER-121912 rseq/TCMalloc startup abort on Linux kernels 6.19+ and 7.0.0-7.0.13.
       - GLIBC_TUNABLES=glibc.pthread.rseq=1

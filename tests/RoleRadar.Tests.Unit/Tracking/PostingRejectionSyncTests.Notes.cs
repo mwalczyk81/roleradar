@@ -23,7 +23,8 @@ public sealed partial class PostingRejectionSyncTests
             PostingId: world.Posting.Id,
             Action: "append_event",
             Event: new ApplicationEventInputDto("note", "2026-10-05", "web", "A remark about the call"),
-            OwnerId: Owner));
+            OwnerId: Owner,
+            Actor: "agent"));
 
         Assert.True(result.IsSuccess, result.Error?.Message);
         var ev = Assert.Single(world.Events);

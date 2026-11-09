@@ -7,6 +7,7 @@ using RoleRadar.Application;
 using RoleRadar.Infrastructure;
 using RoleRadar.Mcp.Stdio.Filters;
 using RoleRadar.Mcp.Stdio.Tools;
+using RoleRadar.Observability;
 
 namespace RoleRadar.Mcp.Stdio;
 
@@ -20,10 +21,7 @@ public static class Program
 
             // Route all diagnostic logging strictly to stderr so stdout carries exclusively JSON-RPC 2.0 protocol frames (FR-020).
             builder.Logging.ClearProviders();
-            builder.Logging.AddConsole(options =>
-            {
-                options.LogToStandardErrorThreshold = LogLevel.Trace;
-            });
+            builder.Logging.AddRoleRadarLogging("mcp", LogStream.StdErr, builder.Configuration);
 
             var connectionString = RoleRadar.Infrastructure.Mongo.MongoConnectionStringSource.Resolve(Environment.GetEnvironmentVariable);
             var databaseName = Environment.GetEnvironmentVariable("ROLERADAR_MONGO_DATABASE");

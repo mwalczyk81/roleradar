@@ -412,6 +412,9 @@
           "Microsoft.IdentityModel.JsonWebTokens": "8.19.2",
           "Microsoft.IdentityModel.Tokens": "8.19.2"
         }
+      },
+      "roleradar.observability": {
+        "type": "Project"
       }
     }
   }

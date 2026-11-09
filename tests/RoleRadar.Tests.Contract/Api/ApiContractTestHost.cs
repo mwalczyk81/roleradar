@@ -43,7 +43,8 @@ internal sealed class ApiContractTestHost : IAsyncDisposable
 
     public static async Task<ApiContractTestHost> StartAsync(
         SharedMongoFixture sharedMongo,
-        string dbPrefix = "rrtest_api_contract")
+        string dbPrefix = "rrtest_api_contract",
+        Action<WebApplicationBuilder>? configure = null)
     {
         var rsa = RSA.Create(2048);
         var rsaKey = new RsaSecurityKey(rsa) { KeyId = "api-contract-rsa-1" };
@@ -77,6 +78,8 @@ internal sealed class ApiContractTestHost : IAsyncDisposable
                     options.TokenValidationParameters.ValidAudience = ValidAudience;
                     options.TokenValidationParameters.IssuerSigningKeys = [rsaKey];
                 });
+
+                configure?.Invoke(builder);
             });
 
         await app.StartAsync();

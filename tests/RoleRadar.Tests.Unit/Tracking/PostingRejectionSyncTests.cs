@@ -158,7 +158,8 @@ public sealed partial class PostingRejectionSyncTests
             PostingId: world.Posting.Id,
             Action: "append_event",
             Event: new ApplicationEventInputDto("rejected", "2026-10-06", "web", "Second email"),
-            OwnerId: Owner));
+            OwnerId: Owner,
+            Actor: "agent"));
 
         Assert.True(manual.IsSuccess, manual.Error?.Message);
         Assert.Equal(PostingDisposition.Rejected, world.Posting.Disposition);
@@ -179,7 +180,8 @@ public sealed partial class PostingRejectionSyncTests
             TargetDisposition: "closed",
             VersionToken: world.Posting.VersionToken,
             Reason: "Listing taken down",
-            OwnerId: Owner));
+            OwnerId: Owner,
+            Actor: "mcp-stdio"));
 
         Assert.True(result.IsSuccess, result.Error?.Message);
         Assert.Equal(PostingDisposition.Closed, world.Posting.Disposition);
@@ -245,7 +247,8 @@ public sealed partial class PostingRejectionSyncTests
             PostingId: world.Posting.Id,
             TargetDisposition: "lead",
             VersionToken: world.Posting.VersionToken,
-            OwnerId: Owner));
+            OwnerId: Owner,
+            Actor: "mcp-stdio"));
 
         Assert.False(result.IsSuccess);
         Assert.Equal(ErrorCode.ValidationError, result.Error!.Value.Code);
@@ -390,7 +393,8 @@ public sealed partial class PostingRejectionSyncTests
                 TargetDisposition: "rejected",
                 VersionToken: Posting.VersionToken,
                 Reason: reason,
-                OwnerId: Owner);
+                OwnerId: Owner,
+                Actor: "mcp-stdio");
 
         public TransitionPostingCommand ReopenCommand() =>
             new(
@@ -398,7 +402,8 @@ public sealed partial class PostingRejectionSyncTests
                 TargetDisposition: "lead",
                 VersionToken: Posting.VersionToken,
                 OverrideReason: "Recruiter reopened the role",
-                OwnerId: Owner);
+                OwnerId: Owner,
+                Actor: "mcp-stdio");
 
         private sealed class Ctx : ITrackingTransactionContext
         {

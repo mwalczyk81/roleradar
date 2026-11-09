@@ -75,7 +75,8 @@ public sealed class PostingRecordExplicitUpdateTests : IAsyncLifetime
             Location: "Austin, TX (Remote)",
             RemoteType: "remote",
             Score: 9.2m,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var result = await handler.HandleAsync(command);
 
@@ -109,7 +110,8 @@ public sealed class PostingRecordExplicitUpdateTests : IAsyncLifetime
             PostingId: posting.Id,
             VersionToken: staleToken,
             Location: "New Location",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var result = await handler.HandleAsync(command);
 

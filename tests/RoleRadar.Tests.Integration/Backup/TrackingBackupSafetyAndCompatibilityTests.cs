@@ -275,7 +275,8 @@ public sealed class TrackingBackupSafetyAndCompatibilityTests : IClassFixture<Ba
                 var dryRunOutcome = await importHandler.HandleAsync(new ImportMarkdownCommand(
                     FilePaths: [testMarkdownFile],
                     DryRun: true,
-                    OwnerId: "legacy-owner"));
+                    OwnerId: "legacy-owner",
+                    Actor: "cli-import"));
 
                 Assert.True(dryRunOutcome.IsSuccess);
                 var summary = dryRunOutcome.Value!;

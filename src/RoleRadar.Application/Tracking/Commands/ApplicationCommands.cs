@@ -16,6 +16,7 @@ public sealed record ApplicationEventInputDto(
 public sealed record RecordApplicationCommand(
     Guid PostingId,
     string Action,
+    string Actor,
     string? SubmittedDate = null,
     decimal? DesiredSalaryMin = null,
     decimal? DesiredSalaryMax = null,
@@ -28,7 +29,6 @@ public sealed record RecordApplicationCommand(
     bool OverrideDecided = false,
     string? OverrideReason = null,
     ApplicationEventInputDto? Event = null,
-    string Actor = "agent",
     string? OwnerId = null) : ICommand<ApplicationRecordResultDto>;
 
 public sealed record ApplicationRecordResultDto(
@@ -44,6 +44,12 @@ public sealed class RecordApplicationCommandValidator : ICommandValidator<Record
     public ResultError? Validate(RecordApplicationCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        var actorError = CommandActor.Validate(command.Actor);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
 
         if (command.PostingId == Guid.Empty)
         {

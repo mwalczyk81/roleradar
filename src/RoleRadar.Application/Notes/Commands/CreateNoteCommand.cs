@@ -32,7 +32,7 @@ public sealed record CreateNoteCommand(
     string ProvenanceKind,
     string ProvenanceDate,
     string? ProvenanceQualifier,
-    string Actor = "mcp-stdio",
+    string Actor,
     string? OwnerId = null) : ICommand<NoteCreatedDto>;
 
 public sealed class CreateNoteCommandValidator : ICommandValidator<CreateNoteCommand>
@@ -40,6 +40,12 @@ public sealed class CreateNoteCommandValidator : ICommandValidator<CreateNoteCom
     public ResultError? Validate(CreateNoteCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        var actorError = CommandActor.Validate(command.Actor);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
 
         if (string.IsNullOrWhiteSpace(command.Title))
         {
@@ -154,7 +160,7 @@ public sealed class CreateNoteCommandHandler : ICommandHandler<CreateNoteCommand
             ? OwnerId.Default.Value
             : new OwnerId(command.OwnerId).Value;
 
-        var actor = string.IsNullOrWhiteSpace(command.Actor) ? "mcp-stdio" : command.Actor.Trim();
+        var actor = command.Actor.Trim();
         var now = _clock.UtcNow;
 
         var provKind = ProvenanceKindExtensions.FromWireString(command.ProvenanceKind);

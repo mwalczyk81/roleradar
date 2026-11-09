@@ -3,11 +3,11 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
-import { AsyncLocalStorage } from "node:async_hooks";
 import { pathToFileURL } from "node:url";
-
-const requestContextStorage = new AsyncLocalStorage<{ nonce: string }>();
 import { createRequestListener } from "@react-router/node";
+import { log } from "./app/lib/log.server.js";
+import { acceptCorrelationId, newCorrelationId } from "./app/lib/observability.js";
+import { getRequestContext, runWithRequestContext } from "./app/lib/request-context.server.js";
 
 export function validateSecretsOrExit(): void {
   if (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test") {
@@ -32,11 +32,7 @@ export function validateSecretsOrExit(): void {
     }
 
     if (missing.length > 0) {
-      console.error(
-        `[FATAL] RoleRadar Web refused to start: missing required secrets (${missing.join(
-          ", "
-        )}).`
-      );
+      log.fatal(`RoleRadar Web refused to start: missing required secrets (${missing.join(", ")}).`);
       process.exit(1);
     }
   }
@@ -84,11 +80,16 @@ function resolveCertPath(
   return defaultFilename;
 }
 
-let requestListener: ReturnType<typeof createRequestListener> | null = null;
+type RequestListener = (req: http.IncomingMessage, res: http.ServerResponse) => unknown;
 
-export async function getRequestListener(): Promise<
-  ReturnType<typeof createRequestListener>
-> {
+let requestListener: RequestListener | null = null;
+
+/** Test seam: replace the React Router listener (feature 013 tests run without a build). */
+export function setRequestListenerForTesting(listener: RequestListener | null): void {
+  requestListener = listener;
+}
+
+export async function getRequestListener(): Promise<RequestListener> {
   if (!requestListener) {
     const candidates = [
       path.resolve(process.cwd(), "build/server/index.js"),
@@ -105,9 +106,9 @@ export async function getRequestListener(): Promise<
     requestListener = createRequestListener({
       build,
       getLoadContext: (req) => {
-        const store = requestContextStorage.getStore();
+        const store = getRequestContext();
         return {
-          nonce: store?.nonce ?? req.headers.get("x-csp-nonce") ?? undefined,
+          nonce: store?.nonce || req.headers.get("x-csp-nonce") || undefined,
         };
       },
     });
@@ -161,35 +162,67 @@ function serveStaticFile(reqUrl: string, res: http.ServerResponse): boolean {
   return false;
 }
 
+function singleHeader(value: string | string[] | undefined): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
 export function createRequestHandler() {
   return async (req: http.IncomingMessage, res: http.ServerResponse) => {
-    if (req.url === "/health") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok" }));
-      return;
-    }
+    // Feature 013: accept or create the correlation id at the edge, return it on every response, and write one
+    // RequestCompleted record per request (no query string; /health at debug so healthchecks do not flood the log).
+    const correlationId = acceptCorrelationId(singleHeader(req.headers["x-correlation-id"])) ?? newCorrelationId();
+    req.headers["x-correlation-id"] = correlationId;
+    res.setHeader("X-Correlation-ID", correlationId);
 
-    if (req.url && serveStaticFile(req.url, res)) {
-      return;
-    }
+    const started = performance.now();
+    const method = req.method ?? "GET";
+    const path = (req.url ?? "/").split("?")[0];
+    res.on("finish", () => {
+      const status = res.statusCode;
+      const fields = {
+        event: "RequestCompleted",
+        correlationId,
+        props: { method, path, status, durationMs: Math.round((performance.now() - started) * 1000) / 1000 },
+      };
+      const msg = `${method} ${path} responded ${status}`;
+      if (path === "/health") {
+        log.debug(msg, fields);
+      } else {
+        log.info(msg, fields);
+      }
+    });
 
-    if (req.url === "/favicon.ico") {
-      res.writeHead(204);
-      res.end();
-      return;
-    }
+    const context = { correlationId, nonce: "" };
+    await runWithRequestContext(context, async () => {
+      if (req.url === "/health") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ status: "ok" }));
+        return;
+      }
 
-    const nonce = generateCspNonce();
-    applySecurityHeaders(res, nonce);
-    req.headers["x-csp-nonce"] = nonce;
+      if (req.url && serveStaticFile(req.url, res)) {
+        return;
+      }
 
-    requestContextStorage.run({ nonce }, async () => {
+      if (req.url === "/favicon.ico") {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      const nonce = generateCspNonce();
+      context.nonce = nonce;
+      applySecurityHeaders(res, nonce);
+      req.headers["x-csp-nonce"] = nonce;
+
       try {
         const listener = await getRequestListener();
-        listener(req, res);
+        await listener(req, res);
       } catch (err) {
-        console.error("[ERROR] Failed to handle web request:", err);
-        res.writeHead(500, { "Content-Type": "text/plain" });
+        log.error("Failed to handle web request", { error: err });
+        if (!res.headersSent) {
+          res.writeHead(500, { "Content-Type": "text/plain" });
+        }
         res.end("Internal Server Error");
       }
     });
@@ -212,23 +245,20 @@ export function createWebServer(): https.Server | http.Server {
   }
 
   if (process.env.NODE_ENV !== "development" && process.env.NODE_ENV !== "test") {
-    console.error(
-      `[FATAL] RoleRadar Web refused to start: TLS certificate ('${certFile}') or key ('${keyFile}') not found. Production requires TLS.`
-    );
+    log.fatal(`RoleRadar Web refused to start: TLS certificate ('${certFile}') or key ('${keyFile}') not found. Production requires TLS.`);
     process.exit(1);
   }
 
-  console.warn(
-    `[WARN] TLS certificates not found at '${certFile}' and '${keyFile}'. Falling back to HTTP.`
-  );
+  log.warn(`TLS certificates not found at '${certFile}' and '${keyFile}'. Falling back to HTTP.`);
   return http.createServer(handler);
 }
 
-export function startServer(port: number = 5003): void {
+export function startServer(port: number = 5003): https.Server | http.Server {
   const server = createWebServer();
   server.listen(port, "0.0.0.0", () => {
-    console.error(`[INFO] RoleRadar Web listening on port ${port}`);
+    log.info(`RoleRadar Web listening on port ${port}`);
   });
+  return server;
 }
 
 // Auto-start if executed directly

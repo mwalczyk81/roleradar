@@ -120,34 +120,34 @@ public sealed class VerifyCliContractTests : IAsyncLifetime
 
         // Seed clean company
         var companyHandler = new RecordCompanyCommandHandler(context, clock);
-        var companyRes = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: "Baseline Integrity Tech", OwnershipType: "public", OwnerId: "owner-1"));
+        var companyRes = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: "Baseline Integrity Tech", OwnershipType: "public", OwnerId: "owner-1", Actor: "system"));
         Assert.True(companyRes.IsSuccess);
         var companyId = companyRes.Value!.Company.Id;
 
         // Seed root posting
         var postingHandler = new RecordPostingCommandHandler(context, clock);
-        var rootPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Root Engineer", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-ROOT", OwnerId: "owner-1"));
+        var rootPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Root Engineer", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-ROOT", OwnerId: "owner-1", Actor: "mcp-stdio"));
         Assert.True(rootPostingRes.IsSuccess);
         var rootPostingId = rootPostingRes.Value!.Posting!.Id;
 
         // Seed duplicate posting referencing root
-        var dupPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Duplicate Engineer", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-DUP", DuplicateOfId: rootPostingId, OwnerId: "owner-1"));
+        var dupPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Duplicate Engineer", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-DUP", DuplicateOfId: rootPostingId, OwnerId: "owner-1", Actor: "mcp-stdio"));
         Assert.True(dupPostingRes.IsSuccess);
         var dupPostingId = dupPostingRes.Value!.Posting!.Id;
 
         // Seed posting to be applied
-        var appliedPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Applied Engineer", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-APP", OwnerId: "owner-1"));
+        var appliedPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Applied Engineer", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-APP", OwnerId: "owner-1", Actor: "mcp-stdio"));
         Assert.True(appliedPostingRes.IsSuccess);
         var appliedPostingId = appliedPostingRes.Value!.Posting!.Id;
 
         // Seed application
         var appHandler = new RecordApplicationCommandHandler(context, clock);
-        var appRes = await appHandler.HandleAsync(new RecordApplicationCommand(PostingId: appliedPostingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: "tailored", OwnerId: "owner-1"));
+        var appRes = await appHandler.HandleAsync(new RecordApplicationCommand(PostingId: appliedPostingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: "tailored", OwnerId: "owner-1", Actor: "agent"));
         Assert.True(appRes.IsSuccess, $"Failed to create application: {appRes.Error?.Code} - {appRes.Error?.Message}");
         var applicationId = appRes.Value!.ApplicationId;
 
         // Seed posting with signal
-        var signalPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Signal Engineer", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-SIG", Signals: new[] { new SignalInputDto("gone", "404", "2026-10-18T10:00:00Z") }, OwnerId: "owner-1"));
+        var signalPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Signal Engineer", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-SIG", Signals: new[] { new SignalInputDto("gone", "404", "2026-10-18T10:00:00Z") }, OwnerId: "owner-1", Actor: "mcp-stdio"));
         Assert.True(signalPostingRes.IsSuccess);
         var signalPostingId = signalPostingRes.Value!.Posting!.Id;
 
@@ -177,7 +177,7 @@ public sealed class VerifyCliContractTests : IAsyncLifetime
         var searchRunId = searchRunRes.Value!.RecordId;
 
         // Seed applied posting WITHOUT application
-        var danglingAppPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Unlinked Applied Posting", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-NO-APP", OwnerId: "owner-1"));
+        var danglingAppPostingRes = await postingHandler.HandleAsync(new RecordPostingCommand(CompanyId: companyId, Title: "Unlinked Applied Posting", SourceKind: "ats", AtsTenant: "cleanats", RequisitionId: "REQ-NO-APP", OwnerId: "owner-1", Actor: "mcp-stdio"));
         Assert.True(danglingAppPostingRes.IsSuccess);
         var unlinkedAppliedPostingId = danglingAppPostingRes.Value!.Posting!.Id;
         // Mark disposition as applied directly on posting

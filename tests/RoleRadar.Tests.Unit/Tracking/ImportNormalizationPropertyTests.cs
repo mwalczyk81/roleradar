@@ -144,7 +144,8 @@ public sealed class ImportNormalizationPropertyTests
                 Url: row.Url,
                 AtsTenant: row.Tenant,
                 RequisitionId: row.Requisition,
-                OwnerId: Owner));
+                OwnerId: Owner,
+                Actor: "mcp-stdio"));
 
             Assert.True(result.IsSuccess, "Ingest must succeed for generated rows.");
             landed[index] = result.Value!.Posting?.Id ?? Guid.Empty;

@@ -132,7 +132,8 @@ public sealed class IdpAgnosticOidcIntegrationTests(IsolatedContainerMongoFixtur
                     Description: "Distributed observability platform",
                     OwnershipType: "private",
                     Status: "target",
-                    Headquarters: "Denver, CO"));
+                    Headquarters: "Denver, CO",
+                    Actor: "system"));
                 Assert.True(seedRes.IsSuccess);
                 seededCompanyId = seedRes.Value!.Company.Id;
             }

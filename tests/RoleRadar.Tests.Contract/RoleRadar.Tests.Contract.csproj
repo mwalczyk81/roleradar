@@ -12,10 +12,12 @@
     <ProjectReference Include="..\..\src\RoleRadar.Mcp.Stdio\RoleRadar.Mcp.Stdio.csproj" />
     <ProjectReference Include="..\..\src\RoleRadar.Identity\RoleRadar.Identity.csproj" />
     <ProjectReference Include="..\..\src\RoleRadar.Api\RoleRadar.Api.csproj" />
+    <ProjectReference Include="..\..\src\RoleRadar.Observability\RoleRadar.Observability.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="..\RoleRadar.Tests.Integration\Fixtures\MongoTestImage.cs" Link="Fixtures\MongoTestImage.cs" />
+    <Compile Include="..\RoleRadar.Tests.Integration\Fixtures\FormatterLogCapture.cs" Link="Fixtures\FormatterLogCapture.cs" />
   </ItemGroup>
 
   <ItemGroup>

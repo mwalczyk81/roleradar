@@ -6,11 +6,15 @@ using RoleRadar.Application;
 using RoleRadar.Cli.Commands;
 using RoleRadar.Infrastructure;
 using RoleRadar.Infrastructure.Backup;
+using RoleRadar.Observability;
 
 namespace RoleRadar.Cli;
 
 public static class Program
 {
+    /// <summary>The correlation id of this CLI run (feature 013), shared by log records and audit entries.</summary>
+    public static string RunId { get; } = CorrelationId.New();
+
     public static async Task<int> Main(string[] args)
     {
         using var cts = new CancellationTokenSource();
@@ -27,6 +31,11 @@ public static class Program
                                        || string.Equals(a, "-v", StringComparison.OrdinalIgnoreCase));
 
             await using var services = BuildServiceProvider(args, isVerbose: isVerbose);
+
+            // One correlation id for the whole run (feature 013): every record this process writes carries it.
+            using var runScope = services.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("RoleRadar.Cli")
+                .BeginScope(new Dictionary<string, object?> { [CorrelationId.ScopeKey] = RunId });
 
             var rootCommand = new RootCommand("RoleRadar local CLI");
             rootCommand.Add(StatusCommand.Create(services));
@@ -81,10 +90,7 @@ public static class Program
         {
             logging.ClearProviders();
             logging.SetMinimumLevel(logLevel);
-            logging.AddConsole(options =>
-            {
-                options.LogToStandardErrorThreshold = LogLevel.Trace;
-            });
+            logging.AddRoleRadarLogging("cli", LogStream.StdErr);
         });
 
         var connectionString = RoleRadar.Infrastructure.Mongo.MongoConnectionStringSource.Resolve(Environment.GetEnvironmentVariable);

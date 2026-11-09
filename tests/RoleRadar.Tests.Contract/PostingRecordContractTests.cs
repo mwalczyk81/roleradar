@@ -62,7 +62,8 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
             CompanyId: missingCompanyId,
             Title: "Staff Backend Engineer",
             SourceKind: "ats",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var result = await handler.HandleAsync(command);
 
@@ -86,7 +87,8 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
             SourceKind: "ats",
             AtsTenant: "octanecorp",
             RequisitionId: "REQ-1001",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var result = await handlerFirstDay.HandleAsync(command);
         Assert.True(result.IsSuccess);
@@ -127,7 +129,8 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
             SourceKind: "ats",
             AtsTenant: "acme",
             RequisitionId: "REQ-001",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
         var res1 = await handler.HandleAsync(cmd1);
         Assert.True(res1.IsSuccess);
         Assert.NotNull(res1.Value);
@@ -139,7 +142,8 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
             Title: "Staff Backend Engineer",
             SourceKind: "aggregator",
             RequisitionId: "REQ-002",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
         var res2 = await handler.HandleAsync(cmd2);
         Assert.True(res2.IsSuccess);
         Assert.NotNull(res2.Value);
@@ -153,7 +157,8 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
             CompanyId: company.Id,
             Title: "Staff Backend Engineer",
             SourceKind: "aggregator",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
         var res3 = await handler.HandleAsync(cmd3);
         Assert.True(res3.IsSuccess);
         Assert.NotNull(res3.Value);
@@ -177,7 +182,8 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
             SourceKind: "ats",
             AtsTenant: "zenith",
             RequisitionId: "REQ-A",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
         var resA = await handler.HandleAsync(cmdA);
         Assert.True(resA.IsSuccess);
         Assert.NotNull(resA.Value);
@@ -191,7 +197,8 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
             AtsTenant: "zenith",
             RequisitionId: "REQ-B",
             DuplicateOfId: idA,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
         var resB = await handler.HandleAsync(cmdB);
         Assert.True(resB.IsSuccess);
         Assert.NotNull(resB.Value);
@@ -205,7 +212,8 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
             AtsTenant: "zenith",
             RequisitionId: "REQ-C",
             DuplicateOfId: idB,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
         var resC = await handler.HandleAsync(cmdC);
         Assert.True(resC.IsSuccess);
         Assert.NotNull(resC.Value);
@@ -233,7 +241,8 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
             AtsTenant: "acme",
             RequisitionId: "DATA-100",
             ResurfacePolicy: "if_reopened",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var res = await recordHandler.HandleAsync(cmd);
         Assert.True(res.IsSuccess);
@@ -247,7 +256,8 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
             VersionToken: posting.VersionToken,
             Reason: "Below required salary threshold",
             ResurfacePolicy: "if_reopened",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var transRes = await transitionHandler.HandleAsync(transCmd);
         Assert.True(transRes.IsSuccess);
@@ -289,7 +299,8 @@ public sealed class PostingRecordContractTests : IAsyncLifetime
         var cmd = new RecordPostingCommand(
             CompanyId: company.Id,
             Title: "Director, Software Engineering",
-            RequisitionId: "19505");
+            RequisitionId: "19505",
+            Actor: "mcp-stdio");
 
         var res = await handler.HandleAsync(cmd);
         Assert.True(res.IsSuccess);

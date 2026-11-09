@@ -7,19 +7,19 @@ namespace RoleRadar.Application.Tracking.Commands;
 
 public sealed record AddContactCommand(
     string Name,
+    string Actor,
     string? Role = null,
     string? Company = null,
     Guid? CompanyId = null,
     string? Relationship = null,
     string? Notes = null,
-    string? Actor = null,
     string? OwnerId = null,
     Guid? Id = null) : ICommand<ContactResultDto>;
 
 public sealed record RedactContactCommand(
     Guid Id,
+    string Actor,
     Guid? VersionToken = null,
-    string? Actor = null,
     string? OwnerId = null) : ICommand<ContactRedactResultDto>;
 
 public sealed record ContactResultDto(
@@ -54,6 +54,12 @@ public sealed class AddContactCommandHandler : ICommandHandler<AddContactCommand
     public async Task<Result<ContactResultDto>> HandleAsync(AddContactCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        var actorError = CommandActor.Validate(command.Actor);
+        if (actorError is not null)
+        {
+            return Result<ContactResultDto>.Failure(actorError.Value);
+        }
 
         if (string.IsNullOrWhiteSpace(command.Name))
         {
@@ -125,7 +131,7 @@ public sealed class AddContactCommandHandler : ICommandHandler<AddContactCommand
         var details = AuditDetails.ForContact(contact.Id, changedFields);
         var auditEntry = AuditLogEntry.CreateForTracking(
             ownerId: ownerId,
-            actor: command.Actor ?? "cli-user",
+            actor: command.Actor.Trim(),
             operation: AuditOperation.ContactAdd,
             entityType: "contact",
             entityId: contact.Id,
@@ -164,6 +170,12 @@ public sealed class RedactContactCommandHandler : ICommandHandler<RedactContactC
     public async Task<Result<ContactRedactResultDto>> HandleAsync(RedactContactCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        var actorError = CommandActor.Validate(command.Actor);
+        if (actorError is not null)
+        {
+            return Result<ContactRedactResultDto>.Failure(actorError.Value);
+        }
 
         if (command.Id == Guid.Empty)
         {
@@ -207,7 +219,7 @@ public sealed class RedactContactCommandHandler : ICommandHandler<RedactContactC
         var details = AuditDetails.ForContact(contact.Id, changedFields);
         var auditEntry = AuditLogEntry.CreateForTracking(
             ownerId: ownerId,
-            actor: command.Actor ?? "cli-user",
+            actor: command.Actor.Trim(),
             operation: AuditOperation.ContactRedact,
             entityType: "contact",
             entityId: contact.Id,

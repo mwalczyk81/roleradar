@@ -192,6 +192,9 @@
           "RoleRadar.Domain": "[1.0.0, )"
         }
       },
+      "roleradar.observability": {
+        "type": "Project"
+      },
       "Geralt": {
         "type": "CentralTransitive",
         "requested": "[4.5.0, )",

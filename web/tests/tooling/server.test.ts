@@ -43,12 +43,17 @@ describe("server.ts TLS and CSP invariants", () => {
     const exitSpy = vi.spyOn(process, "exit").mockImplementation((code?: string | number | null | undefined) => {
       throw new Error(`process.exit called with ${code}`);
     });
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    // Feature 013: the server logs through the structured logger, so capture stderr rather than console.error.
+    const stderr: string[] = [];
+    vi.spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
+      stderr.push(String(chunk));
+      return true;
+    });
 
     expect(() => createWebServer()).toThrow("process.exit called with 1");
     expect(exitSpy).toHaveBeenCalledWith(1);
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Production requires TLS")
-    );
+    const fatal = stderr.find((line) => line.includes("Production requires TLS"));
+    expect(fatal).toBeDefined();
+    expect(fatal).toMatch(/ fatal web /);
   });
 });

@@ -4,7 +4,9 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using RoleRadar.Identity.Configuration;
 using RoleRadar.Identity.Data;
+using RoleRadar.Identity.Observability;
 using RoleRadar.Identity.Services;
+using RoleRadar.Observability;
 
 namespace RoleRadar.Identity;
 
@@ -43,6 +45,9 @@ public partial class Program
             Args = args ?? [],
             ApplicationName = typeof(Program).Assembly.GetName().Name
         });
+
+        // Logging first, so providers a test adds through configureBuilder are kept (feature 013, ADR 0041).
+        builder.Logging.ClearProviders().AddRoleRadarLogging("identity", LogStream.Split, builder.Configuration);
 
         configureBuilder?.Invoke(builder);
 
@@ -122,6 +127,8 @@ public partial class Program
             var dbContext = scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>();
             dbContext.Database.Migrate();
         }
+
+        app.UseMiddleware<CorrelationMiddleware>();
 
         // 009 US4: the kit and Identity assets, then the /Account headers (form-action comes from the registered clients).
         app.UseStaticFiles();

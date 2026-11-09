@@ -226,13 +226,14 @@ public sealed class PostingRejectionSyncEndpointTests(SharedMongoFixture sharedM
         var companyHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto>>();
         var postingHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordPostingCommand, PostingRecordResultDto>>();
 
-        var company = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: $"Lantern Systems {Guid.NewGuid():N}"));
+        var company = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: $"Lantern Systems {Guid.NewGuid():N}", Actor: "system"));
         Assert.True(company.IsSuccess, company.Error?.Message);
         var posting = await postingHandler.HandleAsync(new RecordPostingCommand(
             CompanyId: company.Value!.Company.Id,
             Title: "Platform Engineer",
             RequisitionId: $"LAN-{Guid.NewGuid():N}"[..12],
-            AtsTenant: "lantern"));
+            AtsTenant: "lantern",
+            Actor: "mcp-stdio"));
         Assert.True(posting.IsSuccess, posting.Error?.Message);
         return posting.Value!.Posting!.Id;
     }
@@ -243,13 +244,14 @@ public sealed class PostingRejectionSyncEndpointTests(SharedMongoFixture sharedM
         var companyHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto>>();
         var postingHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordPostingCommand, PostingRecordResultDto>>();
 
-        var company = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: $"Harbor Analytics {Guid.NewGuid():N}"));
+        var company = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: $"Harbor Analytics {Guid.NewGuid():N}", Actor: "system"));
         Assert.True(company.IsSuccess, company.Error?.Message);
         var posting = await postingHandler.HandleAsync(new RecordPostingCommand(
             CompanyId: company.Value!.Company.Id,
             Title: "Staff Platform Engineer",
             RequisitionId: $"HAR-{Guid.NewGuid():N}"[..12],
-            AtsTenant: "harbor"));
+            AtsTenant: "harbor",
+            Actor: "mcp-stdio"));
         Assert.True(posting.IsSuccess, posting.Error?.Message);
         var postingId = posting.Value!.Posting!.Id;
 

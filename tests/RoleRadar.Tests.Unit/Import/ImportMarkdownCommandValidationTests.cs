@@ -24,7 +24,7 @@ public sealed class ImportMarkdownCommandValidationTests
             File.WriteAllText(pathA, "# Heading A\nContent A\n");
             File.WriteAllText(pathB, "# Heading B\nContent B\n");
 
-            var command = new ImportMarkdownCommand(FilePaths: [pathA, pathB]);
+            var command = new ImportMarkdownCommand(FilePaths: [pathA, pathB], Actor: "cli-import");
             var error = _validator.Validate(command);
 
             Assert.NotNull(error);
@@ -60,7 +60,8 @@ public sealed class ImportMarkdownCommandValidationTests
 
             var command = new ImportMarkdownCommand(
                 FilePaths: [tempFile1, tempFile2],
-                SourceFileId: "custom-id.md");
+                SourceFileId: "custom-id.md",
+                Actor: "cli-import");
 
             var error = _validator.Validate(command);
 
@@ -93,7 +94,8 @@ public sealed class ImportMarkdownCommandValidationTests
 
             var command = new ImportMarkdownCommand(
                 FilePaths: [tempFile],
-                SourceFileId: "custom-single.md");
+                SourceFileId: "custom-single.md",
+                Actor: "cli-import");
 
             var error = _validator.Validate(command);
 
@@ -119,7 +121,7 @@ public sealed class ImportMarkdownCommandValidationTests
             File.WriteAllText(tempFile1, "# Heading 1\nContent 1\n");
             File.WriteAllText(tempFile2, "# Heading 2\nContent 2\n");
 
-            var command = new ImportMarkdownCommand(FilePaths: [tempFile1, tempFile2]);
+            var command = new ImportMarkdownCommand(FilePaths: [tempFile1, tempFile2], Actor: "cli-import");
             var error = _validator.Validate(command);
 
             Assert.Null(error);
