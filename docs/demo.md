@@ -18,7 +18,7 @@ From the repository root:
 docker compose -p roleradar-demo -f deploy/demo/docker-compose.yml up --build --wait
 ```
 
-The first run builds four images (the command line tool, identity, api and web), which takes a few minutes; later runs start in seconds. The command ends when every service is healthy and the seed step has finished. The seed step prints counts only, for example "created 14 companies, 48 postings, 20 applications".
+The first run builds four images (the command line tool, identity, api and web), which takes a few minutes; later runs take about a minute. The command ends when every service is healthy and the seed step has finished. The seed step prints counts only, for example "created 14 companies, 48 postings, 20 applications".
 
 ## Get a sign-in
 

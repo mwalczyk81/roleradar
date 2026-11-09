@@ -25,7 +25,7 @@ You need Docker with Compose v2 ([versions](docs/demo.md#what-you-need)). Four s
    cd roleradar
    ```
 
-2. Start the demo stack. The first run builds four images, which takes a few minutes; later starts take about a minute and a half.
+2. Start the demo stack. The first run builds four images, which takes a few minutes; later starts take about a minute.
 
    ```bash
    docker compose -p roleradar-demo -f deploy/demo/docker-compose.yml up --build --wait
