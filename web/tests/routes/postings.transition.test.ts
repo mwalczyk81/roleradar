@@ -294,6 +294,41 @@ describe("POST /postings/:id action (T035)", () => {
     expect(String(data.message)).toContain("Database connection failed");
   });
 
+  it("maps a 503 service_unavailable envelope to a 503 action result with the API's friendly message and no raw text (013 US3)", async () => {
+    const { sessionId, session } = createTestSession();
+    const postingId = crypto.randomUUID();
+
+    mockApiPost.mockResolvedValueOnce({
+      data: undefined,
+      error: {
+        ok: false,
+        errorCode: "service_unavailable",
+        message: "The data store is not reachable. Try again shortly.",
+        correlationId: "test-corr-act-0503",
+      },
+      response: { status: 503 } as Response,
+    });
+
+    const formData = new FormData();
+    formData.set("_csrf", session.csrfToken);
+    formData.set("toDisposition", "scored");
+    formData.set("reason", "Outage test");
+    formData.set("versionToken", crypto.randomUUID());
+    const request = new Request(`https://localhost:5003/postings/${postingId}`, {
+      method: "POST",
+      headers: { Cookie: `${SECURE_COOKIE_NAME}=${sessionId}` },
+      body: formData,
+    });
+
+    const { status, data } = unwrapActionResult(await callAction(postingDetailAction, request, { id: postingId }));
+
+    expect(status).toBe(503);
+    expect(data.ok).toBe(false);
+    expect(data.errorCode).toBe("service_unavailable");
+    expect(String(data.message)).toBe("The data store is not reachable. Try again shortly.");
+    expect(JSON.stringify(data)).not.toMatch(/Mongo|stack|27017/);
+  });
+
   // ---- 008 phase 4 (T050): eventDate, warnings, status handling ----
 
   function transitionRequest(sessionId: string, csrf: string, fields: Record<string, string>, postingId = "post-1") {

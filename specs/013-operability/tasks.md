@@ -414,7 +414,7 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
     2. Unpause.
     3. Poll the same read until it returns 200, with a 30 s limit. Do not dispose or recreate the API host.
   - Add a stop-and-start variant only if pausing does not exercise the connection-failure path. That variant binds a free port chosen at runtime, under the same exclusions, so the address survives the restart.
-- [ ] T062 [P] [US3] Write `web/tests/unit/api-policy.test.ts`, using a fake `fetch` and fake timers. It is red until `shouldRetry`, `backoffMs` and `fetchWithPolicy` exist. The policy it checks (SC-007):
+- [X] T062 [P] [US3] Write `web/tests/unit/api-policy.test.ts`, using a fake `fetch` and fake timers. It is red until `shouldRetry`, `backoffMs` and `fetchWithPolicy` exist. The policy it checks (SC-007):
   - `GET` and `HEAD` are attempted at most 3 times, on a network error, a per-attempt timeout (5 s), 502, 503 or 504, with a 200 ms and then a 500 ms backoff.
   - `POST`, `PATCH`, `PUT` and `DELETE` are attempted exactly once, with a 10 s timeout.
   - 400, 401, 404, 409 and 500 are never retried.
@@ -443,7 +443,7 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
     - add `public const string DefaultHealthcheckUrl = "http://127.0.0.1:8080/health/ready"` and use it as the `--healthcheck` default.
   - Leave every compose healthcheck line unchanged.
 - [X] T066 [US3] Make T061 green. If the 5 s bound is missed, check `MongoOptions.ReadinessTimeout` (3 s) and the server-selection timeout before changing anything. Record the measured 503 and recovery times from the test output.
-- [ ] T067 [US3] Implement the outbound policy. T062 green, and the existing insights tests stay green.
+- [X] T067 [US3] Implement the outbound policy. T062 green, and the existing insights tests stay green.
   - In `web/app/lib/observability.ts`: `shouldRetry` and `backoffMs`.
   - In `web/app/lib/api-client.server.ts`: `fetchWithPolicy`, combining `AbortSignal.timeout` with the caller's signal through `AbortSignal.any`. Use it in `fetchOData` and as the `fetch` option of the `openapi-fetch` client.
   - Replace the local timeouts in `web/app/lib/insights-counts.server.ts` and `web/app/lib/insights-stats.server.ts` with the policy.
@@ -451,7 +451,7 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
 
 ### STOP: US3 review gate
 
-- [ ] T068 [US3] Run each command below and report its pass and fail counts from the output, plus the measured 503 and recovery times. Say what could not be run. Then stop for review.
+- [X] T068 [US3] Run each command below and report its pass and fail counts from the output, plus the measured 503 and recovery times. Say what could not be run. Then stop for review.
   - `dotnet build RoleRadar.sln -c Release -v q --nologo -warnaserror`
   - `pwsh ./scripts/test-fast.ps1`
   - `dotnet test tests/RoleRadar.Tests.Integration -c Release --filter "FullyQualifiedName~DatastoreOutage"`
@@ -627,3 +627,23 @@ Within each story, tests come before implementation, and each test task is shown
   - **T066, why the first measurement missed and what changed.** Server selection, connect and readiness are all 3 s (`ReadinessTimeout`), so none of them bounds a read already sent to a server the driver still believes is up. That read waited for the driver's streaming monitor (heartbeat interval 10 s plus connect timeout 3 s) before failing: 14.2 to 14.8 s. Two changes in `ConnectionStringRedactor.CreateClient`, used by every host: the monitor polls (`ServerMonitoringMode.Poll`, 1 s interval, 2 s heartbeat timeout), which brought the read to 5.9 s; and `RetryReads = false`, because the driver's retry selected a server again and waited out a second 3 s server-selection timeout. The CLI's and MCP's reads lose the driver retry too; the web will retry GETs itself (T067). A request deadline through ASP.NET Core request timeouts was tried first and removed: the OData pipeline materialises with a synchronous `ToList()` that takes no token, so a deadline cannot interrupt it.
   - **API-only pieces and one deviation.** `/health` stays a plain `MapGet` in the API (same body) because health-check endpoints are not listed in OpenAPI, so mapping it as a health check removed `/health` from `contracts/openapi/roleradar-api.json` and failed `ApiOpenApiContractSnapshotTests`; the OpenAPI document and `api-types.ts` are unchanged. Identity maps `/health` as the live alias. `SecurityException` from the owner and actor providers still ends as a 500, now with the envelope.
   - Not run in this stop: web tests (T062, T067), the T068 gate, `test-images.ps1`, `test-e2e-real.ps1`, `pre-commit`.
+
+- US3 web and gate (T062, T067, T068, 2026-11-10), numbers from command output:
+  - **Red first.** `web/tests/unit/api-policy.test.ts`: 46 failed, 2 passed (the policy functions did not exist). `service-unavailable-surface.test.ts`: 6 failed. The new root `ErrorBoundary` 503 case failed. Two cases started green and pin existing behavior: the 503 action result in `postings.transition.test.ts` (the action already passes the API's envelope message through) and the non-503 boundary not echoing a response's text.
+  - **Green after.** `api-policy` 48/48, `service-unavailable-surface` 6/6, `root.test.tsx` 8/8, `postings.transition` 15/15.
+  - **What T067 added.**
+    - `shouldRetry`, `backoffMs` and the constants in `observability.ts` (pure).
+    - `fetchWithPolicy` in `api-client.server.ts`, behind `apiFetch`, so `fetchOData` and the `openapi-fetch` client both use it. Reads: at most 3 attempts on a network error, a 5 s attempt timeout, 502, 503 or 504, with 200 ms then 500 ms backoff. Writes: once, 10 s, never retried. 400, 401, 404, 409 and 500 are returned untouched, so `assertApiOk` behaves as before. A caller's abort is never retried. Every attempt carries the same `X-Correlation-ID`. `mapApiError` is untouched.
+    - A final 503 writes one `ApiServiceUnavailable` warn record with the envelope's correlation id (the header, then the request's own id, as fallbacks) and never the envelope text or the query string.
+    - `fetchOData` returns the fixed `SERVICE_UNAVAILABLE_MESSAGE` for a 503, whatever the envelope says, and the root `ErrorBoundary` renders a "Temporarily unavailable" page with a Try again link for a thrown 503 response. No page shows the id.
+  - **Two deviations from the task text.** (1) The attempt timeout is a plain `setTimeout` timer combined with the caller's signal through `AbortSignal.any`, not `AbortSignal.timeout`, because vitest fake timers do not drive `AbortSignal.timeout`; each attempt also races its abort, so a fetch that ignores the signal cannot hang. (2) The Insights loaders keep their own 5 s controller instead of dropping it: it is the one bound over all attempts (three 5 s attempts would be 15 s), and the existing insights tests (they mock `fetchOData` and the client) depend on it. They use the policy through `fetchOData` and the client; only their comments changed.
+  - **Gate (T068), 2026-11-10.**
+    - `dotnet build RoleRadar.sln -c Release -v q --nologo -warnaserror`: 0 warnings, 0 errors.
+    - `pwsh ./scripts/test-fast.ps1`: Architecture 66/66, Unit 939/939, Contract 278/278.
+    - `dotnet test tests/RoleRadar.Tests.Integration -c Release --filter "FullyQualifiedName~DatastoreOutage"`: 1/1. **Measured: read 503 in 2442 ms and write 503 in 3020 ms (bound 5000 ms); recovery to 200 in 462 ms (bound 30000 ms).**
+    - `pnpm --filter web run typecheck`: exit 0. `lint`: 0 errors, 1 warning (unused `findByPlaceholderText` in `postings.component.test.tsx`, a file this stop did not touch). `test`: 101 files, 1282/1282 (an earlier full run had one failure, `ds-sync.test.ts` at 5140 ms under load; it passes alone in 366 ms and in the next full run). `build`: ok. `test:e2e` on Windows: 176 passed, 77 skipped.
+    - `bash scripts/linux-web-check.sh`: PASS. Typecheck and lint clean (0 errors, the same 1 warning), 101 files, 1280 passed and 2 skipped, coverage 90.77% lines, build ok, e2e 154 passed and 99 skipped.
+    - `pwsh ./scripts/test-e2e-real.ps1` (real-stack lane): 1/1, on throwaway `gate-us3` image tags.
+    - `pwsh ./scripts/test-images.ps1` (`Lane=images|Lane=web-container`), on `gate-us3` tags: first run 58 passed and 1 failed, after the fix 59/59. The failure was real: `ContainerHealthCheckLaunchedHostTests` runs the API with an unreachable Mongo to prove a hardened image starts, and it never set its own health URL (the task text assumed it did), so the new `/health/ready` default made the container correctly unhealthy. The API case now sets `ROLERADAR_HEALTHCHECK_URL` to `/health/live`. The default readiness URL against a live Mongo is covered by the real-stack run, where the compose-style healthcheck passes.
+    - `pre-commit run --all-files`: every hook passed. It only reads tracked files, so `pre-commit run --files` was run on the nine changed and new files too: every hook passed.
+    - Not run: nothing from the T068 list was skipped. The `gate-us3` images were removed afterwards. The dev stack (`roleradar-mongo` on 27017, `deploy-*` on 5001 to 5003) was running throughout and was not touched. `test-images.ps1` rebuilds `roleradar-api:test` and `roleradar-identity:test` itself (the test's own docker build), which is existing behavior.

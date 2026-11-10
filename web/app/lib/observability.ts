@@ -129,3 +129,45 @@ export function formatRecord(input: LogRecordInput, format: LogFormat, service: 
   }
   return line;
 }
+
+// ---- Outbound policy (feature 013 US3, FR-026 and FR-027, SC-007). Pure, so it is unit- and mutation-tested. ----
+
+/** What went wrong with one attempt: an HTTP status that came back, or no answer at all. */
+export type AttemptFailure = number | "network" | "timeout";
+
+export const READ_MAX_ATTEMPTS = 3;
+export const READ_TIMEOUT_MS = 5_000;
+export const WRITE_TIMEOUT_MS = 10_000;
+
+/** What the owner sees when the API says its data store did not answer. Fixed text: never the envelope's or an error's. */
+export const SERVICE_UNAVAILABLE_MESSAGE = "The data service is temporarily unavailable. This is usually brief, so try again in a moment.";
+
+const READ_METHODS = new Set(["GET", "HEAD"]);
+const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+const BACKOFF_MS = [200, 500] as const;
+
+export function isReadMethod(method: string): boolean {
+  return READ_METHODS.has(method.toUpperCase());
+}
+
+/** Per-attempt timeout: 5 s for a read, 10 s for a write. */
+export function attemptTimeoutMs(method: string): number {
+  return isReadMethod(method) ? READ_TIMEOUT_MS : WRITE_TIMEOUT_MS;
+}
+
+/**
+ * Whether to send the request again after attempt number `attempt` (1-based) failed. Only reads are ever retried, at most
+ * {@link READ_MAX_ATTEMPTS} attempts in all, and only when there was no answer or the answer was 502, 503 or 504. A write is
+ * sent once: sending it again could repeat its effect.
+ */
+export function shouldRetry(method: string, failure: AttemptFailure, attempt: number): boolean {
+  if (!isReadMethod(method) || attempt >= READ_MAX_ATTEMPTS) {
+    return false;
+  }
+  return typeof failure === "number" ? RETRYABLE_STATUSES.has(failure) : true;
+}
+
+/** How long to wait after attempt number `attempt` (1-based): 200 ms, then 500 ms. */
+export function backoffMs(attempt: number): number {
+  return BACKOFF_MS[Math.min(Math.max(attempt, 1), BACKOFF_MS.length) - 1];
+}

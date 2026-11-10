@@ -2,9 +2,14 @@
  * Runs the Insights count requests: count-only OData queries (`$top=0&$count=true`) built by the shared lens module.
  *
  * At most MAX_IN_FLIGHT requests run at once (the limiter can be shared with the stats request, which then counts
- * against the same bound), each is cut off after REQUEST_TIMEOUT_MS, and one failing request only
+ * against the same bound), each is cut off after REQUEST_TIMEOUT_MS in all, and one failing request only
  * makes the numbers that depend on it "unavailable". A 401 or 403 from the API is handed to assertApiOk after all
  * requests have settled, so the owner is re-challenged once (never in a loop) or sent to /not-authorized.
+ *
+ * Each request goes through the outbound policy (fetchWithPolicy: a read is retried at most twice on a network error, a
+ * timeout, 502, 503 or 504). REQUEST_TIMEOUT_MS is the bound over the whole of it, retries included: the controller below
+ * cancels the attempt and any backoff, and a caller's abort is never retried. Without that bound three 5 s attempts could
+ * keep the page waiting for 15 s.
  *
  * Requests per page load: 18 lens counts + 2 coverage checks = 20; the 90 day view adds the 2 all-time interview
  * counts (interviewed, applied) = 22. The drill-only lens (offers without an interview) is never counted: its number is

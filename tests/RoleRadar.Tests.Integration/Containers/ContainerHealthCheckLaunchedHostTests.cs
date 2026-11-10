@@ -40,7 +40,10 @@ public sealed class ContainerHealthCheckLaunchedHostTests
             // Data Protection keys, and Duende KeyManagement keys.
             var extraArgs = serviceName == "identity"
                 ? $"-v {identityVolumeName}:/data/identity:rw -e ROLERADAR_IDENTITY_DB=\"Data Source=/data/identity/identity.db\" -e ROLERADAR_WEB_CLIENT_SECRET=\"ContainerHcWebSecret!2026\" -e ROLERADAR_HEADLESS_CLIENT_SECRET=\"ContainerHcHeadlessSecret!2026\" "
-                : "-e ROLERADAR_MONGO_CONNECTION_STRING=\"mongodb://127.0.0.1:27099/?directConnection=true\" -e ROLERADAR_MONGO_DATABASE=\"rrtest_hc\" ";
+                // The API runs with no reachable Mongo here, to prove the hardened image starts and its built-in check works. That is a
+                // liveness question, so the check is pointed at /health/live. The image's default is /health/ready (feature 013), which
+                // is correctly unhealthy while Mongo is down; the real-stack lane covers the default against a live Mongo.
+                : "-e ROLERADAR_MONGO_CONNECTION_STRING=\"mongodb://127.0.0.1:27099/?directConnection=true\" -e ROLERADAR_MONGO_DATABASE=\"rrtest_hc\" -e ROLERADAR_HEALTHCHECK_URL=\"http://127.0.0.1:8080/health/live\" ";
 
             var runResult = await RunProcessAsync(
                 "docker",
