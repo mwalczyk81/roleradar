@@ -1,6 +1,8 @@
 namespace RoleRadar.Tests.Architecture;
 
 using Microsoft.Extensions.DependencyInjection;
+using RoleRadar.Application.Abstractions;
+using RoleRadar.Application.Audit.Queries;
 using RoleRadar.Cli;
 using RoleRadar.Infrastructure.Mongo.Reconcile;
 using Xunit;
@@ -44,5 +46,19 @@ public sealed class CliServiceWiringArchitectureTests
 
         Assert.NotNull(concreteService);
         Assert.NotNull(interfaceService);
+    }
+
+    [Fact]
+    public void CliContainer_ResolvesTheAuditListHandler_AndTheReaderItReadsThrough()
+    {
+        using var services = Program.BuildServiceProvider(configure: sc =>
+        {
+            Environment.SetEnvironmentVariable("ROLERADAR_MONGO_CONNECTION_STRING", "mongodb://localhost:27017");
+        });
+
+        using var scope = services.CreateScope();
+
+        Assert.NotNull(scope.ServiceProvider.GetService<IAuditLogReader>());
+        Assert.NotNull(scope.ServiceProvider.GetService<IQueryHandler<ListAuditEntriesQuery, AuditListPage>>());
     }
 }

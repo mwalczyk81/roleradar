@@ -28,6 +28,7 @@ namespace RoleRadar.Tests.Integration.Observability;
 /// Application paths never reach log output. Every captured line must parse as JSON. Identity's cases live in the
 /// Contract project (IdentityRedactionContractTests) because the Identity test server is there. Values are fictional.
 /// </summary>
+[Trait("Lane", "default")]
 public sealed class RedactionIntegrationTests(SharedMongoFixture mongo)
 {
     private const string SentinelPassword = "SENTINEL-PW-7f3a"; // gitleaks:allow (fictional redaction test vector, not a credential)

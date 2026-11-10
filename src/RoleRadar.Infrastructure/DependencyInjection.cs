@@ -31,6 +31,7 @@ public static class DependencyInjection
         services.TryAddSingleton<MongoReadinessProbe>();
         services.TryAddScoped<INoteRepository>(sp =>
             ActivatorUtilities.CreateInstance<MongoNoteRepository>(sp));
+        services.TryAddScoped<IAuditLogReader, MongoAuditLogReader>();
         services.TryAddScoped<ICompanyRepository>(sp =>
         {
             var client = sp.GetRequiredService<IMongoClient>();

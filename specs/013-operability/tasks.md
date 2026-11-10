@@ -273,7 +273,7 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
 ### Tests first (US2)
 
 - [X] T044 [P] [US2] Write the contract tests in `tests/RoleRadar.Tests.Contract/Api/ApiActorContractTests.cs` (FR-015, SC-004). For each API write, call `ApiContractTestHost` with a test JWT whose `sub` is a fictional v7 id. The writes are the two `RecordApplicationCommand` paths in `ApplicationsEndpoints.cs` (`:79`, `:124`), the company record and the posting transition. Read the newest `audit_log` entry and assert that `actor` equals the subject and is never `api-user`, `agent` or `system`. Show red.
-- [ ] T045 [P] [US2] Write the integration tests in `tests/RoleRadar.Tests.Integration/Cli/CliActorIntegrationTests.cs` (FR-016). Run these commands against Testcontainers Mongo:
+- [X] T045 [P] [US2] Write the integration tests in `tests/RoleRadar.Tests.Integration/Cli/CliActorIntegrationTests.cs` (FR-016). Run these commands against Testcontainers Mongo:
   - `contact add` and `contact redact`;
   - `import` (`src/RoleRadar.Cli/Commands/ImportCommand.cs`);
   - `tracker-import` (`src/RoleRadar.Cli/Commands/TrackerImportCommand.cs`);
@@ -296,7 +296,7 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
   - The fifth consecutive failure writes `SignInFailed`, then `AccountLockedOut` (5003).
   - Every event carries a `correlationId`.
   - No line contains the typed username, the password or the code.
-- [ ] T048 [P] [US2] Write the contract suite for `IAuditLogReader` in `tests/RoleRadar.Tests.Contract/Audit/AuditLogReaderContractTests.cs` (Principle II, data-model.md). Show red.
+- [X] T048 [P] [US2] Write the contract suite for `IAuditLogReader` in `tests/RoleRadar.Tests.Contract/Audit/AuditLogReaderContractTests.cs` (Principle II, data-model.md). Show red.
   - Owner isolation: a second fictional owner's entries are never returned.
   - Order: `occurred_at desc, _id desc`.
   - Keyset paging stays stable when entries are appended between pages.
@@ -305,7 +305,7 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
   - The projection never includes `appended_text`, `details.before`, `details.after` or the content summaries.
   - `IncludeChangedFields` returns field names only.
   - Index `ix_audit_log_entity` `(owner_id: 1, entity_type: 1, entity_id: 1, occurred_at: -1, _id: -1)` exists after bootstrap.
-- [ ] T049 [P] [US2] Write the validation unit tests in `tests/RoleRadar.Tests.Unit/Audit/ListAuditEntriesQueryTests.cs`, quoting the data-model rules. Show red.
+- [X] T049 [P] [US2] Write the validation unit tests in `tests/RoleRadar.Tests.Unit/Audit/ListAuditEntriesQueryTests.cs`, quoting the data-model rules. Show red.
   - `Limit` must be 1 to 100, default 25; `0`, `101` and `-1` are `ValidationError`.
   - `EntityType` must be in the known entity-type set.
   - `EntityId` is 1 to 128 characters.
@@ -314,7 +314,7 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
   - A malformed `Cursor` is `ValidationError`, and the cursor codec round-trips `(occurred_at, _id)`.
   - An offline store returns `DatastoreOffline`.
   - Nothing throws for an expected failure.
-- [ ] T050 [P] [US2] Write the CLI integration tests in `tests/RoleRadar.Tests.Integration/Cli/AuditListCliIntegrationTests.cs`, per `specs/013-operability/contracts/cli-audit-list.md`. Show red.
+- [X] T050 [P] [US2] Write the CLI integration tests in `tests/RoleRadar.Tests.Integration/Cli/AuditListCliIntegrationTests.cs`, per `specs/013-operability/contracts/cli-audit-list.md`. Show red.
   - Text output is newest first, one line per entry: `occurredAt entityType entityId operation actor req=<id>|-`, followed by `next: <cursor>` when more entries exist.
   - `--json` returns `{ ok, data: { items, nextCursor } }`.
   - `--fields` adds `changedFields`, never values.
@@ -350,11 +350,11 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
   - Never pass the username, password or code to any logger.
   - Do not raise Duende `UserLoginFailureEvent`.
   - Leave the lockout policy unchanged: 5 attempts, 15 minutes.
-- [ ] T054 [US2] Add `src/RoleRadar.Application/Abstractions/IAuditLogReader.cs` and `src/RoleRadar.Application/Audit/Queries/ListAuditEntriesQuery.cs`. T049 green.
+- [X] T054 [US2] Add `src/RoleRadar.Application/Abstractions/IAuditLogReader.cs` and `src/RoleRadar.Application/Audit/Queries/ListAuditEntriesQuery.cs`. T049 green.
   - The query file holds the query, `ListAuditEntriesQueryHandler`, `AuditListPage`, `AuditListItem`, the cursor codec and the validators.
   - `AuditListItem` has no field for appended text, before or after values, or summaries.
   - Register the handler with `AddQueryHandler` in `src/RoleRadar.Application/DependencyInjection.cs`.
-- [ ] T055 [US2] Implement `src/RoleRadar.Infrastructure/Mongo/MongoAuditLogReader.cs`. T048 green.
+- [X] T055 [US2] Implement `src/RoleRadar.Infrastructure/Mongo/MongoAuditLogReader.cs`. T048 green.
   - Always filter on `owner_id`.
   - Sort by `occurred_at desc, _id desc`.
   - Fetch `Limit + 1` entries.
@@ -362,14 +362,14 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
   - Return `DatastoreOffline` when the store is not ready.
 
   Add `ix_audit_log_entity` to `src/RoleRadar.Infrastructure/Mongo/MongoBootstrapAndIndexes.cs`, and register the reader in `src/RoleRadar.Infrastructure/DependencyInjection.cs`.
-- [ ] T056 [US2] Add `src/RoleRadar.Cli/Commands/AuditCommand.cs` with a `list` subcommand, following the `ContactCommand get` pattern (text or `--json`, exit codes 0, 1 and 2, `OwnerId.Default`) and the options in `contracts/cli-audit-list.md`. T050 green, and the MCP tool count is still 12 (`McpToolSurfaceArchitectureTests`).
+- [X] T056 [US2] Add `src/RoleRadar.Cli/Commands/AuditCommand.cs` with a `list` subcommand, following the `ContactCommand get` pattern (text or `--json`, exit codes 0, 1 and 2, `OwnerId.Default`) and the options in `contracts/cli-audit-list.md`. T050 green, and the MCP tool count is still 12 (`McpToolSurfaceArchitectureTests`).
   - Neutralize control characters by replacing each with `?`.
   - Register it in `src/RoleRadar.Cli/Program.cs`, and update `CliServiceWiringArchitectureTests` if it lists commands.
   - Document it in `docs/cli-reference.md`.
 
 ### STOP: US2 review gate
 
-- [ ] T057 [US2] Run each command below and report its pass and fail counts from the output. Say what could not be run. Then stop for review.
+- [X] T057 [US2] Run each command below and report its pass and fail counts from the output. Say what could not be run. Then stop for review.
   - `dotnet build RoleRadar.sln -c Release -v q --nologo -warnaserror`
   - `pwsh ./scripts/test-fast.ps1`
   - `dotnet test tests/RoleRadar.Tests.Contract -c Release --filter "FullyQualifiedName~Actor|FullyQualifiedName~SignIn|FullyQualifiedName~AuditLogReader|FullyQualifiedName~RequestCorrelation|FullyQualifiedName~IdentityRedaction"`
@@ -584,3 +584,35 @@ Within each story, tests come before implementation, and each test task is shown
   - Lockout reporting decision: an attempt that comes back locked out at the password step writes `SignInFailed` then `AccountLockedOut`, because Identity does not say whether that attempt or an earlier one started the lockout. At the code step the two cases are distinguishable: a code attempt on an already locked account writes only `AccountLockedOut`, and a wrong code that triggers the lockout writes `OneTimeCodeFailed` then `AccountLockedOut`. The fallback branch with no two-factor cookie writes the unmatched `SignInFailed`.
   - Two existing unit tests (`LoginModelPasswordStepErrorTests`, `LoginModelRazorPageTests`) now pass `NullLogger<LoginModel>.Instance` to the new constructor parameter; no expectation changed.
   - Part 2 checkpoint: `dotnet build RoleRadar.sln -c Release -warnaserror` 0 warnings, 0 errors; `test-fast.ps1` Architecture 65/65, Unit 847/847, Contract 244/244 (239 plus the 5 new).
+- US2b part 3a (T048, T049, T054, T055, 2026-11-09), numbers from command output:
+  - Skeleton first: so the tests compile and fail on assertions, I added inert stubs (`IAuditLogReader`, the query, item and page types, a codec that returned nothing, a validator that returned null, a reader that returned an empty page).
+  - T049 red first: `ListAuditEntriesQueryTests` 22 failed, 22 passed. The 22 that started green are the accepted-input cases, the offline pass-through, the malformed-token `TryDecode`, the default limit and the `AuditListItem` member allowlist. Green after T054: 44 of 44.
+  - T048 red first: `AuditLogReaderContractTests` 19 failed, 1 passed. The one that started green, `Projection_NeverCarriesAppendedTextBeforeAfterOrSummaries`, passed only because the stub returned no items, so I added an item-count assertion and it went red: 20 failed, 0 passed. Green after T055: 20 of 20. One failure after the first implementation run was a bug in my own test (`FromAndTo_AreNormalizedFromAnyOffset` built an offset from a UTC-kind `DateTime`); the reader was right and the test was fixed.
+  - T054: `ListAuditEntriesQuery` (`OwnerId` is the `OwnerId` type; `default(OwnerId)` is a `ValidationError`, not an exception), `AuditListItem` (no member for appended text, before or after values or summaries), `AuditListPage`, `AuditEntityTypes` (note, company, posting, application, application_event, contact, criterion, search_run), `AuditCursorCodec` (URL-safe base64 of `v1:{unix ms}:{id}`), `ListAuditEntriesQueryValidator` and `ListAuditEntriesQueryHandler`, registered with `AddQueryHandler`. Every rule is a `Result` failure; nothing is thrown.
+  - T055: `MongoAuditLogReader` always starts its filter with `owner_id == query.OwnerId.Value`, then adds the entity type, entity id (a GUID matches the binary form and the text form, since a legacy or foreign entry can hold text), actor, `from` (inclusive) and `to` (exclusive) clauses and the keyset clause `occurred_at < c OR (occurred_at == c AND _id < id)`. It sorts `occurred_at desc, _id desc`, fetches `Limit + 1`, and projects an allowlist (`_id`, `occurred_at`, `entity_type`, `entity_id`, `operation`, `actor`, `request_correlation_id`, plus `details.changed_fields` only with `IncludeChangedFields`). It checks readiness through `MongoReadinessProbe` first; a Mongo or timeout error during the read also returns `DatastoreOffline`, with a message that names no endpoint. `ix_audit_log_entity` is created in `MongoBootstrapAndIndexes`, and the reader is registered scoped in `AddRoleRadarInfrastructure`.
+  - Part 3a checkpoint: `dotnet build RoleRadar.sln -c Release -warnaserror` 0 warnings, 0 errors; `test-fast.ps1` Architecture 65/65, Unit 891/891, Contract 264/264 (847 and 244 before, plus 44 and 20 new).
+- US2b part 3b (T050, T056, T057, 2026-11-09), numbers from command output:
+  - T050 red first: `AuditListCliIntegrationTests` 22 failed, 1 passed (the command did not exist yet). **Started green, vacuously:** `RunningTheCommand_ChangesNoCollectionCount_IncludingAuditLog`, because nothing ran, so I made it assert each run's exit code (0, 0, 0, 0, 2, 2, 2, and 1 for the unreachable store); then 23 failed, 0 passed. Green after T056: 23 of 23 on the first run, including `--limit -5` and `--limit abc` (both exit 2).
+  - The OpenAPI case `OpenApiSnapshot_HasNoAuditPath_...` and a new `CliContainer_ResolvesTheAuditListHandler_...` architecture test **started green** (no audit endpoint exists; the handler was registered in 3a). They pin behavior.
+  - T056: `AuditCommand` (`audit list`) is registered in `Program.cs`, uses `OwnerId.Default`, and writes nothing. `--limit`, `--from` and `--to` are read as strings and validated, so a bad value is exit 2 with `validation_error`, not a System.CommandLine parse error (exit 1). `--from` and `--to` need `Z` or an offset. Text lines use two spaces between columns, `req=-` when there is no correlation id, `-` for any empty value, and `fields=a,b` with `--fields`. Control characters (and U+2028/U+2029) print as `?` in text; `--json` keeps the stored value and lets JSON escape it. Any unexpected exception becomes exit 1 `internal_error` carrying the exception type name only. Documented in `docs/cli-reference.md`.
+  - Two names in T056 and T057 do not match the code: `McpToolSurfaceArchitectureTests` does not exist (the 12-tool count is asserted in `TrackingArchitectureTests` and `ContainerReadinessArchitectureTests`, both green), and `CliServiceWiringArchitectureTests` lists no commands, so I added one resolution test there instead of editing a list.
+  - Defect found by the full Integration run and fixed: `HostLogFormatIntegrationTests` and `RedactionIntegrationTests` (US1, committed) use `LaunchedCliRunner` and `McpProcessClient` with `forceContainer: false` but had no `Lane` trait, so `TestLaneCoverageTests.EveryClassUsingTheImageMachinery_...` failed (693 passed, 1 failed). Both now carry `[Trait("Lane", "default")]`, since they run host processes.
+  - **US2 gate (T057), run 2026-11-09:**
+    - `dotnet build RoleRadar.sln -c Release -v q --nologo -warnaserror`: 0 warnings, 0 errors.
+    - `pwsh ./scripts/test-fast.ps1`: Architecture 66/66, Unit 891/891, Contract 265/265.
+    - Contract filter (Actor, SignIn, AuditLogReader, RequestCorrelation, IdentityRedaction): 39/39.
+    - Integration filter (CliActor, AuditListCli, Redaction, ApiMcpParity): 29/29. **`CliActor` matched zero tests: T045 is not written.**
+    - Full Integration lane, `Lane!=images&Lane!=web-container&Lane!=real-stack&Lane!=scan`: 694/694 (2 m 17 s), after the lane fix above.
+    - `pwsh ./scripts/test-e2e-real.ps1` (real-stack lane, includes the T051 actor assertions): 1/1.
+    - `pwsh ./scripts/test-images.ps1` (`Lane=images|Lane=web-container`): 59/59.
+    - Both scripts ran with throwaway `gate-013` image tags (the scripts default to the `:local` and `:test` tags), and those five images were removed afterwards. The dev stack (`roleradar-mongo` on 27017, `deploy-*` on 5001 to 5003) was running throughout and was not touched; no `rrtest` container is left.
+    - `pnpm --filter web run typecheck`: exit 0.
+    - `pre-commit run --all-files`: every hook passed (the private-directory hook had no files to check).
+    - By inspection: MCP tool count is 12 and no MCP, API or `contracts/` file changed in 3b; `git status` shows nothing under `deploy/demo/`; no OpenAPI path contains "audit".
+    - Not run: `bash scripts/linux-web-check.sh` (not in the T057 list; US2 changed no web file).
+
+- T045 and the audit-list format characters (2026-11-10), numbers from command output:
+  - `CliActorIntegrationTests` (4 tests) **was green on its first run (4 of 4)**, so every CLI path already wrote a valid actor and no source fix was needed. Observed in the test output: `contact add` and `contact redact` 2 entries, all `cli-user`; `import` 2 entries, all `cli-import`; `tracker-import --apply` 6 entries, all `cli-import-tracker` (the dry run wrote 0); demo seed 6 entries, all `demo-seed`.
+  - The demo case calls `DemoSeeder` directly in its own container (database named `DemoModeGuard.DemoDatabaseName`), not the `demo seed` command. A first version used the explicit-host guard overload and `DemoArchitectureTests.OnlyTheGuardTestsAndTheIntegrationSeedTest_CallTheExplicitHostOverload` failed on it; the rule was kept and the test changed.
+  - `AuditCommand.Printable` now also replaces `UnicodeCategory.Format` (U+202E, U+200B, U+2066 and the rest). `AuditPrintableTests` (23 tests) was red first: 9 failed (8 format characters and the combined case), 14 passed. It is a unit test on the function because an integration test through the redirected Windows console passed before the fix (the console encoding turns an unmappable character into "?" itself), so it could not fail. `Printable` went from private to public for this.
+  - After: Integration `CliActor` + `AuditListCli` 27/27; Architecture 66/66; `test-fast.ps1` Architecture 66/66, Unit 914/914, Contract 265/265; build with `-warnaserror` 0 warnings, 0 errors. The full Integration lane and the other gates were not re-run.

@@ -11,6 +11,7 @@ namespace RoleRadar.Tests.Integration.Observability;
 /// stderr line, with their service name and a correlation id (the CLI's run id, MCP's per-call id), and never log to
 /// stdout. Launched as real processes so the test sees exactly what production writes.
 /// </summary>
+[Trait("Lane", "default")]
 public sealed class HostLogFormatIntegrationTests(SharedMongoFixture mongo)
 {
     private static List<string> NonEmptyLines(string text) =>

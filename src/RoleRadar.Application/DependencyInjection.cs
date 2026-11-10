@@ -56,6 +56,9 @@ public static class DependencyInjection
         // Feature 007: Insights stats read (a query: no transaction, no audit entry).
         services.AddQueryHandler<Insights.GetInsightsStatsQuery, Insights.InsightsStatsDto, Insights.GetInsightsStatsQueryHandler>();
 
+        // Feature 013: the read-only audit listing behind `roleradar audit list` (a query: no transaction, no audit entry).
+        services.AddQueryHandler<Audit.Queries.ListAuditEntriesQuery, Audit.Queries.AuditListPage, Audit.Queries.ListAuditEntriesQueryHandler>();
+
         // Feature 004: Tracker Import
         services.AddTransient<Tracking.Import.Pipeline.ITrackerImportPipelineFactory, Tracking.Import.Pipeline.TrackerImportPipelineFactory>();
         services.AddTransient<Tracking.Import.Commands.ITrackerImportCoordinator, Tracking.Import.Commands.TrackerImportCoordinator>();
