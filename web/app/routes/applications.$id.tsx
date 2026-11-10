@@ -73,7 +73,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   await assertApiOk(appRes.response, request, session.sessionId, { notFoundMessage: "Application Not Found" });
 
   if (appRes.error || !appRes.data) {
-    throw new Response(appRes.error?.message || "Failed to load application", {
+    throw new Response(appRes.error?.detail || "Failed to load application", {
       status: appRes.response.status || 500,
     });
   }

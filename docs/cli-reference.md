@@ -56,7 +56,7 @@ Text output is one line per entry, followed by `next: <cursor>` when more entrie
 2026-11-09T14:03:22.418Z  posting  0197...b5a  posting_transition  01970f3e-...  req=01970f40-...
 ```
 
-The columns are time (UTC), entity type, entity id, operation, actor and `req=` with the request correlation id (`-` when the entry has none). With `--fields` the line ends with `fields=a,b`. An empty value prints as `-`. Every control character in a printed value, including ESC, CR and LF, is replaced with `?`, so a stored value cannot move the cursor or start a second line. `--json` keeps the stored value and lets JSON escape it.
+The columns are time (UTC), entity type, entity id, operation, actor and `req=` with the request's trace id (`-` when the entry has none; an entry written before feature 014 shows its old-format id). With `--fields` the line ends with `fields=a,b`. An empty value prints as `-`. Every control character in a printed value, including ESC, CR and LF, is replaced with `?`, so a stored value cannot move the cursor or start a second line. `--json` keeps the stored value and lets JSON escape it.
 
 Appended note text, before and after values and content summaries are never read from the store, so no mode can print them.
 

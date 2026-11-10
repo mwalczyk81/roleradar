@@ -13,8 +13,11 @@ namespace RoleRadar.Cli;
 
 public static class Program
 {
-    /// <summary>The correlation id of this CLI run (feature 013), shared by log records and audit entries.</summary>
-    public static string RunId { get; } = CorrelationId.New();
+    /// <summary>
+    /// The trace id of this CLI run (feature 013 run id, feature 014 W3C trace id: 32 lower-case hex characters), shared by every
+    /// log record and audit entry the run writes.
+    /// </summary>
+    public static string RunId { get; } = TraceIds.NewRunId();
 
     public static async Task<int> Main(string[] args)
     {
@@ -33,10 +36,9 @@ public static class Program
 
             await using var services = BuildServiceProvider(args, isVerbose: isVerbose);
 
-            // One correlation id for the whole run (feature 013): every record this process writes carries it.
-            using var runScope = services.GetRequiredService<ILoggerFactory>()
-                .CreateLogger("RoleRadar.Cli")
-                .BeginScope(new Dictionary<string, object?> { [CorrelationId.ScopeKey] = RunId });
+            // One trace id for the whole run: an activity that joins the trace RunId names, so every record this process writes
+            // carries it (the console formatter reads Activity.Current).
+            using var runActivity = TraceIds.StartActivity("roleradar.cli.run", RunId);
 
             var rootCommand = new RootCommand("RoleRadar local CLI");
             rootCommand.Add(StatusCommand.Create(services));

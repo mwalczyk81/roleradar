@@ -138,7 +138,7 @@ public partial class Program
             dbContext.Database.Migrate();
         }
 
-        app.UseMiddleware<CorrelationMiddleware>();
+        app.UseMiddleware<RequestCompletedMiddleware>();
 
         // 009 US4: the kit and Identity assets, then the /Account headers (form-action comes from the registered clients).
         app.UseStaticFiles();

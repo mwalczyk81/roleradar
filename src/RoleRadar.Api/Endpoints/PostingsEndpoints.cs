@@ -1,6 +1,6 @@
 using RoleRadar.Api.Authentication;
-using RoleRadar.Api.Envelopes;
 using RoleRadar.Api.Models;
+using RoleRadar.Api.Problems;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Tracking.Commands;
 using RoleRadar.Domain.Common;
@@ -19,12 +19,12 @@ public static class PostingsEndpoints
 
         readGroup.MapGet("/postings/{id:guid}", GetPostingByIdAsync)
             .Produces<PostingDetailDto>(StatusCodes.Status200OK)
-            .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound);
         writeGroup.MapPost("/postings/{id:guid}/transition", TransitionPostingAsync)
             .Produces<PostingDetailDto>(StatusCodes.Status200OK)
-            .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest)
-            .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound)
-            .Produces<ErrorEnvelope>(StatusCodes.Status409Conflict);
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
         return group;
     }
 
@@ -64,7 +64,7 @@ public static class PostingsEndpoints
 
         if (!Guid.TryParse(request.VersionToken, out var parsedVersionToken) || parsedVersionToken == Guid.Empty)
         {
-            return Results.BadRequest(ErrorEnvelope.Validation("A valid non-empty versionToken UUID is required."));
+            return ApiProblems.Validation("A valid non-empty versionToken UUID is required.");
         }
 
         var command = new TransitionPostingCommand(
@@ -82,7 +82,7 @@ public static class PostingsEndpoints
         var result = await commandHandler.HandleAsync(command, cancellationToken);
         if (!result.IsSuccess)
         {
-            return ErrorEnvelope.FromResultError(result.Error);
+            return ApiProblems.FromResultError(result.Error);
         }
 
         // The warning text comes from the Application layer; the API only maps it.
@@ -114,7 +114,7 @@ public static class PostingsEndpoints
         var postingRes = await postingRepository.GetByIdAsync(ownerId, postingId, cancellationToken);
         if (!postingRes.IsSuccess || postingRes.Value is null)
         {
-            return Results.NotFound(ErrorEnvelope.NotFound("Posting not found."));
+            return ApiProblems.NotFound("Posting not found.");
         }
 
         var posting = postingRes.Value;

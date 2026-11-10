@@ -63,8 +63,7 @@ public sealed class PostingRejectionSyncEndpointTests(SharedMongoFixture sharedM
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var error = await response.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("validation_error", error.GetProperty("errorCode").GetString());
-        var details = error.GetProperty("details").EnumerateArray().ToList();
-        Assert.Contains(details, d => d.GetProperty("field").GetString() == "eventDate");
+        Assert.True(error.GetProperty("errors").TryGetProperty("eventDate", out var eventDateIssues) && eventDateIssues.GetArrayLength() >= 1);
 
         var posting = await host.Client.GetFromJsonAsync<JsonElement>($"/api/v1/postings/{postingId}");
         Assert.Equal("applied", posting.GetProperty("disposition").GetString());

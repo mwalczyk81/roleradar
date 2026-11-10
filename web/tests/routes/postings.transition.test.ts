@@ -191,9 +191,9 @@ describe("POST /postings/:id action (T035)", () => {
     mockApiPost.mockResolvedValueOnce({
       data: undefined,
       error: {
-        ok: false,
-        errorCode: "INVALID_TRANSITION",
-        message: "Cannot transition from 'closed' to 'scored'.",
+        status: 400,
+        errorCode: "validation_error",
+        detail: "Cannot transition from 'closed' to 'scored'.",
       },
       response: { status: 400 } as Response,
     });
@@ -217,7 +217,7 @@ describe("POST /postings/:id action (T035)", () => {
     const { status, data } = unwrapActionResult(result);
     expect(status).toBe(400);
     expect(data.ok).toBe(false);
-    expect(data.errorCode).toBe("INVALID_TRANSITION");
+    expect(data.errorCode).toBe("validation_error");
     expect(String(data.message)).toContain("Cannot transition");
   });
 
@@ -228,9 +228,9 @@ describe("POST /postings/:id action (T035)", () => {
     mockApiPost.mockResolvedValueOnce({
       data: undefined,
       error: {
-        ok: false,
-        errorCode: "CONCURRENCY_CONFLICT",
-        message: "The posting was modified by another process. Please reload.",
+        status: 409,
+        errorCode: "concurrency_conflict",
+        detail: "The posting was modified by another process. Please reload.",
       },
       response: { status: 409 } as Response,
     });
@@ -265,9 +265,9 @@ describe("POST /postings/:id action (T035)", () => {
     mockApiPost.mockResolvedValueOnce({
       data: undefined,
       error: {
-        ok: false,
-        errorCode: "INTERNAL_ERROR",
-        message: "Database connection failed unexpectedly",
+        status: 500,
+        errorCode: "internal_error",
+        detail: "Database connection failed unexpectedly",
       },
       response: { status: 500 } as Response,
     });
@@ -294,17 +294,17 @@ describe("POST /postings/:id action (T035)", () => {
     expect(String(data.message)).toContain("Database connection failed");
   });
 
-  it("maps a 503 service_unavailable envelope to a 503 action result with the API's friendly message and no raw text (013 US3)", async () => {
+  it("maps a 503 service_unavailable problem document to a 503 action result with the API's friendly message and no raw text (013 US3)", async () => {
     const { sessionId, session } = createTestSession();
     const postingId = crypto.randomUUID();
 
     mockApiPost.mockResolvedValueOnce({
       data: undefined,
       error: {
-        ok: false,
+        status: 503,
         errorCode: "service_unavailable",
-        message: "The data store is not reachable. Try again shortly.",
-        correlationId: "test-corr-act-0503",
+        detail: "The data store is not reachable. Try again shortly.",
+        traceId: "0af7651916cd43dd8448eb211c80319c",
       },
       response: { status: 503 } as Response,
     });
@@ -412,10 +412,10 @@ describe("POST /postings/:id action (T035)", () => {
     mockApiPost.mockResolvedValueOnce({
       data: undefined,
       error: {
-        ok: false,
+        status: 400,
         errorCode: "validation_error",
-        message: "Validation failed.",
-        details: [{ field: "eventDate", message: "Event date must be a valid date in yyyy-MM-dd format." }],
+        detail: "Validation failed.",
+        errors: { eventDate: ["Event date must be a valid date in yyyy-MM-dd format."] },
       },
       response: { status: 400 } as Response,
     });
@@ -448,7 +448,7 @@ describe("POST /postings/:id action (T035)", () => {
     const { sessionId, session } = createTestSession();
     mockApiPost.mockResolvedValueOnce({
       data: undefined,
-      error: { ok: false, errorCode: "FORBIDDEN", message: "Forbidden" },
+      error: { status: 403, errorCode: "forbidden" },
       response: { status: 403 } as Response,
     });
 
@@ -464,7 +464,7 @@ describe("POST /postings/:id action (T035)", () => {
     const { sessionId, session } = createTestSession();
     mockApiPost.mockResolvedValueOnce({
       data: undefined,
-      error: { ok: false, errorCode: "NOT_FOUND", message: "Posting not found." },
+      error: { status: 404, errorCode: "not_found", detail: "Posting not found." },
       response: { status: 404 } as Response,
     });
 
@@ -479,7 +479,7 @@ describe("POST /postings/:id action (T035)", () => {
     const { sessionId, session } = createTestSession();
     mockApiPost.mockResolvedValueOnce({
       data: undefined,
-      error: { ok: false, errorCode: "UNAUTHORIZED", message: "Token expired" },
+      error: { status: 401, errorCode: "unauthorized" },
       response: { status: 401 } as Response,
     });
 

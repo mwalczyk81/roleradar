@@ -1,6 +1,6 @@
 // Feature 013 (ADR 0041): the web half of the shared log contract (specs/013-operability/contracts/log-records.md).
-// Pure functions only, so they are unit- and mutation-tested. The rules mirror RoleRadar.Observability's LogScrubber
-// and CorrelationId: change both together.
+// Pure functions only, so they are unit- and mutation-tested. The rules mirror RoleRadar.Observability's LogScrubber:
+// change both together. The trace id is the bare W3C trace id (feature 014).
 
 export type LogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 export type LogFormat = "json" | "text";
@@ -9,7 +9,7 @@ export interface LogRecordInput {
   level: LogLevel;
   msg: string;
   event?: string;
-  correlationId?: string;
+  traceId?: string;
   props?: Record<string, unknown>;
   error?: unknown;
   ts?: Date;
@@ -23,7 +23,6 @@ const SENSITIVE_EXACT = new Set([
   "otp", "totp", "code", "body", "content", "appendedtext", "notebody", "state", "nonce", "codechallenge", "codeverifier",
 ]);
 
-const CORRELATION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$/;
 const AUTH_CREDENTIAL = /\b(Bearer|Basic)\s+[^\s"',;]+/gi;
 const JWT = /eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*/g;
 const MONGO_USER_INFO = /(mongodb(?:\+srv)?:\/\/)[^@/\s]+@/gi;
@@ -62,14 +61,6 @@ export function scrubProps(props: Record<string, unknown>): Record<string, unkno
     }
   }
   return result;
-}
-
-export function acceptCorrelationId(candidate: string | null | undefined): string | undefined {
-  return typeof candidate === "string" && CORRELATION_ID.test(candidate) ? candidate : undefined;
-}
-
-export function newCorrelationId(): string {
-  return globalThis.crypto.randomUUID();
 }
 
 export function resolveLogFormat(value: string | undefined): LogFormat {
@@ -114,13 +105,13 @@ export function formatRecord(input: LogRecordInput, format: LogFormat, service: 
   if (format === "json") {
     const record: Record<string, unknown> = { ts, level: input.level, service, msg };
     if (input.event) record.event = input.event;
-    if (input.correlationId) record.correlationId = input.correlationId;
+    if (input.traceId) record.traceId = input.traceId;
     if (props) record.props = props;
     if (error) record.error = error;
     return JSON.stringify(record);
   }
 
-  let line = `${ts} ${input.level} ${service} [${input.correlationId ?? "-"}] ${oneLine(msg)}`;
+  let line = `${ts} ${input.level} ${service} [${input.traceId ?? "-"}] ${oneLine(msg)}`;
   for (const [key, value] of Object.entries(props ?? {})) {
     line += ` ${key}=${oneLine(String(value))}`;
   }

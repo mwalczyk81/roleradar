@@ -170,13 +170,10 @@ test.describe("Visual baseline: app routes (fictional loopback stub)", () => {
       prepare: (s) => {
         s.nextCompanyResponseStatus = 400;
         s.nextCompanyResponseBody = {
-          errorCode: "VALIDATION_ERROR",
-          message: "Validation failed.",
-          details: [
-            { field: "name", issue: "Company name cannot be blank." },
-            { field: "status", issue: "Status is not recognised." },
-            { field: "ownershipType", issue: "Ownership type is not recognised." },
-          ],
+          status: 400,
+          errorCode: "validation_error",
+          detail: "Validation failed.",
+          errors: { name: ["Company name cannot be blank."], status: ["Status is not recognised."], ownershipType: ["Ownership type is not recognised."] },
         };
       },
       after: async (page) => {
@@ -217,12 +214,10 @@ test.describe("Visual baseline: app routes (fictional loopback stub)", () => {
       prepare: (s) => {
         s.nextApplicationResponseStatus = 400;
         s.nextApplicationResponseBody = {
-          errorCode: "VALIDATION_ERROR",
-          message: "Validation failed.",
-          details: [
-            { field: "eventDate", message: "Event date cannot be in the future." },
-            { field: "notes", message: "Notes are too long." },
-          ],
+          status: 400,
+          errorCode: "validation_error",
+          detail: "Validation failed.",
+          errors: { eventDate: ["Event date cannot be in the future."], notes: ["Notes are too long."] },
         };
       },
       after: async (page) => {
@@ -265,12 +260,10 @@ test.describe("Visual baseline: app routes (fictional loopback stub)", () => {
         s.currentPostingDisposition = "closed";
         s.nextApplicationResponseStatus = 400;
         s.nextApplicationResponseBody = {
-          errorCode: "VALIDATION_ERROR",
-          message: "Validation failed.",
-          details: [
-            { field: "desiredSalaryMin", message: "Minimum salary must be positive." },
-            { field: "confirmationCode", message: "Confirmation code is too long." },
-          ],
+          status: 400,
+          errorCode: "validation_error",
+          detail: "Validation failed.",
+          errors: { desiredSalaryMin: ["Minimum salary must be positive."], confirmationCode: ["Confirmation code is too long."] },
         };
       },
       after: async (page) => {

@@ -1,17 +1,15 @@
 using System.Diagnostics;
-using RoleRadar.Observability;
 
 namespace RoleRadar.Api.Observability;
 
 /// <summary>
-/// First middleware in the API pipeline (feature 013, ADR 0041). Accepts a well-formed inbound X-Correlation-ID or
-/// creates one, returns it on the response, scopes it into every log record of the request, and writes one
-/// RequestCompleted record (method, path without the query string, status, duration). Health paths log at Debug.
+/// First middleware in the API pipeline (feature 013, ADR 0041; trimmed in feature 014, ADR 0044): writes one RequestCompleted
+/// record per request (method, path without the query string, status, duration). Health paths log at Debug. It carries no
+/// correlation logic any more: ASP.NET Core extracts <c>traceparent</c> and starts the request activity, and the console
+/// formatter reads the trace id from <see cref="Activity.Current"/>.
 /// </summary>
-public sealed partial class CorrelationMiddleware(RequestDelegate next, ILogger<CorrelationMiddleware> logger)
+public sealed partial class RequestCompletedMiddleware(RequestDelegate next, ILogger<RequestCompletedMiddleware> logger)
 {
-    public const string ItemKey = "RoleRadar.CorrelationId";
-
     [LoggerMessage(EventId = 6001, EventName = "RequestCompleted", Message = "{method} {path} responded {status} in {durationMs} ms")]
     private static partial void LogRequestCompleted(ILogger logger, LogLevel level, string method, string path, int status, double durationMs);
 
@@ -19,17 +17,6 @@ public sealed partial class CorrelationMiddleware(RequestDelegate next, ILogger<
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var inbound = context.Request.Headers[CorrelationId.HeaderName].ToString();
-        var correlationId = CorrelationId.TryAccept(inbound, out var accepted) ? accepted : CorrelationId.New();
-
-        context.Items[ItemKey] = correlationId;
-        context.Response.OnStarting(() =>
-        {
-            context.Response.Headers[CorrelationId.HeaderName] = correlationId;
-            return Task.CompletedTask;
-        });
-
-        using var scope = logger.BeginScope(new Dictionary<string, object?> { [CorrelationId.ScopeKey] = correlationId });
         var started = Stopwatch.GetTimestamp();
         var failed = false;
         try
@@ -53,8 +40,4 @@ public sealed partial class CorrelationMiddleware(RequestDelegate next, ILogger<
             }
         }
     }
-
-    /// <summary>The current request's correlation id, or null outside a request.</summary>
-    public static string? Current(HttpContext? context) =>
-        context?.Items.TryGetValue(ItemKey, out var value) == true ? value as string : null;
 }

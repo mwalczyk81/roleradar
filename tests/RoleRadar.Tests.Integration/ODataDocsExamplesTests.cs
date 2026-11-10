@@ -82,11 +82,11 @@ public sealed partial class ODataDocsExamplesTests : IAsyncLifetime
                 case 400:
                     using (var json = System.Text.Json.JsonDocument.Parse(body))
                     {
-                        if (json.RootElement.GetProperty("ok").GetBoolean() ||
+                        if (json.RootElement.GetProperty("status").GetInt32() != 400 ||
                             json.RootElement.GetProperty("errorCode").GetString() != "validation_error" ||
-                            string.IsNullOrWhiteSpace(json.RootElement.GetProperty("message").GetString()))
+                            string.IsNullOrWhiteSpace(json.RootElement.GetProperty("detail").GetString()))
                         {
-                            problems.Add($"{example.Url}: 400 body is not the documented envelope: {body}");
+                            problems.Add($"{example.Url}: 400 body is not the documented problem document: {body}");
                         }
                     }
 

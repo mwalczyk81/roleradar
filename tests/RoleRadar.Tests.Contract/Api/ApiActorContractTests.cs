@@ -16,7 +16,7 @@ namespace RoleRadar.Tests.Contract.Api;
 
 /// <summary>
 /// Feature 013 (FR-015, FR-017, SC-004): every API write names the signed-in subject as its audit actor, never a
-/// placeholder, and the audit entry carries the request's correlation id.
+/// placeholder, and the audit entry carries the request's trace id (feature 014: W3C Trace Context replaced X-Correlation-ID).
 /// </summary>
 public sealed class ApiActorContractTests(SharedMongoFixture sharedMongo)
 {
@@ -133,7 +133,7 @@ public sealed class ApiActorContractTests(SharedMongoFixture sharedMongo)
     }
 
     [Fact]
-    public async Task ApiWrite_WithCorrelationHeader_StoresItOnTheAuditEntry()
+    public async Task ApiWrite_WithATraceparent_StoresItsTraceIdOnTheAuditEntry()
     {
         await using var host = await StartHostAsync("rrtest_api_actor_corr");
         var seed = await SeedAsync(host, "Actor Correlation Labs");
@@ -142,12 +142,12 @@ public sealed class ApiActorContractTests(SharedMongoFixture sharedMongo)
         {
             Content = JsonContent.Create(new { status = "target" })
         };
-        request.Headers.Add("X-Correlation-ID", "test-corr-0002");
+        request.Headers.Add("traceparent", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
         var response = await host.Client.SendAsync(request);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var entry = await NewestAuditEntryAsync(host);
         Assert.True(entry.TryGetValue("request_correlation_id", out var stored), "audit entry has no request_correlation_id");
-        Assert.Equal("test-corr-0002", stored!.AsString);
+        Assert.Equal("4bf92f3577b34da6a3ce929d0e0e4736", stored!.AsString);
     }
 }

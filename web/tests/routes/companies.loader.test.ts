@@ -102,7 +102,7 @@ describe("Companies Loaders (T040)", () => {
 
       mockApiGet.mockResolvedValueOnce({
         data: undefined,
-        error: { ok: false, errorCode: "NOT_FOUND", message: "Company not found" },
+        error: { status: 404, errorCode: "not_found", detail: "Company not found" },
         response: { status: 404 } as Response,
       });
 
@@ -129,7 +129,7 @@ describe("Companies Loaders (T040)", () => {
 
       mockApiGet.mockResolvedValueOnce({
         data: undefined,
-        error: { ok: false, errorCode: "FORBIDDEN", message: "Forbidden" },
+        error: { status: 403, errorCode: "forbidden" },
         response: { status: 403 } as Response,
       });
 

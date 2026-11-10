@@ -15,6 +15,7 @@ using RoleRadar.Api.Endpoints;
 using RoleRadar.Api.Filters;
 using RoleRadar.Api.Observability;
 using RoleRadar.Api.OpenApi;
+using RoleRadar.Api.Problems;
 using RoleRadar.Application;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Reading.Models;
@@ -84,6 +85,7 @@ public partial class Program
         builder.Services.AddSingleton<IAuthorizationHandler, ScopeAuthorizationHandler>();
         builder.Services.AddHostedService<RoleRadar.Api.OData.ReadIndexStartupService>();
         builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+        builder.Services.AddProblemDetails(options => options.CustomizeProblemDetails = ProblemTypes.Customize);
         builder.Services.AddHealthChecks()
             .AddCheck<ApiReadinessCheck>("mongo", failureStatus: HealthStatus.Unhealthy, tags: [HealthEndpoints.ReadyTag]);
 
@@ -168,6 +170,7 @@ public partial class Program
         builder.Services.AddOpenApi(options =>
         {
             options.AddExplicitTypeTransformers();
+            options.AddProblemDetailsMembers();
         });
 
         builder.Services.AddControllers(options =>
@@ -201,11 +204,14 @@ public partial class Program
         // Intentionally zero CORS middleware registered (server-to-server only per ADR-0018 / FR-009)
         var app = builder.Build();
 
-        app.UseMiddleware<CorrelationMiddleware>();
+        app.UseMiddleware<RequestCompletedMiddleware>();
 
-        // Right after the correlation middleware, so an escaped exception becomes the standard envelope with the request's id.
+        // Right after the request log middleware, so an escaped exception becomes a problem document with the request's trace id.
         // Every failure is handled by ApiExceptionHandler; the no-op delegate only satisfies the middleware's own options.
         app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = static _ => Task.CompletedTask });
+
+        // An empty 401, 403 or 404 written by authentication, authorization or routing gets the same problem document.
+        app.UseStatusCodePages();
 
         app.UseAuthentication();
         app.UseAuthorization();
@@ -222,7 +228,9 @@ public partial class Program
             .AllowAnonymous();
 
         var apiV1 = app.MapGroup("/api/v1")
-            .RequireAuthorization(OwnerPolicyName);
+            .RequireAuthorization(OwnerPolicyName)
+            .ProducesProblem(StatusCodes.Status401Unauthorized)
+            .ProducesProblem(StatusCodes.Status403Forbidden);
 
         apiV1.MapPostingsEndpoints();
         apiV1.MapCompaniesEndpoints();

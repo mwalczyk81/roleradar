@@ -9,7 +9,7 @@ namespace RoleRadar.Tests.Architecture;
 /// </summary>
 public sealed class ObservabilityArchitectureTests
 {
-    private static readonly Assembly ObservabilityAssembly = typeof(RoleRadar.Observability.CorrelationId).Assembly;
+    private static readonly Assembly ObservabilityAssembly = typeof(RoleRadar.Observability.TraceIds).Assembly;
     private static readonly Assembly DomainAssembly = typeof(RoleRadar.Domain.Common.OwnerId).Assembly;
     private static readonly Assembly ApplicationAssembly = typeof(RoleRadar.Application.DependencyInjection).Assembly;
     private static readonly Assembly InfrastructureAssembly = typeof(RoleRadar.Infrastructure.DependencyInjection).Assembly;

@@ -1,6 +1,6 @@
 # ADR 0018: REST API Style, Error Envelope, Paging, and Owner Mapping
 
-- **Status**: Accepted. Superseded in part by [ADR 0028](./0028-odata-read-seam-and-query-execution.md) (list endpoints retired in feature 006)
+- **Status**: Accepted. Superseded in part by [ADR 0028](./0028-odata-read-seam-and-query-execution.md) (list endpoints retired in feature 006) and by [ADR 0044](./0044-problem-details-and-trace-context.md) (section 2, the error envelope, is replaced by RFC 9457 problem documents)
 - **Date**: 2026-10-25
 - **Feature**: `005a-api-and-login`
 
@@ -46,6 +46,8 @@ Minimal APIs are selected over MVC Controllers:
 Each endpoint delegates directly to an injected `ICommandHandler<TCommand, TResult>` or `IQueryHandler<TQuery, TResult>`.
 
 ### 2. Error Envelope
+
+> Superseded by [ADR 0044](./0044-problem-details-and-trace-context.md): errors are RFC 9457 problem documents (`docs/api/problems.md`). The text below is the historical decision.
 
 All error responses adhere to a consistent JSON envelope schema:
 

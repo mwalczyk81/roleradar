@@ -4,21 +4,21 @@ import { loadODataList } from "../../app/lib/odata-list.server";
 import { SERVICE_UNAVAILABLE_MESSAGE } from "../../app/lib/observability";
 import { runWithRequestContext } from "../../app/lib/request-context.server";
 
-// Feature 013 US3 (FR-024, contracts/http-correlation-and-errors.md): when the API answers 503 service_unavailable the
-// web shows a friendly, retryable message of its own, never the envelope's text or an error's text, and writes one warn
-// record that carries the envelope's correlation id so the owner can find the API's side of it.
+// Feature 013 US3 (FR-024), restated for feature 014 (RFC 9457): when the API answers 503 service_unavailable the web
+// shows a friendly, retryable message of its own, never the problem document's text or an error's text, and writes one
+// warn record that carries the problem document's traceId so the owner can find the API's side of it.
 
 const RAW_TEXT = "MongoConnectionException: connect failed at db.fictional.invalid:27017";
-const API_ID = "test-corr-api-0503";
-const OWN_ID = "test-corr-web-0503";
+const API_ID = "0af7651916cd43dd8448eb211c80319c";
+const OWN_ID = "4bf92f3577b34da6a3ce929d0e0e4736";
 
-function envelope(correlationId?: string) {
-  return { ok: false, errorCode: "service_unavailable", message: RAW_TEXT, details: null, ...(correlationId ? { correlationId } : {}) };
+function envelope(traceId?: string) {
+  return { type: "https://github.com/mwalczyk81/roleradar/blob/main/docs/api/problems.md#service_unavailable", title: "Service Unavailable", status: 503, detail: RAW_TEXT, errorCode: "service_unavailable", ...(traceId ? { traceId } : {}) };
 }
 
 function stubUnavailable(body: unknown) {
   const fake = vi.fn((): Promise<Response> =>
-    Promise.resolve(new Response(typeof body === "string" ? body : JSON.stringify(body), { status: 503, headers: { "Content-Type": "application/json" } }))
+    Promise.resolve(new Response(typeof body === "string" ? body : JSON.stringify(body), { status: 503, headers: { "Content-Type": "application/problem+json" } }))
   );
   vi.stubGlobal("fetch", fake);
   return fake;
@@ -104,18 +104,18 @@ describe("a 503 service_unavailable envelope from the API", () => {
     expect(await thrown.text()).toBe(SERVICE_UNAVAILABLE_MESSAGE);
   });
 
-  it("writes one warn record carrying the envelope's correlation id, and nothing of its text", async () => {
+  it("writes one warn record carrying the problem document's traceId, and nothing of its text", async () => {
     stubUnavailable(envelope(API_ID));
     const lines = captureLogs();
 
-    await runWithRequestContext({ correlationId: OWN_ID, nonce: "" }, async () =>
+    await runWithRequestContext({ traceId: OWN_ID, spanId: "00f067aa0ba902b7", nonce: "" }, async () =>
       settle(fetchOData<unknown>("/odata/Postings", "$top=1&$filter=title eq 'x'", "fictional-token"))
     );
 
     const unavailable = records(lines).filter((r) => r.event === "ApiServiceUnavailable");
     expect(unavailable).toHaveLength(1);
     expect(unavailable[0].level).toBe("warn");
-    expect(unavailable[0].correlationId).toBe(API_ID);
+    expect(unavailable[0].traceId).toBe(API_ID);
     expect(unavailable[0].props).toMatchObject({ method: "GET", path: "/odata/Postings", status: 503, attempts: 3 });
     const text = lines.join("");
     expect(text).not.toContain("Mongo");
@@ -124,17 +124,17 @@ describe("a 503 service_unavailable envelope from the API", () => {
     expect(text).not.toContain("fictional-token");
   });
 
-  it("falls back to the request's own correlation id when the envelope has none", async () => {
+  it("falls back to the request's own trace id when the problem document has none", async () => {
     stubUnavailable("upstream connect error");
     const lines = captureLogs();
 
-    await runWithRequestContext({ correlationId: OWN_ID, nonce: "" }, async () =>
+    await runWithRequestContext({ traceId: OWN_ID, spanId: "00f067aa0ba902b7", nonce: "" }, async () =>
       settle(fetchOData<unknown>("/odata/Postings", "", "fictional-token"))
     );
 
     const unavailable = records(lines).filter((r) => r.event === "ApiServiceUnavailable");
     expect(unavailable).toHaveLength(1);
-    expect(unavailable[0].correlationId).toBe(OWN_ID);
+    expect(unavailable[0].traceId).toBe(OWN_ID);
   });
 
   it("is not logged as unavailable when a retry succeeds", async () => {

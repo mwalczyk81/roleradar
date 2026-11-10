@@ -192,13 +192,13 @@ describe("Company Detail Action (T041)", () => {
     mockApiPatch.mockResolvedValueOnce({
       data: undefined,
       error: {
-        ok: false,
-        errorCode: "VALIDATION_ERROR",
-        message: "Invalid company payload",
-        details: [
-          { field: "name", issue: "Company name cannot be blank." },
-          { field: "status", issue: "Invalid status value." },
-        ],
+        status: 400,
+        errorCode: "validation_error",
+        detail: "Invalid company payload",
+        errors: {
+          name: ["Company name cannot be blank."],
+          status: ["Invalid status value."],
+        },
       },
       response: { status: 400 } as Response,
     });
@@ -236,9 +236,9 @@ describe("Company Detail Action (T041)", () => {
     mockApiPatch.mockResolvedValueOnce({
       data: undefined,
       error: {
-        ok: false,
-        errorCode: "CONCURRENCY_CONFLICT",
-        message: "The record was modified by another user or operation.",
+        status: 409,
+        errorCode: "concurrency_conflict",
+        detail: "The record was modified by another user or operation.",
       },
       response: { status: 409 } as Response,
     });
@@ -272,9 +272,8 @@ describe("Company Detail Action (T041)", () => {
     mockApiPatch.mockResolvedValueOnce({
       data: undefined,
       error: {
-        ok: false,
-        errorCode: "FORBIDDEN",
-        message: "Forbidden",
+        status: 403,
+        errorCode: "forbidden",
       },
       response: { status: 403 } as Response,
     });

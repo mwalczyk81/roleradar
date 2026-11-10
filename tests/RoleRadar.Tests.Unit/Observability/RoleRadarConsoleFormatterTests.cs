@@ -1,3 +1,4 @@
+using System.Diagnostics;
 // Tests log fixed templates to exercise the formatter; LoggerMessage delegates would add nothing here.
 #pragma warning disable CA1848, CA1873
 
@@ -49,20 +50,32 @@ public sealed partial class RoleRadarConsoleFormatterTests
         Assert.Equal(42, json.GetProperty("eventId").GetInt32());
         Assert.Equal("p-1", json.GetProperty("props").GetProperty("PostingId").GetString());
         Assert.False(json.GetProperty("props").TryGetProperty("{OriginalFormat}", out _));
+        Assert.False(json.TryGetProperty("traceId", out _));
         Assert.False(json.TryGetProperty("correlationId", out _));
     }
 
     [Fact]
-    public void Json_TakesCorrelationIdFromScope()
+    public void Json_TakesTheTraceIdFromTheCurrentActivity_UnderTheFieldTraceId()
     {
         var (capture, logger) = Create(LogFormat.Json);
 
-        using (logger.BeginScope(new Dictionary<string, object?> { ["CorrelationId"] = "test-corr-0001" }))
-        {
-            logger.LogInformation("inside");
-        }
+        using var activity = new Activity("formatter-test").Start();
+        logger.LogInformation("inside");
 
-        Assert.Equal("test-corr-0001", SingleJson(capture).GetProperty("correlationId").GetString());
+        var json = SingleJson(capture);
+        Assert.Equal(activity.TraceId.ToHexString(), json.GetProperty("traceId").GetString());
+        Assert.False(json.TryGetProperty("correlationId", out _));
+    }
+
+    [Fact]
+    public void Json_WithNoActivity_HasNoTraceId()
+    {
+        var (capture, logger) = Create(LogFormat.Json);
+        Activity.Current = null;
+
+        logger.LogInformation("startup");
+
+        Assert.False(SingleJson(capture).TryGetProperty("traceId", out _));
     }
 
     [Fact]
@@ -112,19 +125,18 @@ public sealed partial class RoleRadarConsoleFormatterTests
     {
         var (capture, logger) = Create(LogFormat.Text, service: "identity");
 
-        using (logger.BeginScope(new Dictionary<string, object?> { ["CorrelationId"] = "test-corr-0001" }))
-        {
-            logger.LogWarning("Posting {PostingId} moved", "p-1");
-        }
+        using var activity = new Activity("formatter-test").Start();
+        logger.LogWarning("Posting {PostingId} moved", "p-1");
 
         var line = Assert.Single(capture.Lines);
-        Assert.Matches(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z warn identity \[test-corr-0001\] Posting p-1 moved PostingId=p-1$", line);
+        Assert.Matches(@"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z warn identity \[" + activity.TraceId.ToHexString() + @"\] Posting p-1 moved PostingId=p-1$", line);
     }
 
     [Fact]
-    public void Text_WithoutCorrelationId_UsesADash()
+    public void Text_WithoutATraceId_UsesADash()
     {
         var (capture, logger) = Create(LogFormat.Text, service: "cli");
+        Activity.Current = null;
 
         logger.LogInformation("started");
 
@@ -150,7 +162,7 @@ public sealed partial class RoleRadarConsoleFormatterTests
     {
         var (capture, logger) = Create(format);
 
-        using (logger.BeginScope(new Dictionary<string, object?> { ["CorrelationId"] = "test-corr-0001", ["Upstream"] = $"Bearer {Jwt}" }))
+        using (logger.BeginScope(new Dictionary<string, object?> { ["Upstream"] = $"Bearer {Jwt}" }))
         {
             logger.LogError(
                 new InvalidOperationException($"connect failed mongodb://{SecretVectors.User}:{SecretVectors.Password}@mongo.test:27017"),

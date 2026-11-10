@@ -5,7 +5,7 @@ import { useLoaderData, useFetcher, useRevalidator, Link, data } from "react-rou
 import { ArrowLeft, Plus, Trash2 } from "lucide-react";
 import { requireUserSession, assertApiOk } from "../lib/auth-guard.server.js";
 import { validateCsrfToken } from "../lib/csrf.server.js";
-import { createApiClient } from "../lib/api-client.server.js";
+import { createApiClient, mapApiError } from "../lib/api-client.server.js";
 import { useTheme } from "../lib/use-theme.js";
 import { getNavItems } from "../lib/nav.js";
 import {
@@ -63,7 +63,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   await assertApiOk(response, request, session.sessionId, { notFoundMessage: "Company not found" });
 
   if (error || !company) {
-    throw new Response(error?.message || "Failed to load company", {
+    throw new Response(error?.detail || "Failed to load company", {
       status: response.status || 500,
     });
   }
@@ -167,25 +167,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
       {
         ok: false,
         conflict: true,
-        error: error?.message || "This company was modified by another operation. Please reload to see latest data.",
+        error: error?.detail || "This company was modified by another operation. Please reload to see latest data.",
       },
       { status: 409 }
     );
   }
 
   if (response.status === 400 || error) {
-    const fieldErrors: Record<string, string> = {};
-    if (error && "details" in error && Array.isArray(error.details)) {
-      for (const item of error.details) {
-        if (item && item.field) {
-          fieldErrors[item.field] = item.issue;
-        }
-      }
-    }
+    const { fieldErrors } = mapApiError(error, response.status);
     return data<CompanyActionData>(
       {
         ok: false,
-        error: error?.message || "Validation failed.",
+        error: error?.detail || "Validation failed.",
         fieldErrors,
       },
       { status: 400 }

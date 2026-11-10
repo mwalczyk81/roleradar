@@ -8,7 +8,7 @@ Every error response is `application/problem+json`.
 
 | Member | Type | Present | Notes |
 | --- | --- | --- | --- |
-| `type` | string (URI) | always | An RFC 4151 tag URI built from the error code: `tag:mattwalczyk.com,2026:roleradar:problem:<errorCode>`. The authority name is confirmed by the owner at review. `docs/api/problem-types.md` lists each code. A status with no code of ours (for example 405) keeps the platform default. |
+| `type` | string (URI) | always | A documentation URL in the repository built from the error code: `https://github.com/mwalczyk81/roleradar/blob/main/docs/api/problems.md#<errorCode>`, one anchor per code in `docs/api/problems.md`. The base is one constant (`ProblemTypes.TypeUriPrefix`). The web does not switch on `type`; it switches on `errorCode`. A status with no code of ours (for example 405) keeps the platform default. |
 | `title` | string | always | Fixed text per status (the platform's). |
 | `status` | integer | always | Equals the HTTP status. |
 | `detail` | string | 400, 404, 409, 500, 503 | The human-readable message. Fixed text for 500 and 503. |

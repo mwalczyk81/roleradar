@@ -186,8 +186,8 @@ public static class TrackerImportCommand
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                var correlationHint = Guid.NewGuid().ToString("N")[..8];
-                await Console.Error.WriteLineAsync($"Tracker import failed unexpectedly with {ex.GetType().Name} (ref: {correlationHint}). Inspect logs or rerun with diagnostic logging.");
+                // The run's trace id: the same value is on every log record of this run (feature 014).
+                await Console.Error.WriteLineAsync($"Tracker import failed unexpectedly with {ex.GetType().Name} (ref: {Program.RunId}). Inspect logs or rerun with diagnostic logging.");
                 return 1;
             }
         });

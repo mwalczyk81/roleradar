@@ -66,7 +66,7 @@ public sealed class IdentityHealthContractTests
 
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             AssertStatusDocument(body, "Healthy");
-            Assert.True(response.Headers.Contains(CorrelationId.HeaderName), "Health responses carry X-Correlation-ID.");
+            Assert.False(response.Headers.Contains("X-Correlation-ID"), "Health responses carry no X-Correlation-ID since feature 014.");
         }
         finally
         {
@@ -87,7 +87,7 @@ public sealed class IdentityHealthContractTests
 
             Assert.Equal(HttpStatusCode.ServiceUnavailable, ready.StatusCode);
             AssertStatusDocument(readyBody, "Unhealthy");
-            Assert.True(ready.Headers.Contains(CorrelationId.HeaderName));
+            Assert.False(ready.Headers.Contains("X-Correlation-ID"));
             Assert.Equal(HttpStatusCode.OK, live.StatusCode);
             AssertStatusDocument(liveBody, "Healthy");
         }

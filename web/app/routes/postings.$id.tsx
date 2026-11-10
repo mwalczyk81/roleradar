@@ -91,7 +91,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   await assertApiOk(postingRes.response, request, session.sessionId, { notFoundMessage: "Posting Not Found" });
 
   if (postingRes.error || !postingRes.data) {
-    throw new Response(postingRes.error?.message ?? "Failed to fetch posting", {
+    throw new Response(postingRes.error?.detail ?? "Failed to fetch posting", {
       status: postingRes.response.status || 500,
     });
   }

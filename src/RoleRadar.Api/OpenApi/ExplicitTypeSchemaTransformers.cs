@@ -57,7 +57,7 @@ public static class ExplicitTypeSchemaTransformers
 
     /// <summary>
     /// GET /api/v1/insights/stats: <c>window</c> is a required string enum and <c>asOf</c> a required string with
-    /// <c>format: date</c>. The handler parses both itself so that a bad value is answered with the ErrorEnvelope, which
+    /// <c>format: date</c>. The handler parses both itself so that a bad value is answered with a 400 problem document, which
     /// is why they are bound as plain strings; the schema still tells clients the real contract.
     /// </summary>
     private static void DeclareInsightsStatsParameters(OpenApiOperation operation)

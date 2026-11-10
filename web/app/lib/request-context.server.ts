@@ -1,11 +1,12 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-// Feature 013: the per-request store (CSP nonce and correlation id). web/server.ts and the React Router build are
+// Feature 013: the per-request store (CSP nonce); feature 014: the W3C trace id and this service's span id. web/server.ts and the React Router build are
 // bundled separately, so the store lives on globalThis under a registered symbol: both bundles must share one
 // AsyncLocalStorage instance or loaders would not see the request's context.
 
 export interface RequestContext {
-  correlationId: string;
+  traceId: string;
+  spanId: string;
   nonce: string;
 }
 

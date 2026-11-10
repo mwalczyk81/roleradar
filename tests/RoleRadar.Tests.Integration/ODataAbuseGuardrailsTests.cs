@@ -7,7 +7,7 @@ using Xunit;
 
 /// <summary>
 /// Phase 6 (T060): the query guardrails hold on all six entity sets, not only Postings. Every rejected query
-/// is HTTP 400 with the ErrorEnvelope.Validation shape ({ ok: false, errorCode: "validation_error", message }),
+/// is HTTP 400 with a validation problem document ({ status: 400, errorCode: "validation_error", detail }, feature 014),
 /// and every write verb is HTTP 405 with Allow: GET.
 /// </summary>
 public sealed class ODataAbuseGuardrailsTests : IClassFixture<AllEntitiesFixture>
@@ -43,9 +43,9 @@ public sealed class ODataAbuseGuardrailsTests : IClassFixture<AllEntitiesFixture
     {
         var (status, body) = await GetAsync(set, query);
         Assert.True(status == HttpStatusCode.BadRequest, $"/odata/{set}?{query} returned {(int)status}: {body}");
-        Assert.False(body.GetProperty("ok").GetBoolean(), body.ToString());
+        Assert.Equal(400, body.GetProperty("status").GetInt32());
         Assert.Equal("validation_error", body.GetProperty("errorCode").GetString());
-        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("message").GetString()), body.ToString());
+        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("detail").GetString()), body.ToString());
     }
 
     private static string Q(string filter) => "$filter=" + Uri.EscapeDataString(filter);

@@ -14,7 +14,7 @@ public sealed class PostingsEndpointsContractTests(SharedMongoFixture sharedMong
     private readonly SharedMongoFixture _sharedMongo = sharedMongo;
 
     [Fact]
-    public async Task GetPostingById_Returns200WithDetail_Or404WithErrorEnvelope()
+    public async Task GetPostingById_Returns200WithDetail_Or404WithAProblemDocument()
     {
         await using var host = await ApiContractTestHost.StartAsync(_sharedMongo, "rrtest_api_posting_detail");
         using var scope = host.Services.CreateScope();
@@ -43,11 +43,11 @@ public sealed class PostingsEndpointsContractTests(SharedMongoFixture sharedMong
         Assert.Equal("Nimbus Systems", detail.GetProperty("companyName").GetString());
         Assert.Equal("Principal Distributed Systems Engineer", detail.GetProperty("title").GetString());
 
-        // Non-existent posting -> 404 with ErrorEnvelope
+        // Non-existent posting -> 404 problem document
         var missingResp = await host.Client.GetAsync($"/api/v1/postings/{Guid.CreateVersion7()}");
         Assert.Equal(HttpStatusCode.NotFound, missingResp.StatusCode);
         var err = await missingResp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.False(err.GetProperty("ok").GetBoolean());
+        Assert.Equal(404, err.GetProperty("status").GetInt32());
         Assert.Equal("not_found", err.GetProperty("errorCode").GetString());
     }
 
@@ -89,7 +89,7 @@ public sealed class PostingsEndpointsContractTests(SharedMongoFixture sharedMong
         var staleResp = await host.Client.PostAsJsonAsync($"/api/v1/postings/{postingId}/transition", validPayload);
         Assert.Equal(HttpStatusCode.Conflict, staleResp.StatusCode);
         var conflictErr = await staleResp.Content.ReadFromJsonAsync<JsonElement>();
-        Assert.False(conflictErr.GetProperty("ok").GetBoolean());
+        Assert.Equal(409, conflictErr.GetProperty("status").GetInt32());
         Assert.Equal("concurrency_conflict", conflictErr.GetProperty("errorCode").GetString());
     }
 }

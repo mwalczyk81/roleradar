@@ -6,6 +6,8 @@ All notable changes to RoleRadar are recorded here. The format follows [Keep a C
 
 ### Changed
 
+- **Breaking: API errors are RFC 9457 problem documents.** Every error under `/api/v1` and `/odata` is `application/problem+json` with `type`, `title`, `status`, `detail`, `errorCode` and `traceId` (and `errors` for field problems), replacing the private `{ ok, errorCode, message, details, correlationId }` envelope. The codes are listed in `docs/api/problems.md`. See ADR 0044.
+- **Breaking: W3C Trace Context replaces `X-Correlation-ID`.** The id of a request is its W3C trace id (32 hex characters), carried by the `traceparent` header. The `X-Correlation-ID` header is no longer read, written or returned, the log field `correlationId` is now `traceId`, and the CLI run id and the MCP per-call id are trace ids too. The audit field keeps its name `request_correlation_id` and now holds the trace id for new entries; older entries keep their values. The web app now reads field errors and lower-case error codes correctly (RR-64).
 - The one-time code at sign-in and at enrolment is checked by the ASP.NET Core Identity authenticator provider instead of hand-written RFC 6238 code. Existing enrolments and secrets keep working with no re-enrolment. The accepted window is the provider's: the code for the current 30-second step and two steps either side. The demo `totp` command and the enrolment URI use Otp.NET; the URI now also states the default `algorithm`, `digits` and `period` ([ADR 0042](docs/adr/0042-authenticator-provider-and-replay-guard.md)).
 
 ### Security

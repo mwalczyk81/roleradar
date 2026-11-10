@@ -1,5 +1,7 @@
 # Contract: Correlation Header and Error Envelope
 
+> **Superseded in part by [ADR 0044](../../../docs/adr/0044-problem-details-and-trace-context.md) (feature 014).** The correlation header is replaced by W3C `traceparent` and the bare trace id, and the error envelope by RFC 9457 problem documents: see `specs/014-standards-first/contracts/trace-context.md` and `problem-details.md`. The text below is the 013 contract as shipped.
+
 Applies to the web app, the API and the Identity service. Decisions: research R-004, R-007.
 
 ## `X-Correlation-ID`

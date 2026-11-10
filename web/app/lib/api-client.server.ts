@@ -1,15 +1,14 @@
 import createClient, { type Client } from "openapi-fetch";
-import type { paths } from "../../../contracts/client/api-types.js";
+import type { components, paths } from "../../../contracts/client/api-types.js";
 import { log } from "./log.server.js";
 import {
   SERVICE_UNAVAILABLE_MESSAGE,
-  acceptCorrelationId,
   attemptTimeoutMs,
   backoffMs,
   shouldRetry,
   type AttemptFailure,
 } from "./observability.js";
-import { getRequestContext } from "./request-context.server.js";
+import { withTraceparent } from "./trace-context.server.js";
 
 export interface UiError {
   errorCode: string;
@@ -18,51 +17,58 @@ export interface UiError {
   isConflict: boolean;
   isNotFound: boolean;
   isForbidden: boolean;
+  traceId?: string;
 }
 
-export function mapApiError(error: unknown, status?: number): UiError {
-  const envelope = error as {
-    ok?: boolean;
-    errorCode?: string;
-    message?: string;
-    details?: Array<{ field?: string; message?: string }>;
-  } | null | undefined;
+/** An RFC 9457 problem document as the API sends it (generated types; the validation form adds `errors`). */
+type ProblemDocument = components["schemas"]["HttpValidationProblemDetails"];
 
-  const fieldErrors: Record<string, string> = {};
-  if (envelope?.details && Array.isArray(envelope.details)) {
-    for (const d of envelope.details) {
-      if (d.field && d.message) {
-        fieldErrors[d.field] = d.message;
-      }
+function isProblemDocument(value: unknown): value is ProblemDocument {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function fieldErrorsOf(errors: unknown): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (typeof errors !== "object" || errors === null || Array.isArray(errors)) {
+    return result;
+  }
+  for (const [field, issues] of Object.entries(errors)) {
+    if (!Array.isArray(issues)) {
+      continue;
+    }
+    const texts = issues.filter((issue): issue is string => typeof issue === "string" && issue !== "");
+    if (field && texts.length > 0) {
+      result[field] = texts.join(" ");
     }
   }
+  return result;
+}
 
-  const errorCode = envelope?.errorCode ?? (status ? `HTTP_${status}` : "UNKNOWN_ERROR");
-  const message = envelope?.message ?? "An unexpected API error occurred.";
+/**
+ * Maps an API error body (an RFC 9457 problem document, feature 014) to what the routes show. Field errors come from
+ * `errors` (issues joined with a space), the code is the lower-case `errorCode` (never `type`), the message is `detail`,
+ * and `traceId` is carried through for logging. The flags come from the status or from the lower-case code.
+ */
+export function mapApiError(error: unknown, status?: number): UiError {
+  const problem = isProblemDocument(error) ? error : undefined;
+
+  const errorCode = typeof problem?.errorCode === "string" && problem.errorCode !== "" ? problem.errorCode : status ? `HTTP_${status}` : "UNKNOWN_ERROR";
+  const message = typeof problem?.detail === "string" && problem.detail !== "" ? problem.detail : "An unexpected API error occurred.";
+  const traceId = typeof problem?.traceId === "string" && problem.traceId !== "" ? problem.traceId : undefined;
 
   return {
     errorCode,
     message,
-    fieldErrors,
-    isConflict: status === 409 || errorCode === "CONCURRENCY_CONFLICT",
-    isNotFound: status === 404 || errorCode === "NOT_FOUND",
-    isForbidden: status === 403 || errorCode === "FORBIDDEN",
+    fieldErrors: fieldErrorsOf(problem?.errors),
+    isConflict: status === 409 || errorCode === "concurrency_conflict",
+    isNotFound: status === 404 || errorCode === "not_found",
+    isForbidden: status === 403 || errorCode === "forbidden",
+    traceId,
   };
 }
 
 export function getApiBaseUrl(): string {
   return process.env.ROLERADAR_API_BASE_URL ?? "https://localhost:5002";
-}
-
-export const CORRELATION_HEADER = "X-Correlation-ID";
-
-/** Adds the current request's X-Correlation-ID (feature 013) to outbound headers. Outside a request, adds nothing. */
-export function withCorrelationHeader(headers: Headers): Headers {
-  const correlationId = getRequestContext()?.correlationId;
-  if (correlationId) {
-    headers.set(CORRELATION_HEADER, correlationId);
-  }
-  return headers;
 }
 
 /** Rejects when `signal` aborts, even if the underlying fetch ignores it, so a stalled socket cannot hold the caller. */
@@ -96,29 +102,25 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-async function envelopeCorrelationId(response: Response): Promise<string | undefined> {
+/** The traceId of the API's problem document, or undefined when the body is not one (a proxy's page, an empty body). */
+async function problemTraceId(response: Response): Promise<string | undefined> {
   try {
     const body: unknown = await response.clone().json();
-    if (typeof body === "object" && body !== null && "correlationId" in body && typeof body.correlationId === "string") {
-      const fromEnvelope = acceptCorrelationId(body.correlationId);
-      if (fromEnvelope) {
-        return fromEnvelope;
-      }
-    }
+    return mapApiError(body, response.status).traceId;
   } catch {
-    // Not a JSON envelope (a proxy's page, an empty body): fall back to the header.
+    return undefined;
   }
-  return acceptCorrelationId(response.headers.get(CORRELATION_HEADER));
 }
 
 /**
- * One warn record when the API finally answers 503 (after any retries), carrying the correlation id the API's envelope
- * names so the owner can find its side of the request. The envelope's text and the query string are never logged.
+ * One warn record when the API finally answers 503 (after any retries), carrying the traceId the API's problem document
+ * names (otherwise the request's own trace id) so the owner can find its side of the request. The document's text and the
+ * query string are never logged.
  */
 async function logServiceUnavailable(request: Request, response: Response, attempts: number): Promise<void> {
   log.warn("The API answered 503: its data store is unavailable", {
     event: "ApiServiceUnavailable",
-    correlationId: await envelopeCorrelationId(response),
+    traceId: await problemTraceId(response),
     props: { method: request.method.toUpperCase(), path: new URL(request.url).pathname, status: 503, attempts },
   });
 }
@@ -128,13 +130,13 @@ async function logServiceUnavailable(request: Request, response: Response, attem
  * three times, on a network error, a 5 s per-attempt timeout, 502, 503 or 504, with a 200 ms and then a 500 ms backoff. A
  * write is sent exactly once, with a 10 s timeout, and never retried. 400, 401, 404, 409 and 500 come straight back for the
  * caller (and assertApiOk) to handle. A caller's abort is never retried and propagates. Every attempt carries the same
- * X-Correlation-ID. The timeout is a plain timer, not AbortSignal.timeout, so tests can drive it with fake timers.
+ * traceparent. The timeout is a plain timer, not AbortSignal.timeout, so tests can drive it with fake timers.
  *
  * The per-attempt timeout bounds each attempt, not the whole call: a caller that needs one overall bound across the
  * retries (the Insights loaders: 5 s) passes a signal of its own, which cancels the attempt and any backoff.
  */
 export async function fetchWithPolicy(request: Request): Promise<Response> {
-  withCorrelationHeader(request.headers);
+  withTraceparent(request.headers);
   const method = request.method.toUpperCase();
   const caller = request.signal;
   const timeoutMs = attemptTimeoutMs(method);
@@ -245,9 +247,9 @@ export async function fetchOData<T>(
 
     let errorMsg = `OData request failed with status ${response.status}`;
     try {
-      const errJson = await response.json();
-      if (errJson?.message) {
-        errorMsg = errJson.message;
+      const errJson: unknown = await response.json();
+      if (isProblemDocument(errJson) && typeof errJson.detail === "string" && errJson.detail !== "") {
+        errorMsg = errJson.detail;
       }
     } catch {
       // ignore json parse error on non-json error responses

@@ -14,13 +14,13 @@ using Xunit;
 namespace RoleRadar.Tests.Contract.Audit;
 
 /// <summary>
-/// Feature 013 (FR-017, FR-008): both audit choke points stamp the correlation id of the current request as
-/// <c>request_correlation_id</c>, leave the field out when there is no request context, and leave the existing
+/// Feature 013 (FR-017, FR-008), restated for feature 014: both audit choke points stamp the trace id (32 lower-case hex
+/// characters) of the current request as <c>request_correlation_id</c>, leave the field out when there is no request context, and leave the existing
 /// <c>details.after.correlation_id</c> alone.
 /// </summary>
 public sealed class RequestCorrelationAuditContractTests : IAsyncLifetime
 {
-    private const string CorrelationId = "test-corr-0001";
+    private const string CorrelationId = "0af7651916cd43dd8448eb211c80319c";
 
     private readonly SharedMongoFixture _sharedMongo;
     private MongoClient _client = null!;

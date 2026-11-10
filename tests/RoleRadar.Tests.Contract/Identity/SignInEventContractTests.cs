@@ -32,7 +32,7 @@ public sealed partial class SignInEventContractTests
     [GeneratedRegex(@"name=""__RequestVerificationToken""[^>]*?value=""([^""]+)""")]
     private static partial Regex AntiForgery();
 
-    private sealed record Event(int EventId, string Name, string Level, string? CorrelationId, JsonElement Props);
+    private sealed record Event(int EventId, string Name, string Level, string? TraceId, JsonElement Props);
 
     private static FormatterLogCapture NewCapture() => new(RoleRadarConsoleFormatter.Create("identity", LogFormat.Json));
 
@@ -92,7 +92,7 @@ public sealed partial class SignInEventContractTests
                 idElement.GetInt32(),
                 root.GetProperty("event").GetString()!,
                 root.GetProperty("level").GetString()!,
-                root.TryGetProperty("correlationId", out var c) ? c.GetString() : null,
+                root.TryGetProperty("traceId", out var c) ? c.GetString() : null,
                 props));
         }
 
@@ -119,7 +119,7 @@ public sealed partial class SignInEventContractTests
         e.Props.ValueKind == JsonValueKind.Object && e.Props.TryGetProperty("subject", out _);
 
     private static void AssertEveryEventCorrelated(IEnumerable<Event> events) =>
-        Assert.All(events, e => Assert.False(string.IsNullOrWhiteSpace(e.CorrelationId), $"{e.Name} has no correlationId"));
+        Assert.All(events, e => Assert.Matches("^[0-9a-f]{32}$", e.TraceId ?? string.Empty));
 
     private static void AssertNoneOfTheSecretsAppear(FormatterLogCapture capture, params string[] secrets)
     {

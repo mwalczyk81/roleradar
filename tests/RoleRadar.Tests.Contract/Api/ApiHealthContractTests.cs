@@ -59,7 +59,7 @@ public sealed class ApiHealthContractTests(SharedMongoFixture sharedMongo)
 
         Assert.Equal(HttpStatusCode.OK, status);
         AssertStatusDocument(body, "Healthy");
-        Assert.True(response.Headers.Contains(CorrelationId.HeaderName), "Health responses carry X-Correlation-ID.");
+        Assert.False(response.Headers.Contains("X-Correlation-ID"), "Health responses carry no X-Correlation-ID since feature 014.");
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public sealed class ApiHealthContractTests(SharedMongoFixture sharedMongo)
 
         Assert.Equal(HttpStatusCode.OK, status);
         AssertStatusDocument(body, "Healthy");
-        Assert.True(response.Headers.Contains(CorrelationId.HeaderName));
+        Assert.False(response.Headers.Contains("X-Correlation-ID"));
     }
 
     [Fact]
@@ -85,7 +85,7 @@ public sealed class ApiHealthContractTests(SharedMongoFixture sharedMongo)
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, readyStatus);
         AssertStatusDocument(readyBody, "Unhealthy");
-        Assert.True(readyResponse.Headers.Contains(CorrelationId.HeaderName));
+        Assert.False(readyResponse.Headers.Contains("X-Correlation-ID"));
         Assert.Equal(HttpStatusCode.OK, liveStatus);
         AssertStatusDocument(liveBody, "Healthy");
     }

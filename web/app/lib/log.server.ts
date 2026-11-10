@@ -3,11 +3,11 @@ import { getRequestContext } from "./request-context.server.js";
 
 // Feature 013: the web logger. info and below go to stdout, warn and above to stderr. The format comes from
 // ROLERADAR_LOG_FORMAT (json in the image, text otherwise), the minimum level from ROLERADAR_LOG_LEVEL (default info).
-// The correlation id comes from the request store unless a caller passes one (callbacks outside the store).
+// The trace id (field traceId) comes from the request store unless a caller passes one (callbacks outside the store).
 
 export interface LogFields {
   event?: string;
-  correlationId?: string;
+  traceId?: string;
   props?: Record<string, unknown>;
   error?: unknown;
 }
@@ -22,7 +22,7 @@ function write(level: LogLevel, msg: string, fields: LogFields = {}): void {
       level,
       msg,
       event: fields.event,
-      correlationId: fields.correlationId ?? getRequestContext()?.correlationId,
+      traceId: fields.traceId ?? getRequestContext()?.traceId,
       props: fields.props,
       error: fields.error,
     },

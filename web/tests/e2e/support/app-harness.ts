@@ -547,7 +547,7 @@ export async function startAppHarness(s: StubState, sessionId: string): Promise<
     if (url.pathname === "/api/v1/notes/note-e2e-1" && req.method === "GET") {
       if (!s.currentNoteDetail) {
         res.writeHead(404);
-        res.end(JSON.stringify({ ok: false, errorCode: "NOT_FOUND", message: "Note not found" }));
+        res.end(JSON.stringify({ status: 404, errorCode: "not_found", detail: "Note not found" }));
         return;
       }
       res.writeHead(200);
@@ -556,7 +556,7 @@ export async function startAppHarness(s: StubState, sessionId: string): Promise<
     }
 
     res.writeHead(404);
-    res.end(JSON.stringify({ ok: false, errorCode: "NOT_FOUND", message: "Not found" }));
+    res.end(JSON.stringify({ status: 404, errorCode: "not_found", detail: "Not found" }));
   });
 
   await new Promise<void>((resolve) => {

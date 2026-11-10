@@ -18,7 +18,7 @@ public sealed record EnumAllowlistEntry(Type DomainOwner, string DomainProperty,
 /// The single mapping from Domain enum properties to the API properties that carry them. The OpenAPI schema
 /// transformer writes <c>enum</c> from it, so contracts/openapi/roleradar-api.json and the generated client types
 /// cannot drift from Domain (ADR 0035). EnumContractRegistryTests fails when a Domain enum property is in neither
-/// list. DTOs bind these values as plain strings on purpose (handlers answer a bad value with the ErrorEnvelope), so
+/// list. DTOs bind these values as plain strings on purpose (handlers answer a bad value with a 400 problem document), so
 /// only the schema, not the binding, carries the constraint. OData stays Edm.String (ADR 0028).
 /// </summary>
 public static class EnumContractRegistry

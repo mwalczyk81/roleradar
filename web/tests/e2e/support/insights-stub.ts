@@ -233,12 +233,12 @@ export async function startInsightsHarness(sessionId: string): Promise<InsightsH
       const asOf = url.searchParams.get("asOf") ?? "";
       if (statsMode === "fail") {
         res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: false, errorCode: "internal_error", message: "Fictional stub failure." }));
+        res.end(JSON.stringify({ status: 500, errorCode: "internal_error", detail: "Fictional stub failure." }));
         return;
       }
       if ((window !== "last90Days" && window !== "allTime") || !/^\d{4}-\d{2}-\d{2}$/.test(asOf)) {
         res.writeHead(400, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ ok: false, errorCode: "validation_error", message: "Bad window or asOf." }));
+        res.end(JSON.stringify({ status: 400, errorCode: "validation_error", detail: "Bad window or asOf." }));
         return;
       }
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -269,7 +269,7 @@ export async function startInsightsHarness(sessionId: string): Promise<InsightsH
     if (total === undefined) {
       unexpectedFilters.push(filter ?? "");
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: false, errorCode: "validation_error", message: "Unexpected filter for the fictional stub." }));
+      res.end(JSON.stringify({ status: 400, errorCode: "validation_error", detail: "Unexpected filter for the fictional stub." }));
       return;
     }
 

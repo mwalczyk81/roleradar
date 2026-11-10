@@ -1,5 +1,5 @@
-using RoleRadar.Api.Envelopes;
 using RoleRadar.Api.Models;
+using RoleRadar.Api.Problems;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Notes.Queries;
 using RoleRadar.Domain.Common;
@@ -15,7 +15,7 @@ public static class AncillaryEndpoints
 
         readGroup.MapGet("/notes/{id:guid}", GetNoteByIdAsync)
             .Produces<NoteDto>(StatusCodes.Status200OK)
-            .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound);
         return group;
     }
 
@@ -32,7 +32,7 @@ public static class AncillaryEndpoints
 
         if (!result.IsSuccess || result.Value is null)
         {
-            return ErrorEnvelope.FromResultError(result.Error);
+            return ApiProblems.FromResultError(result.Error);
         }
 
         var n = result.Value;

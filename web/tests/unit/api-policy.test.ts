@@ -10,11 +10,12 @@ import type { LensContext } from "../../app/lib/insights-lenses";
 // Feature 013 US3 (FR-026, FR-027, SC-007): the outbound policy of the web server. Reads (GET, HEAD) are attempted at most
 // 3 times, on a network error, a 5 s per-attempt timeout, 502, 503 or 504, with a 200 ms and then a 500 ms backoff. Writes
 // (POST, PATCH, PUT, DELETE) are sent exactly once, with a 10 s timeout. 400, 401, 404, 409 and 500 are never retried. A
-// caller's abort is not retried and propagates. Every attempt carries the same X-Correlation-ID. A fake fetch and fake
+// caller's abort is not retried and propagates. Every attempt carries the same traceparent. A fake fetch and fake
 // timers stand in for the network and the clock.
 
 const URL_UNDER_TEST = "https://api.test/odata/Postings?$top=1";
-const CORRELATION = "test-corr-policy-0001";
+const TRACE_ID = "0af7651916cd43dd8448eb211c80319c";
+const SPAN_ID = "00f067aa0ba902b7";
 
 type Step = number | "network" | "hang";
 
@@ -254,15 +255,16 @@ describe("fetchWithPolicy", () => {
     expect("error" in result).toBe(true);
   });
 
-  it("puts the same X-Correlation-ID on every attempt", async () => {
+  it("puts the same traceparent on every attempt", async () => {
     const { requests } = scriptedFetch([503, 503, 200]);
 
-    const result = await runWithRequestContext({ correlationId: CORRELATION, nonce: "" }, async () => settled(start(get())));
+    const result = await runWithRequestContext({ traceId: TRACE_ID, spanId: SPAN_ID, nonce: "" }, async () => settled(start(get())));
 
     expect("response" in result && result.response.status).toBe(200);
     expect(requests).toHaveLength(3);
     for (const request of requests) {
-      expect(request.headers.get("x-correlation-id")).toBe(CORRELATION);
+      expect(request.headers.get("traceparent")).toBe(`00-${TRACE_ID}-${SPAN_ID}-01`);
+      expect(request.headers.has("x-correlation-id")).toBe(false);
     }
   });
 
