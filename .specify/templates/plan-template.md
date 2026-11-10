@@ -42,6 +42,28 @@
 
 [Gates determined based on constitution file]
 
+| Principle | Status | Evidence |
+|-----------|--------|----------|
+| X. Standards First | [PASS / FAIL / N/A: no new mechanism] | [Every new mechanism has a row in "Standards considered" below; every hand-rolled one links its ADR] |
+
+## Standards considered
+
+<!--
+  ACTION REQUIRED (Constitution Principle X): add one row per new mechanism (wire format, error
+  envelope, correlation or tracing, auth or credentials, retries, logging or scrubbing, parsing,
+  serialization, backup format, and similar). If the feature adds none, replace the table with
+  "No new mechanism."
+  Check an RFC, a platform feature (ASP.NET Core, Microsoft.Extensions.*, the .NET BCL, Node
+  built-ins) and an established ecosystem standard or library, and use what exists unless a
+  recorded reason says it does not fit. A hand-rolled choice needs an ADR; supply-chain
+  minimalism alone is not a reason. For a near fit prefer a thin in-repo extension (temporary,
+  linked to the upstream issue) or an upstream contribution, which needs the owner's approval.
+-->
+
+| Mechanism | What was checked | What was chosen | Why (ADR if hand-rolled) |
+|-----------|------------------|-----------------|--------------------------|
+| [e.g., API error body] | [e.g., RFC 9457 ProblemDetails, ASP.NET Core `AddProblemDetails`] | [e.g., ProblemDetails] | [e.g., built in, no gap] |
+
 ## Project Structure
 
 ### Documentation (this feature)

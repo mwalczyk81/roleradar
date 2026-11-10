@@ -2,6 +2,15 @@
 
 Version history for `.specify/memory/constitution.md`. Newest first.
 
+## 1.2.0 (2026-11-10, MINOR)
+
+Version change: 1.1.1 -> 1.2.0 (new Principle X). Tracked as RR-76.
+
+- Added Principle X, Standards First: before building a mechanism, check for an RFC, a platform feature or an established standard or library; a hand-rolled mechanism needs an ADR naming what it was compared against; a near fit prefers a thin temporary in-repo extension or an upstream contribution; nothing goes upstream without the owner's approval or carries real data.
+- Principle IV: added a clarifying bullet that the abstraction and library gates are not a preference for hand-rolled code. Principle VIII: added a bullet that pinning, license and privacy rules apply to what Principle X adopts and are not a reason to hand-roll. No existing rule weakened.
+- Compliance Review now covers Principles I through X and adds a Standards Check that `/speckit-analyze` reports as CRITICAL.
+- Templates: `plan-template.md` gains a "Standards considered" table and a Constitution Check row; the PR template gains a Principle X line; `AGENTS.md` and `CONTRIBUTING.md` updated.
+
 ## 1.1.1 (2026-10-27, PATCH)
 
 - Wording only: each rationale shortened to one sentence; the Sync Impact Report moved here from the constitution header. No principle changed.
