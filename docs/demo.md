@@ -84,6 +84,6 @@ Without `ROLERADAR_SCREENSHOT_DIR` the spec is skipped, so the normal end-to-end
 ## Troubleshooting
 
 - **A port is taken:** stop whatever uses 5101, 5102 or 5103; the demo does not use the real stack's ports.
-- **The sign-in page says the code is wrong:** codes last 30 seconds; run the totp command again.
+- **The sign-in page says the code is wrong:** codes last 30 seconds and each code works only once; if you just used one, wait for the next and run the totp command again.
 - **Locked out after five wrong attempts:** run the credentials command again; it clears the lockout.
 - **You want fresh data or new dates:** remove the demo with the `down -v` command above and start it again.

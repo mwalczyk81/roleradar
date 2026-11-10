@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import crypto from "node:crypto";
 import { test, expect } from "@playwright/test";
-import { totpCode } from "./support/totp";
+import { nextUnusedTotpCode } from "./support/totp";
 
 // Feature 013 US1 (SC-001): a failing request through the web returns X-Correlation-ID, and the real-stack harness
 // (RealStackEndToEndTests) then finds that id on JSON log lines from both the web and the API containers. This spec
@@ -31,7 +31,7 @@ test.describe("Operability: one correlation id across services (013)", () => {
     await page.fill('input[name="Input.Password"]', password);
     await page.click('button[type="submit"]:has-text("Sign In")');
     await expect(page.getByText("6-Digit Authenticator Code")).toBeVisible({ timeout: 10_000 });
-    await page.fill('input[name="TwoFactorInput.Code"]', totpCode(totpKey));
+    await page.fill('input[name="TwoFactorInput.Code"]', await nextUnusedTotpCode(totpKey));
     await page.click('button[type="submit"]:has-text("Verify Code")');
     await page.waitForURL("**/postings");
 

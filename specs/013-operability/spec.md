@@ -159,7 +159,7 @@ As the owner, the API and identity service report separately whether they are al
 - **FR-024**: When the database is unreachable, any API request that needs it MUST receive a service-unavailable status in the standard error envelope, with the correlation id, within 5 seconds of the request arriving.
 - **FR-025**: When the database becomes reachable again, the API MUST serve requests successfully within 30 seconds without a restart.
 - **FR-026**: Web-to-API calls MUST have a per-attempt timeout, and only safe read requests MAY be retried, at most 2 times after the first attempt; write requests MUST never be retried automatically.
-- **FR-027**: Retries and timeouts MUST be implemented without a retry policy library.
+- **FR-027**: Retries and timeouts MUST be implemented without a retry policy library. *(Superseded by feature 014, FR-044: a maintained retry library is now allowed. See `specs/014-standards-first/spec.md`.)*
 
 **Constraints (all stories)**
 

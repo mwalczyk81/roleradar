@@ -1,5 +1,5 @@
 using System.Security.Cryptography;
-using RoleRadar.Identity.Services;
+using OtpNet;
 
 namespace RoleRadar.Cli.Demo;
 
@@ -35,7 +35,7 @@ public static class CredentialGenerator
     }
 
     /// <summary>A random Base32 authenticator key, in the format the interactive provisioning uses.</summary>
-    public static string GenerateAuthenticatorKey() => OwnerProvisioningService.GenerateAuthenticatorKey();
+    public static string GenerateAuthenticatorKey() => Base32Encoding.ToString(KeyGeneration.GenerateRandomKey(20));
 
     private static char Pick(string set) => set[RandomNumberGenerator.GetInt32(set.Length)];
 }

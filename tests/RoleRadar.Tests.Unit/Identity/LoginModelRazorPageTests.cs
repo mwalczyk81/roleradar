@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using RoleRadar.Identity.Data;
 using RoleRadar.Identity.Pages.Account;
+using RoleRadar.Identity.Services;
 using Xunit;
 
 namespace RoleRadar.Tests.Unit.Identity;
@@ -83,7 +84,7 @@ public sealed class LoginModelRazorPageTests
         var loginModel = new LoginModel(
             signInManager,
             userManager,
-            dbContext,
+            OwnerProvisioningService.Create(dbContext),
             interactionService,
             NullLogger<LoginModel>.Instance)
         {

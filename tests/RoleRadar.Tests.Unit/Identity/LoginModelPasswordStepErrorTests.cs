@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using RoleRadar.Identity.Data;
 using RoleRadar.Identity.Pages.Account;
+using RoleRadar.Identity.Services;
 using Xunit;
 
 namespace RoleRadar.Tests.Unit.Identity;
@@ -71,7 +72,7 @@ public sealed class LoginModelPasswordStepErrorTests
         provider.GetRequiredService<IHttpContextAccessor>().HttpContext = httpContext;
         signInManager.Context = httpContext;
 
-        var model = new LoginModel(signInManager, userManager, dbContext, provider.GetRequiredService<IIdentityServerInteractionService>(), NullLogger<LoginModel>.Instance)
+        var model = new LoginModel(signInManager, userManager, OwnerProvisioningService.Create(dbContext), provider.GetRequiredService<IIdentityServerInteractionService>(), NullLogger<LoginModel>.Instance)
         {
             Input = new LoginModel.InputModel { Username = username, Password = password },
             RequiresTwoFactor = requiresTwoFactor,

@@ -1,3 +1,4 @@
+using OtpNet;
 using RoleRadar.Identity.Data;
 using RoleRadar.Identity.Services;
 
@@ -23,7 +24,7 @@ public sealed record DemoTotp(string Code, int SecondsRemaining);
 /// </summary>
 public sealed class DemoAccountManager(IdentityAppDbContext dbContext)
 {
-    private readonly OwnerProvisioningService _service = new(dbContext);
+    private readonly OwnerProvisioningService _service = OwnerProvisioningService.Create(dbContext);
 
     private static Guid UserId => Guid.Parse(DemoAccount.UserId);
 
@@ -58,7 +59,7 @@ public sealed class DemoAccountManager(IdentityAppDbContext dbContext)
             return null;
         }
 
-        var uri = $"otpauth://totp/RoleRadar:{Uri.EscapeDataString(DemoAccount.Username)}?secret={key}&issuer=RoleRadar";
+        var uri = new OtpUri(OtpType.Totp, key, DemoAccount.Username, "RoleRadar").ToString();
         return new DemoCredentials(DemoAccount.Username, password, key, uri);
     }
 
@@ -70,7 +71,9 @@ public sealed class DemoAccountManager(IdentityAppDbContext dbContext)
             return null;
         }
 
-        var now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        return new DemoTotp(_service.ComputeTotpCode(key, now), (int)(30 - (now % 30)));
+        // The platform provider verifies codes but cannot generate them, so the demo command asks Otp.NET (ADR 0042).
+        var totp = new Totp(Base32Encoding.ToBytes(key));
+        var instant = DateTime.UtcNow;
+        return new DemoTotp(totp.ComputeTotp(instant), totp.RemainingSeconds(instant));
     }
 }

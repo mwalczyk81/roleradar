@@ -11,7 +11,7 @@ import {
   type ScreenshotView,
   type Theme,
 } from "./support/demo-capture.js";
-import { totpCode } from "./support/totp.js";
+import { nextUnusedTotpCode } from "./support/totp.js";
 
 /**
  * Feature 012: the README screenshots, captured from the running demo stack (deploy/demo/docker-compose.yml) in light
@@ -131,7 +131,7 @@ async function signIn(page: Page, credentials: DemoCredentials, origin: string):
   await page.getByRole("button", { name: "Sign In" }).click();
   const codeField = page.getByLabel("6-Digit Authenticator Code");
   await codeField.waitFor();
-  await codeField.fill(totpCode(credentials.totpSecret));
+  await codeField.fill(await nextUnusedTotpCode(credentials.totpSecret));
   await page.getByRole("button", { name: "Verify Code" }).click();
   await page.waitForURL((url) => url.origin === origin);
 }

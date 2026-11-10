@@ -43,7 +43,7 @@ public sealed class OwnerProvisioningTests
         await using var dbContext = new IdentityAppDbContext(options);
         await dbContext.Database.MigrateAsync();
 
-        var service = new OwnerProvisioningService(dbContext);
+        var service = OwnerProvisioningService.Create(dbContext);
 
         // Act
         var result = await service.ProvisionOwnerAsync("matt", "InitialOwnerPassword123!");
@@ -73,7 +73,7 @@ public sealed class OwnerProvisioningTests
         await using var dbContext = new IdentityAppDbContext(options);
         await dbContext.Database.MigrateAsync();
 
-        var service = new OwnerProvisioningService(dbContext);
+        var service = OwnerProvisioningService.Create(dbContext);
         await service.ProvisionOwnerAsync("matt", "InitialOwnerPassword123!");
 
         // Attempting to provision a second owner must throw
@@ -94,11 +94,11 @@ public sealed class OwnerProvisioningTests
         await using var dbContext = new IdentityAppDbContext(options);
         await dbContext.Database.MigrateAsync();
 
-        var service = new OwnerProvisioningService(dbContext);
+        var service = OwnerProvisioningService.Create(dbContext);
         var provisionResult = await service.ProvisionOwnerAsync("matt", "InitialOwnerPassword123!");
 
         // Act: Generate valid current TOTP code using the shared secret
-        var validCode = service.ComputeTotpCode(provisionResult.AuthenticatorKey);
+        var validCode = TotpTestCodes.Current(provisionResult.AuthenticatorKey);
         var activated = await service.VerifyTotpAndActivateAsync(provisionResult.UserId, validCode);
 
         // Assert
@@ -120,7 +120,7 @@ public sealed class OwnerProvisioningTests
         await using var dbContext = new IdentityAppDbContext(options);
         await dbContext.Database.MigrateAsync();
 
-        var service = new OwnerProvisioningService(dbContext);
+        var service = OwnerProvisioningService.Create(dbContext);
         var provisionResult = await service.ProvisionOwnerAsync("matt", "InitialOwnerPassword123!");
 
         // Act: attempt invalid code

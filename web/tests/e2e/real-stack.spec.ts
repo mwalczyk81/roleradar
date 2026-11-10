@@ -1,39 +1,5 @@
 import { test, expect } from "@playwright/test";
-import crypto from "node:crypto";
-
-function base32Decode(base32: string): Buffer {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-  const cleaned = base32.toUpperCase().replace(/=+$/, "");
-  let bits = 0;
-  let value = 0;
-  const bytes: number[] = [];
-
-  for (let i = 0; i < cleaned.length; i++) {
-    const idx = alphabet.indexOf(cleaned[i]);
-    if (idx === -1) continue;
-    value = (value << 5) | idx;
-    bits += 5;
-    if (bits >= 8) {
-      bytes.push((value >>> (bits - 8)) & 255);
-      bits -= 8;
-    }
-  }
-  return Buffer.from(bytes);
-}
-
-function computeTotp(base32Secret: string): string {
-  const key = base32Decode(base32Secret);
-  const epoch = Math.floor(Date.now() / 1000);
-  const timeStep = Math.floor(epoch / 30);
-  const buffer = Buffer.alloc(8);
-  buffer.writeBigInt64BE(BigInt(timeStep));
-  const hmac = crypto.createHmac("sha1", key);
-  hmac.update(buffer);
-  const digest = hmac.digest();
-  const offset = digest[digest.length - 1] & 0x0f;
-  const code = ((digest.readUInt32BE(offset) & 0x7fffffff) % 1_000_000).toString().padStart(6, "0");
-  return code;
-}
+import { nextUnusedTotpCode } from "./support/totp";
 
 test.describe("Real-Stack End-to-End User Journey (T062)", () => {
   const baseUrl = process.env.E2E_BASE_URL;
@@ -63,7 +29,8 @@ test.describe("Real-Stack End-to-End User Journey (T062)", () => {
 
     // 3. Challenge with TOTP 2FA
     await expect(page.getByText("6-Digit Authenticator Code")).toBeVisible({ timeout: 10000 });
-    const totpCode = computeTotp(totpKey);
+    // The identity host rejects a code it already accepted, so take one that was not handed out before (ADR 0042).
+    const totpCode = await nextUnusedTotpCode(totpKey);
     await page.fill('input[name="TwoFactorInput.Code"]', totpCode);
     await page.click('button[type="submit"]:has-text("Verify Code")');
 

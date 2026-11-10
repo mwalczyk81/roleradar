@@ -53,7 +53,7 @@ public static class CreateOwnerCommand
             var dbContext = services.GetRequiredService<IdentityAppDbContext>();
             await dbContext.Database.MigrateAsync(cancellationToken);
 
-            var provisioningService = new OwnerProvisioningService(dbContext);
+            var provisioningService = OwnerProvisioningService.Create(dbContext);
 
             if (await provisioningService.OwnerExistsAsync(cancellationToken))
             {

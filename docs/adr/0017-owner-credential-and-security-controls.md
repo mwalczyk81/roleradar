@@ -3,6 +3,7 @@
 - **Status**: Accepted
 - **Date**: 2026-10-25
 - **Feature**: `005a-api-and-login`
+- **See also**: [ADR 0042](0042-authenticator-provider-and-replay-guard.md) (one-time codes are verified by the platform authenticator provider, with a replay guard; the window and the guard are recorded there).
 
 ## Context and Problem Statement
 

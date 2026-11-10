@@ -71,7 +71,8 @@ public sealed partial class SignInEventContractTests
         var db = scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>();
         var user = db.Users.Single(u => u.UserName == OwnerUsername);
         var key = db.UserTokens.Single(t => t.UserId == user.Id && t.Name == "AuthenticatorKey").Value!;
-        return (user.Id, new OwnerProvisioningService(db).ComputeTotpCode(key));
+        // A code already accepted is rejected as a replay (ADR 0042), so every call takes a code not handed out before.
+        return (user.Id, TotpTestCodes.NextUnused(key));
     }
 
     private static List<Event> Events(FormatterLogCapture capture)
