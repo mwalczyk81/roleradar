@@ -10,3 +10,4 @@
 - [ ] **Principle III (Test-Enforced Layering)**: `RoleRadar.Tests.Architecture` passes (inward dependencies + every `ICommandHandler<,>` wrapped by `TransactionAndAuditCommandDecorator<,>`).
 - [ ] **Principle IV (Named Seams Only)**: Uses `INoteRepository` and plain `ICommandHandler`/`IQueryHandler` with typed `Result<T>` outcomes.
 - [ ] **Principle VIII (Pinned Dependencies)**: Any dependency change updates `Directory.Packages.props` and `packages.lock.json` (`dotnet restore --locked-mode`).
+- [ ] **Principle X (Standards First)**: Any new mechanism has a "Standards considered" row in the plan (what was checked, what was chosen, why); a hand-rolled one has an ADR naming the standard or library it lost to, and no upstream issue, PR or discussion was opened without the owner's approval.
