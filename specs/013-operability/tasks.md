@@ -388,23 +388,23 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
 
 ### Tests first (US3)
 
-- [ ] T058 [P] [US3] Write the health tests per `contracts/health.md`. Never start a host that cannot start: Identity migrates SQLite at startup (`src/RoleRadar.Identity/Program.cs:123`). Show red.
+- [X] T058 [P] [US3] Write the health tests per `contracts/health.md`. Never start a host that cannot start: Identity migrates SQLite at startup (`src/RoleRadar.Identity/Program.cs:123`). Show red.
   - **Host-level contract tests** in `tests/RoleRadar.Tests.Contract/Api/ApiHealthContractTests.cs` and `tests/RoleRadar.Tests.Contract/Identity/IdentityHealthContractTests.cs`:
     - `/health/live` returns 200 `{"status":"Healthy"}`, and `/health` matches it.
     - `/health/ready` returns 200 when the readiness check passes, and 503 `{"status":"Unhealthy"}` when the host's readiness check is replaced by a stub that returns `Unhealthy`. For the API, an unreachable Mongo address with a short readiness timeout is also acceptable, because the API starts without Mongo.
     - Bodies contain no host, endpoint or error text.
   - **Direct check test** in `tests/RoleRadar.Tests.Unit/Identity/IdentityReadinessCheckTests.cs`: construct the real `IdentityReadinessCheck` with an `IdentityAppDbContext` on an unopenable SQLite path (a file inside a non-existent temp directory) and assert `Unhealthy` within the 2 s bound. A path that can be opened gives `Healthy`.
   - **Default URL**: `RoleRadar.Api.Program.DefaultHealthcheckUrl` and `RoleRadar.Identity.Program.DefaultHealthcheckUrl` both equal `http://127.0.0.1:8080/health/ready`. `ContainerHealthCheckLaunchedHostTests` keeps setting its own URL and stays green.
-- [ ] T059 [P] [US3] Write the unit tests in `tests/RoleRadar.Tests.Unit/Api/ErrorEnvelopeMappingTests.cs` and `tests/RoleRadar.Tests.Unit/Api/ApiExceptionHandlerTests.cs`. Show red.
+- [X] T059 [P] [US3] Write the unit tests in `tests/RoleRadar.Tests.Unit/Api/ErrorEnvelopeMappingTests.cs` and `tests/RoleRadar.Tests.Unit/Api/ApiExceptionHandlerTests.cs`. Show red.
   - `FromResultError(DatastoreOffline)` returns 503 `service_unavailable` with `Retry-After: 5`.
   - 400, 404 and 409 are unchanged.
   - The exception handler maps an exception that `DatastoreFailure.IsUnavailable` classifies as unavailable to 503, and anything else to 500 `internal_error`.
   - Neither body contains the exception message, the stack, a host or a remediation command.
   - Both bodies carry `correlationId`.
-- [ ] T060 [P] [US3] Write `tests/RoleRadar.Tests.Unit/Infrastructure/DatastoreFailureTests.cs`. Show red.
+- [X] T060 [P] [US3] Write `tests/RoleRadar.Tests.Unit/Infrastructure/DatastoreFailureTests.cs`. Show red.
   - `IsUnavailable` is true for `MongoConnectionException`, a server-selection `TimeoutException` and `MongoNotPrimaryException`.
   - It is false for `MongoWriteException` (duplicate key), `ArgumentException` and `InvalidOperationException`.
-- [ ] T061 [US3] Write the integration test in `tests/RoleRadar.Tests.Integration/Api/DatastoreOutageIntegrationTests.cs` (FR-024, FR-025, SC-006). Show red: today a write returns 400 and a read returns 500.
+- [X] T061 [US3] Write the integration test in `tests/RoleRadar.Tests.Integration/Api/DatastoreOutageIntegrationTests.cs` (FR-024, FR-025, SC-006). Show red: today a write returns 400 and a read returns 500.
   - Attributes: `[Trait("Category","Slow")]`, the default lane, and its own xUnit collection (like `StoppedMongoReadinessCollection`).
   - Start a dedicated Testcontainers Mongo replica set on a host port assigned at runtime: Testcontainers' random port or an OS-assigned free port.
   - The port must never be 27017 or any port the dev or demo stacks publish (27017, 5001 to 5004, 5101 to 5103). If the assigned port is on that list, release it and pick again instead of failing.
@@ -424,14 +424,14 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
 
 ### Implementation (US3)
 
-- [ ] T063 [US3] Implement `src/RoleRadar.Infrastructure/Mongo/DatastoreFailure.cs` (`IsUnavailable(Exception)`). T060 green.
-- [ ] T064 [US3] Map outages to 503. T059 green.
+- [X] T063 [US3] Implement `src/RoleRadar.Infrastructure/Mongo/DatastoreFailure.cs` (`IsUnavailable(Exception)`). T060 green.
+- [X] T064 [US3] Map outages to 503. T059 green.
   - In `src/RoleRadar.Api/Envelopes/ErrorEnvelope.cs` and `ErrorResults.cs`, map `DatastoreOffline` to 503 `service_unavailable` with `Retry-After: 5`.
   - Add `src/RoleRadar.Api/Observability/ApiExceptionHandler.cs`, an `IExceptionHandler`. It returns 503 when `DatastoreFailure.IsUnavailable` matches and 500 `internal_error` otherwise, and logs the exception through the scrubbing formatter.
   - In `src/RoleRadar.Api/Program.cs`, register it with `AddExceptionHandler` and `UseExceptionHandler`, right after the correlation middleware.
   - `HttpUserOwnerIdProvider`'s `SecurityException` path keeps today's status; confirm with the existing auth tests.
   - Regenerate the OpenAPI document, `contracts/client/api-types.ts` and the `ApiOpenApiContractSnapshotTests` snapshot if response metadata changed.
-- [ ] T065 [US3] Add the health checks and endpoints. T058 green.
+- [X] T065 [US3] Add the health checks and endpoints. T058 green.
   - `src/RoleRadar.Api/Observability/ApiReadinessCheck.cs` wraps `INoteRepository.CheckReadinessAsync`, bounded at 2 s.
   - `src/RoleRadar.Identity/Observability/IdentityReadinessCheck.cs` wraps `IdentityAppDbContext.Database.CanConnectAsync`, bounded at 2 s.
   - In both `Program.cs` files:
@@ -442,7 +442,7 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
     - each writes the minimal `{"status":...}` body;
     - add `public const string DefaultHealthcheckUrl = "http://127.0.0.1:8080/health/ready"` and use it as the `--healthcheck` default.
   - Leave every compose healthcheck line unchanged.
-- [ ] T066 [US3] Make T061 green. If the 5 s bound is missed, check `MongoOptions.ReadinessTimeout` (3 s) and the server-selection timeout before changing anything. Record the measured 503 and recovery times from the test output.
+- [X] T066 [US3] Make T061 green. If the 5 s bound is missed, check `MongoOptions.ReadinessTimeout` (3 s) and the server-selection timeout before changing anything. Record the measured 503 and recovery times from the test output.
 - [ ] T067 [US3] Implement the outbound policy. T062 green, and the existing insights tests stay green.
   - In `web/app/lib/observability.ts`: `shouldRetry` and `backoffMs`.
   - In `web/app/lib/api-client.server.ts`: `fetchWithPolicy`, combining `AbortSignal.timeout` with the caller's signal through `AbortSignal.any`. Use it in `fetchOData` and as the `fetch` option of the `openapi-fetch` client.
@@ -616,3 +616,14 @@ Within each story, tests come before implementation, and each test task is shown
   - The demo case calls `DemoSeeder` directly in its own container (database named `DemoModeGuard.DemoDatabaseName`), not the `demo seed` command. A first version used the explicit-host guard overload and `DemoArchitectureTests.OnlyTheGuardTestsAndTheIntegrationSeedTest_CallTheExplicitHostOverload` failed on it; the rule was kept and the test changed.
   - `AuditCommand.Printable` now also replaces `UnicodeCategory.Format` (U+202E, U+200B, U+2066 and the rest). `AuditPrintableTests` (23 tests) was red first: 9 failed (8 format characters and the combined case), 14 passed. It is a unit test on the function because an integration test through the redirected Windows console passed before the fix (the console encoding turns an unmappable character into "?" itself), so it could not fail. `Printable` went from private to public for this.
   - After: Integration `CliActor` + `AuditListCli` 27/27; Architecture 66/66; `test-fast.ps1` Architecture 66/66, Unit 914/914, Contract 265/265; build with `-warnaserror` 0 warnings, 0 errors. The full Integration lane and the other gates were not re-run.
+
+- US3 backend (T058 to T061, T063 to T066, 2026-11-10), numbers from command output:
+  - **Red first.**
+    - T058 contract tests (`ApiHealthContractTests`, `IdentityHealthContractTests`): 11 failed, 2 passed of 13. The 2 that passed are the existing `/health` alias, which started green. Two "bodies carry nothing" tests first passed on empty 404 bodies; they now require a non-empty status body, which is what made them red. The default URL is read by reflection so a missing constant fails one test, not the build.
+    - T059, T060 and the `IdentityReadinessCheck` unit tests: red as compile errors (`ApiExceptionHandler` and `IdentityReadinessCheck` did not exist; `DatastoreFailure` and the 503 mapping followed).
+    - T061: failed. The read returned 500 after 14.2 s. The write's own command returned `DatastoreOffline` after 3.0 s (mapped to 400 before T064).
+  - **Green after.** New Unit tests 25/25, new Contract tests 13/13, T061 1/1. `pwsh ./scripts/test-fast.ps1`: Architecture 66/66, Unit 939/939, Contract 278/278. Build with `-warnaserror`: 0 warnings, 0 errors. Full default Integration lane (`Lane!=images&Lane!=web-container&Lane!=real-stack&Lane!=scan`): 699/699.
+  - **Measured by T061 (docker pause of its own Testcontainers replica set, host port assigned by Docker, never a reserved port):** read 503 in 2600 ms, write 503 in 3016 ms (bound 5000 ms); recovery to 200 in 444 ms after unpausing, same API host (bound 30000 ms). An earlier run gave 2895, 3014 and 505 ms.
+  - **T066, why the first measurement missed and what changed.** Server selection, connect and readiness are all 3 s (`ReadinessTimeout`), so none of them bounds a read already sent to a server the driver still believes is up. That read waited for the driver's streaming monitor (heartbeat interval 10 s plus connect timeout 3 s) before failing: 14.2 to 14.8 s. Two changes in `ConnectionStringRedactor.CreateClient`, used by every host: the monitor polls (`ServerMonitoringMode.Poll`, 1 s interval, 2 s heartbeat timeout), which brought the read to 5.9 s; and `RetryReads = false`, because the driver's retry selected a server again and waited out a second 3 s server-selection timeout. The CLI's and MCP's reads lose the driver retry too; the web will retry GETs itself (T067). A request deadline through ASP.NET Core request timeouts was tried first and removed: the OData pipeline materialises with a synchronous `ToList()` that takes no token, so a deadline cannot interrupt it.
+  - **API-only pieces and one deviation.** `/health` stays a plain `MapGet` in the API (same body) because health-check endpoints are not listed in OpenAPI, so mapping it as a health check removed `/health` from `contracts/openapi/roleradar-api.json` and failed `ApiOpenApiContractSnapshotTests`; the OpenAPI document and `api-types.ts` are unchanged. Identity maps `/health` as the live alias. `SecurityException` from the owner and actor providers still ends as a 500, now with the envelope.
+  - Not run in this stop: web tests (T062, T067), the T068 gate, `test-images.ps1`, `test-e2e-real.ps1`, `pre-commit`.

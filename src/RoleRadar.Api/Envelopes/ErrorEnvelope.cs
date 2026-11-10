@@ -28,6 +28,43 @@ public sealed record ErrorEnvelope(
     public static ErrorEnvelope ConcurrencyConflict(string message) =>
         new(false, "concurrency_conflict", message);
 
+    /// <summary>The data store did not answer. The message is fixed: no endpoint, exception text or remediation command.</summary>
+    public static ErrorEnvelope ServiceUnavailable() =>
+        new(false, "service_unavailable", "The data store is not reachable. Try again shortly.");
+
+    /// <summary>Any other failure the owner cannot fix. The message is fixed; the detail is in the scrubbed log.</summary>
+    public static ErrorEnvelope InternalError() =>
+        new(false, "internal_error", "The request failed unexpectedly. Try again, and check the logs if it keeps happening.");
+
+    /// <summary>The seconds a client should wait before retrying a 503 (contracts/http-correlation-and-errors.md).</summary>
+    public const int RetryAfterSeconds = 5;
+
+    /// <summary>A 503 with the envelope and <c>Retry-After</c>, for a request whose data store did not answer.</summary>
+    public static IResult ServiceUnavailableResult(ErrorEnvelope? envelope = null) =>
+        new HeaderAddingResult(
+            StatusCodes.Status503ServiceUnavailable,
+            envelope ?? ServiceUnavailable(),
+            retryAfterSeconds: RetryAfterSeconds);
+
+    /// <summary>A 500 with the envelope.</summary>
+    public static IResult InternalErrorResult(ErrorEnvelope? envelope = null) =>
+        new HeaderAddingResult(StatusCodes.Status500InternalServerError, envelope ?? InternalError(), retryAfterSeconds: null);
+
+    private sealed class HeaderAddingResult(int statusCode, ErrorEnvelope envelope, int? retryAfterSeconds) : IResult
+    {
+        public Task ExecuteAsync(HttpContext httpContext)
+        {
+            ArgumentNullException.ThrowIfNull(httpContext);
+
+            if (retryAfterSeconds is { } seconds)
+            {
+                httpContext.Response.Headers.RetryAfter = seconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+
+            return Results.Json(envelope, statusCode: statusCode).ExecuteAsync(httpContext);
+        }
+    }
+
     public static IResult FromResultError(ResultError? error)
     {
         if (error is null)
@@ -52,6 +89,9 @@ public sealed record ErrorEnvelope(
                 Results.NotFound(NotFound(error.Value.Message)),
             RoleRadar.Application.Abstractions.ErrorCode.StaleVersionToken =>
                 Results.Conflict(ConcurrencyConflict(error.Value.Message)),
+            // The Result message names the endpoint and a remediation command for the CLI; none of that leaves the API.
+            RoleRadar.Application.Abstractions.ErrorCode.DatastoreOffline =>
+                ServiceUnavailableResult(),
             _ =>
                 Results.BadRequest(Validation(error.Value.Message))
         };

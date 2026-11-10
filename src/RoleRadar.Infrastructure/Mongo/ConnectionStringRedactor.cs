@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using MongoDB.Driver;
+using MongoDB.Driver.Core.Servers;
 
 namespace RoleRadar.Infrastructure.Mongo;
 
@@ -34,6 +35,19 @@ public static class ConnectionStringRedactor
             var settings = MongoClientSettings.FromUrl(mongoUrl);
             settings.ServerSelectionTimeout = timeout;
             settings.ConnectTimeout = timeout;
+
+            // Notice a stalled server quickly (feature 013, FR-024). The driver's default is a streaming monitor that waits the
+            // heartbeat interval plus the connect timeout (about 13 s) before it gives up on a frozen server, and an operation
+            // already sent to that server waits for the same verdict: measured at 14 s against a paused container. Polling
+            // every second with a short timeout fails such an operation in a few seconds. The cost is one small hello per second.
+            settings.ServerMonitoringMode = ServerMonitoringMode.Poll;
+            settings.HeartbeatInterval = TimeSpan.FromSeconds(1);
+            settings.HeartbeatTimeout = TimeSpan.FromSeconds(2);
+
+            // No driver-level read retry. After a failed read it would select a server again and wait out the whole
+            // server-selection timeout a second time, doubling the time to a 503 (5.9 s measured against a paused container).
+            // Callers that want a retry own it: the web retries GETs, bounded, in its outbound policy.
+            settings.RetryReads = false;
             return new MongoClient(settings);
         }
         catch (Exception ex) when (ex is MongoConfigurationException or FormatException or ArgumentException)

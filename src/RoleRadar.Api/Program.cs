@@ -1,8 +1,11 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.OData;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OData.Edm;
@@ -29,12 +32,15 @@ public partial class Program
     public const string FullAccessScope = "roleradar.api";
     public const string ReadOnlyScope = "roleradar.api.read";
 
+    /// <summary>What the image's built-in <c>--healthcheck</c> calls unless ROLERADAR_HEALTHCHECK_URL says otherwise: readiness, not just liveness.</summary>
+    public const string DefaultHealthcheckUrl = "http://127.0.0.1:8080/health/ready";
+
     public static async Task<int> Main(string[] args)
     {
         if (args.Contains("--healthcheck", StringComparer.OrdinalIgnoreCase))
         {
             var healthUrl = Environment.GetEnvironmentVariable("ROLERADAR_HEALTHCHECK_URL")
-                ?? "http://127.0.0.1:8080/health";
+                ?? DefaultHealthcheckUrl;
             using var handler = new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(2) };
             using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };
             try
@@ -76,6 +82,9 @@ public partial class Program
         builder.Services.AddSingleton<IAuthorizationHandler, OwnerAllowlistHandler>();
         builder.Services.AddSingleton<IAuthorizationHandler, ScopeAuthorizationHandler>();
         builder.Services.AddHostedService<RoleRadar.Api.OData.ReadIndexStartupService>();
+        builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+        builder.Services.AddHealthChecks()
+            .AddCheck<ApiReadinessCheck>("mongo", failureStatus: HealthStatus.Unhealthy, tags: [HealthEndpoints.ReadyTag]);
 
         var authority = builder.Configuration["Authentication:Authority"]
             ?? Environment.GetEnvironmentVariable("ROLERADAR_OIDC_AUTHORITY")
@@ -182,6 +191,11 @@ public partial class Program
         var app = builder.Build();
 
         app.UseMiddleware<CorrelationMiddleware>();
+
+        // Right after the correlation middleware, so an escaped exception becomes the standard envelope with the request's id.
+        // Every failure is handled by ApiExceptionHandler; the no-op delegate only satisfies the middleware's own options.
+        app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = static _ => Task.CompletedTask });
+
         app.UseAuthentication();
         app.UseAuthorization();
 
@@ -190,6 +204,9 @@ public partial class Program
             app.MapOpenApi();
         }
 
+        app.MapRoleRadarHealth();
+
+        // Compatibility alias of /health/live. A plain endpoint, not a health check, so the OpenAPI document keeps listing it.
         app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }))
             .AllowAnonymous();
 
