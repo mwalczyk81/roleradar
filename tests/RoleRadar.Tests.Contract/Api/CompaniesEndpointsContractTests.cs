@@ -35,7 +35,8 @@ public sealed class CompaniesEndpointsContractTests(SharedMongoFixture sharedMon
                     Slug: "helios",
                     FetchMethod: "api",
                     IsActive: true)
-            ]));
+            ],
+            Actor: "system"));
 
         Assert.True(created.IsSuccess);
         var companyId = created.Value!.Company.Id;

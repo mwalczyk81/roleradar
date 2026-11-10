@@ -9,12 +9,14 @@ COPY global.json Directory.Build.props Directory.Packages.props .editorconfig ./
 COPY src/RoleRadar.Domain/RoleRadar.Domain.csproj src/RoleRadar.Domain/packages.lock.json src/RoleRadar.Domain/
 # The sign-in pages use the vendored kit CSS and fonts; the project copies them into wwwroot/ds at build (ADR 0034).
 COPY web/app/ds/ web/app/ds/
+COPY src/RoleRadar.Observability/RoleRadar.Observability.csproj src/RoleRadar.Observability/packages.lock.json src/RoleRadar.Observability/
 COPY src/RoleRadar.Identity/RoleRadar.Identity.csproj src/RoleRadar.Identity/packages.lock.json src/RoleRadar.Identity/
 
 RUN dotnet restore src/RoleRadar.Identity/RoleRadar.Identity.csproj --locked-mode
 
 # Copy source code and publish framework-dependent binaries
 COPY src/RoleRadar.Domain/ src/RoleRadar.Domain/
+COPY src/RoleRadar.Observability/ src/RoleRadar.Observability/
 COPY src/RoleRadar.Identity/ src/RoleRadar.Identity/
 
 RUN dotnet publish src/RoleRadar.Identity/RoleRadar.Identity.csproj -c Release --no-restore -o /app/identity && \
@@ -30,6 +32,7 @@ USER 1654:1654
 ENV ASPNETCORE_URLS=http://127.0.0.1:8080 \
     DOTNET_EnableDiagnostics=0 \
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
-    DOTNET_gcServer=0
+    DOTNET_gcServer=0 \
+    ROLERADAR_LOG_FORMAT=json
 HEALTHCHECK --interval=2s --timeout=3s --retries=5 --start-period=4s CMD ["/app/RoleRadar.Identity", "--healthcheck"]
 ENTRYPOINT ["/app/RoleRadar.Identity"]

@@ -5,7 +5,9 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  isRouteErrorResponse,
   useLoaderData,
+  useLocation,
 } from "react-router";
 
 import dsTokensHref from "./ds/tokens.css?url";
@@ -13,6 +15,7 @@ import dsBundleHref from "./ds/components/bundle.css?url";
 import appCssHref from "./app.css?url";
 import { THEME_BOOTSTRAP_SCRIPT, parseThemeCookie } from "./lib/theme.js";
 import { useTheme } from "./lib/use-theme.js";
+import { SERVICE_UNAVAILABLE_MESSAGE } from "./lib/observability.js";
 
 export const meta: MetaFunction = () => [
   { title: "RoleRadar" },
@@ -66,7 +69,36 @@ export default function App() {
   );
 }
 
+/** The API said its data store did not answer: a friendly page of the web's own words, with a plain link back to the same URL. */
+function ServiceUnavailableBoundary() {
+  const { pathname, search } = useLocation();
+
+  return (
+    <html lang="en">
+      <head>
+        <meta charSet="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Temporarily Unavailable</title>
+        <Meta />
+        <Links />
+      </head>
+      <body className="app-error-body">
+        <h1>Temporarily unavailable</h1>
+        <p>{SERVICE_UNAVAILABLE_MESSAGE}</p>
+        <p>
+          <a href={`${pathname}${search}`}>Try again</a>
+        </p>
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+
 export function ErrorBoundary({ error }: { error?: unknown }) {
+  if (isRouteErrorResponse(error) && error.status === 503) {
+    return <ServiceUnavailableBoundary />;
+  }
+
   const message =
     error instanceof Error ? error.message : "An unexpected application error occurred.";
 

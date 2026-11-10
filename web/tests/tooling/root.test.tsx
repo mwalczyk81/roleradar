@@ -3,6 +3,7 @@ import React from "react";
 import { render } from "@testing-library/react";
 import { createRoutesStub } from "react-router";
 import App, { meta, links, loader, ErrorBoundary } from "../../app/root.js";
+import { SERVICE_UNAVAILABLE_MESSAGE } from "../../app/lib/observability.js";
 
 describe("Root layout (root.tsx)", () => {
   it("exports meta returning title RoleRadar", () => {
@@ -146,5 +147,44 @@ describe("Root layout (root.tsx)", () => {
     const { findByText } = render(React.createElement(AppStub, { initialEntries: ["/"] }));
     expect(await findByText("Application Error")).toBeDefined();
     expect(await findByText("Boom test failure")).toBeDefined();
+  });
+
+  it("ErrorBoundary shows a friendly, retryable message for a 503 and never the generic application error", async () => {
+    const AppStub = createRoutesStub([
+      {
+        path: "/",
+        Component: () => <div>never rendered</div>,
+        loader: () => {
+          throw new Response(SERVICE_UNAVAILABLE_MESSAGE, { status: 503 });
+        },
+        ErrorBoundary: ErrorBoundary,
+      },
+    ]);
+
+    const { findByRole, findByText, queryByText } = render(React.createElement(AppStub, { initialEntries: ["/"] }));
+
+    expect(await findByRole("heading", { name: /temporarily unavailable/i })).toBeDefined();
+    expect(await findByText(SERVICE_UNAVAILABLE_MESSAGE)).toBeDefined();
+    const retry = await findByRole("link", { name: /try again/i });
+    expect(retry.getAttribute("href")).toBe("/");
+    expect(queryByText("Application Error")).toBeNull();
+  });
+
+  it("ErrorBoundary does not echo the text of a non-503 response either", async () => {
+    const AppStub = createRoutesStub([
+      {
+        path: "/",
+        Component: () => <div>never rendered</div>,
+        loader: () => {
+          throw new Response("MongoConnectionException at db.fictional.invalid", { status: 500 });
+        },
+        ErrorBoundary: ErrorBoundary,
+      },
+    ]);
+
+    const { findByText, queryByText } = render(React.createElement(AppStub, { initialEntries: ["/"] }));
+
+    expect(await findByText("Application Error")).toBeDefined();
+    expect(queryByText(/Mongo/)).toBeNull();
   });
 });

@@ -66,7 +66,8 @@ public sealed partial class PostingRejectionSyncTests
             VersionToken: world.Posting.VersionToken,
             Reason: "Listing taken down",
             EventDate: "not-a-date",
-            OwnerId: Owner));
+            OwnerId: Owner,
+            Actor: "mcp-stdio"));
 
         Assert.True(result.IsSuccess, result.Error?.Message);
         Assert.Empty(world.Events);

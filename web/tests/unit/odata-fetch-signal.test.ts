@@ -17,7 +17,11 @@ describe("fetchOData abort signal", () => {
 
     expect(result.data?.["@odata.count"]).toBe(3);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
+    // Feature 013: fetchOData sends a Request (the correlation header is added in one place); its signal follows ours.
+    const request: Request = fetchMock.mock.calls[0][0];
+    expect(request.signal.aborted).toBe(false);
+    controller.abort();
+    expect(request.signal.aborted).toBe(true);
   });
 
   it("sends no signal when none is given, as before", async () => {
@@ -28,6 +32,7 @@ describe("fetchOData abort signal", () => {
 
     await fetchOData<unknown>("/odata/Postings", "$top=1", "token");
 
-    expect(fetchMock.mock.calls[0][1].signal).toBeUndefined();
+    const request: Request = fetchMock.mock.calls[0][0];
+    expect(request.signal.aborted).toBe(false);
   });
 });

@@ -9,6 +9,7 @@ COPY global.json Directory.Build.props Directory.Packages.props .editorconfig ./
 COPY src/RoleRadar.Domain/RoleRadar.Domain.csproj src/RoleRadar.Domain/packages.lock.json src/RoleRadar.Domain/
 COPY src/RoleRadar.Application/RoleRadar.Application.csproj src/RoleRadar.Application/packages.lock.json src/RoleRadar.Application/
 COPY src/RoleRadar.Infrastructure/RoleRadar.Infrastructure.csproj src/RoleRadar.Infrastructure/packages.lock.json src/RoleRadar.Infrastructure/
+COPY src/RoleRadar.Observability/RoleRadar.Observability.csproj src/RoleRadar.Observability/packages.lock.json src/RoleRadar.Observability/
 COPY src/RoleRadar.Api/RoleRadar.Api.csproj src/RoleRadar.Api/packages.lock.json src/RoleRadar.Api/
 
 RUN dotnet restore src/RoleRadar.Api/RoleRadar.Api.csproj --locked-mode
@@ -17,6 +18,7 @@ RUN dotnet restore src/RoleRadar.Api/RoleRadar.Api.csproj --locked-mode
 COPY src/RoleRadar.Domain/ src/RoleRadar.Domain/
 COPY src/RoleRadar.Application/ src/RoleRadar.Application/
 COPY src/RoleRadar.Infrastructure/ src/RoleRadar.Infrastructure/
+COPY src/RoleRadar.Observability/ src/RoleRadar.Observability/
 COPY src/RoleRadar.Api/ src/RoleRadar.Api/
 
 RUN dotnet publish src/RoleRadar.Api/RoleRadar.Api.csproj -c Release --no-restore -p:OpenApiGenerateDocumentsOnBuild=false -o /app/api
@@ -34,6 +36,7 @@ USER 1654:1654
 ENV ASPNETCORE_URLS=http://127.0.0.1:8080 \
     DOTNET_EnableDiagnostics=0 \
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
-    DOTNET_gcServer=0
+    DOTNET_gcServer=0 \
+    ROLERADAR_LOG_FORMAT=json
 HEALTHCHECK --interval=2s --timeout=3s --retries=5 --start-period=4s CMD ["/app/RoleRadar.Api", "--healthcheck"]
 ENTRYPOINT ["/app/RoleRadar.Api"]

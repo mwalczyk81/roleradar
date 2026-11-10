@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using RoleRadar.Identity.Data;
 using RoleRadar.Identity.Services;
+using RoleRadar.Observability;
 
 namespace RoleRadar.Identity.Pages.Account;
 
@@ -14,12 +15,14 @@ public class LoginModel(
     SignInManager<IdentityUser<Guid>> signInManager,
     UserManager<IdentityUser<Guid>> userManager,
     IdentityAppDbContext dbContext,
-    IIdentityServerInteractionService interactionService) : PageModel
+    IIdentityServerInteractionService interactionService,
+    ILogger<LoginModel> logger) : PageModel
 {
     private readonly SignInManager<IdentityUser<Guid>> _signInManager = signInManager;
     private readonly UserManager<IdentityUser<Guid>> _userManager = userManager;
     private readonly IdentityAppDbContext _dbContext = dbContext;
     private readonly IIdentityServerInteractionService _interactionService = interactionService;
+    private readonly ILogger<LoginModel> _logger = logger;
 
     [BindProperty]
     public InputModel Input { get; set; } = new();
@@ -90,8 +93,11 @@ public class LoginModel(
             var twoFactorUser = await _signInManager.GetTwoFactorAuthenticationUserAsync();
             if (twoFactorUser is not null)
             {
+                var twoFactorSubject = SubjectOf(twoFactorUser);
                 if (await _userManager.IsLockedOutAsync(twoFactorUser))
                 {
+                    // The code was not checked: the account was already locked, so only the lockout is reported.
+                    SecurityEvents.AccountLockedOut(_logger, twoFactorSubject);
                     ModelState.AddModelError(string.Empty, "Account is locked due to multiple failed login attempts. Please try again after 15 minutes.");
                     return Page();
                 }
@@ -101,12 +107,15 @@ public class LoginModel(
                 {
                     await _userManager.ResetAccessFailedCountAsync(twoFactorUser);
                     await _signInManager.SignInAsync(twoFactorUser, isPersistent: false);
+                    SecurityEvents.SignInSucceeded(_logger, twoFactorSubject);
                     return ValidateAndRedirect(ReturnUrl);
                 }
 
                 await _userManager.AccessFailedAsync(twoFactorUser);
+                SecurityEvents.OneTimeCodeFailed(_logger, twoFactorSubject);
                 if (await _userManager.IsLockedOutAsync(twoFactorUser))
                 {
+                    SecurityEvents.AccountLockedOut(_logger, twoFactorSubject);
                     ModelState.AddModelError(string.Empty, "Account is locked due to multiple failed login attempts. Please try again after 15 minutes.");
                     return Page();
                 }
@@ -125,6 +134,8 @@ public class LoginModel(
                 return ValidateAndRedirect(ReturnUrl);
             }
 
+            // Without the two-factor cookie Identity cannot name an account, so this attempt has no subject.
+            UnmatchedAccountEvents.SignInFailed(_logger);
             if (twoFactorResult.IsLockedOut)
             {
                 ModelState.AddModelError(string.Empty, "Account is locked due to multiple failed login attempts. Please try again after 15 minutes.");
@@ -154,13 +165,38 @@ public class LoginModel(
             return Page();
         }
 
+        // The typed username goes to the user store and nowhere else: only the matched account's id is ever logged.
+        var account = await _userManager.FindByNameAsync(Input.Username.Trim());
+        var accountSubject = account is null ? null : SubjectOf(account);
+
         if (result.Succeeded)
         {
+            if (accountSubject is not null)
+            {
+                SecurityEvents.SignInSucceeded(_logger, accountSubject);
+            }
+
             return ValidateAndRedirect(ReturnUrl);
+        }
+
+        // Every other outcome is a failed attempt. An attempt against an already locked account fails too, and Identity
+        // does not say whether this attempt or an earlier one started the lockout, so it reports both events.
+        if (accountSubject is null)
+        {
+            UnmatchedAccountEvents.SignInFailed(_logger);
+        }
+        else
+        {
+            SecurityEvents.SignInFailed(_logger, accountSubject);
         }
 
         if (result.IsLockedOut)
         {
+            if (accountSubject is not null)
+            {
+                SecurityEvents.AccountLockedOut(_logger, accountSubject);
+            }
+
             ModelState.AddModelError(string.Empty, "Account is locked due to multiple failed login attempts. Please try again after 15 minutes.");
             return Page();
         }
@@ -168,6 +204,8 @@ public class LoginModel(
         ModelState.AddModelError(string.Empty, "Invalid username or password.");
         return Page();
     }
+
+    private static string SubjectOf(IdentityUser<Guid> user) => user.Id.ToString("D");
 
     private RedirectResult ValidateAndRedirect(string returnUrl)
     {

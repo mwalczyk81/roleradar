@@ -67,6 +67,15 @@ internal sealed class ODataTestHost : IAsyncDisposable
         Database = new MongoClient(_container.GetConnectionString()).GetDatabase(_databaseName);
     }
 
+    /// <summary>
+    /// <c>docker pause</c> of this host's own container: every process in it freezes and its sockets stay open, which is how
+    /// a stalled data store looks to the API. Only ever the container this host started.
+    /// </summary>
+    public Task PauseDatabaseAsync() => _container.PauseAsync();
+
+    /// <summary>Resumes the container paused by <see cref="PauseDatabaseAsync"/>.</summary>
+    public Task UnpauseDatabaseAsync() => _container.UnpauseAsync();
+
     public async Task StartApiAsync()
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(TestSecret));

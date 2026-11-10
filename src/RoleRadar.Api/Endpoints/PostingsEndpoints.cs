@@ -1,3 +1,4 @@
+using RoleRadar.Api.Authentication;
 using RoleRadar.Api.Envelopes;
 using RoleRadar.Api.Models;
 using RoleRadar.Application.Abstractions;
@@ -9,8 +10,6 @@ namespace RoleRadar.Api.Endpoints;
 
 public static class PostingsEndpoints
 {
-    public const string ApiActor = "api-user";
-
     public static RouteGroupBuilder MapPostingsEndpoints(this RouteGroupBuilder group)
     {
         var readGroup = group.MapGroup(string.Empty)
@@ -53,6 +52,7 @@ public static class PostingsEndpoints
         Guid id,
         TransitionPostingRequestDto request,
         IOwnerIdProvider ownerIdProvider,
+        HttpActorAccessor actor,
         ICommandHandler<TransitionPostingCommand, PostingTransitionResultDto> commandHandler,
         IPostingRepository postingRepository,
         ICompanyRepository companyRepository,
@@ -76,7 +76,7 @@ public static class PostingsEndpoints
             ResurfacePolicy: request.ResurfacePolicy,
             OverrideReason: request.OverrideReason,
             EventDate: request.EventDate,
-            Actor: ApiActor,
+            Actor: actor.Subject,
             OwnerId: ownerId);
 
         var result = await commandHandler.HandleAsync(command, cancellationToken);

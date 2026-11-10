@@ -15,7 +15,7 @@ public sealed record NoteUpdatedDto(
 public sealed record AppendToNoteCommand(
     Guid Id,
     string TextToAppend,
-    string Actor = "mcp-stdio",
+    string Actor,
     string? OwnerId = null) : ICommand<NoteUpdatedDto>;
 
 public sealed class AppendToNoteCommandValidator : ICommandValidator<AppendToNoteCommand>
@@ -23,6 +23,12 @@ public sealed class AppendToNoteCommandValidator : ICommandValidator<AppendToNot
     public ResultError? Validate(AppendToNoteCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        var actorError = CommandActor.Validate(command.Actor);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
 
         if (command.Id == Guid.Empty)
         {
@@ -76,7 +82,7 @@ public sealed class AppendToNoteCommandHandler : ICommandHandler<AppendToNoteCom
             ? OwnerId.Default.Value
             : new OwnerId(command.OwnerId).Value;
 
-        var actor = string.IsNullOrWhiteSpace(command.Actor) ? "mcp-stdio" : command.Actor.Trim();
+        var actor = command.Actor.Trim();
         var now = _clock.UtcNow;
 
         var outcome = await _repository.ExecuteInTransactionAsync(

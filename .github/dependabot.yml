@@ -37,7 +37,9 @@ updates:
         update-types: ["version-update:semver-major"]
 
   # Compose files: the Mongo image in deploy/docker-compose.yml and in the demo stack (feature 012, ADR 0039) is pinned by
-  # tag. Dependabot reads Dockerfiles with the "docker" entry above and compose files with this one.
+  # tag. The opt-in log viewer in deploy/docker-compose.logs.yml (feature 013, ADR 0041) is pinned by tag and digest
+  # and is covered by the "/deploy" directory. Dependabot reads Dockerfiles with the "docker" entry above and compose
+  # files with this one.
   - package-ecosystem: "docker-compose"
     directories:
       - "/deploy"

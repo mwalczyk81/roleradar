@@ -228,7 +228,7 @@ public static class ContactCommand
             using var scope = services.CreateScope();
             var handler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RedactContactCommand, ContactRedactResultDto>>();
 
-            var command = new RedactContactCommand(id, versionToken, Actor: "cli-user");
+            var command = new RedactContactCommand(id, Actor: "cli-user", VersionToken: versionToken);
             var result = await handler.HandleAsync(command, ct);
 
             if (result.IsSuccess && result.Value is not null)

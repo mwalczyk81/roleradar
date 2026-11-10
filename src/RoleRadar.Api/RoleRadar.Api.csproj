@@ -9,6 +9,7 @@
     <ProjectReference Include="..\RoleRadar.Application\RoleRadar.Application.csproj" />
     <ProjectReference Include="..\RoleRadar.Domain\RoleRadar.Domain.csproj" />
     <ProjectReference Include="..\RoleRadar.Infrastructure\RoleRadar.Infrastructure.csproj" />
+    <ProjectReference Include="..\RoleRadar.Observability\RoleRadar.Observability.csproj" />
   </ItemGroup>
 
   <ItemGroup>

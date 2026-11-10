@@ -195,6 +195,7 @@ public static class TrackingBsonFieldNames
         public const string ResultingVersionToken = "resulting_version_token";
         public const string ResolvedDefaultDate = "resolved_default_date";
         public const string OccurredAt = "occurred_at";
+        public const string RequestCorrelationId = "request_correlation_id";
         public const string BeforeSummary = "before_summary";
         public const string AfterSummary = "after_summary";
     }

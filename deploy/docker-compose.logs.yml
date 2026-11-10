@@ -1,0 +1,45 @@
+# Optional log viewer for the local RoleRadar stack (feature 013, ADR 0041). Off by default: start it deliberately with
+#   docker compose -f deploy/docker-compose.logs.yml up -d
+# and open http://127.0.0.1:5004. Remove it with `docker compose -f deploy/docker-compose.logs.yml down`.
+#
+# It reads the same container output as `docker compose logs`; the apps need no log sink and nothing leaves the
+# machine (analytics, release checks, registry checks and avatar fetches are all off). The Docker socket is mounted
+# read-only, but read access to the socket is still host-level Docker access for this container: that is accepted only
+# because the viewer is opt-in, bound to loopback and runs on the owner's own machine (ADR 0041). It is never part of
+# the demo stack.
+name: roleradar-logs
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  logs:
+    image: amir20/dozzle:v11.3.5@sha256:dd09e6aaa9d5ad686b6017427a502c40dc862ba28445609813e5ea1f66f6dbdf
+    logging: *default-logging
+    read_only: true
+    tmpfs:
+      - /data:rw,noexec,nosuid,size=16m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:5004:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      DOZZLE_NO_ANALYTICS: "true"
+      DOZZLE_RELEASE_CHECK_MODE: "manual"
+      DOZZLE_IMAGE_CHECK_MODE: "off"
+      DOZZLE_DISABLE_AVATARS: "true"
+      # The real stack's compose project (deploy/docker-compose.yml and deploy/docker-compose.apps.yml run from the
+      # repository root, so the project is named after the deploy folder).
+      DOZZLE_FILTER: "label=com.docker.compose.project=deploy"
+    healthcheck:
+      test: ["CMD", "/dozzle", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 3

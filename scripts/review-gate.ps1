@@ -124,9 +124,28 @@ try {
     $lintOutput = & pwsh -NoProfile -Command "Invoke-ScriptAnalyzer -Path scripts -Recurse -Settings scripts/psscriptanalyzer-settings.psd1 -EnableExit" 2>&1
     if ($LASTEXITCODE -eq 0) { $gateResults.ScriptLint = "PASS" } else { throw "PSScriptAnalyzer failed (module 1.25.0 required): $(@($lintOutput) -join "`n")" }
 
-    # 4. Build with warnings as errors
-    $null = & dotnet build RoleRadar.sln -c Release --no-restore -warnaserror 2>&1
-    if ($LASTEXITCODE -eq 0) { $gateResults.Build = "PASS" } else { throw "dotnet build (-warnaserror) failed." }
+    # 4. Build with warnings as errors, the way CI builds: with no Mongo reachable. The API project generates its OpenAPI
+    # document at build time by starting the API (dotnet-getdocument), and anything the API logs at warn or above while it
+    # starts is written to stderr, which MSBuild's Exec task turns into a build error (MSB3077). With the dev Mongo up at its
+    # default address that start-up is quiet, so a regression there passes this gate and fails CI. The connection string points
+    # at a port nothing listens on, for this command only, and the previous value (or its absence) is restored afterwards.
+    # --no-incremental makes sure the API project is really built, so the generator really runs.
+    $mongoVariable = "ROLERADAR_MONGO_CONNECTION_STRING"
+    $previousMongo = [Environment]::GetEnvironmentVariable($mongoVariable)
+    [Environment]::SetEnvironmentVariable($mongoVariable, "mongodb://127.0.0.1:1/?directConnection=true")
+    try {
+        $buildOutput = & dotnet build RoleRadar.sln -c Release --no-restore --no-incremental -warnaserror 2>&1
+        $buildExitCode = $LASTEXITCODE
+    }
+    finally {
+        [Environment]::SetEnvironmentVariable($mongoVariable, $previousMongo)
+    }
+    if ($buildExitCode -eq 0) {
+        $gateResults.Build = "PASS"
+    } else {
+        $buildErrors = @($buildOutput | ForEach-Object { "$_" } | Where-Object { $_ -match "error" } | Select-Object -Unique | Select-Object -First 10)
+        throw "dotnet build (-warnaserror, no Mongo reachable) failed: $($buildErrors -join "`n")"
+    }
 
     # 5. Web typecheck
     if (Test-Path (Join-Path $repoRoot "web/package.json")) {

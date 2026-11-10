@@ -21,6 +21,10 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\RoleRadar.Observability\RoleRadar.Observability.csproj" />
+  </ItemGroup>
+
   <!-- Runs before build and publish. Fails with a clear message when the vendored design system is missing. -->
   <Target Name="CopyKitAssets" BeforeTargets="BeforeBuild;BeforePublish;ResolveStaticWebAssetsInputs">
     <Error Condition="!Exists('$(KitDesignSystemDir)tokens.css')"

@@ -44,12 +44,12 @@ public sealed record TransitionPostingCommand(
     Guid PostingId,
     string TargetDisposition,
     Guid VersionToken,
+    string Actor,
     string? Reason = null,
     Guid? CriterionId = null,
     string? ResurfacePolicy = null,
     string? OverrideReason = null,
     string? EventDate = null,
-    string Actor = "mcp-stdio",
     string? OwnerId = null) : ICommand<PostingTransitionResultDto>;
 
 public sealed class TransitionPostingCommandValidator : ICommandValidator<TransitionPostingCommand>
@@ -57,6 +57,12 @@ public sealed class TransitionPostingCommandValidator : ICommandValidator<Transi
     public ResultError? Validate(TransitionPostingCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        var actorError = CommandActor.Validate(command.Actor);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
 
         if (command.PostingId == Guid.Empty)
         {

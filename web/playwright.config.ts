@@ -48,7 +48,7 @@ export default defineConfig({
     {
       name: "chromium",
       // The real-stack spec must only run in the real-stack project: this project maps identity to host port 5001.
-      testIgnore: ["**/real-stack.spec.ts"],
+      testIgnore: ["**/real-stack.spec.ts", "**/*.real-stack.spec.ts"],
       use: {
         ...devices["Desktop Chrome"],
         launchOptions: {
@@ -61,7 +61,7 @@ export default defineConfig({
     },
     {
       name: "real-stack",
-      testMatch: ["**/real-stack.spec.ts"],
+      testMatch: ["**/real-stack.spec.ts", "**/*.real-stack.spec.ts"],
       use: {
         ...devices["Desktop Chrome"],
         launchOptions: {

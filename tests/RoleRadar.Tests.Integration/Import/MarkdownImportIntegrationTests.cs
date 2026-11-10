@@ -138,14 +138,16 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
 
         var run1 = await handler.HandleAsync(new ImportMarkdownCommand(
             FilePaths: [primaryPath],
-            DefaultDate: "2026-01-01"));
+            DefaultDate: "2026-01-01",
+            Actor: "cli-import"));
         Assert.True(run1.IsSuccess);
         var initialCreated = run1.Value!.CreatedCount;
 
         // Re-run with a different default date
         var run2 = await handler.HandleAsync(new ImportMarkdownCommand(
             FilePaths: [primaryPath],
-            DefaultDate: "2026-12-31"));
+            DefaultDate: "2026-12-31",
+            Actor: "cli-import"));
         Assert.True(run2.IsSuccess);
 
         var summary2 = run2.Value!;
@@ -180,14 +182,14 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
             var handler = provider.GetRequiredService<ICommandHandler<ImportMarkdownCommand, ImportMarkdownSummaryDto>>();
             var repo = provider.GetRequiredService<INoteRepository>();
 
-            var initialImport = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [tempFile]));
+            var initialImport = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [tempFile], Actor: "cli-import"));
             Assert.True(initialImport.IsSuccess);
             Assert.Equal(2, initialImport.Value!.CreatedCount);
 
             // Update Header One in the source markdown file
             await File.WriteAllTextAsync(tempFile, "# Header One\r\nUpdated source content.\r\n## Section Two\r\nSection two text.\r\n");
 
-            var secondImport = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [tempFile]));
+            var secondImport = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [tempFile], Actor: "cli-import"));
             Assert.True(secondImport.IsSuccess);
 
             var summary2 = secondImport.Value!;
@@ -228,7 +230,7 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
             var handler = provider.GetRequiredService<ICommandHandler<ImportMarkdownCommand, ImportMarkdownSummaryDto>>();
             var repo = provider.GetRequiredService<INoteRepository>();
 
-            var initialImport = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [tempFile]));
+            var initialImport = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [tempFile], Actor: "cli-import"));
             Assert.True(initialImport.IsSuccess);
 
             var notes = (await repo.GetImportedBySourceFileAsync(OwnerId.Default.Value, Path.GetFileName(tempFile))).Value!;
@@ -242,7 +244,7 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
             // Now update the source file as well
             await File.WriteAllTextAsync(tempFile, "# Stable Heading\r\nSource changed text.\r\n");
 
-            var reimport = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [tempFile]));
+            var reimport = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [tempFile], Actor: "cli-import"));
             Assert.True(reimport.IsSuccess);
 
             var summary = reimport.Value!;
@@ -278,14 +280,14 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
             var handler = provider.GetRequiredService<ICommandHandler<ImportMarkdownCommand, ImportMarkdownSummaryDto>>();
             var repo = provider.GetRequiredService<INoteRepository>();
 
-            var initialImport = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [tempFile]));
+            var initialImport = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [tempFile], Actor: "cli-import"));
             Assert.True(initialImport.IsSuccess);
             Assert.Equal(2, initialImport.Value!.CreatedCount);
 
             // Source file is updated: Section Beta was renamed to Section Gamma
             await File.WriteAllTextAsync(tempFile, "# Section Alpha\r\nAlpha text.\r\n## Section Gamma\r\nGamma text.\r\n");
 
-            var reimport = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [tempFile]));
+            var reimport = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [tempFile], Actor: "cli-import"));
             Assert.True(reimport.IsSuccess);
 
             var summary = reimport.Value!;
@@ -322,7 +324,7 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
             var handler = provider.GetRequiredService<ICommandHandler<ImportMarkdownCommand, ImportMarkdownSummaryDto>>();
             var repo = provider.GetRequiredService<INoteRepository>();
 
-            var outcome = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [invalidTempFile]));
+            var outcome = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [invalidTempFile], Actor: "cli-import"));
 
             Assert.False(outcome.IsSuccess);
             Assert.Equal(ErrorCode.InvalidUtf8, outcome.Error!.Value.Code);
@@ -355,7 +357,8 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
         var dryRunCommand = new ImportMarkdownCommand(
             FilePaths: [primaryPath],
             DryRun: true,
-            DefaultDate: "2026-01-01");
+            DefaultDate: "2026-01-01",
+            Actor: "cli-import");
 
         var dryRunOutcome = await handler.HandleAsync(dryRunCommand);
 
@@ -378,7 +381,8 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
         var realCommand = new ImportMarkdownCommand(
             FilePaths: [primaryPath],
             DryRun: false,
-            DefaultDate: "2026-01-01");
+            DefaultDate: "2026-01-01",
+            Actor: "cli-import");
 
         var realOutcome = await handler.HandleAsync(realCommand);
         Assert.True(realOutcome.IsSuccess);
@@ -411,7 +415,7 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
             var handler = provider.GetRequiredService<ICommandHandler<ImportMarkdownCommand, ImportMarkdownSummaryDto>>();
             var repo = provider.GetRequiredService<INoteRepository>();
 
-            var outcome = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [pathA, pathB]));
+            var outcome = await handler.HandleAsync(new ImportMarkdownCommand(FilePaths: [pathA, pathB], Actor: "cli-import"));
 
             Assert.False(outcome.IsSuccess);
             Assert.Equal(ErrorCode.ValidationError, outcome.Error!.Value.Code);
@@ -455,7 +459,8 @@ public sealed class MarkdownImportIntegrationTests : IAsyncLifetime
 
             var outcome = await handler.HandleAsync(new ImportMarkdownCommand(
                 FilePaths: [tempFile],
-                SourceFileId: customSourceId));
+                SourceFileId: customSourceId,
+                Actor: "cli-import"));
 
             Assert.True(outcome.IsSuccess);
             Assert.Equal(2, outcome.Value!.CreatedCount);

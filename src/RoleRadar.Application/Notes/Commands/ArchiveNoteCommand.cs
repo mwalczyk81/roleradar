@@ -13,8 +13,8 @@ public sealed record NoteArchivedDto(
 
 public sealed record ArchiveNoteCommand(
     Guid Id,
+    string Actor,
     Guid? ExpectedVersionToken = null,
-    string Actor = "mcp-stdio",
     string? OwnerId = null) : ICommand<NoteArchivedDto>;
 
 public sealed class ArchiveNoteCommandValidator : ICommandValidator<ArchiveNoteCommand>
@@ -22,6 +22,12 @@ public sealed class ArchiveNoteCommandValidator : ICommandValidator<ArchiveNoteC
     public ResultError? Validate(ArchiveNoteCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        var actorError = CommandActor.Validate(command.Actor);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
 
         if (command.Id == Guid.Empty)
         {
@@ -67,7 +73,7 @@ public sealed class ArchiveNoteCommandHandler : ICommandHandler<ArchiveNoteComma
             ? OwnerId.Default.Value
             : new OwnerId(command.OwnerId).Value;
 
-        var actor = string.IsNullOrWhiteSpace(command.Actor) ? "mcp-stdio" : command.Actor.Trim();
+        var actor = command.Actor.Trim();
         var now = _clock.UtcNow;
 
         var outcome = await _repository.ExecuteInTransactionAsync(

@@ -45,20 +45,21 @@ describe("Insights e2e isolation guard (T050): fictional loopback stub only, nev
     expect(() => assertNotRealStackProject("chromium")).not.toThrow();
   });
 
-  it("the real-stack project runs only the real-stack spec, and the chromium project ignores it", () => {
+  it("the real-stack project runs only the real-stack specs, and the chromium project ignores them", () => {
     const projects = config.projects ?? [];
     const realStack = projects.find((p) => p.name === "real-stack");
     const chromium = projects.find((p) => p.name === "chromium");
 
-    expect(realStack?.testMatch).toEqual(["**/real-stack.spec.ts"]);
-    expect(chromium?.testIgnore).toEqual(["**/real-stack.spec.ts"]);
+    // Feature 013 added operability.real-stack.spec.ts; the real-stack project still matches only *real-stack.spec.ts.
+    expect(realStack?.testMatch).toEqual(["**/real-stack.spec.ts", "**/*.real-stack.spec.ts"]);
+    expect(chromium?.testIgnore).toEqual(["**/real-stack.spec.ts", "**/*.real-stack.spec.ts"]);
   });
 
   it("no Insights spec could be picked up by the real-stack project", () => {
     const projects = config.projects ?? [];
     const realStack = projects.find((p) => p.name === "real-stack");
     const patterns = realStack?.testMatch;
-    expect(patterns).toEqual(["**/real-stack.spec.ts"]);
+    expect(patterns).toEqual(["**/real-stack.spec.ts", "**/*.real-stack.spec.ts"]);
     for (const spec of ["insights.spec.ts", "insights-drilldown.spec.ts", "insights-isolation.spec.ts"]) {
       expect(spec.endsWith("real-stack.spec.ts")).toBe(false);
     }

@@ -1,4 +1,6 @@
 import * as client from "openid-client";
+import { log } from "./log.server.js";
+import { withCorrelationHeader } from "./api-client.server.js";
 
 interface RoleRadarOidcGlobal {
   __ROLERADAR_OIDC_CONFIG_PROMISE__?: Promise<client.Configuration> | null;
@@ -21,8 +23,8 @@ export function getWebClientSecret(): string {
       return "dev-web-client-secret-placeholder";
     }
     const msg =
-      "[FATAL] RoleRadar Web refused to start: ROLERADAR_WEB_CLIENT_SECRET is required outside Development.";
-    console.error(msg);
+      "RoleRadar Web refused to start: ROLERADAR_WEB_CLIENT_SECRET is required outside Development.";
+    log.fatal(msg);
     throw new Error(msg);
   }
   return secret.trim();
@@ -42,13 +44,34 @@ export function getPostLogoutRedirectUri(): string {
   );
 }
 
+/**
+ * Every server-side call to Identity (discovery, code grant, refresh) carries the request's X-Correlation-ID
+ * (feature 013). Reads globalThis.fetch per call so tests can stub it.
+ */
+const identityFetch: client.CustomFetch = (url, options) =>
+  globalThis.fetch(url, {
+    ...options,
+    body: toBodyInit(options.body),
+    headers: withCorrelationHeader(new Headers(options.headers)),
+  });
+
+/** openid-client may hand over a Uint8Array view on any buffer; copy it so it is a standard BodyInit. */
+function toBodyInit(body: client.FetchBody): BodyInit | null | undefined {
+  return body instanceof Uint8Array ? new Uint8Array(body) : body;
+}
+
 export async function getOidcConfig(): Promise<client.Configuration> {
   if (!oidcGlobal.__ROLERADAR_OIDC_CONFIG_PROMISE__) {
     const issuer = new URL(getOidcIssuerUri());
     const clientId = getWebClientId();
     const clientSecret = getWebClientSecret();
 
-    oidcGlobal.__ROLERADAR_OIDC_CONFIG_PROMISE__ = client.discovery(issuer, clientId, clientSecret);
+    oidcGlobal.__ROLERADAR_OIDC_CONFIG_PROMISE__ = client
+      .discovery(issuer, clientId, clientSecret, undefined, { [client.customFetch]: identityFetch })
+      .then((config) => {
+        config[client.customFetch] = identityFetch;
+        return config;
+      });
   }
   return await oidcGlobal.__ROLERADAR_OIDC_CONFIG_PROMISE__;
 }

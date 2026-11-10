@@ -15,7 +15,7 @@
     "test:coverage": "vitest run --coverage",
     "mutation": "node scripts/stryker-run.mjs",
     "test:e2e": "playwright test",
-    "test:e2e:real": "playwright test tests/e2e/real-stack.spec.ts --project=real-stack"
+    "test:e2e:real": "playwright test tests/e2e/real-stack.spec.ts tests/e2e/operability.real-stack.spec.ts --project=real-stack"
   },
   "dependencies": {
     "@react-router/node": "7.18.5",

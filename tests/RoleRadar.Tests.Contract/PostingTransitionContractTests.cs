@@ -67,7 +67,8 @@ public sealed class PostingTransitionContractTests : IAsyncLifetime
             PostingId: posting.Id,
             TargetDisposition: "applied",
             VersionToken: posting.VersionToken,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var result = await handler.HandleAsync(command);
 
@@ -97,7 +98,8 @@ public sealed class PostingTransitionContractTests : IAsyncLifetime
             PostingId: postingNever.Id,
             TargetDisposition: "lead",
             VersionToken: postingNever.VersionToken,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
         var resNever = await handler.HandleAsync(cmdReopenNever);
 
         Assert.False(resNever.IsSuccess);
@@ -115,7 +117,8 @@ public sealed class PostingTransitionContractTests : IAsyncLifetime
             PostingId: postingIfReopened.Id,
             TargetDisposition: "lead",
             VersionToken: postingIfReopened.VersionToken,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
         var resIf = await handler.HandleAsync(cmdReopenIf);
 
         Assert.True(resIf.IsSuccess);

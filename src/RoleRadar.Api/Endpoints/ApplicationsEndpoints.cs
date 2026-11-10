@@ -1,3 +1,4 @@
+using RoleRadar.Api.Authentication;
 using RoleRadar.Api.Envelopes;
 using RoleRadar.Api.Models;
 using RoleRadar.Application.Abstractions;
@@ -10,8 +11,6 @@ namespace RoleRadar.Api.Endpoints;
 
 public static class ApplicationsEndpoints
 {
-    public const string ApiActor = "api-user";
-
     public static RouteGroupBuilder MapApplicationsEndpoints(this RouteGroupBuilder group)
     {
         var readGroup = group.MapGroup(string.Empty)
@@ -54,6 +53,7 @@ public static class ApplicationsEndpoints
     private static async Task<IResult> CreateApplicationAsync(
         RecordApplicationRequestDto request,
         IOwnerIdProvider ownerIdProvider,
+        HttpActorAccessor actor,
         ICommandHandler<RecordApplicationCommand, ApplicationRecordResultDto> commandHandler,
         IApplicationRepository applicationRepository,
         IPostingRepository postingRepository,
@@ -76,7 +76,7 @@ public static class ApplicationsEndpoints
             OverrideDecided: request.OverrideDecided,
             OverrideReason: request.OverrideReason,
             Event: null,
-            Actor: ApiActor,
+            Actor: actor.Subject,
             OwnerId: ownerId);
 
         var result = await commandHandler.HandleAsync(command, cancellationToken);
@@ -99,6 +99,7 @@ public static class ApplicationsEndpoints
         Guid id,
         AppendApplicationEventRequestDto request,
         IOwnerIdProvider ownerIdProvider,
+        HttpActorAccessor actor,
         ICommandHandler<RecordApplicationCommand, ApplicationRecordResultDto> commandHandler,
         IApplicationRepository applicationRepository,
         IPostingRepository postingRepository,
@@ -121,7 +122,7 @@ public static class ApplicationsEndpoints
                 EventDate: request.EventDate,
                 EventSource: request.EventSource ?? "api",
                 Notes: request.Notes),
-            Actor: ApiActor,
+            Actor: actor.Subject,
             OwnerId: ownerId);
 
         var result = await commandHandler.HandleAsync(command, cancellationToken);

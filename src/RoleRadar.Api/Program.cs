@@ -1,8 +1,11 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.OData;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OData.Edm;
@@ -10,12 +13,14 @@ using Microsoft.OData.ModelBuilder;
 using RoleRadar.Api.Authentication;
 using RoleRadar.Api.Endpoints;
 using RoleRadar.Api.Filters;
+using RoleRadar.Api.Observability;
 using RoleRadar.Api.OpenApi;
 using RoleRadar.Application;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Reading.Models;
 using RoleRadar.Domain.Common;
 using RoleRadar.Infrastructure;
+using RoleRadar.Observability;
 
 namespace RoleRadar.Api;
 
@@ -27,12 +32,15 @@ public partial class Program
     public const string FullAccessScope = "roleradar.api";
     public const string ReadOnlyScope = "roleradar.api.read";
 
+    /// <summary>What the image's built-in <c>--healthcheck</c> calls unless ROLERADAR_HEALTHCHECK_URL says otherwise: readiness, not just liveness.</summary>
+    public const string DefaultHealthcheckUrl = "http://127.0.0.1:8080/health/ready";
+
     public static async Task<int> Main(string[] args)
     {
         if (args.Contains("--healthcheck", StringComparer.OrdinalIgnoreCase))
         {
             var healthUrl = Environment.GetEnvironmentVariable("ROLERADAR_HEALTHCHECK_URL")
-                ?? "http://127.0.0.1:8080/health";
+                ?? DefaultHealthcheckUrl;
             using var handler = new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(2) };
             using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };
             try
@@ -53,7 +61,8 @@ public partial class Program
 
     public static WebApplication CreateApp(
             string[]? args = null,
-            Action<WebApplicationBuilder>? configureBuilder = null)
+            Action<WebApplicationBuilder>? configureBuilder = null,
+            string? entryAssemblyName = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -61,14 +70,22 @@ public partial class Program
             ApplicationName = typeof(Program).Assembly.GetName().Name
         });
 
+        // Logging first, so providers a test adds through configureBuilder are kept (feature 013, ADR 0041).
+        builder.Logging.ClearProviders().AddRoleRadarLogging("api", LogStream.Split, builder.Configuration);
+
         configureBuilder?.Invoke(builder);
 
         builder.Services.AddHttpContextAccessor();
         builder.Services.Configure<OwnerSecurityOptions>(builder.Configuration.GetSection(OwnerSecurityOptions.SectionName));
         builder.Services.TryAddScoped<IOwnerIdProvider, HttpUserOwnerIdProvider>();
+        builder.Services.AddScoped<HttpActorAccessor>();
+        builder.Services.Replace(ServiceDescriptor.Scoped<IRequestContext, HttpRequestContext>());
         builder.Services.AddSingleton<IAuthorizationHandler, OwnerAllowlistHandler>();
         builder.Services.AddSingleton<IAuthorizationHandler, ScopeAuthorizationHandler>();
         builder.Services.AddHostedService<RoleRadar.Api.OData.ReadIndexStartupService>();
+        builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+        builder.Services.AddHealthChecks()
+            .AddCheck<ApiReadinessCheck>("mongo", failureStatus: HealthStatus.Unhealthy, tags: [HealthEndpoints.ReadyTag]);
 
         var authority = builder.Configuration["Authentication:Authority"]
             ?? Environment.GetEnvironmentVariable("ROLERADAR_OIDC_AUTHORITY")
@@ -171,8 +188,24 @@ public partial class Program
                 .SetMaxTop(100);
         });
 
+        // Build-time OpenAPI generation (dotnet-getdocument) runs this entry point under a mock server, so every startup service runs
+        // too. One that cannot reach Mongo logs an error, and since feature 013 warn and above go to stderr, which MSBuild's Exec
+        // task turns into a build error (MSB3077) on any machine with no Mongo, such as CI. Generating the document needs none of
+        // them, so drop what the application and its libraries registered: the read-index service, the data-protection key ring (its
+        // "no XML encryptor" warning), the health-check publisher. The web host's own service is added at Build and stays.
+        if (OpenApiDocumentGeneration.IsGeneratingDocument(entryAssemblyName ?? System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name))
+        {
+            builder.Services.RemoveAll<IHostedService>();
+        }
+
         // Intentionally zero CORS middleware registered (server-to-server only per ADR-0018 / FR-009)
         var app = builder.Build();
+
+        app.UseMiddleware<CorrelationMiddleware>();
+
+        // Right after the correlation middleware, so an escaped exception becomes the standard envelope with the request's id.
+        // Every failure is handled by ApiExceptionHandler; the no-op delegate only satisfies the middleware's own options.
+        app.UseExceptionHandler(new ExceptionHandlerOptions { ExceptionHandler = static _ => Task.CompletedTask });
 
         app.UseAuthentication();
         app.UseAuthorization();
@@ -182,6 +215,9 @@ public partial class Program
             app.MapOpenApi();
         }
 
+        app.MapRoleRadarHealth();
+
+        // Compatibility alias of /health/live. A plain endpoint, not a health check, so the OpenAPI document keeps listing it.
         app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }))
             .AllowAnonymous();
 

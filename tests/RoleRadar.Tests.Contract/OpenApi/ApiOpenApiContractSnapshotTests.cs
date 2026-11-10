@@ -98,6 +98,22 @@ public sealed class ApiOpenApiContractSnapshotTests
         await app.StopAsync();
     }
 
+    /// <summary>
+    /// Feature 013 (FR-020, ADR 0041): the audit log is read through the CLI only. The snapshot is pinned equal to the live
+    /// document by the test above, so a path added to the API shows up here as a failure.
+    /// </summary>
+    [Fact]
+    public async Task OpenApiSnapshot_HasNoAuditPath_BecauseTheAuditLogIsReadThroughTheCliOnly()
+    {
+        var snapshotPath = Path.Combine(FindRepoRoot(), "contracts", "openapi", "roleradar-api.json");
+        using var snapshot = JsonDocument.Parse(await File.ReadAllTextAsync(snapshotPath));
+
+        var paths = snapshot.RootElement.GetProperty("paths").EnumerateObject().Select(p => p.Name).ToArray();
+
+        Assert.NotEmpty(paths);
+        Assert.DoesNotContain(paths, path => path.Contains("audit", StringComparison.OrdinalIgnoreCase));
+    }
+
     private static void AssertExplicitTypesInPaths(JsonElement paths)
     {
         foreach (var pathProp in paths.EnumerateObject())

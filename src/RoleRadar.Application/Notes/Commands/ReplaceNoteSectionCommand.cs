@@ -19,7 +19,7 @@ public sealed record ReplaceNoteSectionCommand(
     string Heading,
     string NewSectionBody,
     Guid VersionToken,
-    string Actor = "mcp-stdio",
+    string Actor,
     string? OwnerId = null) : ICommand<NoteSectionReplacedDto>;
 
 public sealed class ReplaceNoteSectionCommandValidator : ICommandValidator<ReplaceNoteSectionCommand>
@@ -27,6 +27,12 @@ public sealed class ReplaceNoteSectionCommandValidator : ICommandValidator<Repla
     public ResultError? Validate(ReplaceNoteSectionCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        var actorError = CommandActor.Validate(command.Actor);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
 
         if (command.Id == Guid.Empty)
         {
@@ -90,7 +96,7 @@ public sealed class ReplaceNoteSectionCommandHandler : ICommandHandler<ReplaceNo
             ? OwnerId.Default.Value
             : new OwnerId(command.OwnerId).Value;
 
-        var actor = string.IsNullOrWhiteSpace(command.Actor) ? "mcp-stdio" : command.Actor.Trim();
+        var actor = command.Actor.Trim();
         var now = _clock.UtcNow;
 
         var outcome = await _repository.ExecuteInTransactionAsync(

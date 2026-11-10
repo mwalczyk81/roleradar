@@ -13,6 +13,7 @@
     <ProjectReference Include="..\..\src\RoleRadar.Cli\RoleRadar.Cli.csproj" />
     <ProjectReference Include="..\..\src\RoleRadar.Identity\RoleRadar.Identity.csproj" />
     <ProjectReference Include="..\..\src\RoleRadar.Api\RoleRadar.Api.csproj" />
+    <ProjectReference Include="..\..\src\RoleRadar.Observability\RoleRadar.Observability.csproj" />
   </ItemGroup>
 
   <ItemGroup>

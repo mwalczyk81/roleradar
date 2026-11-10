@@ -740,7 +740,8 @@
         "required": [
           "ok",
           "errorCode",
-          "message"
+          "message",
+          "correlationId"
         ],
         "type": "object",
         "properties": {
@@ -761,6 +762,9 @@
             "items": {
               "$ref": "#/components/schemas/ErrorFieldDetail"
             }
+          },
+          "correlationId": {
+            "type": "string"
           }
         }
       },

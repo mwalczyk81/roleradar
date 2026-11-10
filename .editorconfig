@@ -41,6 +41,9 @@ dotnet_sort_system_directives_first = true
 dotnet_separate_import_directive_groups = false
 dotnet_diagnostic.CA1822.severity = none
 dotnet_diagnostic.CA2007.severity = none
+# Feature 013 (ADR 0041): log through LoggerMessage source generation only.
+dotnet_diagnostic.CA1848.severity = error
+dotnet_diagnostic.CA2254.severity = error
 
 [tests/**/*.cs]
 dotnet_diagnostic.CA1707.severity = none

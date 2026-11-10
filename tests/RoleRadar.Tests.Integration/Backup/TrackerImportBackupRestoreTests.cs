@@ -440,7 +440,8 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
             var resReqHandler = await recordPostingHandler.HandleAsync(new RecordPostingCommand(
                 CompanyId: companyId,
                 Title: "Director, Software Engineering",
-                RequisitionId: "19505"));
+                RequisitionId: "19505",
+                Actor: "mcp-stdio"));
             Assert.True(resReqHandler.IsSuccess);
             Assert.Equal("already_decided", resReqHandler.Value!.Status);
             Assert.Equal("screened_out", resReqHandler.Value.Posting!.Disposition);
@@ -496,7 +497,8 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
             // 4. Call posting_record handler and MCP tool with same company + title (Tier D, screened_out -> already_decided)
             var resTitleDecidedHandler = await recordPostingHandler.HandleAsync(new RecordPostingCommand(
                 CompanyId: companyId,
-                Title: "Director, Software Engineering"));
+                Title: "Director, Software Engineering",
+                Actor: "mcp-stdio"));
             Assert.True(resTitleDecidedHandler.IsSuccess);
             Assert.Equal("already_decided", resTitleDecidedHandler.Value!.Status);
             Assert.Equal("screened_out", resTitleDecidedHandler.Value.Posting!.Disposition);
@@ -515,7 +517,8 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
             var resUrlHandler = await recordPostingHandler.HandleAsync(new RecordPostingCommand(
                 CompanyId: companyId,
                 Title: "Staff Software Engineer",
-                Url: "https://example.com/job/staff-20001"));
+                Url: "https://example.com/job/staff-20001",
+                Actor: "mcp-stdio"));
             Assert.True(resUrlHandler.IsSuccess);
             Assert.Equal("already_tracked", resUrlHandler.Value!.Status);
             Assert.Equal("scored", resUrlHandler.Value.Posting!.Disposition);
@@ -534,7 +537,8 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
             var resActiveReqHandler = await recordPostingHandler.HandleAsync(new RecordPostingCommand(
                 CompanyId: companyId,
                 Title: "Staff Software Engineer",
-                RequisitionId: "20001"));
+                RequisitionId: "20001",
+                Actor: "mcp-stdio"));
             Assert.True(resActiveReqHandler.IsSuccess);
             Assert.Equal("already_tracked", resActiveReqHandler.Value!.Status);
 
@@ -551,7 +555,8 @@ public sealed class TrackerImportBackupRestoreTests : IClassFixture<IsolatedCont
             // 7. Call posting_record handler and MCP tool with same company + title (Tier D, active -> already_tracked)
             var resActiveTitleHandler = await recordPostingHandler.HandleAsync(new RecordPostingCommand(
                 CompanyId: companyId,
-                Title: "Staff Software Engineer"));
+                Title: "Staff Software Engineer",
+                Actor: "mcp-stdio"));
             Assert.True(resActiveTitleHandler.IsSuccess);
             Assert.Equal("already_tracked", resActiveTitleHandler.Value!.Status);
 

@@ -85,7 +85,8 @@ public sealed class AuditArchiveAndReadinessIntegrationTests : IAsyncLifetime
             Tags: ["remote", "contract"],
             ProvenanceKind: "stated",
             ProvenanceDate: "2026-10-17",
-            ProvenanceQualifier: null));
+            ProvenanceQualifier: null,
+            Actor: "mcp-stdio"));
         Assert.True(created.IsSuccess);
         var noteId = created.Value!.Id;
         var initialToken = created.Value.VersionToken;
@@ -99,14 +100,16 @@ public sealed class AuditArchiveAndReadinessIntegrationTests : IAsyncLifetime
         var bogusToken = Guid.CreateVersion7();
         var staleArchiveResult = await archiveHandler.HandleAsync(new ArchiveNoteCommand(
             Id: noteId,
-            ExpectedVersionToken: bogusToken));
+            ExpectedVersionToken: bogusToken,
+            Actor: "mcp-stdio"));
         Assert.False(staleArchiveResult.IsSuccess);
         Assert.Equal(ErrorCode.StaleVersionToken, staleArchiveResult.Error!.Value.Code);
 
         // 3. Archive with valid expectedVersionToken (or null)
         var archiveResult = await archiveHandler.HandleAsync(new ArchiveNoteCommand(
             Id: noteId,
-            ExpectedVersionToken: initialToken));
+            ExpectedVersionToken: initialToken,
+            Actor: "mcp-stdio"));
         Assert.True(archiveResult.IsSuccess);
         Assert.Equal("archived", archiveResult.Value!.Status);
         Assert.NotEqual(initialToken, archiveResult.Value.VersionToken);
@@ -142,7 +145,8 @@ public sealed class AuditArchiveAndReadinessIntegrationTests : IAsyncLifetime
 
         var secondArchiveResult = await archiveHandler.HandleAsync(new ArchiveNoteCommand(
             Id: noteId,
-            ExpectedVersionToken: archivedToken));
+            ExpectedVersionToken: archivedToken,
+            Actor: "mcp-stdio"));
         Assert.True(secondArchiveResult.IsSuccess);
         Assert.Equal("archived", secondArchiveResult.Value!.Status);
         Assert.Equal(archivedToken, secondArchiveResult.Value.VersionToken); // No rotation
@@ -173,14 +177,16 @@ public sealed class AuditArchiveAndReadinessIntegrationTests : IAsyncLifetime
             Tags: ["audit", "e2e"],
             ProvenanceKind: "stated",
             ProvenanceDate: "2026-10-17",
-            ProvenanceQualifier: "test"));
+            ProvenanceQualifier: "test",
+            Actor: "mcp-stdio"));
         Assert.True(createOutcome.IsSuccess);
         var noteId = createOutcome.Value!.Id;
 
         // Op 2: AppendToNote
         var appendOutcome = await appendHandler.HandleAsync(new AppendToNoteCommand(
             Id: noteId,
-            TextToAppend: "- Appended audit point.\n"));
+            TextToAppend: "- Appended audit point.\n",
+            Actor: "mcp-stdio"));
         Assert.True(appendOutcome.IsSuccess);
 
         // Op 3: ReplaceNoteSection (destructive edit: must produce revision reference)
@@ -188,13 +194,15 @@ public sealed class AuditArchiveAndReadinessIntegrationTests : IAsyncLifetime
             Id: noteId,
             Heading: "Summary",
             NewSectionBody: "## Summary\nReplaced line with new content.\n",
-            VersionToken: appendOutcome.Value!.VersionToken));
+            VersionToken: appendOutcome.Value!.VersionToken,
+            Actor: "mcp-stdio"));
         Assert.True(replaceOutcome.IsSuccess);
 
         // Op 4: ArchiveNote
         var archiveOutcome = await archiveHandler.HandleAsync(new ArchiveNoteCommand(
             Id: noteId,
-            ExpectedVersionToken: replaceOutcome.Value!.VersionToken));
+            ExpectedVersionToken: replaceOutcome.Value!.VersionToken,
+            Actor: "mcp-stdio"));
         Assert.True(archiveOutcome.IsSuccess);
 
         // Op 5: ImportMarkdown (import a new section into the same owner)

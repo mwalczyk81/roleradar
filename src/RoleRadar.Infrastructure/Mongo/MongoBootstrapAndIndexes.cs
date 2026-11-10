@@ -131,6 +131,18 @@ public static class MongoBootstrapAndIndexes
                 new CreateIndexOptions
                 {
                     Name = "ix_audit_log_chronological"
+                }),
+            // Feature 013: serves `audit list --entity-type --entity-id`, newest first (data-model.md).
+            new CreateIndexModel<BsonDocument>(
+                Builders<BsonDocument>.IndexKeys
+                    .Ascending("owner_id")
+                    .Ascending("entity_type")
+                    .Ascending("entity_id")
+                    .Descending("occurred_at")
+                    .Descending("_id"),
+                new CreateIndexOptions
+                {
+                    Name = "ix_audit_log_entity"
                 })
         };
 

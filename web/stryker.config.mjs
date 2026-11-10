@@ -29,6 +29,7 @@ export default {
     "app/lib/markdown-limits.ts",
     "app/lib/markdown-url.ts",
     "app/lib/nav.ts",
+    "app/lib/observability.ts",
     "app/lib/odata-client.ts",
     "app/lib/theme.ts",
   ],

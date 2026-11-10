@@ -18,34 +18,34 @@ public sealed class TrackingValidatorAndDtoCoverageTests
         Assert.Throws<ArgumentNullException>(() => validator.Validate(null!));
 
         // Name required & max 150
-        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "")));
-        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "   ")));
-        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: new string('a', 151))));
+        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "", Actor: "system")));
+        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "   ", Actor: "system")));
+        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: new string('a', 151), Actor: "system")));
 
         // Description max 300
-        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", Description: new string('d', 301))));
+        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", Description: new string('d', 301), Actor: "system")));
 
         // ParentCompany max 150
-        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", ParentCompany: new string('p', 151))));
+        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", ParentCompany: new string('p', 151), Actor: "system")));
 
         // Headquarters max 150
-        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", Headquarters: new string('h', 151))));
+        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", Headquarters: new string('h', 151), Actor: "system")));
 
         // Tags count max 20
         var tooManyTags = Enumerable.Range(0, 21).Select(i => $"tag{i}").ToList();
-        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", CategoryTags: tooManyTags)));
+        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", CategoryTags: tooManyTags, Actor: "system")));
 
         // Tag length max 50
-        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", CategoryTags: [new string('t', 51)])));
+        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", CategoryTags: [new string('t', 51)], Actor: "system")));
 
         // Invalid OwnershipType
-        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", OwnershipType: "bogus_ownership")));
+        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", OwnershipType: "bogus_ownership", Actor: "system")));
 
         // Invalid Status
-        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", Status: "bogus_status")));
+        Assert.NotNull(validator.Validate(new RecordCompanyCommand(Name: "Acme", Status: "bogus_status", Actor: "system")));
 
         // Update mode by ID allows omitted name
-        Assert.Null(validator.Validate(new RecordCompanyCommand(Id: Guid.NewGuid(), CareerSources: [])));
+        Assert.Null(validator.Validate(new RecordCompanyCommand(Id: Guid.NewGuid(), CareerSources: [], Actor: "system")));
 
         // Valid command returns null
         var valid = new RecordCompanyCommand(
@@ -55,7 +55,8 @@ public sealed class TrackingValidatorAndDtoCoverageTests
             Headquarters: "Chicago, IL",
             OwnershipType: "public",
             Status: "target",
-            CategoryTags: ["fintech", "remote"]);
+            CategoryTags: ["fintech", "remote"],
+            Actor: "system");
         Assert.Null(validator.Validate(valid));
     }
 
@@ -69,49 +70,57 @@ public sealed class TrackingValidatorAndDtoCoverageTests
         var postingId = Guid.CreateVersion7();
 
         // Empty posting ID
-        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: Guid.Empty, Action: "create")));
+        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: Guid.Empty, Action: "create", Actor: "agent")));
 
         // Empty action or unknown action
-        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "")));
-        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "invalid_action")));
+        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "", Actor: "agent")));
+        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "invalid_action", Actor: "agent")));
 
         // Create action: missing or invalid submitted date
-        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "create", SubmittedDate: null)));
-        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "create", SubmittedDate: "invalid-date")));
-        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "create", SubmittedDate: "10/18/2026")));
+        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "create", SubmittedDate: null, Actor: "agent")));
+        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "create", SubmittedDate: "invalid-date", Actor: "agent")));
+        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "create", SubmittedDate: "10/18/2026", Actor: "agent")));
 
         // Create action: missing or invalid resume variant
-        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: null)));
-        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: "custom")));
+        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: null, Actor: "agent")));
+        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: "custom", Actor: "agent")));
 
         // Create action: overrideDecided requires non-empty overrideReason
         Assert.NotNull(validator.Validate(new RecordApplicationCommand(
-            PostingId: postingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: "tailored", OverrideDecided: true, OverrideReason: null)));
+            PostingId: postingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: "tailored", OverrideDecided: true, OverrideReason: null,
+            Actor: "agent")));
         Assert.NotNull(validator.Validate(new RecordApplicationCommand(
-            PostingId: postingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: "tailored", OverrideDecided: true, OverrideReason: "   ")));
+            PostingId: postingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: "tailored", OverrideDecided: true, OverrideReason: "   ",
+            Actor: "agent")));
 
         // Create action: valid
         Assert.Null(validator.Validate(new RecordApplicationCommand(
-            PostingId: postingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: "tailored")));
+            PostingId: postingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: "tailored",
+            Actor: "agent")));
         Assert.Null(validator.Validate(new RecordApplicationCommand(
-            PostingId: postingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: "as_is", OverrideDecided: true, OverrideReason: "Re-posted role")));
+            PostingId: postingId, Action: "create", SubmittedDate: "2026-10-18", ResumeVariant: "as_is", OverrideDecided: true, OverrideReason: "Re-posted role",
+            Actor: "agent")));
 
         // Append_event action: missing event
-        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "append_event", Event: null)));
+        Assert.NotNull(validator.Validate(new RecordApplicationCommand(PostingId: postingId, Action: "append_event", Event: null, Actor: "agent")));
 
         // Append_event action: invalid eventType
         Assert.NotNull(validator.Validate(new RecordApplicationCommand(
-            PostingId: postingId, Action: "append_event", Event: new ApplicationEventInputDto("invalid_type", "2026-10-18"))));
+            PostingId: postingId, Action: "append_event", Event: new ApplicationEventInputDto("invalid_type", "2026-10-18"),
+            Actor: "agent")));
 
         // Append_event action: missing or invalid eventDate
         Assert.NotNull(validator.Validate(new RecordApplicationCommand(
-            PostingId: postingId, Action: "append_event", Event: new ApplicationEventInputDto("interview", ""))));
+            PostingId: postingId, Action: "append_event", Event: new ApplicationEventInputDto("interview", ""),
+            Actor: "agent")));
         Assert.NotNull(validator.Validate(new RecordApplicationCommand(
-            PostingId: postingId, Action: "append_event", Event: new ApplicationEventInputDto("interview", "2026/10/18"))));
+            PostingId: postingId, Action: "append_event", Event: new ApplicationEventInputDto("interview", "2026/10/18"),
+            Actor: "agent")));
 
         // Append_event action: valid
         Assert.Null(validator.Validate(new RecordApplicationCommand(
-            PostingId: postingId, Action: "append_event", Event: new ApplicationEventInputDto("interview", "2026-10-18", "recruiter", "Phone screen"))));
+            PostingId: postingId, Action: "append_event", Event: new ApplicationEventInputDto("interview", "2026-10-18", "recruiter", "Phone screen"),
+            Actor: "agent")));
     }
 
     [Fact]

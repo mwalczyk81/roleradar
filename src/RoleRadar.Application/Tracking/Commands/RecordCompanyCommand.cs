@@ -29,6 +29,7 @@ public sealed record CompanyRecordResultDto(
     string Status = "created");
 
 public sealed record RecordCompanyCommand(
+    string Actor,
     Guid? Id = null,
     string? Name = null,
     string? Description = null,
@@ -39,8 +40,7 @@ public sealed record RecordCompanyCommand(
     IReadOnlyList<string>? CategoryTags = null,
     IReadOnlyList<CareerSourceInputDto>? CareerSources = null,
     Guid? VersionToken = null,
-    string? OwnerId = null,
-    string Actor = "system") : ICommand<CompanyRecordResultDto>;
+    string? OwnerId = null) : ICommand<CompanyRecordResultDto>;
 
 public sealed class RecordCompanyCommandHandler : ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto>
 {
@@ -470,6 +470,12 @@ public sealed class RecordCompanyCommandValidator : ICommandValidator<RecordComp
     public ResultError? Validate(RecordCompanyCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        var actorError = CommandActor.Validate(command.Actor);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
 
         if (string.IsNullOrWhiteSpace(command.Name) && !command.Id.HasValue)
         {

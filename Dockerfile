@@ -9,6 +9,7 @@ COPY global.json Directory.Build.props Directory.Packages.props .editorconfig ./
 COPY src/RoleRadar.Domain/RoleRadar.Domain.csproj src/RoleRadar.Domain/packages.lock.json src/RoleRadar.Domain/
 COPY src/RoleRadar.Application/RoleRadar.Application.csproj src/RoleRadar.Application/packages.lock.json src/RoleRadar.Application/
 COPY src/RoleRadar.Infrastructure/RoleRadar.Infrastructure.csproj src/RoleRadar.Infrastructure/packages.lock.json src/RoleRadar.Infrastructure/
+COPY src/RoleRadar.Observability/RoleRadar.Observability.csproj src/RoleRadar.Observability/packages.lock.json src/RoleRadar.Observability/
 COPY src/RoleRadar.Identity/RoleRadar.Identity.csproj src/RoleRadar.Identity/packages.lock.json src/RoleRadar.Identity/
 COPY src/RoleRadar.Cli/RoleRadar.Cli.csproj src/RoleRadar.Cli/packages.lock.json src/RoleRadar.Cli/
 COPY src/RoleRadar.Mcp.Stdio/RoleRadar.Mcp.Stdio.csproj src/RoleRadar.Mcp.Stdio/packages.lock.json src/RoleRadar.Mcp.Stdio/
@@ -70,7 +71,8 @@ COPY --from=build --chown=1654:1654 /app/mcp /app
 USER 1654:1654
 ENV DOTNET_EnableDiagnostics=0 \
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
-    DOTNET_gcServer=0
+    DOTNET_gcServer=0 \
+    ROLERADAR_LOG_FORMAT=json
 ENTRYPOINT ["/app/RoleRadar.Mcp.Stdio"]
 
 # Stage 4: CLI Runtime (roleradar-cli)
@@ -82,5 +84,6 @@ COPY --from=build --chown=1654:1654 /app/cli /app
 USER 1654:1654
 ENV DOTNET_EnableDiagnostics=0 \
     DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 \
-    DOTNET_gcServer=0
+    DOTNET_gcServer=0 \
+    ROLERADAR_LOG_FORMAT=json
 ENTRYPOINT ["/app/RoleRadar.Cli"]

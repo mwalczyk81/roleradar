@@ -190,56 +190,56 @@ public sealed class PostingDomainAndValidatorUnitTests
         Assert.Throws<ArgumentNullException>(() => validator.Validate(null!));
 
         // Explicit update without version token
-        var errUpdateNoToken = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid()));
+        var errUpdateNoToken = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid(), Actor: "mcp-stdio"));
         Assert.NotNull(errUpdateNoToken);
         Assert.Equal(ErrorCode.StaleVersionToken, errUpdateNoToken.Value.Code);
 
         // Explicit update title validation
-        var errUpdateTitleEmpty = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid(), VersionToken: Guid.NewGuid(), Title: "  "));
+        var errUpdateTitleEmpty = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid(), VersionToken: Guid.NewGuid(), Title: "  ", Actor: "mcp-stdio"));
         Assert.NotNull(errUpdateTitleEmpty);
         Assert.Equal(ErrorCode.ValidationError, errUpdateTitleEmpty.Value.Code);
 
-        var errUpdateTitleTooLong = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid(), VersionToken: Guid.NewGuid(), Title: new string('a', 201)));
+        var errUpdateTitleTooLong = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid(), VersionToken: Guid.NewGuid(), Title: new string('a', 201), Actor: "mcp-stdio"));
         Assert.NotNull(errUpdateTitleTooLong);
 
         // Explicit update url validation
-        var errUpdateUrlTooLong = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid(), VersionToken: Guid.NewGuid(), Url: new string('a', 1001)));
+        var errUpdateUrlTooLong = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid(), VersionToken: Guid.NewGuid(), Url: new string('a', 1001), Actor: "mcp-stdio"));
         Assert.NotNull(errUpdateUrlTooLong);
 
         // Explicit update score validation
-        var errUpdateScoreLow = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid(), VersionToken: Guid.NewGuid(), Score: -0.5m));
+        var errUpdateScoreLow = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid(), VersionToken: Guid.NewGuid(), Score: -0.5m, Actor: "mcp-stdio"));
         Assert.NotNull(errUpdateScoreLow);
 
-        var errUpdateScoreHigh = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid(), VersionToken: Guid.NewGuid(), Score: 10.5m));
+        var errUpdateScoreHigh = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid(), VersionToken: Guid.NewGuid(), Score: 10.5m, Actor: "mcp-stdio"));
         Assert.NotNull(errUpdateScoreHigh);
 
         // Valid explicit update
-        var okUpdate = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid(), VersionToken: Guid.NewGuid(), Title: "Valid Title", Score: 8.5m));
+        var okUpdate = validator.Validate(new RecordPostingCommand(PostingId: Guid.NewGuid(), VersionToken: Guid.NewGuid(), Title: "Valid Title", Score: 8.5m, Actor: "mcp-stdio"));
         Assert.Null(okUpdate);
 
         // Create mode: missing companyId
-        var errCreateNoCo = validator.Validate(new RecordPostingCommand(Title: "Title"));
+        var errCreateNoCo = validator.Validate(new RecordPostingCommand(Title: "Title", Actor: "mcp-stdio"));
         Assert.NotNull(errCreateNoCo);
         Assert.Equal(ErrorCode.ValidationError, errCreateNoCo.Value.Code);
 
         // Create mode: empty title
-        var errCreateNoTitle = validator.Validate(new RecordPostingCommand(CompanyId: Guid.NewGuid(), Title: "  "));
+        var errCreateNoTitle = validator.Validate(new RecordPostingCommand(CompanyId: Guid.NewGuid(), Title: "  ", Actor: "mcp-stdio"));
         Assert.NotNull(errCreateNoTitle);
 
         // Create mode: title too long
-        var errCreateTitleTooLong = validator.Validate(new RecordPostingCommand(CompanyId: Guid.NewGuid(), Title: new string('a', 201)));
+        var errCreateTitleTooLong = validator.Validate(new RecordPostingCommand(CompanyId: Guid.NewGuid(), Title: new string('a', 201), Actor: "mcp-stdio"));
         Assert.NotNull(errCreateTitleTooLong);
 
         // Create mode: url too long
-        var errCreateUrlTooLong = validator.Validate(new RecordPostingCommand(CompanyId: Guid.NewGuid(), Title: "Valid Title", Url: new string('a', 1001)));
+        var errCreateUrlTooLong = validator.Validate(new RecordPostingCommand(CompanyId: Guid.NewGuid(), Title: "Valid Title", Url: new string('a', 1001), Actor: "mcp-stdio"));
         Assert.NotNull(errCreateUrlTooLong);
 
         // Create mode: score out of bounds
-        var errCreateScore = validator.Validate(new RecordPostingCommand(CompanyId: Guid.NewGuid(), Title: "Valid Title", Score: -1.0m));
+        var errCreateScore = validator.Validate(new RecordPostingCommand(CompanyId: Guid.NewGuid(), Title: "Valid Title", Score: -1.0m, Actor: "mcp-stdio"));
         Assert.NotNull(errCreateScore);
 
         // Valid create
-        var okCreate = validator.Validate(new RecordPostingCommand(CompanyId: Guid.NewGuid(), Title: "Valid Title", Score: 7.0m));
+        var okCreate = validator.Validate(new RecordPostingCommand(CompanyId: Guid.NewGuid(), Title: "Valid Title", Score: 7.0m, Actor: "mcp-stdio"));
         Assert.Null(okCreate);
     }
 
@@ -251,37 +251,37 @@ public sealed class PostingDomainAndValidatorUnitTests
         Assert.Throws<ArgumentNullException>(() => validator.Validate(null!));
 
         // Missing PostingId
-        var errNoId = validator.Validate(new TransitionPostingCommand(Guid.Empty, "scored", Guid.NewGuid()));
+        var errNoId = validator.Validate(new TransitionPostingCommand(Guid.Empty, "scored", Guid.NewGuid(), Actor: "mcp-stdio"));
         Assert.NotNull(errNoId);
 
         // Missing TargetDisposition
-        var errNoDisp = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "", Guid.NewGuid()));
+        var errNoDisp = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "", Guid.NewGuid(), Actor: "mcp-stdio"));
         Assert.NotNull(errNoDisp);
 
         // Missing VersionToken
-        var errNoToken = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "scored", Guid.Empty));
+        var errNoToken = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "scored", Guid.Empty, Actor: "mcp-stdio"));
         Assert.NotNull(errNoToken);
         Assert.Equal(ErrorCode.StaleVersionToken, errNoToken.Value.Code);
 
         // Target 'applied' disallowed
-        var errApplied = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "applied", Guid.NewGuid()));
+        var errApplied = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "applied", Guid.NewGuid(), Actor: "mcp-stdio"));
         Assert.NotNull(errApplied);
         Assert.Equal(ErrorCode.InvalidTransition, errApplied.Value.Code);
 
         // Unknown target disposition
-        var errUnknown = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "not_a_disp", Guid.NewGuid()));
+        var errUnknown = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "not_a_disp", Guid.NewGuid(), Actor: "mcp-stdio"));
         Assert.NotNull(errUnknown);
 
         // Missing reason when transitioning to screened_out
-        var errNoReason = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "screened_out", Guid.NewGuid(), Reason: null));
+        var errNoReason = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "screened_out", Guid.NewGuid(), Reason: null, Actor: "mcp-stdio"));
         Assert.NotNull(errNoReason);
 
         // Reason too long (> 500)
-        var errReasonTooLong = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "screened_out", Guid.NewGuid(), Reason: new string('a', 501)));
+        var errReasonTooLong = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "screened_out", Guid.NewGuid(), Reason: new string('a', 501), Actor: "mcp-stdio"));
         Assert.NotNull(errReasonTooLong);
 
         // Valid transition
-        var ok = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "screened_out", Guid.NewGuid(), Reason: "Too junior"));
+        var ok = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), "screened_out", Guid.NewGuid(), Reason: "Too junior", Actor: "mcp-stdio"));
         Assert.Null(ok);
     }
 

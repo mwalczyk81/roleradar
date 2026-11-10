@@ -324,7 +324,9 @@ public sealed class RealStackEndToEndTests
             var probeRes = await webProbeClient.GetAsync($"https://127.0.0.1:{webHostPort}/postings");
             var authLocation = probeRes.Headers.Location?.ToString() ?? "NO_LOCATION";
 
-            // 11. Execute Playwright in real Chromium
+            // 11. Execute Playwright in real Chromium. The operability spec (feature 013) writes the correlation id of a
+            // failing request to this file so the harness can follow it through the containers' logs below.
+            var operabilityIdFile = Path.Combine(Path.GetTempPath(), $"rrtest-real-operability-{runId}.txt");
             var playwrightResult = await RunPlaywrightAsync(
                 workingDirectory: repoRoot,
                 baseUrl: $"https://127.0.0.1:{webHostPort}",
@@ -332,7 +334,8 @@ public sealed class RealStackEndToEndTests
                 apiPort: apiHttpsPort,
                 username: ownerUsername,
                 password: ownerPassword,
-                totpKey: totpKey);
+                totpKey: totpKey,
+                operabilityIdFile: operabilityIdFile);
 
             if (playwrightResult.ExitCode != 0)
             {
@@ -363,28 +366,60 @@ public sealed class RealStackEndToEndTests
                 playwrightResult.ExitCode == 0,
                 $"Playwright real-stack E2E test failed with exit code {playwrightResult.ExitCode}:\n{playwrightResult.StdErr}\n{playwrightResult.StdOut}");
 
+            // 11b. Feature 013 (SC-001, SC-002): the failing request's id appears on JSON lines from web and api, and
+            // every line from the identity, web and api containers is one JSON object.
+            Assert.True(File.Exists(operabilityIdFile), "The operability spec did not write the correlation id file.");
+            var followedId = (await File.ReadAllTextAsync(operabilityIdFile)).Trim();
+            try { File.Delete(operabilityIdFile); } catch { }
+            Assert.Matches("^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$", followedId);
+
+            var containerLines = new Dictionary<string, List<string>>();
+            foreach (var (service, container) in new[] { ("identity", idContainerName), ("web", webContainerName), ("api", apiContainerName) })
+            {
+                var logs = await RunDockerAsync($"logs {container}", repoRoot, 15);
+                containerLines[service] = (logs.StdOut + "\n" + logs.StdErr)
+                    .Split('\n')
+                    .Select(l => l.TrimEnd('\r'))
+                    .Where(l => l.Length > 0)
+                    .ToList();
+            }
+
+            foreach (var (service, lines) in containerLines)
+            {
+                Assert.NotEmpty(lines);
+                var notJson = lines.Where(l => !IsJsonObjectLine(l)).Take(5).ToList();
+                Assert.True(notJson.Count == 0, $"{service} wrote non-JSON log lines:\n{string.Join("\n", notJson)}");
+            }
+
+            foreach (var service in new[] { "web", "api" })
+            {
+                Assert.True(
+                    containerLines[service].Any(l => CorrelationIdOf(l) == followedId),
+                    $"No {service} log line carries correlation id {followedId}.");
+            }
+
             // 12. Assert directly against the isolated Mongo `audit_log`
             var auditCollection = domainDb.GetCollection<BsonDocument>(MongoBootstrapAndIndexes.AuditLogCollectionName);
             var allAuditLogs = await auditCollection.Find(Builders<BsonDocument>.Filter.Empty).ToListAsync();
 
-            // A. Posting disposition transition: exactly one entry, actor == "api-user"
+            // A. Posting disposition transition: exactly one entry, actor == the harness owner subject (feature 013)
             var transitionEntry = Assert.Single(allAuditLogs, d =>
                 d.Contains("operation") && d["operation"].AsString == "posting_transition");
             Assert.Equal("posting", transitionEntry.GetValue("entity_type", "").AsString);
-            Assert.Equal("api-user", transitionEntry.GetValue("actor", "").AsString);
+            Assert.Equal(ownerSub, transitionEntry.GetValue("actor", "").AsString);
             Assert.Equal(posting1Id, transitionEntry.GetValue("entity_id").AsGuid);
 
-            // B. Application creation: exactly one entry, actor == "api-user"
+            // B. Application creation: exactly one entry, actor == the harness owner subject (feature 013)
             var appCreateEntry = Assert.Single(allAuditLogs, d =>
                 d.Contains("operation") && d["operation"].AsString == "application_create");
             Assert.Equal("application", appCreateEntry.GetValue("entity_type", "").AsString);
-            Assert.Equal("api-user", appCreateEntry.GetValue("actor", "").AsString);
+            Assert.Equal(ownerSub, appCreateEntry.GetValue("actor", "").AsString);
 
-            // C. Company update: exactly one entry, actor == "api-user"
+            // C. Company update: exactly one entry, actor == the harness owner subject (feature 013)
             var compUpdateEntry = Assert.Single(allAuditLogs, d =>
                 d.Contains("operation") && d["operation"].AsString == "company_update");
             Assert.Equal("company", compUpdateEntry.GetValue("entity_type", "").AsString);
-            Assert.Equal("api-user", compUpdateEntry.GetValue("actor", "").AsString);
+            Assert.Equal(ownerSub, compUpdateEntry.GetValue("actor", "").AsString);
             Assert.Equal(company1Id, compUpdateEntry.GetValue("entity_id").AsGuid);
         }
         finally
@@ -404,6 +439,30 @@ public sealed class RealStackEndToEndTests
         }
     }
 
+    private static bool IsJsonObjectLine(string line)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(line);
+            return doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Object;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    private static string? CorrelationIdOf(string line)
+    {
+        if (!IsJsonObjectLine(line))
+        {
+            return null;
+        }
+
+        using var doc = System.Text.Json.JsonDocument.Parse(line);
+        return doc.RootElement.TryGetProperty("correlationId", out var id) ? id.GetString() : null;
+    }
+
     private static async Task<(int ExitCode, string StdOut, string StdErr)> RunPlaywrightAsync(
         string workingDirectory,
         string baseUrl,
@@ -412,6 +471,7 @@ public sealed class RealStackEndToEndTests
         string username,
         string password,
         string totpKey,
+        string? operabilityIdFile = null,
         int timeoutSeconds = 120)
     {
         var isWindows = OperatingSystem.IsWindows();
@@ -435,6 +495,10 @@ public sealed class RealStackEndToEndTests
         psi.Environment["E2E_PASSWORD"] = password;
         psi.Environment["E2E_TOTP_KEY"] = totpKey;
         psi.Environment["NODE_TLS_REJECT_UNAUTHORIZED"] = "0";
+        if (!string.IsNullOrEmpty(operabilityIdFile))
+        {
+            psi.Environment["E2E_OPERABILITY_ID_FILE"] = operabilityIdFile;
+        }
 
         using var process = Process.Start(psi)
             ?? throw new InvalidOperationException("Failed to start Playwright runner.");

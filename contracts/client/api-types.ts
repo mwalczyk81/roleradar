@@ -539,6 +539,7 @@ export interface components {
             errorCode: string;
             message: string;
             details?: null | components["schemas"]["ErrorFieldDetail"][];
+            correlationId: string;
         };
         ErrorFieldDetail: {
             field: string;

@@ -16,6 +16,9 @@ public static class DependencyInjection
         ArgumentNullException.ThrowIfNull(services);
         services.TryAddSingleton<IUtcClock>(SystemUtcClock.Instance);
 
+        // No request context unless the host replaces it (API, CLI and MCP do; feature 013, plan D6).
+        services.TryAddScoped<IRequestContext, NullRequestContext>();
+
         // US1 & US4 Validators
         services.AddSingleton<ICommandValidator<CreateNoteCommand>, CreateNoteCommandValidator>();
         services.AddSingleton<ICommandValidator<AppendToNoteCommand>, AppendToNoteCommandValidator>();
@@ -52,6 +55,9 @@ public static class DependencyInjection
 
         // Feature 007: Insights stats read (a query: no transaction, no audit entry).
         services.AddQueryHandler<Insights.GetInsightsStatsQuery, Insights.InsightsStatsDto, Insights.GetInsightsStatsQueryHandler>();
+
+        // Feature 013: the read-only audit listing behind `roleradar audit list` (a query: no transaction, no audit entry).
+        services.AddQueryHandler<Audit.Queries.ListAuditEntriesQuery, Audit.Queries.AuditListPage, Audit.Queries.ListAuditEntriesQueryHandler>();
 
         // Feature 004: Tracker Import
         services.AddTransient<Tracking.Import.Pipeline.ITrackerImportPipelineFactory, Tracking.Import.Pipeline.TrackerImportPipelineFactory>();

@@ -27,12 +27,12 @@ public sealed record ImportMarkdownSummaryDto(
 
 public sealed record ImportMarkdownCommand(
     IReadOnlyList<string> FilePaths,
+    string Actor,
     string Area = "imported",
     IReadOnlyList<string>? Tags = null,
     string? DefaultDate = null,
     bool DryRun = false,
     string? SourceFileId = null,
-    string Actor = "cli-import",
     string? OwnerId = null) : ICommand<ImportMarkdownSummaryDto>;
 
 public sealed class ImportMarkdownCommandValidator : ICommandValidator<ImportMarkdownCommand>
@@ -40,6 +40,12 @@ public sealed class ImportMarkdownCommandValidator : ICommandValidator<ImportMar
     public ResultError? Validate(ImportMarkdownCommand command)
     {
         ArgumentNullException.ThrowIfNull(command);
+
+        var actorError = CommandActor.Validate(command.Actor);
+        if (actorError is not null)
+        {
+            return actorError;
+        }
 
         if (command.FilePaths is null || command.FilePaths.Count == 0)
         {
@@ -161,7 +167,7 @@ public sealed class ImportMarkdownCommandHandler : ICommandHandler<ImportMarkdow
             ? OwnerId.Default.Value
             : new OwnerId(command.OwnerId).Value;
 
-        var actor = string.IsNullOrWhiteSpace(command.Actor) ? "cli-import" : command.Actor.Trim();
+        var actor = command.Actor.Trim();
         var normalizedTags = Note.NormalizeTags(command.Tags);
         var normalizedArea = Note.NormalizeArea(command.Area);
         var now = _clock.UtcNow;

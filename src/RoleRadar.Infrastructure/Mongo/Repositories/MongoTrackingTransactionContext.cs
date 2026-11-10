@@ -27,6 +27,7 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
     private readonly IMongoCollection<BsonDocument> _auditCollection;
     private readonly IMongoCollection<BsonDocument>? _notesCollection;
     private readonly IClientSessionHandle? _session;
+    private readonly IRequestContext? _requestContext;
 
     public MongoTrackingTransactionContext(
         IMongoClient? client,
@@ -38,7 +39,8 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
         ISearchRunRepository? searchRuns,
         IMongoCollection<BsonDocument> auditCollection,
         IMongoCollection<BsonDocument>? notesCollection = null,
-        IClientSessionHandle? session = null)
+        IClientSessionHandle? session = null,
+        IRequestContext? requestContext = null)
     {
         _client = client;
         _companies = companies ?? throw new ArgumentNullException(nameof(companies));
@@ -50,6 +52,7 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
         _auditCollection = auditCollection ?? throw new ArgumentNullException(nameof(auditCollection));
         _notesCollection = notesCollection;
         _session = session;
+        _requestContext = requestContext;
     }
 
     public MongoTrackingTransactionContext(
@@ -128,6 +131,12 @@ public sealed class MongoTrackingTransactionContext : ITrackingTransactionContex
         if (entry.Details is not null)
         {
             doc[TrackingBsonFieldNames.AuditLog.Details] = MapDetailsToBson(entry.Details);
+        }
+
+        var requestCorrelationId = _requestContext?.CorrelationId ?? entry.RequestCorrelationId;
+        if (!string.IsNullOrWhiteSpace(requestCorrelationId))
+        {
+            doc[TrackingBsonFieldNames.AuditLog.RequestCorrelationId] = requestCorrelationId;
         }
 
         var session = _session ?? MongoNoteRepository.CurrentSession;

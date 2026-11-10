@@ -21,7 +21,7 @@ public sealed class PostingsEndpointsContractTests(SharedMongoFixture sharedMong
         var companyHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto>>();
         var postingHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordPostingCommand, PostingRecordResultDto>>();
 
-        var companyRes = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: "Nimbus Systems"));
+        var companyRes = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: "Nimbus Systems", Actor: "system"));
         var companyId = companyRes.Value!.Company.Id;
 
         var postingRes = await postingHandler.HandleAsync(new RecordPostingCommand(
@@ -32,7 +32,8 @@ public sealed class PostingsEndpointsContractTests(SharedMongoFixture sharedMong
             AtsTenant: "nimbus",
             Location: "Remote",
             CompensationText: "$210k - $240k USD",
-            Score: 9.0m));
+            Score: 9.0m,
+            Actor: "mcp-stdio"));
         var postingId = postingRes.Value!.Posting!.Id;
 
         var getResp = await host.Client.GetAsync($"/api/v1/postings/{postingId}");
@@ -58,12 +59,13 @@ public sealed class PostingsEndpointsContractTests(SharedMongoFixture sharedMong
         var companyHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto>>();
         var postingHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordPostingCommand, PostingRecordResultDto>>();
 
-        var companyRes = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: "Vertex Analytics"));
+        var companyRes = await companyHandler.HandleAsync(new RecordCompanyCommand(Name: "Vertex Analytics", Actor: "system"));
         var postingRes = await postingHandler.HandleAsync(new RecordPostingCommand(
             CompanyId: companyRes.Value!.Company.Id,
             Title: "Senior Backend Engineer",
             RequisitionId: "VTX-202",
-            AtsTenant: "vertex"));
+            AtsTenant: "vertex",
+            Actor: "mcp-stdio"));
 
         var postingId = postingRes.Value!.Posting!.Id;
         var initialVersionToken = postingRes.Value.Posting.VersionToken;

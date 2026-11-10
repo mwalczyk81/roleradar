@@ -1,10 +1,14 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using RoleRadar.Application.Tracking.Commands;
 using RoleRadar.Mcp.Stdio.Tools;
+using RoleRadar.Observability;
 
 namespace RoleRadar.Mcp.Stdio.Filters;
 
@@ -12,27 +16,51 @@ namespace RoleRadar.Mcp.Stdio.Filters;
 /// Intercepts tool calls and rejects unknown or misshapen arguments with a ValidationError envelope,
 /// coerces signal shorthand to object form, and protects against generic SDK binding failures.
 /// </summary>
-public static class UnknownArgumentValidationFilter
+public static partial class UnknownArgumentValidationFilter
 {
+    [LoggerMessage(EventId = 7001, EventName = "ToolReturnedError", Level = LogLevel.Error, Message = "Unexpected error invoking tool {ToolName}: {Detail}")]
+    private static partial void LogToolReturnedError(ILogger logger, string toolName, string? detail);
+
+    [LoggerMessage(EventId = 7002, EventName = "ToolThrew", Level = LogLevel.Error, Message = "Unexpected exception invoking tool {ToolName}")]
+    private static partial void LogToolThrew(ILogger logger, Exception exception, string toolName);
+
     private static readonly Dictionary<string, Dictionary<string, ParameterInfo>> KnownToolParameters = BuildKnownToolParameters();
 
     public static McpRequestFilter<CallToolRequestParams, CallToolResult> Create()
     {
         return next => async (context, cancellationToken) =>
         {
+            // One correlation id per tool call (feature 013): every record the call writes carries it.
+            var logger = context.Services?.GetService<ILoggerFactory>()?.CreateLogger("RoleRadar.Mcp.Stdio.ToolCall") ?? NullLogger.Instance;
+            var correlationId = CorrelationId.New();
+            if (context.Services?.GetService<McpRequestContext>() is { } requestContext)
+            {
+                requestContext.CorrelationId = correlationId;
+            }
+
+            using var scope = logger.BeginScope(new Dictionary<string, object?> { [CorrelationId.ScopeKey] = correlationId });
             return await ExecuteAsync(
                 context.Params,
                 async p => await next(context, cancellationToken),
+                logger,
                 cancellationToken);
         };
     }
 
+    public static ValueTask<CallToolResult> ExecuteAsync(
+        CallToolRequestParams requestParams,
+        Func<CallToolRequestParams, ValueTask<CallToolResult>> next,
+        CancellationToken cancellationToken = default) =>
+        ExecuteAsync(requestParams, next, logger: null, cancellationToken);
+
     public static async ValueTask<CallToolResult> ExecuteAsync(
         CallToolRequestParams requestParams,
         Func<CallToolRequestParams, ValueTask<CallToolResult>> next,
+        ILogger? logger,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(requestParams);
+        logger ??= NullLogger.Instance;
         ArgumentNullException.ThrowIfNull(next);
 
         var toolName = requestParams.Name;
@@ -200,7 +228,7 @@ public static class UnknownArgumentValidationFilter
                     return result;
                 }
 
-                Console.Error.WriteLine($"[ERROR] Unexpected error invoking tool '{toolName}': {contentText}");
+                LogToolReturnedError(logger, toolName, contentText);
                 var msg = ExtractErrorMessage(result, toolName);
                 return CreateValidationErrorResult(msg);
             }
@@ -210,7 +238,7 @@ public static class UnknownArgumentValidationFilter
         catch (Exception ex)
         {
             var actualEx = ex is TargetInvocationException tie && tie.InnerException != null ? tie.InnerException : ex;
-            Console.Error.WriteLine($"[ERROR] Unexpected exception invoking tool '{toolName}': {actualEx.GetType().FullName}: {actualEx.Message}\n{actualEx.StackTrace}");
+            LogToolThrew(logger, actualEx, toolName);
             var msg = ExtractExceptionMessage(actualEx, toolName, validParams);
             return CreateValidationErrorResult(msg);
         }

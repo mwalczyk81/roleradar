@@ -68,7 +68,7 @@ public sealed class NoteMcpTools
             ProvenanceKind: provenanceKind,
             ProvenanceDate: provenanceDate,
             ProvenanceQualifier: provenanceQualifier,
-            Actor: "mcp-stdio");
+            Actor: McpActor.Name);
 
         var result = await _createNoteHandler.HandleAsync(command, cancellationToken);
         return SerializeResult(result);
@@ -94,7 +94,7 @@ public sealed class NoteMcpTools
         var command = new AppendToNoteCommand(
             Id: id,
             TextToAppend: textToAppend,
-            Actor: "mcp-stdio");
+            Actor: McpActor.Name);
 
         var result = await _appendToNoteHandler.HandleAsync(command, cancellationToken);
         return SerializeResult(result);
@@ -113,7 +113,7 @@ public sealed class NoteMcpTools
             Heading: heading,
             NewSectionBody: newSectionBody,
             VersionToken: versionToken,
-            Actor: "mcp-stdio");
+            Actor: McpActor.Name);
 
         var result = await _replaceNoteSectionHandler.HandleAsync(command, cancellationToken);
         return SerializeResult(result);
@@ -148,7 +148,7 @@ public sealed class NoteMcpTools
         var command = new ArchiveNoteCommand(
             Id: id,
             ExpectedVersionToken: expectedVersionToken,
-            Actor: "mcp-stdio");
+            Actor: McpActor.Name);
 
         var result = await _archiveNoteHandler.HandleAsync(command, cancellationToken);
         return SerializeResult(result);

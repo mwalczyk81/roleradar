@@ -154,6 +154,60 @@ public sealed class DockerIgnoreCoverageTests
         }
     }
 
+    [Fact]
+    public void DockerIgnore_AllowsTheObservabilityProjectInputs()
+    {
+        // Covers: feature 013 (ADR 0041) added RoleRadar.Observability, referenced by every .NET host image.
+        var repoRoot = FindRepoRoot();
+        var rules = ParseRules(File.ReadAllLines(Path.Combine(repoRoot, ".dockerignore")));
+
+        string[] required =
+        [
+            "src/RoleRadar.Observability/RoleRadar.Observability.csproj",
+            "src/RoleRadar.Observability/packages.lock.json",
+            "src/RoleRadar.Observability/CorrelationId.cs",
+        ];
+
+        foreach (var file in required)
+        {
+            Assert.True(File.Exists(Path.Combine(repoRoot, file)), $"Expected '{file}' to exist.");
+            Assert.True(IsIncluded(rules, file), $".dockerignore must allow '{file}'.");
+        }
+    }
+
+    [Theory]
+    [InlineData("Dockerfile", false)]
+    [InlineData("deploy/Dockerfile.api", true)]
+    [InlineData("deploy/Dockerfile.identity", true)]
+    public void Dockerfiles_CopyTheObservabilityProjectBeforeRestore(string dockerfile, bool copiesSourcePerProject)
+    {
+        // Covers: a locked restore of any host fails unless the Observability csproj and lock file are copied
+        // before `dotnet restore`; the per-project deploy Dockerfiles must also copy its source before publish.
+        var repoRoot = FindRepoRoot();
+        var lines = File.ReadAllLines(Path.Combine(repoRoot, dockerfile)).Select(l => l.Trim()).ToList();
+
+        const string restoreCopy =
+            "COPY src/RoleRadar.Observability/RoleRadar.Observability.csproj src/RoleRadar.Observability/packages.lock.json src/RoleRadar.Observability/";
+        var firstRestore = lines.FindIndex(l => l.Contains("dotnet restore", StringComparison.Ordinal));
+        var restoreCopyIndex = lines.IndexOf(restoreCopy);
+
+        Assert.True(firstRestore >= 0, $"{dockerfile} has no 'dotnet restore' line.");
+        Assert.True(
+            restoreCopyIndex >= 0 && restoreCopyIndex < firstRestore,
+            $"{dockerfile} must have '{restoreCopy}' before its first 'dotnet restore'.");
+
+        if (copiesSourcePerProject)
+        {
+            const string sourceCopy = "COPY src/RoleRadar.Observability/ src/RoleRadar.Observability/";
+            var publish = lines.FindIndex(l => l.Contains("dotnet publish", StringComparison.Ordinal));
+            var sourceCopyIndex = lines.IndexOf(sourceCopy);
+
+            Assert.True(
+                sourceCopyIndex > firstRestore && sourceCopyIndex < publish,
+                $"{dockerfile} must have '{sourceCopy}' between its restore and its 'dotnet publish'.");
+        }
+    }
+
     private sealed record Rule(bool Negated, Regex Pattern);
 
     private static List<Rule> ParseRules(IEnumerable<string> lines)

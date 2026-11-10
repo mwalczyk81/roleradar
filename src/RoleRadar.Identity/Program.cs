@@ -2,20 +2,26 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using RoleRadar.Identity.Configuration;
 using RoleRadar.Identity.Data;
+using RoleRadar.Identity.Observability;
 using RoleRadar.Identity.Services;
+using RoleRadar.Observability;
 
 namespace RoleRadar.Identity;
 
 public partial class Program
 {
+    /// <summary>What the image's built-in <c>--healthcheck</c> calls unless ROLERADAR_HEALTHCHECK_URL says otherwise: readiness, not just liveness.</summary>
+    public const string DefaultHealthcheckUrl = "http://127.0.0.1:8080/health/ready";
+
     public static async Task<int> Main(string[] args)
     {
         if (args.Contains("--healthcheck", StringComparer.OrdinalIgnoreCase))
         {
             var healthUrl = Environment.GetEnvironmentVariable("ROLERADAR_HEALTHCHECK_URL")
-                ?? "http://127.0.0.1:8080/health";
+                ?? DefaultHealthcheckUrl;
             using var handler = new SocketsHttpHandler { ConnectTimeout = TimeSpan.FromSeconds(2) };
             using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(3) };
             try
@@ -43,6 +49,9 @@ public partial class Program
             Args = args ?? [],
             ApplicationName = typeof(Program).Assembly.GetName().Name
         });
+
+        // Logging first, so providers a test adds through configureBuilder are kept (feature 013, ADR 0041).
+        builder.Logging.ClearProviders().AddRoleRadarLogging("identity", LogStream.Split, builder.Configuration);
 
         configureBuilder?.Invoke(builder);
 
@@ -115,6 +124,9 @@ public partial class Program
 
         IdentityServerConfig.ConfigureRateLimiting(builder.Services);
 
+        builder.Services.AddHealthChecks()
+            .AddCheck<IdentityReadinessCheck>("identity-db", failureStatus: HealthStatus.Unhealthy, tags: [HealthEndpoints.ReadyTag]);
+
         var app = builder.Build();
 
         using (var scope = app.Services.CreateScope())
@@ -122,6 +134,8 @@ public partial class Program
             var dbContext = scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>();
             dbContext.Database.Migrate();
         }
+
+        app.UseMiddleware<CorrelationMiddleware>();
 
         // 009 US4: the kit and Identity assets, then the /Account headers (form-action comes from the registered clients).
         app.UseStaticFiles();
@@ -133,8 +147,7 @@ public partial class Program
         app.UseIdentityServer();
         app.UseAuthorization();
 
-        app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }))
-            .AllowAnonymous();
+        app.MapRoleRadarHealth();
 
         app.MapRazorPages().RequireRateLimiting(IdentityServerConfig.AuthRateLimitPolicy);
 

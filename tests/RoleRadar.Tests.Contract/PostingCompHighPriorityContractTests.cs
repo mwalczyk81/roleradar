@@ -74,7 +74,8 @@ public sealed class PostingCompHighPriorityContractTests : IAsyncLifetime
             AtsTenant: "hipri-ats",
             RequisitionId: "REQ-HP-1",
             CompHighPriority: true,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var result = await handler.HandleAsync(command);
 
@@ -108,7 +109,8 @@ public sealed class PostingCompHighPriorityContractTests : IAsyncLifetime
             AtsTenant: "nullpri-ats",
             RequisitionId: "REQ-NP-1",
             CompHighPriority: null,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var result = await handler.HandleAsync(command);
 
@@ -141,7 +143,8 @@ public sealed class PostingCompHighPriorityContractTests : IAsyncLifetime
             AtsTenant: "updatepri-ats",
             RequisitionId: "REQ-UP-1",
             CompHighPriority: null,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var createResult = await handler.HandleAsync(createCommand);
         Assert.True(createResult.IsSuccess);
@@ -153,7 +156,8 @@ public sealed class PostingCompHighPriorityContractTests : IAsyncLifetime
             PostingId: originalPosting.Id,
             VersionToken: originalToken,
             CompHighPriority: true,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var updateResult = await handler.HandleAsync(updateCommand);
 
@@ -198,7 +202,8 @@ public sealed class PostingCompHighPriorityContractTests : IAsyncLifetime
             SourceKind: "ats",
             AtsTenant: "stalepri-ats",
             RequisitionId: "REQ-SP-1",
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var createResult = await handler.HandleAsync(createCommand);
         Assert.True(createResult.IsSuccess);
@@ -209,7 +214,8 @@ public sealed class PostingCompHighPriorityContractTests : IAsyncLifetime
             PostingId: posting.Id,
             VersionToken: Guid.CreateVersion7(),
             CompHighPriority: true,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var updateResult = await handler.HandleAsync(updateCommand);
 
@@ -231,7 +237,8 @@ public sealed class PostingCompHighPriorityContractTests : IAsyncLifetime
             AtsTenant: "deduppri-ats",
             RequisitionId: "REQ-DP-1",
             CompHighPriority: false,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var createResult = await handler.HandleAsync(createCommand);
         Assert.True(createResult.IsSuccess);
@@ -244,7 +251,8 @@ public sealed class PostingCompHighPriorityContractTests : IAsyncLifetime
             AtsTenant: "deduppri-ats",
             RequisitionId: "REQ-DP-1",
             CompHighPriority: false,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var sameResult = await handler.HandleAsync(sameCommand);
         Assert.True(sameResult.IsSuccess);
@@ -260,7 +268,8 @@ public sealed class PostingCompHighPriorityContractTests : IAsyncLifetime
             AtsTenant: "deduppri-ats",
             RequisitionId: "REQ-DP-1",
             CompHighPriority: true,
-            OwnerId: "owner-1");
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio");
 
         var diffResult = await handler.HandleAsync(diffCommand);
         Assert.True(diffResult.IsSuccess);
@@ -290,7 +299,8 @@ public sealed class PostingCompHighPriorityContractTests : IAsyncLifetime
             AtsTenant: "query-ats",
             RequisitionId: "REQ-QA-1",
             CompHighPriority: true,
-            OwnerId: "owner-1"));
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio"));
         Assert.True(createActive.IsSuccess);
 
         // 2. Decided posting with CompHighPriority = false
@@ -301,7 +311,8 @@ public sealed class PostingCompHighPriorityContractTests : IAsyncLifetime
             AtsTenant: "query-ats",
             RequisitionId: "REQ-QD-1",
             CompHighPriority: false,
-            OwnerId: "owner-1"));
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio"));
         Assert.True(createDecided.IsSuccess);
 
         var transResult = await transitionHandler.HandleAsync(new TransitionPostingCommand(
@@ -309,7 +320,8 @@ public sealed class PostingCompHighPriorityContractTests : IAsyncLifetime
             TargetDisposition: "screened_out",
             VersionToken: createDecided.Value.Posting.VersionToken,
             Reason: "Not enough experience",
-            OwnerId: "owner-1"));
+            OwnerId: "owner-1",
+            Actor: "mcp-stdio"));
         Assert.True(transResult.IsSuccess);
 
         // Query postings

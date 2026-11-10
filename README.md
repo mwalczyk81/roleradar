@@ -107,7 +107,7 @@ The [reports site](https://mwalczyk81.github.io/roleradar/) publishes the combin
 ## Documentation
 
 - [docs/README.md](docs/README.md) indexes everything under `docs/`, including the [ADR index](docs/adr/README.md) and the [demo](docs/demo.md).
-- [MCP client registration](docs/mcp-clients.md), [MCP tools](docs/mcp-tools.md), [CLI reference](docs/cli-reference.md), [Insights](docs/insights.md), [backup and restore](docs/operations/backup-restore.md).
+- [MCP client registration](docs/mcp-clients.md), [MCP tools](docs/mcp-tools.md), [CLI reference](docs/cli-reference.md), [Insights](docs/insights.md), [backup and restore](docs/operations/backup-restore.md), [logs and health](docs/operations/logs-and-health.md).
 - [Changelog](CHANGELOG.md): what changed in each release.
 
 ## Quickstart on the real stack

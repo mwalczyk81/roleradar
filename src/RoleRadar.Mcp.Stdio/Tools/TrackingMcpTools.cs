@@ -56,6 +56,7 @@ public sealed class TrackingMcpTools
         CancellationToken cancellationToken = default)
     {
         var command = new RecordCompanyCommand(
+            Actor: McpActor.Name,
             Id: id,
             Name: name,
             Description: description,
@@ -99,6 +100,7 @@ public sealed class TrackingMcpTools
         CancellationToken cancellationToken = default)
     {
         var command = new RecordPostingCommand(
+            Actor: McpActor.Name,
             PostingId: postingId,
             VersionToken: versionToken,
             CompanyId: companyId,
@@ -140,6 +142,7 @@ public sealed class TrackingMcpTools
         CancellationToken cancellationToken = default)
     {
         var command = new TransitionPostingCommand(
+            Actor: McpActor.Name,
             PostingId: postingId,
             TargetDisposition: targetDisposition,
             VersionToken: versionToken,
@@ -242,6 +245,7 @@ public sealed class TrackingMcpTools
         CancellationToken cancellationToken = default)
     {
         var command = new RecordApplicationCommand(
+            Actor: McpActor.Name,
             PostingId: postingId,
             Action: action,
             SubmittedDate: submittedDate,
