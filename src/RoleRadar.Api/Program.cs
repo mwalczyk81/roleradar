@@ -61,7 +61,8 @@ public partial class Program
 
     public static WebApplication CreateApp(
             string[]? args = null,
-            Action<WebApplicationBuilder>? configureBuilder = null)
+            Action<WebApplicationBuilder>? configureBuilder = null,
+            string? entryAssemblyName = null)
     {
         var builder = WebApplication.CreateBuilder(new WebApplicationOptions
         {
@@ -186,6 +187,16 @@ public partial class Program
                 .Count()
                 .SetMaxTop(100);
         });
+
+        // Build-time OpenAPI generation (dotnet-getdocument) runs this entry point under a mock server, so every startup service runs
+        // too. One that cannot reach Mongo logs an error, and since feature 013 warn and above go to stderr, which MSBuild's Exec
+        // task turns into a build error (MSB3077) on any machine with no Mongo, such as CI. Generating the document needs none of
+        // them, so drop what the application and its libraries registered: the read-index service, the data-protection key ring (its
+        // "no XML encryptor" warning), the health-check publisher. The web host's own service is added at Build and stays.
+        if (OpenApiDocumentGeneration.IsGeneratingDocument(entryAssemblyName ?? System.Reflection.Assembly.GetEntryAssembly()?.GetName().Name))
+        {
+            builder.Services.RemoveAll<IHostedService>();
+        }
 
         // Intentionally zero CORS middleware registered (server-to-server only per ADR-0018 / FR-009)
         var app = builder.Build();
