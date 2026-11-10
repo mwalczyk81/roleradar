@@ -165,7 +165,7 @@ public sealed class DockerIgnoreCoverageTests
         [
             "src/RoleRadar.Observability/RoleRadar.Observability.csproj",
             "src/RoleRadar.Observability/packages.lock.json",
-            "src/RoleRadar.Observability/CorrelationId.cs",
+            "src/RoleRadar.Observability/TraceIds.cs",
         ];
 
         foreach (var file in required)

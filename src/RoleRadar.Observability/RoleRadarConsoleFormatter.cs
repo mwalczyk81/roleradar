@@ -47,7 +47,7 @@ public sealed class RoleRadarConsoleFormatter : ConsoleFormatter
 {
     public const string FormatterName = "roleradar";
 
-    // ASP.NET Core's hosting scope adds these to every request; they are noise next to correlationId.
+    // ASP.NET Core's hosting scope adds these to every request; they are noise next to traceId.
     private static readonly HashSet<string> IgnoredScopeKeys = new(StringComparer.Ordinal)
     {
         "{OriginalFormat}", "RequestId", "RequestPath", "ConnectionId", "SpanId", "TraceId", "ParentId",
@@ -87,10 +87,11 @@ public sealed class RoleRadarConsoleFormatter : ConsoleFormatter
             ? Convert.ToString(logEntry.State, CultureInfo.InvariantCulture) ?? string.Empty
             : logEntry.Formatter(logEntry.State, logEntry.Exception);
 
-        string? correlationId = null;
+        // The trace id of the request, call or run (feature 014): read from the current activity, not from a logging scope.
+        var traceId = TraceIds.CurrentOrNull();
         var props = new List<KeyValuePair<string, object?>>();
 
-        scopeProvider?.ForEachScope((scope, _) => Collect(scope, props, ref correlationId), (object?)null);
+        scopeProvider?.ForEachScope((scope, _) => Collect(scope, props), (object?)null);
         if (logEntry.State is IEnumerable<KeyValuePair<string, object?>> stateValues)
         {
             foreach (var pair in stateValues)
@@ -109,7 +110,7 @@ public sealed class RoleRadarConsoleFormatter : ConsoleFormatter
             logEntry.Category,
             LogScrubber.ScrubText(RedactSensitiveTemplateValues(message, logEntry.State)),
             logEntry.EventId,
-            correlationId,
+            traceId,
             Deduplicate(props),
             logEntry.Exception);
 
@@ -148,17 +149,13 @@ public sealed class RoleRadarConsoleFormatter : ConsoleFormatter
         return result;
     }
 
-    private static void Collect(object? scope, List<KeyValuePair<string, object?>> props, ref string? correlationId)
+    private static void Collect(object? scope, List<KeyValuePair<string, object?>> props)
     {
         if (scope is IEnumerable<KeyValuePair<string, object?>> pairs)
         {
             foreach (var pair in pairs)
             {
-                if (string.Equals(pair.Key, CorrelationId.ScopeKey, StringComparison.Ordinal))
-                {
-                    correlationId = Convert.ToString(pair.Value, CultureInfo.InvariantCulture);
-                }
-                else if (!IgnoredScopeKeys.Contains(pair.Key))
+                if (!IgnoredScopeKeys.Contains(pair.Key))
                 {
                     props.Add(pair);
                 }
@@ -219,9 +216,9 @@ public sealed class RoleRadarConsoleFormatter : ConsoleFormatter
                 writer.WriteNumber("eventId", record.EventId.Id);
             }
 
-            if (!string.IsNullOrEmpty(record.CorrelationId))
+            if (!string.IsNullOrEmpty(record.TraceId))
             {
-                writer.WriteString("correlationId", record.CorrelationId);
+                writer.WriteString("traceId", record.TraceId);
             }
 
             if (record.Props.Count > 0)
@@ -280,7 +277,7 @@ public sealed class RoleRadarConsoleFormatter : ConsoleFormatter
         sb.Append(record.Timestamp.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture))
             .Append(' ').Append(record.Level)
             .Append(' ').Append(record.Service)
-            .Append(" [").Append(string.IsNullOrEmpty(record.CorrelationId) ? "-" : record.CorrelationId).Append("] ")
+            .Append(" [").Append(string.IsNullOrEmpty(record.TraceId) ? "-" : record.TraceId).Append("] ")
             .Append(OneLine(record.Message));
 
         foreach (var (key, value) in record.Props)
@@ -308,7 +305,7 @@ public sealed class RoleRadarConsoleFormatter : ConsoleFormatter
         string Category,
         string Message,
         EventId EventId,
-        string? CorrelationId,
+        string? TraceId,
         IReadOnlyList<KeyValuePair<string, string?>> Props,
         Exception? Exception);
 }

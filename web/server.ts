@@ -6,7 +6,7 @@ import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
 import { createRequestListener } from "@react-router/node";
 import { log } from "./app/lib/log.server.js";
-import { acceptCorrelationId, newCorrelationId } from "./app/lib/observability.js";
+import { startTrace } from "./app/lib/trace-context.server.js";
 import { getRequestContext, runWithRequestContext } from "./app/lib/request-context.server.js";
 
 export function validateSecretsOrExit(): void {
@@ -168,11 +168,10 @@ function singleHeader(value: string | string[] | undefined): string | undefined 
 
 export function createRequestHandler() {
   return async (req: http.IncomingMessage, res: http.ServerResponse) => {
-    // Feature 013: accept or create the correlation id at the edge, return it on every response, and write one
-    // RequestCompleted record per request (no query string; /health at debug so healthchecks do not flood the log).
-    const correlationId = acceptCorrelationId(singleHeader(req.headers["x-correlation-id"])) ?? newCorrelationId();
-    req.headers["x-correlation-id"] = correlationId;
-    res.setHeader("X-Correlation-ID", correlationId);
+    // Feature 014: start the W3C trace at the edge (a valid inbound traceparent is honoured, anything else is replaced),
+    // keep it in the request context, return no trace header, and write one RequestCompleted record per request (no query
+    // string; /health at debug so healthchecks do not flood the log).
+    const { traceId, spanId } = startTrace(singleHeader(req.headers["traceparent"]));
 
     const started = performance.now();
     const method = req.method ?? "GET";
@@ -181,7 +180,7 @@ export function createRequestHandler() {
       const status = res.statusCode;
       const fields = {
         event: "RequestCompleted",
-        correlationId,
+        traceId,
         props: { method, path, status, durationMs: Math.round((performance.now() - started) * 1000) / 1000 },
       };
       const msg = `${method} ${path} responded ${status}`;
@@ -192,7 +191,7 @@ export function createRequestHandler() {
       }
     });
 
-    const context = { correlationId, nonce: "" };
+    const context = { traceId, spanId, nonce: "" };
     await runWithRequestContext(context, async () => {
       if (req.url === "/health") {
         res.writeHead(200, { "Content-Type": "application/json" });

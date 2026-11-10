@@ -127,6 +127,24 @@ public sealed class AuditLogReaderContractTests : IAsyncLifetime
     private static Guid IdOf(BsonDocument doc) => doc["_id"].AsBsonBinaryData.ToGuid(GuidRepresentation.Standard);
 
     [Fact]
+    public async Task AnEntryWrittenBeforeFeature014_KeepsItsOldFormatRequestCorrelationId_AndIsListedUnchanged()
+    {
+        // Spec 014 scenario 9: audit is append-only, so an entry with the 013 style id (a UUID or a header value) is not
+        // rewritten. A raw legacy document and a new 32-hex one are both listed with their stored values. Green by design.
+        const string legacy = "legacy-corr-0001";
+        const string traceId = "0af7651916cd43dd8448eb211c80319c";
+        await SeedAsync(
+            Entry(Origin, actor: "legacy-1", requestCorrelationId: legacy),
+            Entry(Origin.AddMinutes(1), actor: "new-1", requestCorrelationId: traceId));
+
+        var page = await ListAsync(Query());
+
+        Assert.Equal(2, page.Items.Count);
+        Assert.Equal(legacy, page.Items.Single(i => i.Actor == "legacy-1").RequestCorrelationId);
+        Assert.Equal(traceId, page.Items.Single(i => i.Actor == "new-1").RequestCorrelationId);
+    }
+
+    [Fact]
     public async Task ReturnsOnlyTheQueriedOwnersEntries()
     {
         var mine = Entry(Origin, actor: "mine-1");

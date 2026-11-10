@@ -102,7 +102,7 @@ function handleTransition(payload: Record<string, unknown>, res: http.ServerResp
 
   if (payload.versionToken !== versionToken) {
     res.writeHead(409);
-    res.end(JSON.stringify({ errorCode: "CONCURRENCY_CONFLICT", message: "Stale version token." }));
+    res.end(JSON.stringify({ status: 409, errorCode: "concurrency_conflict", detail: "Stale version token." }));
     return;
   }
 
@@ -110,9 +110,10 @@ function handleTransition(payload: Record<string, unknown>, res: http.ServerResp
     res.writeHead(400);
     res.end(
       JSON.stringify({
+        status: 400,
         errorCode: "validation_error",
-        message: "Validation failed.",
-        details: [{ field: "eventDate", message: "Event date must be a valid date in yyyy-MM-dd format." }],
+        detail: "Validation failed.",
+        errors: { eventDate: ["Event date must be a valid date in yyyy-MM-dd format."] },
       })
     );
     return;
@@ -248,7 +249,7 @@ test.beforeAll(async () => {
     }
 
     res.writeHead(404);
-    res.end(JSON.stringify({ errorCode: "NOT_FOUND", message: "Not found in the fictional stub." }));
+    res.end(JSON.stringify({ status: 404, errorCode: "not_found", detail: "Not found in the fictional stub." }));
   });
 
   await new Promise<void>((resolve) => {
@@ -419,7 +420,7 @@ test.describe("Posting rejection sync (real Chromium, fictional stub API)", () =
     await openPosting(page);
 
     nextTransitionStatus = 401;
-    nextTransitionBody = { errorCode: "UNAUTHORIZED", message: "API access token is expired or unauthorized." };
+    nextTransitionBody = { status: 401, errorCode: "unauthorized" };
 
     let authRedirectCount = 0;
     const authRequest = page.waitForRequest((req) => {

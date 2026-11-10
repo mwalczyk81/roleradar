@@ -81,7 +81,7 @@ describe("web redaction", () => {
       headers: { Cookie: `${guard.getAuthStateCookieName()}=${state}; ${guard.getCodeVerifierCookieName()}=fictional-verifier` },
     });
 
-    await runWithRequestContext({ correlationId: "test-corr-web-0004", nonce: "" }, async () => {
+    await runWithRequestContext({ traceId: "0af7651916cd43dd8448eb211c80319c", spanId: "00f067aa0ba902b7", nonce: "" }, async () => {
       await callLoader(loader, request);
     });
 

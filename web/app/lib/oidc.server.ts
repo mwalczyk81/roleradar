@@ -1,6 +1,6 @@
 import * as client from "openid-client";
 import { log } from "./log.server.js";
-import { withCorrelationHeader } from "./api-client.server.js";
+import { withTraceparent } from "./trace-context.server.js";
 
 interface RoleRadarOidcGlobal {
   __ROLERADAR_OIDC_CONFIG_PROMISE__?: Promise<client.Configuration> | null;
@@ -45,14 +45,14 @@ export function getPostLogoutRedirectUri(): string {
 }
 
 /**
- * Every server-side call to Identity (discovery, code grant, refresh) carries the request's X-Correlation-ID
- * (feature 013). Reads globalThis.fetch per call so tests can stub it.
+ * Every server-side call to Identity (discovery, code grant, refresh) carries the request's W3C traceparent
+ * (feature 014). Reads globalThis.fetch per call so tests can stub it.
  */
 const identityFetch: client.CustomFetch = (url, options) =>
   globalThis.fetch(url, {
     ...options,
     body: toBodyInit(options.body),
-    headers: withCorrelationHeader(new Headers(options.headers)),
+    headers: withTraceparent(new Headers(options.headers)),
   });
 
 /** openid-client may hand over a Uint8Array view on any buffer; copy it so it is a standard BodyInit. */

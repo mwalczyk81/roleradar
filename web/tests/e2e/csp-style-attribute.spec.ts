@@ -479,9 +479,10 @@ test.describe("Posting Detail Real Transitions (Real Chromium)", () => {
     // Configure mock API to return 400 InvalidTransition
     nextTransitionResponseStatus = 400;
     nextTransitionResponseBody = {
-      errorCode: "INVALID_TRANSITION",
-      message: "Transition to this disposition is not allowed by policy.",
-      details: [{ field: "toDisposition", message: "Transition not allowed." }],
+      status: 400,
+      errorCode: "validation_error",
+      detail: "Transition to this disposition is not allowed by policy.",
+      errors: { toDisposition: ["Transition not allowed."] },
     };
 
     // Open change disposition dialog
@@ -514,8 +515,9 @@ test.describe("Posting Detail Real Transitions (Real Chromium)", () => {
     // Configure mock API to return 409 Concurrency Conflict
     nextTransitionResponseStatus = 409;
     nextTransitionResponseBody = {
-      errorCode: "CONCURRENCY_CONFLICT",
-      message: "This posting was modified by another process.",
+      status: 409,
+      errorCode: "concurrency_conflict",
+      detail: "This posting was modified by another process.",
     };
 
     // Open change disposition dialog
@@ -607,8 +609,9 @@ test.describe("Posting Detail Real Transitions (Real Chromium)", () => {
     // Configure mock API to return 401 on transition attempt
     nextTransitionResponseStatus = 401;
     nextTransitionResponseBody = {
-      errorCode: "UNAUTHORIZED",
-      message: "API access token is expired or unauthorized.",
+      status: 401,
+      errorCode: "unauthorized",
+      detail: "API access token is expired or unauthorized.",
     };
 
     let authRedirectCount = 0;
@@ -990,9 +993,10 @@ test.describe("Company Management (Real Chromium)", () => {
 
     nextCompanyResponseStatus = 400;
     nextCompanyResponseBody = {
-      errorCode: "VALIDATION_ERROR",
-      message: "Validation failed.",
-      details: [{ field: "name", issue: "Company name cannot be blank." }],
+      status: 400,
+      errorCode: "validation_error",
+      detail: "Validation failed.",
+      errors: { name: ["Company name cannot be blank."] },
     };
 
     await page.getByRole("button", { name: "Save Changes" }).click();
@@ -1011,8 +1015,9 @@ test.describe("Company Management (Real Chromium)", () => {
 
     nextCompanyResponseStatus = 409;
     nextCompanyResponseBody = {
-      errorCode: "CONCURRENCY_CONFLICT",
-      message: "This company was modified by another operation.",
+      status: 409,
+      errorCode: "concurrency_conflict",
+      detail: "This company was modified by another operation.",
     };
 
     await page.getByRole("button", { name: "Save Changes" }).click();
@@ -1058,8 +1063,9 @@ test.describe("Company Management (Real Chromium)", () => {
 
     nextCompanyResponseStatus = 401;
     nextCompanyResponseBody = {
-      errorCode: "UNAUTHORIZED",
-      message: "Token expired",
+      status: 401,
+      errorCode: "unauthorized",
+      detail: "Token expired",
     };
 
     let authRedirectCount = 0;
@@ -1242,9 +1248,10 @@ test.describe("Company Management (Real Chromium)", () => {
 
       nextApplicationResponseStatus = 400;
       nextApplicationResponseBody = {
-        errorCode: "VALIDATION_FAILED",
-        message: "Validation failed.",
-        details: [{ field: "submittedDate", message: "Invalid submission date format." }],
+        status: 400,
+        errorCode: "validation_error",
+        detail: "Validation failed.",
+        errors: { submittedDate: ["Invalid submission date format."] },
       };
 
       await page.getByRole("button", { name: "Create Application" }).click();
@@ -1271,8 +1278,9 @@ test.describe("Company Management (Real Chromium)", () => {
 
       nextApplicationResponseStatus = 409;
       nextApplicationResponseBody = {
-        errorCode: "CONCURRENCY_CONFLICT",
-        message: "An application already exists for this posting or state transition conflict occurred.",
+        status: 409,
+        errorCode: "concurrency_conflict",
+        detail: "An application already exists for this posting or state transition conflict occurred.",
       };
 
       await page.getByRole("button", { name: "Create Application" }).click();
@@ -1328,8 +1336,9 @@ test.describe("Company Management (Real Chromium)", () => {
 
       nextApplicationResponseStatus = 401;
       nextApplicationResponseBody = {
-        errorCode: "UNAUTHORIZED",
-        message: "Access token expired",
+        status: 401,
+        errorCode: "unauthorized",
+        detail: "Access token expired",
       };
 
       // Stub the Identity authorize endpoint so this test never depends on a listener on host port 5001
@@ -1418,9 +1427,10 @@ test.describe("Company Management (Real Chromium)", () => {
 
       nextApplicationResponseStatus = 400;
       nextApplicationResponseBody = {
-        errorCode: "VALIDATION_FAILED",
-        message: "Invalid event date.",
-        details: [{ field: "eventDate", message: "Event date must be formatted as YYYY-MM-DD." }],
+        status: 400,
+        errorCode: "validation_error",
+        detail: "Invalid event date.",
+        errors: { eventDate: ["Event date must be formatted as YYYY-MM-DD."] },
       };
 
       await page.getByRole("button", { name: "Append Event" }).first().click();
@@ -1442,8 +1452,9 @@ test.describe("Company Management (Real Chromium)", () => {
 
       nextApplicationResponseStatus = 409;
       nextApplicationResponseBody = {
-        errorCode: "CONCURRENCY_CONFLICT",
-        message: "This application was updated concurrently.",
+        status: 409,
+        errorCode: "concurrency_conflict",
+        detail: "This application was updated concurrently.",
       };
 
       await page.getByRole("button", { name: "Append Event" }).first().click();
@@ -1494,8 +1505,9 @@ test.describe("Company Management (Real Chromium)", () => {
 
       nextApplicationResponseStatus = 401;
       nextApplicationResponseBody = {
-        errorCode: "UNAUTHORIZED",
-        message: "Session token expired",
+        status: 401,
+        errorCode: "unauthorized",
+        detail: "Session token expired",
       };
 
       // Stub the Identity authorize endpoint so this test never depends on a listener on host port 5001

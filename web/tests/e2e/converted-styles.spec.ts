@@ -421,12 +421,10 @@ test.describe("slice 3c: posting detail and the transition dialog", () => {
     await open(page, "/postings/post-e2e-1");
     state.nextTransitionResponseStatus = 400;
     state.nextTransitionResponseBody = {
-      errorCode: "INVALID_TRANSITION",
-      message: "Transition to this disposition is not allowed by policy.",
-      details: [
-        { field: "toDisposition", message: "Transition not allowed." },
-        { field: "reason", message: "Reason is required." },
-      ],
+      status: 400,
+      errorCode: "validation_error",
+      detail: "Transition to this disposition is not allowed by policy.",
+      errors: { toDisposition: ["Transition not allowed."], reason: ["Reason is required."] },
     };
     await page.getByRole("button", { name: "Change Disposition" }).click();
     const dialog = page.getByRole("dialog");
@@ -606,13 +604,10 @@ test.describe("slice 3d: company detail", () => {
     await open(page, "/companies/comp-e2e-1");
     state.nextCompanyResponseStatus = 400;
     state.nextCompanyResponseBody = {
-      errorCode: "VALIDATION_ERROR",
-      message: "Validation failed.",
-      details: [
-        { field: "name", issue: "Company name cannot be blank." },
-        { field: "status", issue: "Status is not recognised." },
-        { field: "ownershipType", issue: "Ownership type is not recognised." },
-      ],
+      status: 400,
+      errorCode: "validation_error",
+      detail: "Validation failed.",
+      errors: { name: ["Company name cannot be blank."], status: ["Status is not recognised."], ownershipType: ["Ownership type is not recognised."] },
     };
     await page.getByRole("button", { name: "Save Changes" }).click();
     await expect(page.getByText("Company name cannot be blank.")).toBeVisible();
@@ -784,13 +779,10 @@ test.describe("slice 3e: applications.$id", () => {
     await open(page, "/applications/app-e2e-1");
     state.nextApplicationResponseStatus = 400;
     state.nextApplicationResponseBody = {
-      errorCode: "VALIDATION_ERROR",
-      message: "Validation failed.",
-      details: [
-        { field: "eventDate", message: "Event date cannot be in the future." },
-        { field: "notes", message: "Notes are too long." },
-        { field: "eventType", message: "Event type is not allowed." },
-      ],
+      status: 400,
+      errorCode: "validation_error",
+      detail: "Validation failed.",
+      errors: { eventDate: ["Event date cannot be in the future."], notes: ["Notes are too long."], eventType: ["Event type is not allowed."] },
     };
     await page.getByRole("button", { name: "Append Event" }).click();
     const dialog = page.getByRole("dialog");
@@ -868,13 +860,10 @@ test.describe("slice 3e: create-application dialog on /postings/:id", () => {
     state.currentPostingDisposition = "closed";
     state.nextApplicationResponseStatus = 400;
     state.nextApplicationResponseBody = {
-      errorCode: "VALIDATION_ERROR",
-      message: "Validation failed.",
-      details: [
-        { field: "desiredSalaryMin", message: "Minimum salary must be positive." },
-        { field: "confirmationCode", message: "Confirmation code is too long." },
-        { field: "overrideReason", message: "Override reason is too short." },
-      ],
+      status: 400,
+      errorCode: "validation_error",
+      detail: "Validation failed.",
+      errors: { desiredSalaryMin: ["Minimum salary must be positive."], confirmationCode: ["Confirmation code is too long."], overrideReason: ["Override reason is too short."] },
     };
     await open(page, "/postings/post-e2e-1");
     await page.getByRole("button", { name: "Create Application" }).click();

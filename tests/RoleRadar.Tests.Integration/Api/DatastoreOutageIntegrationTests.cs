@@ -89,9 +89,10 @@ public sealed class DatastoreOutageIntegrationTests : IAsyncLifetime
 
         using var document = JsonDocument.Parse(raw);
         var body = document.RootElement;
-        Assert.False(body.GetProperty("ok").GetBoolean());
+        Assert.Equal(503, body.GetProperty("status").GetInt32());
         Assert.Equal("service_unavailable", body.GetProperty("errorCode").GetString());
-        Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("correlationId").GetString()), $"{what}: the envelope has no correlationId.");
+        Assert.Matches("^[0-9a-f]{32}$", body.GetProperty("traceId").GetString()!);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
 
         foreach (var forbidden in new[] { "27017", "mongodb://", "start-services", "docker compose", "MongoDB.", " at RoleRadar" })
         {

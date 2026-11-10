@@ -21,7 +21,7 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0015](./0015-identity-operational-store-selection.md) | Identity Operational Store Selection — SQLite File Volume vs. PostgreSQL Container | Accepted | `005a-api-and-login` |
 | [ADR-0016](./0016-duende-identityserver-community-edition-and-fallback.md) | Duende IdentityServer Community Edition Licensing and IdP Fallback Strategy | Accepted | `005a-api-and-login` |
 | [ADR-0017](./0017-owner-credential-and-security-controls.md) | Single-Owner Credential Handling and Authentication Security Controls | Accepted | `005a-api-and-login` |
-| [ADR-0018](./0018-rest-api-style-and-owner-mapping.md) | REST API Style, Error Envelope, Paging, and Owner Mapping | Accepted; superseded in part by ADR-0028 | `005a-api-and-login` |
+| [ADR-0018](./0018-rest-api-style-and-owner-mapping.md) | REST API Style, Error Envelope, Paging, and Owner Mapping | Accepted; superseded in part by ADR-0028 and ADR-0044 | `005a-api-and-login` |
 | [ADR-0019](./0019-openapi-generation-and-typed-client.md) | OpenAPI Contract Generation, Committed Snapshot Verification, and Typed Client Generation | Accepted | `005a-api-and-login` |
 | [ADR-0020](./0020-https-transport-and-local-compose-certificates.md) | Transport Security, Local Compose Certificates, and Self-Contained Health Probing | Accepted | `005a-api-and-login` |
 | [ADR-0021](./0021-oidc-client-library-selection.md) | OIDC Client Library Selection (`openid-client` v6) | Accepted | `005b-management-ui` |
@@ -44,5 +44,6 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0038](./0038-reporting-stack.md) | Reporting From Pipeline Numbers, With One Combined Allure Report | Accepted | `011-test-quality-reporting` |
 | [ADR-0039](./0039-demo-stack-and-guard.md) | A Separate Demo Stack With a Guard and Generated Credentials | Accepted | `012-front-door` |
 | [ADR-0040](./0040-mongodb-9-and-one-image-source.md) | MongoDB 9.0, With One Source for the Image Tag | Accepted | `chore/mongo-9-upgrade` |
-| [ADR-0041](./0041-operability-logging-correlation-health.md) | Structured Logs, One Correlation Id, and Health That Checks Its Store | Accepted | `013-operability` |
+| [ADR-0041](./0041-operability-logging-correlation-health.md) | Structured Logs, One Correlation Id, and Health That Checks Its Store | Accepted; superseded in part by ADR-0044 | `013-operability` |
 | [ADR-0042](./0042-authenticator-provider-and-replay-guard.md) | One-Time Codes Through the Platform Authenticator Provider, With a Temporary Replay Guard | Accepted | `014-standards-first` |
+| [ADR-0044](./0044-problem-details-and-trace-context.md) | RFC 9457 Problem Documents and W3C Trace Context | Accepted | `014-standards-first` |

@@ -75,15 +75,15 @@ public sealed partial class InsightsStatsOpenApiContractTests
     }
 
     [Fact]
-    public void Snapshot_Responses_Are200WithTheStatsDto_And400WithTheErrorEnvelope()
+    public void Snapshot_Responses_Are200WithTheStatsDto_And400WithAValidationProblemDocument()
     {
         var responses = StatsOperation(LoadSnapshot()).GetProperty("get").GetProperty("responses");
 
         var ok = responses.GetProperty("200").GetProperty("content").GetProperty("application/json").GetProperty("schema");
         Assert.EndsWith("/InsightsStatsDto", ok.GetProperty("$ref").GetString(), StringComparison.Ordinal);
 
-        var bad = responses.GetProperty("400").GetProperty("content").GetProperty("application/json").GetProperty("schema");
-        Assert.EndsWith("/ErrorEnvelope", bad.GetProperty("$ref").GetString(), StringComparison.Ordinal);
+        var bad = responses.GetProperty("400").GetProperty("content").GetProperty("application/problem+json").GetProperty("schema");
+        Assert.EndsWith("/HttpValidationProblemDetails", bad.GetProperty("$ref").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]

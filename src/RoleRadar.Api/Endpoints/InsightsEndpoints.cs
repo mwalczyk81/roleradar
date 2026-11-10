@@ -1,5 +1,5 @@
 using System.Globalization;
-using RoleRadar.Api.Envelopes;
+using RoleRadar.Api.Problems;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Insights;
 using RoleRadar.Domain.Common;
@@ -23,7 +23,7 @@ public static class InsightsEndpoints
         readGroup.MapGet(StatsPath, GetStatsAsync)
             .WithName("GetInsightsStats")
             .Produces<InsightsStatsDto>(StatusCodes.Status200OK)
-            .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest);
+            .ProducesValidationProblem();
         return group;
     }
 
@@ -34,29 +34,29 @@ public static class InsightsEndpoints
         IQueryHandler<GetInsightsStatsQuery, InsightsStatsDto> queryHandler,
         CancellationToken cancellationToken)
     {
-        var details = new List<ErrorFieldDetail>();
+        var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
 
         if (!InsightsWindows.TryParse(window, out var parsedWindow))
         {
-            details.Add(new ErrorFieldDetail("window", "window is required and must be one of: " + string.Join(", ", InsightsWindows.Names) + "."));
+            errors["window"] = ["window is required and must be one of: " + string.Join(", ", InsightsWindows.Names) + "."];
         }
 
         // Exactly yyyy-MM-dd: no time part, no short forms, no locale.
         if (!DateOnly.TryParseExact(asOf, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedAsOf))
         {
-            details.Add(new ErrorFieldDetail("asOf", "asOf is required and must be a date written as yyyy-MM-dd."));
+            errors["asOf"] = ["asOf is required and must be a date written as yyyy-MM-dd."];
         }
 
-        if (details.Count > 0)
+        if (errors.Count > 0)
         {
-            return Results.BadRequest(ErrorEnvelope.Validation("The window or as-of date is missing or invalid.", details));
+            return ApiProblems.Validation("The window or as-of date is missing or invalid.", errors);
         }
 
         var ownerId = ownerIdProvider.GetOwnerId().Value;
         var result = await queryHandler.HandleAsync(new GetInsightsStatsQuery(ownerId, parsedWindow, parsedAsOf), cancellationToken);
         if (!result.IsSuccess || result.Value is null)
         {
-            return ErrorEnvelope.FromResultError(result.Error);
+            return ApiProblems.FromResultError(result.Error);
         }
 
         return Results.Ok(result.Value);

@@ -164,7 +164,7 @@ describe("GET /postings/:id (T031)", () => {
       if (endpoint === "/api/v1/postings/{id}") {
         return Promise.resolve({
           data: undefined,
-          error: { ok: false, errorCode: "NOT_FOUND", message: "Not found" },
+          error: { status: 404, errorCode: "not_found", detail: "Not found" },
           response: { status: 404 } as Response,
         });
       }
@@ -195,7 +195,7 @@ describe("GET /postings/:id (T031)", () => {
       if (endpoint === "/api/v1/postings/{id}") {
         return Promise.resolve({
           data: undefined,
-          error: { ok: false, errorCode: "UNAUTHORIZED", message: "Token expired" },
+          error: { status: 401, errorCode: "unauthorized" },
           response: { status: 401 } as Response,
         });
       }

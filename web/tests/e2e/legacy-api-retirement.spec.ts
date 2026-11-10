@@ -190,7 +190,7 @@ test.describe("Legacy list API retirement (T065)", () => {
 
       // Anything else, including every legacy list path, is unknown to the stub.
       res.writeHead(404);
-      res.end(JSON.stringify({ ok: false, errorCode: "not_found", message: "Not found" }));
+      res.end(JSON.stringify({ status: 404, errorCode: "not_found", detail: "Not found" }));
     });
     await new Promise<void>((resolve) => apiServer.listen(apiPort, "127.0.0.1", resolve));
 

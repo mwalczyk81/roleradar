@@ -182,19 +182,19 @@ public sealed class InsightsStatsTests(InsightsFixture fixture) : IClassFixture<
     [InlineData("?window=last90Days&asOf=2026-13-40")]
     [InlineData("?window=last90Days&asOf=2026-9-30")]
     [InlineData("?window=last90Days&asOf=2026-09-30T00:00:00Z")]
-    public async Task MissingOrBadWindowOrAsOf_Is400_WithTheExistingErrorEnvelope(string query)
+    public async Task MissingOrBadWindowOrAsOf_Is400_WithAValidationProblemDocument(string query)
     {
         var (status, body) = await InsightsTestSupport.RawAsync(Host, OwnerA, "/api/v1/insights/stats" + query);
 
         Assert.Equal(HttpStatusCode.BadRequest, status);
         var root = InsightsTestSupport.ParseRoot(body);
-        Assert.False(root.GetProperty("ok").GetBoolean());
+        Assert.Equal(400, root.GetProperty("status").GetInt32());
         Assert.Equal("validation_error", root.GetProperty("errorCode").GetString());
-        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("message").GetString()));
+        Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("detail").GetString()));
     }
 
     [Fact]
-    public async Task AsOfMoreThanOneDayInTheFuture_Is400_WithTheExistingErrorEnvelope()
+    public async Task AsOfMoreThanOneDayInTheFuture_Is400_WithAValidationProblemDocument()
     {
         var farFuture = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(2).ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
 

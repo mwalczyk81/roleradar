@@ -184,11 +184,10 @@ describe("Application Actions (T047)", () => {
       mockApiPost.mockResolvedValueOnce({
         data: undefined,
         error: {
-          errorCode: "VALIDATION_FAILED",
-          message: "SubmittedDate must be in YYYY-MM-DD format.",
-          details: [
-            { field: "submittedDate", message: "SubmittedDate must be in YYYY-MM-DD format: 'invalid-date'." },
-          ],
+          status: 400,
+          errorCode: "validation_error",
+          detail: "SubmittedDate must be in YYYY-MM-DD format.",
+          errors: { submittedDate: ["SubmittedDate must be in YYYY-MM-DD format: 'invalid-date'."] },
         },
         response: { status: 400 } as Response,
       });
@@ -223,8 +222,9 @@ describe("Application Actions (T047)", () => {
       mockApiPost.mockResolvedValueOnce({
         data: undefined,
         error: {
-          code: "INVALID_TRANSITION",
-          message: "An application already exists for this posting.",
+          status: 409,
+          errorCode: "concurrency_conflict",
+          detail: "An application already exists for this posting.",
         },
         response: { status: 409 } as Response,
       });

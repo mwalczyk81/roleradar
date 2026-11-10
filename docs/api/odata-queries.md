@@ -30,7 +30,7 @@ Entity sets: `Postings`, `Companies`, `Applications`, `Notes`, `Criteria`, `Sear
 
 ## Errors
 
-- `400` for a rejected query (unknown or disallowed field, `$top` above 100, uppercase search term, unsupported operator, too many nodes). The body is the API error envelope: `{ "ok": false, "errorCode": "validation_error", "message": "<what was rejected>" }`.
+- `400` for a rejected query (unknown or disallowed field, `$top` above 100, uppercase search term, unsupported operator, too many nodes). The body is an RFC 9457 problem document (`application/problem+json`): `{ "type": "...", "title": "Bad Request", "status": 400, "detail": "<what was rejected>", "errorCode": "validation_error", "traceId": "<32 hex>" }`. See [API problem types](problems.md).
 - `401` without a valid bearer token, `403` when the token's subject is not the configured owner.
 - `405` with `Allow: GET` for `POST`, `PUT`, `PATCH` and `DELETE` on any entity set. There are no write or delete operations in OData.
 

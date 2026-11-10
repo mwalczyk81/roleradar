@@ -17,7 +17,7 @@ describe("fetchOData abort signal", () => {
 
     expect(result.data?.["@odata.count"]).toBe(3);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    // Feature 013: fetchOData sends a Request (the correlation header is added in one place); its signal follows ours.
+    // Feature 013: fetchOData sends a Request (the traceparent header is added in one place); its signal follows ours.
     const request: Request = fetchMock.mock.calls[0][0];
     expect(request.signal.aborted).toBe(false);
     controller.abort();

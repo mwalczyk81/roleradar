@@ -1,6 +1,6 @@
 using RoleRadar.Api.Authentication;
-using RoleRadar.Api.Envelopes;
 using RoleRadar.Api.Models;
+using RoleRadar.Api.Problems;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Tracking.Commands;
 using RoleRadar.Domain.Common;
@@ -20,15 +20,15 @@ public static class ApplicationsEndpoints
 
         readGroup.MapGet("/applications/{id:guid}", GetApplicationByIdAsync)
             .Produces<ApplicationDetailDto>(StatusCodes.Status200OK)
-            .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound);
         writeGroup.MapPost("/applications", CreateApplicationAsync)
             .Produces<ApplicationDetailDto>(StatusCodes.Status201Created)
-            .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest)
-            .Produces<ErrorEnvelope>(StatusCodes.Status409Conflict);
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status409Conflict);
         writeGroup.MapPost("/applications/{id:guid}/events", AppendApplicationEventAsync)
             .Produces<ApplicationDetailDto>(StatusCodes.Status200OK)
-            .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest)
-            .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound);
         return group;
     }
 
@@ -43,7 +43,7 @@ public static class ApplicationsEndpoints
         var appRes = await applicationRepository.GetByIdAsync(ownerId, id, cancellationToken);
         if (!appRes.IsSuccess || appRes.Value is null)
         {
-            return Results.NotFound(ErrorEnvelope.NotFound("Application not found."));
+            return ApiProblems.NotFound("Application not found.");
         }
 
         var dto = await BuildApplicationDtoAsync(ownerId, appRes.Value, applicationRepository, postingRepository, cancellationToken);
@@ -82,13 +82,13 @@ public static class ApplicationsEndpoints
         var result = await commandHandler.HandleAsync(command, cancellationToken);
         if (!result.IsSuccess || result.Value is null)
         {
-            return ErrorEnvelope.FromResultError(result.Error);
+            return ApiProblems.FromResultError(result.Error);
         }
 
         var appRes = await applicationRepository.GetByIdAsync(ownerId, result.Value.ApplicationId, cancellationToken);
         if (!appRes.IsSuccess || appRes.Value is null)
         {
-            return Results.NotFound(ErrorEnvelope.NotFound("Created application could not be retrieved."));
+            return ApiProblems.NotFound("Created application could not be retrieved.");
         }
 
         var dto = await BuildApplicationDtoAsync(ownerId, appRes.Value, applicationRepository, postingRepository, cancellationToken);
@@ -110,7 +110,7 @@ public static class ApplicationsEndpoints
         var existingRes = await applicationRepository.GetByIdAsync(ownerId, id, cancellationToken);
         if (!existingRes.IsSuccess || existingRes.Value is null)
         {
-            return Results.NotFound(ErrorEnvelope.NotFound("Application not found."));
+            return ApiProblems.NotFound("Application not found.");
         }
 
         var existing = existingRes.Value;
@@ -128,7 +128,7 @@ public static class ApplicationsEndpoints
         var result = await commandHandler.HandleAsync(command, cancellationToken);
         if (!result.IsSuccess)
         {
-            return ErrorEnvelope.FromResultError(result.Error);
+            return ApiProblems.FromResultError(result.Error);
         }
 
         var updatedRes = await applicationRepository.GetByIdAsync(ownerId, id, cancellationToken);

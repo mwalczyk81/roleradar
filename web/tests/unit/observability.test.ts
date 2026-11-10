@@ -1,17 +1,15 @@
 import { describe, it, expect } from "vitest";
 import {
   REDACTED,
-  acceptCorrelationId,
   formatRecord,
   isSensitiveKey,
-  newCorrelationId,
   resolveLogFormat,
   scrub,
   scrubProps,
 } from "../../app/lib/observability";
 
 // Feature 013 US1: the web half of the shared log contract (specs/013-operability/contracts/log-records.md).
-// The rules mirror RoleRadar.Observability's LogScrubber and CorrelationId, one case per rule (SC-003).
+// The rules mirror RoleRadar.Observability's LogScrubber, one case per rule (SC-003).
 
 const JWT = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiIwMTkyIn0.c2lnbmF0dXJlLWZpY3Rpb25hbA"; // gitleaks:allow (fictional redaction test vector, not a credential)
 const FIXED = new Date(Date.UTC(2026, 10, 9, 14, 3, 22, 418));
@@ -19,7 +17,7 @@ const FIXED = new Date(Date.UTC(2026, 10, 9, 14, 3, 22, 418));
 describe("formatRecord", () => {
   it("writes one JSON object with the contract fields", () => {
     const line = formatRecord(
-      { level: "info", msg: "Request done", event: "RequestCompleted", correlationId: "test-corr-0001", props: { method: "GET", status: 200 }, ts: FIXED },
+      { level: "info", msg: "Request done", event: "RequestCompleted", traceId: "0af7651916cd43dd8448eb211c80319c", props: { method: "GET", status: 200 }, ts: FIXED },
       "json"
     );
 
@@ -31,9 +29,16 @@ describe("formatRecord", () => {
       service: "web",
       msg: "Request done",
       event: "RequestCompleted",
-      correlationId: "test-corr-0001",
+      traceId: "0af7651916cd43dd8448eb211c80319c",
       props: { method: "GET", status: 200 },
     });
+  });
+
+  it("writes the trace id under the field traceId and never as correlationId", () => {
+    const record = JSON.parse(formatRecord({ level: "info", msg: "x", traceId: "0af7651916cd43dd8448eb211c80319c", ts: FIXED }, "json"));
+
+    expect(record.traceId).toBe("0af7651916cd43dd8448eb211c80319c");
+    expect("correlationId" in record).toBe(false);
   });
 
   it("omits optional fields that are absent", () => {
@@ -60,14 +65,14 @@ describe("formatRecord", () => {
 
   it("writes one readable text line", () => {
     const line = formatRecord(
-      { level: "warn", msg: "Posting moved", correlationId: "test-corr-0001", props: { postingId: "p-1" }, ts: FIXED },
+      { level: "warn", msg: "Posting moved", traceId: "0af7651916cd43dd8448eb211c80319c", props: { postingId: "p-1" }, ts: FIXED },
       "text"
     );
 
-    expect(line).toBe("2026-11-09T14:03:22.418Z warn web [test-corr-0001] Posting moved postingId=p-1");
+    expect(line).toBe("2026-11-09T14:03:22.418Z warn web [0af7651916cd43dd8448eb211c80319c] Posting moved postingId=p-1");
   });
 
-  it("uses a dash in text mode when there is no correlation id", () => {
+  it("uses a dash in text mode when there is no trace id", () => {
     expect(formatRecord({ level: "info", msg: "started", ts: FIXED }, "text")).toBe("2026-11-09T14:03:22.418Z info web [-] started");
   });
 
@@ -168,51 +173,13 @@ describe("sensitive keys", () => {
     expect(scrubProps({ [key]: "SENTINEL-VALUE-7f3a" })).toEqual({ [key]: REDACTED });
   });
 
-  it.each(["statusCode", "method", "path", "durationMs", "subject", "correlationId"])("leaves %s alone", (key) => {
+  it.each(["statusCode", "method", "path", "durationMs", "subject", "traceId"])("leaves %s alone", (key) => {
     expect(isSensitiveKey(key)).toBe(false);
     expect(scrubProps({ [key]: "ordinary" })).toEqual({ [key]: "ordinary" });
   });
 
   it("keeps numbers and booleans as they are", () => {
     expect(scrubProps({ status: 404, ok: false })).toEqual({ status: 404, ok: false });
-  });
-});
-
-describe("correlation ids", () => {
-  it.each([
-    "abcdefgh",
-    "01970f3e-5b1c-7d2a-9a77-3c2f1e0d4b5a",
-    "test-corr-0001",
-    "A1.b2_c3-D4",
-    "0123456789012345678901234567890123456789012345678901234567890123",
-  ])("accepts %s", (candidate) => {
-    expect(acceptCorrelationId(candidate)).toBe(candidate);
-  });
-
-  it.each([
-    null,
-    undefined,
-    "",
-    "abcdefg",
-    "01234567890123456789012345678901234567890123456789012345678901234",
-    "-abcdefgh",
-    ".abcdefgh",
-    "abc defgh",
-    "abcdefgh\r\n",
-    "abcd\nefgh",
-    "abcdefgh%0d%0a",
-    "abcdéfghij",
-    "<script>alert(1)</script>",
-  ])("rejects %s", (candidate) => {
-    expect(acceptCorrelationId(candidate)).toBeUndefined();
-  });
-
-  it("generates UUIDs that are accepted and distinct", () => {
-    const first = newCorrelationId();
-    const second = newCorrelationId();
-    expect(first).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-    expect(acceptCorrelationId(first)).toBe(first);
-    expect(first).not.toBe(second);
   });
 });
 

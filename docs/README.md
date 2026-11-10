@@ -26,7 +26,8 @@ docker compose -p roleradar-demo -f deploy/demo/docker-compose.yml up --build --
 
 - [operations/backup-restore.md](operations/backup-restore.md): encrypted backup and the two-pass restore.
 - [operations/reconcile-read-models.md](operations/reconcile-read-models.md): backfilling the derived read-model fields, owner only.
-- [operations/logs-and-health.md](operations/logs-and-health.md): reading the logs (compose, text mode, the opt-in viewer), following a request by correlation id, log levels and caps, the health endpoints, what a 503 means, and `roleradar audit list`.
+- [api/problems.md](api/problems.md): the RFC 9457 problem types the API returns, one anchor per error code.
+- [operations/logs-and-health.md](operations/logs-and-health.md): reading the logs (compose, text mode, the opt-in viewer), following a request by trace id, log levels and caps, the health endpoints, what a 503 means, and `roleradar audit list`.
 
 ## Decisions and governance
 

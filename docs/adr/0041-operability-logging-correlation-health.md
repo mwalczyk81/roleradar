@@ -1,6 +1,6 @@
 # ADR 0041: Structured Logs, One Correlation Id, and Health That Checks Its Store
 
-- **Status**: Accepted (2026-11-09; the viewer is pinned to `amir20/dozzle:v11.3.5@sha256:dd09e6aaa9d5ad686b6017427a502c40dc862ba28445609813e5ea1f66f6dbdf`)
+- **Status**: Accepted; the correlation decisions are superseded in part by [ADR 0044](./0044-problem-details-and-trace-context.md) (W3C Trace Context replaced `X-Correlation-ID`, and the log field `correlationId` became `traceId`) (2026-11-09; the viewer is pinned to `amir20/dozzle:v11.3.5@sha256:dd09e6aaa9d5ad686b6017427a502c40dc862ba28445609813e5ea1f66f6dbdf`)
 - **Date**: 2026-11-09
 - **Feature**: `013-operability`
 
@@ -23,7 +23,7 @@ Feature 013 specifies the outcomes. This ADR records the library and tooling cho
 - **Logging (.NET): built-in console provider plus one custom formatter.** `RoleRadarConsoleFormatter` writes either one JSON object per line or one readable line, selected by `ROLERADAR_LOG_FORMAT`. Every field is scrubbed (bearer and basic credentials, JWT shapes, connection-string credentials, denylisted property keys and the same values in the rendered message, sensitive `key=value` pairs and JSON pairs in free text, query strings). No Serilog and no logging library. The one package this adds is `Microsoft.Extensions.Logging.Console` 10.0.14 (see Consequences).
 - **A new source project, `RoleRadar.Observability`,** holds the formatter, scrubber, correlation id rules, logging setup and sign-in event definitions. It references no RoleRadar project, and Domain, Application and Infrastructure must not reference it. It exists because Identity references no other RoleRadar project and the redaction logic must have one copy.
 - **Logging (web): a dependency-free logger** with the same record shape. The pure part is unit- and mutation-tested. `no-console` is enforced by lint.
-- **Correlation: `X-Correlation-ID`.**
+- **Correlation: `X-Correlation-ID`.** *(Superseded by ADR 0044: the id is the W3C trace id, the header is `traceparent`, the log field is `traceId`, and the error body is an RFC 9457 problem document. The text below is the historical decision.)*
   - Accepted when it matches `^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$`, otherwise replaced.
   - Created or accepted at the web edge and sent to the API and to Identity's server-side endpoints.
   - Returned on every response and added to the API error envelope as `correlationId`.

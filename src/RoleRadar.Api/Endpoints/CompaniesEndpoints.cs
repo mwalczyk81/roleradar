@@ -1,6 +1,6 @@
 using RoleRadar.Api.Authentication;
-using RoleRadar.Api.Envelopes;
 using RoleRadar.Api.Models;
+using RoleRadar.Api.Problems;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Tracking.Commands;
 using RoleRadar.Domain.Common;
@@ -19,12 +19,12 @@ public static class CompaniesEndpoints
 
         readGroup.MapGet("/companies/{id:guid}", GetCompanyByIdAsync)
             .Produces<CompanyDetailDto>(StatusCodes.Status200OK)
-            .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound);
+            .ProducesProblem(StatusCodes.Status404NotFound);
         writeGroup.MapPatch("/companies/{id:guid}", PatchCompanyAsync)
             .Produces<CompanyDetailDto>(StatusCodes.Status200OK)
-            .Produces<ErrorEnvelope>(StatusCodes.Status400BadRequest)
-            .Produces<ErrorEnvelope>(StatusCodes.Status404NotFound)
-            .Produces<ErrorEnvelope>(StatusCodes.Status409Conflict);
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status409Conflict);
         return group;
     }
 
@@ -52,7 +52,7 @@ public static class CompaniesEndpoints
         var existingRes = await companyRepository.GetByIdAsync(ownerId, id, cancellationToken);
         if (!existingRes.IsSuccess || existingRes.Value is null)
         {
-            return Results.NotFound(ErrorEnvelope.NotFound("Company not found."));
+            return ApiProblems.NotFound("Company not found.");
         }
 
         var existing = existingRes.Value;
@@ -90,7 +90,7 @@ public static class CompaniesEndpoints
         var result = await commandHandler.HandleAsync(command, cancellationToken);
         if (!result.IsSuccess)
         {
-            return ErrorEnvelope.FromResultError(result.Error);
+            return ApiProblems.FromResultError(result.Error);
         }
 
         return await BuildCompanyDetailResultAsync(ownerId, id, companyRepository, cancellationToken);
@@ -105,7 +105,7 @@ public static class CompaniesEndpoints
         var companyRes = await companyRepository.GetByIdAsync(ownerId, companyId, cancellationToken);
         if (!companyRes.IsSuccess || companyRes.Value is null)
         {
-            return Results.NotFound(ErrorEnvelope.NotFound("Company not found."));
+            return ApiProblems.NotFound("Company not found.");
         }
 
         var company = companyRes.Value;

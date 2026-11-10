@@ -100,6 +100,7 @@ public sealed class LogScrubberTests
     [InlineData("durationMs")]
     [InlineData("subject")]
     [InlineData("correlationId")]
+    [InlineData("traceId")]
     [InlineData("entityType")]
     public void OrdinaryKeys_AreNotSensitive(string key)
     {

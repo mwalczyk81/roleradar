@@ -30,15 +30,15 @@ public static partial class UnknownArgumentValidationFilter
     {
         return next => async (context, cancellationToken) =>
         {
-            // One correlation id per tool call (feature 013): every record the call writes carries it.
+            // One trace id per tool call (feature 013 call id, feature 014 W3C trace id): an activity with a new trace, so every
+            // record the call writes carries it (the console formatter reads Activity.Current) and so does its audit entry.
             var logger = context.Services?.GetService<ILoggerFactory>()?.CreateLogger("RoleRadar.Mcp.Stdio.ToolCall") ?? NullLogger.Instance;
-            var correlationId = CorrelationId.New();
+            using var callActivity = TraceIds.StartActivity("roleradar.mcp.tool-call");
             if (context.Services?.GetService<McpRequestContext>() is { } requestContext)
             {
-                requestContext.CorrelationId = correlationId;
+                requestContext.CorrelationId = callActivity.TraceId.ToHexString();
             }
 
-            using var scope = logger.BeginScope(new Dictionary<string, object?> { [CorrelationId.ScopeKey] = correlationId });
             return await ExecuteAsync(
                 context.Params,
                 async p => await next(context, cancellationToken),

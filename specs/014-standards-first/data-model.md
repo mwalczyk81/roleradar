@@ -54,7 +54,7 @@ Full contract in [contracts/problem-details.md](contracts/problem-details.md).
 | Old member | New member |
 | --- | --- |
 | `ok: false` | the HTTP status, and `status` in the body |
-| `errorCode` | `errorCode` (extension member) and `type` (tag URI built from it) |
+| `errorCode` | `errorCode` (extension member) and `type` (documentation URL built from it) |
 | `message` | `detail` (and a fixed `title` per status) |
 | `details[{ field, issue }]` | `errors`: `{ "<field>": ["<issue>", ...] }` (400 validation only) |
 | `correlationId` | `traceId` (the bare trace id, not `Activity.Id`) |

@@ -74,26 +74,26 @@ describe("log.server", () => {
     expect(stderr).toHaveLength(1);
   });
 
-  it("takes the correlation id from the request store and omits it outside a request", async () => {
+  it("takes the trace id from the request store and omits it outside a request", async () => {
     process.env.ROLERADAR_LOG_FORMAT = "json";
     const { stdout } = captureStreams();
 
-    await runWithRequestContext({ correlationId: "test-corr-web-0001", nonce: "" }, async () => {
+    await runWithRequestContext({ traceId: "0af7651916cd43dd8448eb211c80319c", spanId: "00f067aa0ba902b7", nonce: "" }, async () => {
       await Promise.resolve();
       log.info("inside");
     });
     log.info("outside");
 
-    expect(JSON.parse(stdout[0]).correlationId).toBe("test-corr-web-0001");
-    expect(JSON.parse(stdout[1]).correlationId).toBeUndefined();
+    expect(JSON.parse(stdout[0]).traceId).toBe("0af7651916cd43dd8448eb211c80319c");
+    expect(JSON.parse(stdout[1]).traceId).toBeUndefined();
   });
 
-  it("lets an explicit correlation id win, for callbacks that run outside the store", () => {
+  it("lets an explicit trace id win, for callbacks that run outside the store", () => {
     process.env.ROLERADAR_LOG_FORMAT = "json";
     const { stdout } = captureStreams();
 
-    log.info("explicit", { correlationId: "test-corr-web-0002" });
+    log.info("explicit", { traceId: "1111111111111111111111111111aaaa" });
 
-    expect(JSON.parse(stdout[0]).correlationId).toBe("test-corr-web-0002");
+    expect(JSON.parse(stdout[0]).traceId).toBe("1111111111111111111111111111aaaa");
   });
 });

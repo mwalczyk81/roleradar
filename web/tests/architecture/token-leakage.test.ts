@@ -316,7 +316,7 @@ describe("Architecture Verification: Token Leakage Assertion (FR-028, SC-005)", 
         }
 
         res.writeHead(404);
-        res.end(JSON.stringify({ ok: false, errorCode: "NOT_FOUND" }));
+        res.end(JSON.stringify({ status: 404, errorCode: "not_found" }));
       });
 
       await new Promise<void>((resolve) => {

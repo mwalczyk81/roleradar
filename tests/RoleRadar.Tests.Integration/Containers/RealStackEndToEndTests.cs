@@ -368,12 +368,17 @@ public sealed class RealStackEndToEndTests
                 playwrightResult.ExitCode == 0,
                 $"Playwright real-stack E2E test failed with exit code {playwrightResult.ExitCode}:\n{playwrightResult.StdErr}\n{playwrightResult.StdOut}");
 
-            // 11b. Feature 013 (SC-001, SC-002): the failing request's id appears on JSON lines from web and api, and
-            // every line from the identity, web and api containers is one JSON object.
-            Assert.True(File.Exists(operabilityIdFile), "The operability spec did not write the correlation id file.");
-            var followedId = (await File.ReadAllTextAsync(operabilityIdFile)).Trim();
+            // 11b. Feature 014 (SC-006, ADR 0044): the operability spec wrote two W3C trace ids, one per line. The failing page
+            // request's id appears on JSON lines from web and api; the sign-in's id on JSON lines from web and identity. Every
+            // line from the identity, web and api containers is one JSON object.
+            Assert.True(File.Exists(operabilityIdFile), "The operability spec did not write the trace id file.");
+            var followedIds = (await File.ReadAllLinesAsync(operabilityIdFile)).Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
             try { File.Delete(operabilityIdFile); } catch { }
-            Assert.Matches("^[A-Za-z0-9][A-Za-z0-9._-]{7,63}$", followedId);
+            Assert.Equal(2, followedIds.Count);
+            var followedId = followedIds[0];
+            var signInId = followedIds[1];
+            Assert.Matches("^[0-9a-f]{32}$", followedId);
+            Assert.Matches("^[0-9a-f]{32}$", signInId);
 
             var containerLines = new Dictionary<string, List<string>>();
             foreach (var (service, container) in new[] { ("identity", idContainerName), ("web", webContainerName), ("api", apiContainerName) })
@@ -396,8 +401,15 @@ public sealed class RealStackEndToEndTests
             foreach (var service in new[] { "web", "api" })
             {
                 Assert.True(
-                    containerLines[service].Any(l => CorrelationIdOf(l) == followedId),
-                    $"No {service} log line carries correlation id {followedId}.");
+                    containerLines[service].Any(l => TraceIdOf(l) == followedId),
+                    $"No {service} log line carries trace id {followedId}.");
+            }
+
+            foreach (var service in new[] { "web", "identity" })
+            {
+                Assert.True(
+                    containerLines[service].Any(l => TraceIdOf(l) == signInId),
+                    $"No {service} log line carries the sign-in trace id {signInId}.");
             }
 
             // 12. Assert directly against the isolated Mongo `audit_log`
@@ -410,6 +422,17 @@ public sealed class RealStackEndToEndTests
             Assert.Equal("posting", transitionEntry.GetValue("entity_type", "").AsString);
             Assert.Equal(ownerSub, transitionEntry.GetValue("actor", "").AsString);
             Assert.Equal(posting1Id, transitionEntry.GetValue("entity_id").AsGuid);
+
+            // The audit entry of a write made through the web carries the trace id of that request, and the same id is on log
+            // lines of the web and the API (feature 014, SC-006).
+            var writeTraceId = transitionEntry.GetValue("request_correlation_id", "").AsString;
+            Assert.Matches("^[0-9a-f]{32}$", writeTraceId);
+            foreach (var service in new[] { "web", "api" })
+            {
+                Assert.True(
+                    containerLines[service].Any(l => TraceIdOf(l) == writeTraceId),
+                    $"No {service} log line carries the trace id {writeTraceId} of the posting transition's audit entry.");
+            }
 
             // B. Application creation: exactly one entry, actor == the harness owner subject (feature 013)
             var appCreateEntry = Assert.Single(allAuditLogs, d =>
@@ -454,7 +477,7 @@ public sealed class RealStackEndToEndTests
         }
     }
 
-    private static string? CorrelationIdOf(string line)
+    private static string? TraceIdOf(string line)
     {
         if (!IsJsonObjectLine(line))
         {
@@ -462,7 +485,7 @@ public sealed class RealStackEndToEndTests
         }
 
         using var doc = System.Text.Json.JsonDocument.Parse(line);
-        return doc.RootElement.TryGetProperty("correlationId", out var id) ? id.GetString() : null;
+        return doc.RootElement.TryGetProperty("traceId", out var id) ? id.GetString() : null;
     }
 
     private static async Task<(int ExitCode, string StdOut, string StdErr)> RunPlaywrightAsync(
