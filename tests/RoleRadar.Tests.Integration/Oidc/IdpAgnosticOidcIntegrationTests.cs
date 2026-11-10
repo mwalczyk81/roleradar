@@ -71,11 +71,11 @@ public sealed class IdpAgnosticOidcIntegrationTests(IsolatedContainerMongoFixtur
             using (var scope = identityApp.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>();
-                var prov = new OwnerProvisioningService(db);
+                var prov = OwnerProvisioningService.Create(db);
                 var provisioned = await prov.ProvisionOwnerAsync("oidc-owner", "StrongPass!2026#Oidc");
                 ownerSubId = provisioned.UserId;
                 totpSecret = provisioned.AuthenticatorKey;
-                var initialCode = prov.ComputeTotpCode(totpSecret);
+                var initialCode = TotpTestCodes.NextUnused(totpSecret);
                 Assert.True(await prov.VerifyTotpAndActivateAsync(ownerSubId, initialCode));
             }
 
@@ -180,8 +180,7 @@ public sealed class IdpAgnosticOidcIntegrationTests(IsolatedContainerMongoFixtur
             using (var scope = identityApp.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>();
-                var prov = new OwnerProvisioningService(db);
-                liveTotp = prov.ComputeTotpCode(totpSecret);
+                liveTotp = TotpTestCodes.NextUnused(totpSecret);
             }
 
             // Step 2: Submit 6-digit TOTP verification code

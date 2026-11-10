@@ -15,10 +15,24 @@ using Xunit;
 
 namespace RoleRadar.Tests.Contract.Identity;
 
+/// <summary>How the fictional owner's second factor is set up when a contract host starts (feature 014).</summary>
+internal enum OwnerSecondFactor
+{
+    /// <summary>Activated by submitting a code, as the interactive enrolment does. The code is recorded as used.</summary>
+    ActivatedByCode,
+
+    /// <summary>Two-factor switched on directly, with no code submitted, so no used-code record exists yet.</summary>
+    EnabledWithoutCode,
+
+    /// <summary>Provisioned but not activated: two-factor is off.</summary>
+    NotActivated,
+}
+
 internal static class IdentityContractTestServer
 {
     public static async Task<(WebApplication App, HttpClient Client, CookieContainer Cookies, string DbDir)> StartHostAsync(
-        Action<WebApplicationBuilder>? configure = null)
+        Action<WebApplicationBuilder>? configure = null,
+        OwnerSecondFactor secondFactor = OwnerSecondFactor.ActivatedByCode)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "rrtest_identity_contract_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
@@ -44,11 +58,20 @@ internal static class IdentityContractTestServer
         using (var scope = app.Services.CreateScope())
         {
             var dbContext = scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>();
-            var provisioningService = new OwnerProvisioningService(dbContext);
+            var provisioningService = OwnerProvisioningService.Create(dbContext);
             var provisionResult = await provisioningService.ProvisionOwnerAsync("testowner", "Password123!");
-            var totpCode = provisioningService.ComputeTotpCode(provisionResult.AuthenticatorKey);
-            var activated = await provisioningService.VerifyTotpAndActivateAsync(provisionResult.UserId, totpCode);
-            Assert.True(activated);
+            if (secondFactor == OwnerSecondFactor.ActivatedByCode)
+            {
+                var totpCode = TotpTestCodes.NextUnused(provisionResult.AuthenticatorKey);
+                var activated = await provisioningService.VerifyTotpAndActivateAsync(provisionResult.UserId, totpCode);
+                Assert.True(activated);
+            }
+            else if (secondFactor == OwnerSecondFactor.EnabledWithoutCode)
+            {
+                var owner = dbContext.Users.Single(u => u.Id == provisionResult.UserId);
+                owner.TwoFactorEnabled = true;
+                await dbContext.SaveChangesAsync();
+            }
         }
 
         var server = app.Services.GetRequiredService<IServer>();
@@ -119,8 +142,8 @@ internal static class IdentityContractTestServer
             var dbContext = scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>();
             var user = dbContext.Users.Single(u => u.UserName == "testowner");
             var token = dbContext.UserTokens.Single(t => t.UserId == user.Id && t.Name == "AuthenticatorKey");
-            var provisioningService = new OwnerProvisioningService(dbContext);
-            totpCode = provisioningService.ComputeTotpCode(token.Value!);
+            // The owner was activated with a code in StartHostAsync; the sign-in must not reuse it (ADR 0042).
+            totpCode = TotpTestCodes.NextUnused(token.Value!);
         }
 
         var step2Content = new FormUrlEncodedContent(new Dictionary<string, string>

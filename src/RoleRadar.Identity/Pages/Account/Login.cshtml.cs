@@ -14,13 +14,13 @@ namespace RoleRadar.Identity.Pages.Account;
 public class LoginModel(
     SignInManager<IdentityUser<Guid>> signInManager,
     UserManager<IdentityUser<Guid>> userManager,
-    IdentityAppDbContext dbContext,
+    OwnerProvisioningService provisioningService,
     IIdentityServerInteractionService interactionService,
     ILogger<LoginModel> logger) : PageModel
 {
     private readonly SignInManager<IdentityUser<Guid>> _signInManager = signInManager;
     private readonly UserManager<IdentityUser<Guid>> _userManager = userManager;
-    private readonly IdentityAppDbContext _dbContext = dbContext;
+    private readonly OwnerProvisioningService _provisioningService = provisioningService;
     private readonly IIdentityServerInteractionService _interactionService = interactionService;
     private readonly ILogger<LoginModel> _logger = logger;
 
@@ -102,8 +102,7 @@ public class LoginModel(
                     return Page();
                 }
 
-                var provisioningService = new OwnerProvisioningService(_dbContext);
-                if (await provisioningService.VerifyTotpAndActivateAsync(twoFactorUser.Id, cleanCode))
+                if (await _provisioningService.VerifyTotpAndActivateAsync(twoFactorUser.Id, cleanCode))
                 {
                     await _userManager.ResetAccessFailedCountAsync(twoFactorUser);
                     await _signInManager.SignInAsync(twoFactorUser, isPersistent: false);
@@ -124,24 +123,11 @@ public class LoginModel(
                 return Page();
             }
 
-            var twoFactorResult = await _signInManager.TwoFactorAuthenticatorSignInAsync(
-                cleanCode,
-                isPersistent: false,
-                rememberClient: false);
-
-            if (twoFactorResult.Succeeded)
-            {
-                return ValidateAndRedirect(ReturnUrl);
-            }
-
-            // Without the two-factor cookie Identity cannot name an account, so this attempt has no subject.
+            // Without the two-factor cookie Identity cannot name an account, so nothing is verified and this attempt has no
+            // subject. A code is checked only for a resolved account, through the guarded verifier above: the sign-in manager's
+            // own authenticator sign-in would reach the platform provider directly, which accepts a code more than once
+            // (ADR 0042), and it needs the same two-factor cookie, so it could never succeed here anyway.
             UnmatchedAccountEvents.SignInFailed(_logger);
-            if (twoFactorResult.IsLockedOut)
-            {
-                ModelState.AddModelError(string.Empty, "Account is locked due to multiple failed login attempts. Please try again after 15 minutes.");
-                return Page();
-            }
-
             ModelState.AddModelError(string.Empty, "Invalid verification code.");
             return Page();
         }

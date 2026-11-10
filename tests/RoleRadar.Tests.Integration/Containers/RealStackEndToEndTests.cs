@@ -136,11 +136,13 @@ public sealed class RealStackEndToEndTests
             await using (var db = new IdentityAppDbContext(dbOptions))
             {
                 await db.Database.MigrateAsync();
-                var prov = new OwnerProvisioningService(db);
+                var prov = OwnerProvisioningService.Create(db);
                 var provisionResult = await prov.ProvisionOwnerAsync(ownerUsername, ownerPassword);
                 ownerSubId = provisionResult.UserId;
                 totpKey = provisionResult.AuthenticatorKey;
-                var initialTotp = prov.ComputeTotpCode(totpKey);
+                // The Playwright process signs in later with its own code tracker. Activate with the oldest step the provider
+                // accepts, so the code used here is not one that process asks for first (ADR 0042: a used code is a replay).
+                var initialTotp = TotpTestCodes.Current(totpKey, -2);
                 var activated = await prov.VerifyTotpAndActivateAsync(ownerSubId, initialTotp);
                 Assert.True(activated, "Failed to activate owner 2FA during SQLite seeding.");
             }

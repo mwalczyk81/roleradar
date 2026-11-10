@@ -25,6 +25,9 @@ public class IdentityAppDbContext : IdentityDbContext<IdentityUser<Guid>, Identi
         _configurationOptions = configurationOptions;
     }
 
+    /// <summary>Feature 014 (ADR 0042): codes already accepted, so a reused one-time code is rejected.</summary>
+    public DbSet<UsedAuthenticatorCode> UsedAuthenticatorCodes { get; set; } = null!;
+
     // IPersistedGrantDbContext
     public DbSet<PersistedGrant> PersistedGrants { get; set; } = null!;
     public DbSet<DeviceFlowCodes> DeviceFlowCodes { get; set; } = null!;
@@ -55,5 +58,29 @@ public class IdentityAppDbContext : IdentityDbContext<IdentityUser<Guid>, Identi
         builder.ConfigureClientContext(configurationOptions);
         builder.ConfigureResourcesContext(configurationOptions);
         builder.ConfigureIdentityProviderContext(configurationOptions);
+
+        builder.Entity<UsedAuthenticatorCode>(entity =>
+        {
+            entity.ToTable("UsedAuthenticatorCodes");
+
+            // The primary key is the unique constraint that makes two simultaneous attempts safe: one insert wins.
+            entity.HasKey(code => new { code.UserId, code.CodeHash });
+            entity.Property(code => code.CodeHash).HasMaxLength(64).IsRequired();
+            entity.Property(code => code.OwnerId).IsRequired();
+
+            // UTC ticks as a number, so "expires before now" translates and orders correctly on SQLite.
+            entity.Property(code => code.AcceptedAtUtc).HasConversion(
+                value => value.UtcTicks,
+                value => new DateTimeOffset(value, TimeSpan.Zero));
+            entity.Property(code => code.ExpiresAtUtc).HasConversion(
+                value => value.UtcTicks,
+                value => new DateTimeOffset(value, TimeSpan.Zero));
+            entity.HasIndex(code => code.ExpiresAtUtc);
+
+            entity.HasOne<IdentityUser<Guid>>()
+                .WithMany()
+                .HasForeignKey(code => code.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
     }
 }

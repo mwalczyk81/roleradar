@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <Compile Include="..\RoleRadar.Tests.Integration\Fixtures\FormatterLogCapture.cs" Link="Fixtures\FormatterLogCapture.cs" />
+    <Compile Include="..\RoleRadar.Tests.Integration\Fixtures\TotpTestCodes.cs" Link="Fixtures\TotpTestCodes.cs" />
   </ItemGroup>
 
   <ItemGroup>

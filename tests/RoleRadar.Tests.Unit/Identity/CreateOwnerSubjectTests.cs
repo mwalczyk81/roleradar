@@ -64,10 +64,10 @@ public sealed class CreateOwnerSubjectTests
             string totpSecret;
             using (var scope = identityApp.Services.CreateScope())
             {
-                var provisioning = new OwnerProvisioningService(scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>());
+                var provisioning = OwnerProvisioningService.Create(scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>());
                 provisioned = await provisioning.ProvisionOwnerAsync(Username, Password);
                 totpSecret = provisioned.AuthenticatorKey;
-                Assert.True(await provisioning.VerifyTotpAndActivateAsync(provisioned.UserId, provisioning.ComputeTotpCode(totpSecret)));
+                Assert.True(await provisioning.VerifyTotpAndActivateAsync(provisioned.UserId, TotpTestCodes.NextUnused(totpSecret)));
             }
 
             using var output = new StringWriter();
@@ -158,8 +158,8 @@ public sealed class CreateOwnerSubjectTests
         string liveTotp;
         using (var scope = identityApp.Services.CreateScope())
         {
-            liveTotp = new OwnerProvisioningService(scope.ServiceProvider.GetRequiredService<IdentityAppDbContext>())
-                .ComputeTotpCode(totpSecret);
+            // The owner was activated above with a code from the same key; the sign-in takes the next unused one (ADR 0042).
+            liveTotp = TotpTestCodes.NextUnused(totpSecret);
         }
 
         var step2 = await client.PostAsync(loginPathAndQuery, new FormUrlEncodedContent(new Dictionary<string, string>

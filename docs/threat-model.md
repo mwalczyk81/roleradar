@@ -19,7 +19,7 @@ A single owner's job-search records and notes: companies, postings, applications
 
 ## Authentication
 
-The owner signs in through Duende IdentityServer with a password and a TOTP code. Five failed attempts lock the account for 15 minutes, and the sign-in and token endpoints are rate limited ([ADR 0017](adr/0017-owner-credential-and-security-controls.md)). Tokens are short-lived and refresh tokens rotate with reuse detection. The web session is held encrypted in memory ([ADR 0022](adr/0022-encrypted-in-memory-session-store.md)).
+The owner signs in through Duende IdentityServer with a password and a TOTP code, checked by the ASP.NET Core Identity authenticator provider. The provider accepts the current code and two steps either side (about 150 seconds), wider than RFC 6238 recommends, so a small guard rejects a code that was already used ([ADR 0042](adr/0042-authenticator-provider-and-replay-guard.md)). Five failed attempts lock the account for 15 minutes, and the sign-in and token endpoints are rate limited ([ADR 0017](adr/0017-owner-credential-and-security-controls.md)). Tokens are short-lived and refresh tokens rotate with reuse detection. The web session is held encrypted in memory ([ADR 0022](adr/0022-encrypted-in-memory-session-store.md)).
 
 ## Secrets and backups
 

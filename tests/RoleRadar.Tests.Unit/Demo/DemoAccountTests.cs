@@ -24,7 +24,7 @@ public sealed class DemoAccountTests : IAsyncLifetime
         _connection.Open();
         _db = new IdentityAppDbContext(new DbContextOptionsBuilder<IdentityAppDbContext>().UseSqlite(_connection).Options);
         await _db.Database.MigrateAsync(TestContext.Current.CancellationToken);
-        _service = new OwnerProvisioningService(_db);
+        _service = OwnerProvisioningService.Create(_db);
     }
 
     public async ValueTask DisposeAsync()
@@ -129,8 +129,8 @@ public sealed class DemoAccountTests : IAsyncLifetime
         Assert.Null(stored.LockoutEnd);
 
         // The current TOTP code of the new key is accepted by the real verifier; the old key's code is not.
-        var oldKeyCode = _service.ComputeTotpCode(first.AuthenticatorKey);
-        var newKeyCode = _service.ComputeTotpCode(second.AuthenticatorKey);
+        var oldKeyCode = TotpTestCodes.Current(first.AuthenticatorKey);
+        var newKeyCode = TotpTestCodes.Current(second.AuthenticatorKey);
         if (oldKeyCode != newKeyCode)
         {
             Assert.False(await _service.VerifyTotpAndActivateAsync(stored.Id, oldKeyCode, TestContext.Current.CancellationToken));
@@ -157,7 +157,7 @@ public sealed class DemoAccountTests : IAsyncLifetime
         Assert.NotNull(shown);
         Assert.Matches("^[0-9]{6}$", shown.Code);
         Assert.InRange(shown.SecondsRemaining, 1, 30);
-        Assert.Equal(_service.ComputeTotpCode(credentials.AuthenticatorKey), shown.Code);
+        Assert.Equal(TotpTestCodes.Current(credentials.AuthenticatorKey), shown.Code);
     }
 
     [Fact]

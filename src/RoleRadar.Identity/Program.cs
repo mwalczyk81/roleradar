@@ -90,6 +90,9 @@ public partial class Program
         .AddDefaultTokenProviders()
         .AddClaimsPrincipalFactory<RoleRadar.Identity.Services.RoleRadarUserClaimsPrincipalFactory>();
 
+        // Feature 014 (ADR 0042): the sign-in page checks one-time codes through this service (platform provider + replay guard).
+        builder.Services.AddScoped<RoleRadar.Identity.Services.OwnerProvisioningService>();
+
         var issuerUri = builder.Configuration["Identity:IssuerUri"]
             ?? Environment.GetEnvironmentVariable("ROLERADAR_IDENTITY_ISSUER_URI");
 

@@ -4,7 +4,13 @@ All notable changes to RoleRadar are recorded here. The format follows [Keep a C
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- The one-time code at sign-in and at enrolment is checked by the ASP.NET Core Identity authenticator provider instead of hand-written RFC 6238 code. Existing enrolments and secrets keep working with no re-enrolment. The accepted window is the provider's: the code for the current 30-second step and two steps either side. The demo `totp` command and the enrolment URI use Otp.NET; the URI now also states the default `algorithm`, `digits` and `period` ([ADR 0042](docs/adr/0042-authenticator-provider-and-replay-guard.md)).
+
+### Security
+
+- A one-time code can be used only once. A code that was already accepted is rejected as a failed attempt (it counts toward the lockout and raises the one-time-code-failed event), including when two sign-ins submit it together and after a restart. The enrolment code therefore cannot sign in straight away: wait for the next code.
 
 ## [0.1.0] - TBD
 

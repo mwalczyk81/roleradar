@@ -1,7 +1,7 @@
-using System.Security.Cryptography;
-using System.Text;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using OtpNet;
 using RoleRadar.Identity.Data;
 
 namespace RoleRadar.Identity.Services;
@@ -19,10 +19,48 @@ public sealed record OwnerProvisioningResult(
     public string Subject => UserId.ToString("D", System.Globalization.CultureInfo.InvariantCulture);
 }
 
-public class OwnerProvisioningService(IdentityAppDbContext dbContext)
+/// <summary>
+/// Provisions the single owner account and checks its one-time codes. Feature 014 (ADR 0042): codes are verified by the
+/// ASP.NET Core Identity authenticator provider, a code that was already accepted is rejected by
+/// <see cref="AuthenticatorCodeGuard"/>, keys come from <see cref="UserManager{TUser}.GenerateNewAuthenticatorKey"/> and the
+/// enrolment URI from Otp.NET. No RFC 6238 or Base32 code lives here any more.
+/// </summary>
+public class OwnerProvisioningService(
+    IdentityAppDbContext dbContext,
+    UserManager<IdentityUser<Guid>> users,
+    TimeProvider? clock = null)
 {
     private readonly IdentityAppDbContext _dbContext = dbContext;
+    private readonly UserManager<IdentityUser<Guid>> _users = users;
+    private readonly AuthenticatorCodeGuard _guard = new(dbContext, clock ?? TimeProvider.System);
     private readonly PasswordHasher<IdentityUser<Guid>> _hasher = new();
+
+    /// <summary>
+    /// Builds the service for callers that have no dependency injection (the CLI and tests): a private service provider with
+    /// the same lockout options as the host, the Identity stores over <paramref name="dbContext"/> and only the authenticator
+    /// token provider. Nothing here touches the file system or the network.
+    /// </summary>
+    public static OwnerProvisioningService Create(IdentityAppDbContext dbContext, TimeProvider? clock = null)
+    {
+        ArgumentNullException.ThrowIfNull(dbContext);
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton(dbContext);
+        services.AddIdentityCore<IdentityUser<Guid>>(options =>
+            {
+                options.Lockout.AllowedForNewUsers = true;
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+            })
+            .AddEntityFrameworkStores<IdentityAppDbContext>()
+            .AddTokenProvider<AuthenticatorTokenProvider<IdentityUser<Guid>>>(TokenOptions.DefaultAuthenticatorProvider);
+
+#pragma warning disable CA2000 // The provider holds no unmanaged resource and the context it wraps is owned by the caller.
+        var provider = services.BuildServiceProvider();
+#pragma warning restore CA2000
+        return new OwnerProvisioningService(dbContext, provider.GetRequiredService<UserManager<IdentityUser<Guid>>>(), clock);
+    }
 
     public async Task<bool> OwnerExistsAsync(CancellationToken cancellationToken = default)
     {
@@ -63,7 +101,7 @@ public class OwnerProvisioningService(IdentityAppDbContext dbContext)
 
         user.PasswordHash = _hasher.HashPassword(user, password);
 
-        var authenticatorKey = GenerateBase32Secret(20);
+        var authenticatorKey = _users.GenerateNewAuthenticatorKey();
 
         _dbContext.Users.Add(user);
 
@@ -79,7 +117,7 @@ public class OwnerProvisioningService(IdentityAppDbContext dbContext)
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        var otpAuthUri = $"otpauth://totp/RoleRadar:{Uri.EscapeDataString(normalizedUsername)}?secret={authenticatorKey}&issuer=RoleRadar";
+        var otpAuthUri = BuildOtpAuthUri(authenticatorKey, normalizedUsername);
 
         return new OwnerProvisioningResult(user.Id, normalizedUsername, authenticatorKey, otpAuthUri);
     }
@@ -87,9 +125,6 @@ public class OwnerProvisioningService(IdentityAppDbContext dbContext)
     /// <summary>Whether a user with this id exists.</summary>
     public async Task<bool> UserExistsAsync(Guid userId, CancellationToken cancellationToken = default) =>
         await _dbContext.Users.AnyAsync(u => u.Id == userId, cancellationToken);
-
-    /// <summary>A new random Base32 authenticator key (160 bits), as the interactive provisioning generates.</summary>
-    public static string GenerateAuthenticatorKey() => GenerateBase32Secret(20);
 
     /// <summary>The stored authenticator key of a user, or null when there is none.</summary>
     public async Task<string?> GetAuthenticatorKeyAsync(Guid userId, CancellationToken cancellationToken = default)
@@ -144,7 +179,7 @@ public class OwnerProvisioningService(IdentityAppDbContext dbContext)
         });
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        var otpAuthUri = $"otpauth://totp/RoleRadar:{Uri.EscapeDataString(normalizedUsername)}?secret={authenticatorKey}&issuer=RoleRadar";
+        var otpAuthUri = BuildOtpAuthUri(authenticatorKey, normalizedUsername);
         return new OwnerProvisioningResult(user.Id, normalizedUsername, authenticatorKey, otpAuthUri);
     }
 
@@ -195,6 +230,12 @@ public class OwnerProvisioningService(IdentityAppDbContext dbContext)
         return true;
     }
 
+    /// <summary>
+    /// Checks a one-time code for a user and, when it is good, switches two-factor on. The platform authenticator provider
+    /// decides whether the code is valid (the current step and two steps either side); <see cref="AuthenticatorCodeGuard"/>
+    /// then rejects a code that was already accepted. Returns false for an unknown user, a missing key, a wrong code and a
+    /// replay alike.
+    /// </summary>
     public async Task<bool> VerifyTotpAndActivateAsync(
         Guid userId,
         string totpCode,
@@ -211,142 +252,32 @@ public class OwnerProvisioningService(IdentityAppDbContext dbContext)
             return false;
         }
 
-        var token = await _dbContext.UserTokens.FirstOrDefaultAsync(
-            t => t.UserId == userId && t.LoginProvider == "[AspNetUserStore]" && t.Name == "AuthenticatorKey",
-            cancellationToken);
-
-        if (token is null || string.IsNullOrWhiteSpace(token.Value))
+        var key = await _users.GetAuthenticatorKeyAsync(user);
+        if (string.IsNullOrWhiteSpace(key))
         {
             return false;
         }
 
         var code = totpCode.Trim();
-        if (!VerifyTotp(token.Value, code))
+        if (!await _users.VerifyTwoFactorTokenAsync(user, TokenOptions.DefaultAuthenticatorProvider, code))
         {
             return false;
         }
 
-        user.TwoFactorEnabled = true;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        if (!await _guard.TryRecordAsync(user.Id, key, code, cancellationToken))
+        {
+            return false;
+        }
+
+        if (!user.TwoFactorEnabled)
+        {
+            user.TwoFactorEnabled = true;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
         return true;
     }
 
-    public string ComputeTotpCode(string base32Secret, long? timestampSeconds = null)
-    {
-        var timestamp = timestampSeconds ?? DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var step = timestamp / 30;
-        return ComputeTotpForStep(base32Secret, step);
-    }
-
-    private static bool VerifyTotp(string base32Secret, string code)
-    {
-        var currentTimestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-        var currentStep = currentTimestamp / 30;
-
-        // Allow ±1 time step tolerance (RFC 6238 recommendation)
-        for (var offset = -1; offset <= 1; offset++)
-        {
-            var expectedCode = ComputeTotpForStep(base32Secret, currentStep + offset);
-            if (CryptographicOperations.FixedTimeEquals(
-                Encoding.ASCII.GetBytes(expectedCode),
-                Encoding.ASCII.GetBytes(code)))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA5350:Do Not Use Weak Cryptographic Algorithms", Justification = "RFC 6238 TOTP standard mandates HMAC-SHA1 for authenticator app interoperability.")]
-    private static string ComputeTotpForStep(string base32Secret, long step)
-    {
-        var key = Base32Decode(base32Secret);
-        Span<byte> stepBytes = stackalloc byte[8];
-        for (var i = 7; i >= 0; i--)
-        {
-            stepBytes[i] = (byte)(step & 0xFF);
-            step >>= 8;
-        }
-
-        using var hmac = new HMACSHA1(key);
-        var hash = hmac.ComputeHash(stepBytes.ToArray());
-
-        var offset = hash[^1] & 0x0F;
-        var binaryCode = ((hash[offset] & 0x7F) << 24)
-                       | ((hash[offset + 1] & 0xFF) << 16)
-                       | ((hash[offset + 2] & 0xFF) << 8)
-                       | (hash[offset + 3] & 0xFF);
-
-        var otp = binaryCode % 1_000_000;
-        return otp.ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
-    }
-
-    private static string GenerateBase32Secret(int byteLength)
-    {
-        var bytes = new byte[byteLength];
-        RandomNumberGenerator.Fill(bytes);
-        return Base32Encode(bytes);
-    }
-
-    private const string Base32Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-
-    private static string Base32Encode(byte[] data)
-    {
-        var sb = new StringBuilder();
-        int currentByte = 0, bitsRemaining = 8, mask = 0;
-
-        for (var i = 0; i < data.Length;)
-        {
-            if (bitsRemaining >= 5)
-            {
-                mask = (data[i] >> (bitsRemaining - 5)) & 0x1F;
-                sb.Append(Base32Alphabet[mask]);
-                bitsRemaining -= 5;
-                if (bitsRemaining == 0)
-                {
-                    bitsRemaining = 8;
-                    i++;
-                }
-            }
-            else
-            {
-                currentByte = (data[i] & ((1 << bitsRemaining) - 1)) << (5 - bitsRemaining);
-                i++;
-                if (i < data.Length)
-                {
-                    currentByte |= (data[i] >> (8 - (5 - bitsRemaining))) & 0x1F;
-                    bitsRemaining = 8 - (5 - bitsRemaining);
-                }
-                sb.Append(Base32Alphabet[currentByte & 0x1F]);
-            }
-        }
-
-        return sb.ToString();
-    }
-
-    private static byte[] Base32Decode(string base32)
-    {
-        var cleanInput = base32.Trim().ToUpperInvariant();
-        var output = new List<byte>();
-        var buffer = 0;
-        var bitsLeft = 0;
-
-        foreach (var c in cleanInput)
-        {
-            var val = Base32Alphabet.IndexOf(c, StringComparison.Ordinal);
-            if (val < 0) continue;
-
-            buffer = (buffer << 5) | val;
-            bitsLeft += 5;
-
-            if (bitsLeft >= 8)
-            {
-                output.Add((byte)(buffer >> (bitsLeft - 8)));
-                bitsLeft -= 8;
-            }
-        }
-
-        return [.. output];
-    }
+    private static string BuildOtpAuthUri(string authenticatorKey, string username) =>
+        new OtpUri(OtpType.Totp, authenticatorKey, username, "RoleRadar").ToString();
 }
