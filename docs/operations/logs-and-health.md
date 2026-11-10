@@ -113,7 +113,7 @@ When the API cannot reach Mongo, or Mongo does not answer in time, a request is 
 
 It means the data store is down, paused or stalled, not that the request was wrong. Nothing needs restarting: the driver reconnects on its own and the next request after the store is back succeeds. Look at the store first (`docker compose ps`, then the `mongo` logs), then use the `traceId` to find the API's record of the failed request. Any other unhandled failure is a `500` with `errorCode` `internal_error` and the same fixed kind of problem document. Exception text, stack traces and connection details never reach a response; they go only to the scrubbed log.
 
-In the web app a 503 shows a "Temporarily unavailable" page with a Try again link (or the same friendly message on a form). Reads of the API are retried up to twice before that; writes are sent once and never retried, so a retry can never repeat a change. The web writes one warn record, `ApiServiceUnavailable`, that carries the API's trace id.
+In the web app a 503 shows a "Temporarily unavailable" page with a Try again link (or the same friendly message on a form). A real 503 from the API carries `Retry-After: 5`, which is more than the web is willing to wait (2 seconds), so the web does not retry it and shows the page at once. Reads are still retried up to twice after a network error, a timeout, a 502 or 504, or a 503 that carries no `Retry-After` or a short one; writes are sent once and never retried, so a retry can never repeat a change ([ADR 0045](../adr/0045-web-retry-and-limiter-libraries.md)). The web writes one warn record, `ApiServiceUnavailable`, that carries the API's trace id.
 
 ## Reading the audit log
 

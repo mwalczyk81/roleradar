@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import pLimit from "p-limit";
 import { Link, useLoaderData } from "react-router";
 import { Brand } from "../components/Brand.js";
 import { formatShortDate } from "../lib/format-date.js";
@@ -10,7 +11,6 @@ import type { StatsView } from "../lib/insights-stats.js";
 import { loadInsightsStats } from "../lib/insights-stats.server.js";
 import { buildInsightsView, type CountItem, type FunnelView, type InsightsView, type RateView } from "../lib/insights-view.js";
 import { getNavItems } from "../lib/nav.js";
-import { createLimiter } from "../lib/request-limiter.server.js";
 import { useTheme } from "../lib/use-theme.js";
 import { Alert, AppShell, BarChart, Button, ColumnChart, StatTile, type BarChartItem } from "../ui.js";
 
@@ -20,11 +20,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const session = await requireUserSession(request);
   const ctx = parseWindowParams(new URL(request.url));
 
-  // One limiter for the counts and the stats read. The stats request is started first, so it runs in the first wave
+  // One limit for the counts and the stats read. The stats request is started first, so it runs in the first wave
   // alongside the first counts, and the total in flight never exceeds MAX_IN_FLIGHT.
-  const limiter = createLimiter(MAX_IN_FLIGHT);
-  const statsPromise = loadInsightsStats({ request, session, ctx, limiter });
-  const counts = await loadInsightsCounts({ request, session, ctx, limiter });
+  const limit = pLimit(MAX_IN_FLIGHT);
+  const statsPromise = loadInsightsStats({ request, session, ctx, limit });
+  const counts = await loadInsightsCounts({ request, session, ctx, limit });
   const stats = await statsPromise;
   if (stats.authFailure) {
     // 401 re-challenges once (never in a loop) and 403 goes to /not-authorized. Any other stats failure only

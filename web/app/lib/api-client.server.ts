@@ -1,12 +1,16 @@
+import ky, { isHTTPError, isNetworkError } from "ky";
 import createClient, { type Client } from "openapi-fetch";
 import type { components, paths } from "../../../contracts/client/api-types.js";
 import { log } from "./log.server.js";
 import {
+  READ_RETRY_LIMIT,
+  RETRYABLE_STATUSES,
+  RETRY_AFTER_BOUND_MS,
+  RETRY_DELAYS_MS,
   SERVICE_UNAVAILABLE_MESSAGE,
   attemptTimeoutMs,
-  backoffMs,
-  shouldRetry,
-  type AttemptFailure,
+  isReadMethod,
+  retryAfterMs,
 } from "./observability.js";
 import { withTraceparent } from "./trace-context.server.js";
 
@@ -71,37 +75,6 @@ export function getApiBaseUrl(): string {
   return process.env.ROLERADAR_API_BASE_URL ?? "https://localhost:5002";
 }
 
-/** Rejects when `signal` aborts, even if the underlying fetch ignores it, so a stalled socket cannot hold the caller. */
-function abortable<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const onAbort = () => reject(signal.reason);
-    if (signal.aborted) {
-      onAbort();
-      return;
-    }
-    signal.addEventListener("abort", onAbort, { once: true });
-    promise.then(resolve, reject).finally(() => signal.removeEventListener("abort", onAbort));
-  });
-}
-
-function sleep(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(signal.reason);
-    };
-    const timer = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    if (signal.aborted) {
-      onAbort();
-      return;
-    }
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
-}
-
 /** The traceId of the API's problem document, or undefined when the body is not one (a proxy's page, an empty body). */
 async function problemTraceId(response: Response): Promise<string | undefined> {
   try {
@@ -125,53 +98,90 @@ async function logServiceUnavailable(request: Request, response: Response, attem
   });
 }
 
+/** True when the error is a 503 whose `Retry-After` asks for more than the bound: the web then does not retry. */
+function asksForTooLongAWait(error: Error): boolean {
+  if (!isHTTPError(error) || error.response.status !== 503) {
+    return false;
+  }
+  const waitMs = retryAfterMs(error.response.headers.get("Retry-After"), Date.now());
+  return waitMs !== undefined && waitMs > RETRY_AFTER_BOUND_MS;
+}
+
 /**
- * The outbound policy for every web-to-API call (feature 013 US3, FR-026, FR-027). Reads (GET, HEAD) are attempted at most
- * three times, on a network error, a 5 s per-attempt timeout, 502, 503 or 504, with a 200 ms and then a 500 ms backoff. A
- * write is sent exactly once, with a 10 s timeout, and never retried. 400, 401, 404, 409 and 500 come straight back for the
- * caller (and assertApiOk) to handle. A caller's abort is never retried and propagates. Every attempt carries the same
- * traceparent. The timeout is a plain timer, not AbortSignal.timeout, so tests can drive it with fake timers.
+ * The outbound policy for every web-to-API call (feature 013 US3, FR-026; the retry loop is `ky`'s since feature 014 G3,
+ * ADR 0045, contracts/web-outbound-policy.md). Reads (GET, HEAD) are attempted at most three times, on a network error, a
+ * 5 s per-attempt timeout, 502, 503 or 504, with a 200 ms and then a 500 ms backoff. A write is sent exactly once, with a
+ * 10 s timeout, and never retried. 400, 401, 403, 404, 409 and 500 come straight back for the caller (and assertApiOk) to
+ * handle. A caller's abort is never retried and propagates. Every attempt carries the same traceparent.
+ *
+ * A 503 is retried after the wait its `Retry-After` names (ky reads the header) when that is at most
+ * RETRY_AFTER_BOUND_MS; a longer wait means no retry and the 503 comes back at once. ky's own `maxRetryAfter` would clamp
+ * the wait and still retry (pinned by a test), hence the `shouldRetry` veto.
+ *
+ * ky throws an `HTTPError` for a status it may retry (502, 503, 504); once it gives up, that response is returned, so callers
+ * see every status as before. `throwHttpErrors: false` must not be used: ky then does not retry on status.
  *
  * The per-attempt timeout bounds each attempt, not the whole call: a caller that needs one overall bound across the
  * retries (the Insights loaders: 5 s) passes a signal of its own, which cancels the attempt and any backoff.
  */
 export async function fetchWithPolicy(request: Request): Promise<Response> {
   withTraceparent(request.headers);
+  request.signal.throwIfAborted();
   const method = request.method.toUpperCase();
-  const caller = request.signal;
-  const timeoutMs = attemptTimeoutMs(method);
+  let attempts = 1;
+  // ky reads the body of the response it turns into an HTTPError (error.data), which would leave the caller nothing to
+  // read, so the last retryable response is kept as a clone and that is what comes back once ky gives up.
+  let lastRetryable: Response | undefined;
 
-  for (let attempt = 1; ; attempt += 1) {
-    caller.throwIfAborted();
-
-    const timeout = new AbortController();
-    const timer = setTimeout(() => timeout.abort(new DOMException("The attempt timed out.", "TimeoutError")), timeoutMs);
-    const signal = AbortSignal.any([caller, timeout.signal]);
-
-    let response: Response;
-    try {
-      response = await abortable(globalThis.fetch(new Request(request, { signal })), signal);
-    } catch (error) {
-      clearTimeout(timer);
-      const failure: AttemptFailure = timeout.signal.aborted ? "timeout" : "network";
-      if (caller.aborted || !shouldRetry(method, failure, attempt)) {
-        throw error;
-      }
-      await sleep(backoffMs(attempt), caller);
-      continue;
+  let response: Response;
+  try {
+    response = await ky(request, {
+      retry: {
+        limit: isReadMethod(method) ? READ_RETRY_LIMIT : 0,
+        methods: ["get", "head"],
+        statusCodes: [...RETRYABLE_STATUSES],
+        retryOnTimeout: true,
+        delay: (attemptCount) => RETRY_DELAYS_MS[Math.min(Math.max(attemptCount, 1), RETRY_DELAYS_MS.length) - 1],
+        maxRetryAfter: RETRY_AFTER_BOUND_MS,
+        shouldRetry: ({ error }) => (asksForTooLongAWait(error) ? false : undefined),
+      },
+      timeout: attemptTimeoutMs(method),
+      signal: request.signal,
+      // Only the retryable statuses become an HTTPError; every other status comes straight back with its body unread.
+      throwHttpErrors: (status) => RETRYABLE_STATUSES.includes(status),
+      hooks: {
+        afterResponse: [
+          ({ response: attempt }) => {
+            if (RETRYABLE_STATUSES.includes(attempt.status)) {
+              void lastRetryable?.body?.cancel().catch(() => undefined);
+              lastRetryable = attempt.clone();
+            }
+          },
+        ],
+        beforeRetry: [
+          ({ retryCount }) => {
+            attempts = retryCount + 1;
+          },
+        ],
+      },
+      // Read per call, so a test can stub globalThis.fetch.
+      fetch: (input, init) => globalThis.fetch(input, init),
+    });
+  } catch (error) {
+    if (isHTTPError(error)) {
+      response = lastRetryable ?? error.response;
+    } else if (isNetworkError(error) && error.cause !== undefined) {
+      // ky wraps the failed fetch; the callers (and the 013 contract) see the error fetch itself threw.
+      throw error.cause;
+    } else {
+      throw error;
     }
-    clearTimeout(timer);
-
-    if (!shouldRetry(method, response.status, attempt)) {
-      if (response.status === 503) {
-        await logServiceUnavailable(request, response, attempt);
-      }
-      return response;
-    }
-
-    await response.body?.cancel().catch(() => undefined);
-    await sleep(backoffMs(attempt), caller);
   }
+
+  if (response.status === 503) {
+    await logServiceUnavailable(request, response, attempts);
+  }
+  return response;
 }
 
 /** The fetch every web-to-API call goes through, under the outbound policy. Reads globalThis.fetch per call so tests can stub it. */

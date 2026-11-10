@@ -47,3 +47,4 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0041](./0041-operability-logging-correlation-health.md) | Structured Logs, One Correlation Id, and Health That Checks Its Store | Accepted; superseded in part by ADR-0044 | `013-operability` |
 | [ADR-0042](./0042-authenticator-provider-and-replay-guard.md) | One-Time Codes Through the Platform Authenticator Provider, With a Temporary Replay Guard | Accepted | `014-standards-first` |
 | [ADR-0044](./0044-problem-details-and-trace-context.md) | RFC 9457 Problem Documents and W3C Trace Context | Accepted | `014-standards-first` |
+| [ADR-0045](./0045-web-retry-and-limiter-libraries.md) | Web Retry, Timeout and Concurrency Limit From ky and p-limit | Accepted | `014-standards-first` |
