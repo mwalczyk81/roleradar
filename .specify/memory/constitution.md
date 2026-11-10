@@ -3,7 +3,7 @@
 RoleRadar is a single-owner, local-first job search tracker that an AI agent reads and writes
 through a Model Context Protocol (MCP) server. Because RoleRadar is hosted in a public portfolio
 repository, it MUST never contain personal job-search data. The following principles govern all
-specifications, plans, tasks, and implementations in strict priority order (I through IX).
+specifications, plans, tasks, and implementations in strict priority order (I through X).
 
 ## Core Principles
 
@@ -65,6 +65,9 @@ specifications, plans, tasks, and implementations in strict priority order (I th
   explicitly addresses licensing compatibility with this repository's MIT license.
 - Factories, plugin frameworks, and event buses MUST NOT be introduced without a prior MADR ADR
   justifying the complexity.
+- The gates above restrict abstractions and libraries that add complexity or licensing risk. They
+  MUST NOT be read as a preference for hand-rolled code; whether to build or adopt a mechanism is
+  decided by Principle X.
 
 **Rationale**: Aggregate-level repositories, plain handlers with decorators, and typed failure results keep control flow explicit, testable, and free of licensing risk.
 
@@ -107,6 +110,9 @@ specifications, plans, tasks, and implementations in strict priority order (I th
   Decision Records (MADR) under `docs/adr/`.
 - All NuGet package versions and container image tags MUST be explicitly pinned; floating versions
   and `:latest` container tags are forbidden.
+- A package or image adopted under Principle X MUST meet the same pinning rule, MUST carry a license
+  compatible with this repository's MIT license, and MUST NOT send data off the local machine by
+  default (Principle I). None of these rules is, by itself, a reason to hand-roll the mechanism.
 
 **Rationale**: MADR records preserve decisions across sessions, and pinned versions and tags make builds reproducible and prevent supply-chain drift.
 
@@ -122,12 +128,36 @@ specifications, plans, tasks, and implementations in strict priority order (I th
 
 **Rationale**: Strict compiler settings, UTC time, UUIDv7 ids, standard GUID serialization, and owner_id scoping avoid common persistence bugs and costly retrofits.
 
+### X. Standards First
+
+- Before a specification, plan, or task builds a mechanism, the author MUST check whether an RFC, a
+  platform feature (ASP.NET Core, `Microsoft.Extensions.*`, the .NET BCL, Node built-ins), or an
+  established ecosystem standard or library already provides it. Examples: W3C Trace Context,
+  RFC 9457 ProblemDetails, OpenTelemetry, ASP.NET Core Identity. The check and its outcome MUST be
+  recorded in the plan's "Standards considered" table, and the mechanism MUST use what was found
+  unless a recorded reason says it does not fit.
+- A "mechanism" is reusable behavior that is not specific to the job-search domain: wire formats,
+  error envelopes, correlation and tracing, authentication and credentials, retries, logging and
+  scrubbing, parsing and formatting, serialization, backup formats, and similar. Domain rules are
+  not mechanisms.
+- A hand-rolled mechanism MUST have an ADR under `docs/adr/` that names the standard or library it
+  was compared against and why it lost. Supply-chain minimalism, a smaller dependency count, or
+  preference alone MUST NOT be accepted as the reason.
+- When a standard or library almost fits, the plan MUST prefer a thin in-repo extension or an
+  upstream contribution over a bespoke clone. An in-repo extension MUST have an ADR that marks it
+  temporary and links the upstream issue, or states that the issue awaits owner approval.
+- Opening an upstream issue, pull request, or discussion MUST NOT happen without the owner's
+  explicit approval, and nothing outward-facing MAY carry real data (Principle I).
+- Adopting a standard or library never relaxes Principles I, IV, or VIII.
+
+**Rationale**: Standards and maintained libraries carry interoperability, security review, and years of edge cases that a bespoke clone re-learns the hard way, so building must be the recorded exception.
+
 ## Operational & Scope Constraints
 
 - **Priority Resolution**: When two principles come into tension, the lower-numbered principle
   always prevails (e.g., Principle I Privacy First overrides all other considerations).
 - **Deferred Stack Decisions**: Concrete library, framework, and tooling selections beyond the
-  invariants stated in Principles I–IX are decided during the `/speckit-plan` workflow step and
+  invariants stated in Principles I–X are decided during the `/speckit-plan` workflow step and
   recorded in feature plans or ADRs under `docs/adr/`, not in this constitution.
 - **Public Repository Posture**: Every artifact committed to git—including sample configurations,
   seed scripts, migration tests, and documentation examples—MUST be safe for public inspection.
@@ -156,8 +186,11 @@ specifications, plans, tasks, and implementations in strict priority order (I th
   - **MINOR**: Addition of a new principle or section, or material expansion of governance rules.
   - **PATCH**: Wording clarifications, formatting fixes, or non-semantic refinements.
 - **Compliance Review**: Every `/speckit-plan`, `/speckit-tasks`, and `/speckit-analyze` artifact
-  and every pull request review MUST explicitly verify compliance with Principles I through IX. Any
-  proposed deviation from Principle IV (Named Seams Only) or Principle VIII requires an approved
-  ADR under `docs/adr/` prior to implementation.
+  and every pull request review MUST explicitly verify compliance with Principles I through X. Any
+  proposed deviation from Principle IV (Named Seams Only), Principle VIII, or Principle X requires
+  an approved ADR under `docs/adr/` prior to implementation.
+- **Standards Check (Principle X)**: A plan that adds a mechanism without a "Standards considered"
+  row, or a hand-rolled mechanism without an ADR naming what it was compared against, is a
+  constitution violation. `/speckit-analyze` MUST report it as CRITICAL.
 
-**Version**: 1.1.1 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-10-27
+**Version**: 1.2.0 | **Ratified**: 2026-10-17 | **Last Amended**: 2026-11-10

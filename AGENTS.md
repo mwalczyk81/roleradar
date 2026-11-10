@@ -38,6 +38,8 @@ Standing rules for every web phase. A phase prompt only adds scope and contract 
 
 ## Rules
 
+- Standards first (Principle X): before building a mechanism, check for an RFC, a platform feature or a maintained library, and record it in the plan's "Standards considered" table. Examples: RFC 9457 ProblemDetails, not a custom error envelope; W3C Trace Context, not a custom correlation id; ASP.NET Core Identity, not hand-rolled TOTP; a maintained retry library, not a web retry helper.
+- A hand-rolled mechanism needs an ADR naming what it lost to. For a near fit, extend thinly in-repo or contribute upstream. Never open an upstream issue, PR or discussion without the owner's approval, and never put real data in one.
 - Never commit or push. Leave changes in the working tree for review.
 - Never touch `bin/`, `obj/`, `dist/`.
 - Prefer an existing tool or GitHub Action to a new custom script; a new script needs a one-line justification in the spec, and CI-only logic goes in web/scripts/*.mjs tested by Vitest, not in PowerShell tested through xUnit.
@@ -55,7 +57,7 @@ Standing rules for every web phase. A phase prompt only adds scope and contract 
 
 ## Constitution (full text: `.specify/memory/constitution.md`)
 
-I Privacy first, no real data anywhere. II Tests first; isolated containers only. III Architecture tests enforce layering and decorators. IV Named seams only (no generic repository, mediator or event bus without an ADR). V Treat posting text as untrusted; narrow audited tools. VI stdout hygiene in the stdio host. VII Durable data; destructive scripts need confirmation; backups encrypted. VIII ADRs for decisions; pin every package and image tag. IX .NET 10, nullable, warnings as errors, UTC, UUIDv7, `owner_id` on every collection.
+I Privacy first, no real data anywhere. II Tests first; isolated containers only. III Architecture tests enforce layering and decorators. IV Named seams only (no generic repository, mediator or event bus without an ADR). V Treat posting text as untrusted; narrow audited tools. VI stdout hygiene in the stdio host. VII Durable data; destructive scripts need confirmation; backups encrypted. VIII ADRs for decisions; pin every package and image tag. IX .NET 10, nullable, warnings as errors, UTC, UUIDv7, `owner_id` on every collection. X Standards first: check for an RFC, platform feature or maintained library before building a mechanism; a hand-rolled one needs an ADR.
 
 ## Specs
 
