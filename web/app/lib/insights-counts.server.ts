@@ -1,7 +1,7 @@
 /**
  * Runs the Insights count requests: count-only OData queries (`$top=0&$count=true`) built by the shared lens module.
  *
- * At most MAX_IN_FLIGHT requests run at once (the limiter can be shared with the stats request, which then counts
+ * At most MAX_IN_FLIGHT requests run at once (the p-limit limit function can be shared with the stats request, which then counts
  * against the same bound), each is cut off after REQUEST_TIMEOUT_MS in all, and one failing request only
  * makes the numbers that depend on it "unavailable". A 401 or 403 from the API is handed to assertApiOk after all
  * requests have settled, so the owner is re-challenged once (never in a loop) or sent to /not-authorized.
@@ -16,6 +16,7 @@
  * derived from two counts the page already has.
  */
 import { fetchOData } from "./api-client.server.js";
+import pLimit, { type LimitFunction } from "p-limit";
 import { assertApiOk } from "./auth-guard.server.js";
 import {
   COUNTED_LENS_KEYS,
@@ -30,7 +31,6 @@ import {
   type LensKey,
 } from "./insights-lenses.js";
 import type { CountValue, InsightsCounts } from "./insights-view.js";
-import { createLimiter, type Limiter } from "./request-limiter.server.js";
 
 export const MAX_IN_FLIGHT = 6;
 export const REQUEST_TIMEOUT_MS = 5_000;
@@ -50,10 +50,10 @@ export async function loadInsightsCounts(args: {
   request: Request;
   session: { accessToken: string; sessionId: string };
   ctx: LensContext;
-  limiter?: Limiter;
+  limit?: LimitFunction;
 }): Promise<InsightsCounts> {
   const { request, session, ctx } = args;
-  const limiter = args.limiter ?? createLimiter(MAX_IN_FLIGHT);
+  const limit = args.limit ?? pLimit(MAX_IN_FLIGHT);
   const counts: InsightsCounts = { lens: {}, coverage: {} };
   const tasks: CountTask[] = [];
 
@@ -101,7 +101,7 @@ export async function loadInsightsCounts(args: {
 
   let authFailure: { status: number } | undefined;
 
-  const runners = tasks.map((task) => limiter.run(async () => {
+  const runners = tasks.map((task) => limit(async () => {
     const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const timeout = new Promise<null>((resolve) => {

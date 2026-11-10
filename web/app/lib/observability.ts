@@ -121,21 +121,33 @@ export function formatRecord(input: LogRecordInput, format: LogFormat, service: 
   return line;
 }
 
-// ---- Outbound policy (feature 013 US3, FR-026 and FR-027, SC-007). Pure, so it is unit- and mutation-tested. ----
+// ---- Outbound policy (feature 013 US3 SC-007, feature 014 G3, contracts/web-outbound-policy.md). The retry loop itself is
+// ky's; what stays here is pure, so it is unit- and mutation-tested. ----
 
-/** What went wrong with one attempt: an HTTP status that came back, or no answer at all. */
-export type AttemptFailure = number | "network" | "timeout";
-
-export const READ_MAX_ATTEMPTS = 3;
+/** Reads (GET, HEAD) are attempted at most three times in all: the first call and two retries. Writes are sent once. */
+export const READ_RETRY_LIMIT = 2;
 export const READ_TIMEOUT_MS = 5_000;
 export const WRITE_TIMEOUT_MS = 10_000;
+
+/** The statuses a read is retried on: the API or a proxy in front of it is not answering. */
+export const RETRYABLE_STATUSES: readonly number[] = [502, 503, 504];
+
+/** The wait before retry number 1, 2, ...: 200 ms, then 500 ms. */
+export const RETRY_DELAYS_MS = [200, 500] as const;
+
+/**
+ * The longest `Retry-After` the web honours on a 503. A longer value means no retry: the 503 is returned at once (spec 014
+ * edge case, FR-042). The API sends `Retry-After: 5`, so a real 503 from the API is not retried by the web.
+ */
+export const RETRY_AFTER_BOUND_MS = 2_000;
 
 /** What the owner sees when the API says its data store did not answer. Fixed text: never the envelope's or an error's. */
 export const SERVICE_UNAVAILABLE_MESSAGE = "The data service is temporarily unavailable. This is usually brief, so try again in a moment.";
 
 const READ_METHODS = new Set(["GET", "HEAD"]);
-const RETRYABLE_STATUSES = new Set([502, 503, 504]);
-const BACKOFF_MS = [200, 500] as const;
+const WHOLE_SECONDS = /^\d+$/;
+/** The IMF-fixdate form of an HTTP date (RFC 9110 section 5.6.7), the only one a server may send today. */
+const HTTP_DATE = /^[A-Za-z]{3}, \d{2} [A-Za-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT$/;
 
 export function isReadMethod(method: string): boolean {
   return READ_METHODS.has(method.toUpperCase());
@@ -147,18 +159,18 @@ export function attemptTimeoutMs(method: string): number {
 }
 
 /**
- * Whether to send the request again after attempt number `attempt` (1-based) failed. Only reads are ever retried, at most
- * {@link READ_MAX_ATTEMPTS} attempts in all, and only when there was no answer or the answer was 502, 503 or 504. A write is
- * sent once: sending it again could repeat its effect.
+ * How long a `Retry-After` header (RFC 9110 section 10.2.3: whole seconds or an HTTP date) asks the client to wait, in
+ * milliseconds from `nowMs`, never negative. Undefined when the header is absent or not one of the two forms. ky reads the
+ * same header to time its retry; this reader exists only so the policy can refuse a wait above RETRY_AFTER_BOUND_MS.
  */
-export function shouldRetry(method: string, failure: AttemptFailure, attempt: number): boolean {
-  if (!isReadMethod(method) || attempt >= READ_MAX_ATTEMPTS) {
-    return false;
+export function retryAfterMs(header: string | null, nowMs: number): number | undefined {
+  const value = header?.trim() ?? "";
+  if (WHOLE_SECONDS.test(value)) {
+    return Number(value) * 1_000;
   }
-  return typeof failure === "number" ? RETRYABLE_STATUSES.has(failure) : true;
-}
-
-/** How long to wait after attempt number `attempt` (1-based): 200 ms, then 500 ms. */
-export function backoffMs(attempt: number): number {
-  return BACKOFF_MS[Math.min(Math.max(attempt, 1), BACKOFF_MS.length) - 1];
+  if (HTTP_DATE.test(value)) {
+    const at = Date.parse(value);
+    return Number.isNaN(at) ? undefined : Math.max(0, at - nowMs);
+  }
+  return undefined;
 }

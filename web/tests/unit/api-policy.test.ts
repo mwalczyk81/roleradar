@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { backoffMs, shouldRetry } from "../../app/lib/observability";
 import { fetchWithPolicy } from "../../app/lib/api-client.server";
 import { runWithRequestContext } from "../../app/lib/request-context.server";
 import { loadInsightsCounts } from "../../app/lib/insights-counts.server";
@@ -63,33 +62,6 @@ function write(method: string): Request {
     body: JSON.stringify({ toDisposition: "scored" }),
   });
 }
-
-describe("shouldRetry", () => {
-  it.each(["GET", "HEAD", "get"])("retries a %s on a network error, a timeout, 502, 503 and 504 before the third attempt", (method) => {
-    for (const failure of ["network", "timeout", 502, 503, 504] as const) {
-      expect(shouldRetry(method, failure, 1), `${method} ${failure} after 1`).toBe(true);
-      expect(shouldRetry(method, failure, 2), `${method} ${failure} after 2`).toBe(true);
-      expect(shouldRetry(method, failure, 3), `${method} ${failure} after 3`).toBe(false);
-    }
-  });
-
-  it.each([400, 401, 403, 404, 409, 500, 501, 200])("never retries status %i, even for a GET", (status) => {
-    expect(shouldRetry("GET", status, 1)).toBe(false);
-  });
-
-  it.each(["POST", "PATCH", "PUT", "DELETE", "patch"])("never retries a %s, whatever went wrong", (method) => {
-    for (const failure of ["network", "timeout", 502, 503, 504] as const) {
-      expect(shouldRetry(method, failure, 1)).toBe(false);
-    }
-  });
-});
-
-describe("backoffMs", () => {
-  it("waits 200 ms after the first attempt and 500 ms after the second", () => {
-    expect(backoffMs(1)).toBe(200);
-    expect(backoffMs(2)).toBe(500);
-  });
-});
 
 describe("fetchWithPolicy", () => {
   beforeEach(() => {
@@ -209,7 +181,7 @@ describe("fetchWithPolicy", () => {
     expect("error" in result).toBe(true);
   });
 
-  it.each([400, 401, 404, 409, 500])("does not retry a GET that gets %i", async (status) => {
+  it.each([400, 401, 403, 404, 409, 500])("does not retry a GET that gets %i", async (status) => {
     const { fake } = scriptedFetch([status, 200]);
 
     const result = await settled(start(get()));
