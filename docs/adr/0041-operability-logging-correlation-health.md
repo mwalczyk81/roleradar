@@ -57,3 +57,13 @@ Feature 013 specifies the outcomes. This ADR records the library and tooling cho
   - A wide, mechanical edit to remove `Actor` defaults.
   - Sign-in history lasts only as long as the capped container logs.
   - **Dozzle's read access to the Docker socket is effectively host-level Docker access for that container.** This is accepted only because the viewer is opt-in, loopback-only and runs on the owner's own machine. Exposing it beyond loopback would require a socket proxy and a new decision.
+
+## Known limits and follow-ups
+
+Each is tracked in Jira project RR.
+
+- The web client ignores the API's `Retry-After` header on a 503 and uses its own fixed backoff (RR-79).
+- The Mongo client uses a polling server monitor and has the driver's read retry turned off, because the OData read path materialises with a `ToList()` that cannot take a cancellation token, so a request deadline cannot cut it short (RR-73).
+- Audit entries written by `tracker-import` carry no `request_correlation_id`, because that import's factory is a singleton and cannot see the current request context (RR-65).
+- `roleradar audit list` without a filter sorts the entries in memory (RR-65).
+- The correlation id is a custom `X-Correlation-ID` header and the error body is a custom envelope. Both are queued to move to the W3C trace context and ProblemDetails (RR-78, RR-74).
