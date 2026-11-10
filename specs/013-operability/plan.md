@@ -76,10 +76,10 @@ Decisions and rejected alternatives are in [research.md](research.md), summarize
 | V Untrusted text, narrow audited tools | Pass | MCP tools are unchanged (still 12). No delete path is added. Every write keeps its append-only entry, and each entry now names the real actor. `audit list` neutralizes control characters and prints metadata only. |
 | VI stdout hygiene | Pass | CLI and MCP logs stay on stderr. The formatter's stream choice is per host, and the MCP host is pinned to stderr by an existing test plus a new formatter test. The MCP host opens no listener. |
 | VII Durable data, destructive confirmation | Pass | No data is deleted or rewritten. Old audit entries keep their old actors. The outage test stops only its own container. Log caps limit disk use. |
-| VIII ADRs, pins | Pass (pin pending T073) | ADR 0041 (accepted 2026-11-09) records the logging approach, the Observability project, the correlation id, the viewer and its socket risk, health, the 503 mapping and `IRequestContext`. The Dozzle image is pinned by tag and digest, and the Dependabot docker-compose entry covers the new file. No floating versions. |
+| VIII ADRs, pins | Pass | ADR 0041 (accepted 2026-11-09) records the logging approach, the Observability project, the correlation id, the viewer and its socket risk, health, the 503 mapping and `IRequestContext`. The Dozzle image is pinned by tag and digest in `deploy/docker-compose.logs.yml`, and the tag and digest are recorded in ADR 0041. The Dependabot docker-compose entry covers the new file. No floating versions. |
 | IX .NET 10, nullable, warnings as errors, UTC, UUIDv7, `owner_id` | Pass | The new project inherits `Directory.Build.props`. Log timestamps are UTC. .NET correlation ids are v7 (the web's are v4, which is fine because they are not entity ids). The audit query always filters `owner_id`. No new collection. |
 
-Post-design re-check after D1 to D12: no new violation. ADR 0041 is accepted before any code is written. The Dozzle tag and digest are pinned in T039 and recorded in the ADR in T073.
+Post-design re-check after D1 to D12: no new violation. ADR 0041 is accepted before any code is written. The Dozzle tag and digest are pinned in `deploy/docker-compose.logs.yml` and recorded in ADR 0041.
 
 ## Design
 

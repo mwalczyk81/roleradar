@@ -25,6 +25,26 @@ The owner signs in through Duende IdentityServer with a password and a TOTP code
 
 Client secrets, the session key and certificates for the real stack are generated locally into ignored files; nothing secret is committed. Backups stream through libsodium `secretstream` (XChaCha20-Poly1305) with an Argon2id key, restore verifies the whole archive before writing, and passphrases are never taken from the command line ([ADR 0007](adr/0007-backup-streaming-aead-encryption.md)).
 
+## Logs and the audit trail
+
+The services write structured logs ([logs-and-health.md](operations/logs-and-health.md), [ADR 0041](adr/0041-operability-logging-correlation-health.md)). A log is a second copy of whatever it contains, so the control is to keep secrets and private text out of it.
+
+- **Redaction.** One scrubber is applied to every record before it is written. It removes bearer and basic credentials, JWT-shaped values, credentials in connection strings, query strings, sensitive `key=value` and JSON pairs in free text, and the value of any property whose key names a password, token, secret, cookie, authorization header, note body or OIDC `code` or `state`. The .NET hosts share one implementation (`RoleRadar.Observability`); the web has a matching pure one (`web/app/lib/observability.ts`), and each is changed together with the other. Request records carry the method, the path without its query string, the status and the duration, never headers, cookies or bodies.
+- **The tests that prove it.** Unit tests cover each rule with fictional secret vectors (`LogScrubberTests`, `RoleRadarConsoleFormatterTests`, `web/tests/unit/observability.test.ts`). `IdentityRedactionContractTests` drives the real Identity host through wrong-password, unknown-user and full sign-in flows, and `web/tests/unit/web-redaction.test.ts` drives the web's real failure paths and structured fields. `RedactionIntegrationTests` runs the launched hosts with sentinel passwords, tokens, note bodies and a typed username, and fails if any sentinel appears in any stream. The log of the viewer and of `docker compose logs` is therefore as safe as the scrubber and these tests are complete.
+- **Sign-in events without the username.** Identity logs one event per sign-in outcome (`SignInSucceeded`, `SignInFailed`, `AccountLockedOut`, `OneTimeCodeFailed`) with the account's subject id, and only when the typed username matched an account. The username typed on a failed attempt is never logged, so the logs do not reveal which names were tried or confirm that one exists. `SignInEventContractTests` pins this.
+- **The audit trail.** Every write records who made it (the API records the signed-in subject, the CLI and MCP a fixed actor name) and the request's correlation id. It is append-only and readable only through `roleradar audit list`, which prints no note text or before and after values. There is no MCP tool or API endpoint for it.
+
+### The optional log viewer
+
+`deploy/docker-compose.logs.yml` starts a log viewer (Dozzle) that is off unless the owner starts it. To read container output it mounts the Docker socket. The mount is read-only, but read access to the socket is still effectively host-level Docker access for that one container: whoever controls the viewer can inspect every container on the machine, including its environment variables.
+
+That risk is accepted, and only on these terms:
+
+- **Opt-in.** It is a separate file, never part of the default stack or the demo, and the owner stops it with one command.
+- **Loopback only.** It publishes `127.0.0.1:5004` and nothing else. Exposing it beyond loopback would need a socket proxy and a new decision.
+- **The owner's machine.** Anyone who can already reach the Docker socket or run Docker on that machine can do more than the viewer can, so it grants no new capability to a local attacker.
+- **Hardened and quiet.** Read-only root filesystem, all capabilities dropped, no new privileges, a pinned image digest, and analytics, release checks, registry checks and avatar fetches turned off, so it makes no outbound calls.
+
 ## The demo
 
 The demo ([demo.md](demo.md)) runs the same images over fictional data in a separate Compose project, `roleradar-demo`, with its own containers, volumes and database ([ADR 0039](adr/0039-demo-stack-and-guard.md)).
@@ -42,4 +62,5 @@ The demo ([demo.md](demo.md)) runs the same images over fictional data in a sepa
 - **Single owner.** Owner ids scope every collection, but there is no multi-user isolation, account management or role model.
 - **Self-signed certificates prove nothing.** They protect traffic on the machine; they do not identify a server.
 - **No vulnerability-free images.** The gate fails on fixable CRITICAL findings; fixable HIGH findings are reported and tracked, not blocked ([ADR 0036](adr/0036-test-lanes-and-gate-scan.md)).
+- **Logs are not a secret store.** The scrubber and its tests keep known secret shapes and private text out of the logs, but they cannot recognise every private value a future message might include. Anyone who can read the container logs or run the viewer can read what is there.
 - **No external audit.** No penetration test or third-party review has been done. Agents should still treat posting text as untrusted input, whatever the tools allow.

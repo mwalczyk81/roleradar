@@ -463,7 +463,7 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
 
 ## Phase 7: Polish and cross-cutting
 
-- [ ] T069 [P] Write `docs/operations/logs-and-health.md` and link it from the existing docs list in `README.md` (no new section). Cover:
+- [X] T069 [P] Write `docs/operations/logs-and-health.md` and link it from the existing docs list in `README.md` (no new section). Cover:
   - the three ways to read logs: `docker compose logs`, text mode outside compose, and the opt-in viewer at `http://127.0.0.1:5004`, started with `docker compose -f deploy/docker-compose.logs.yml up -d`;
   - searching by `X-Correlation-ID`;
   - `ROLERADAR_LOG_FORMAT` and the level variables;
@@ -471,22 +471,22 @@ Notation: `[P]` = can run in parallel (different files, no dependency on an inco
   - the health endpoints and what a 503 means;
   - `roleradar audit list`;
   - the never-logged list from `contracts/log-records.md`.
-- [ ] T070 [P] Update `docs/threat-model.md` with:
+- [X] T070 [P] Update `docs/threat-model.md` with:
   - the logging redaction control and the tests that prove it;
   - sign-in events without the username;
   - the viewer's read-only Docker socket risk, and why it is accepted (opt-in, loopback-only, the owner's machine).
-- [ ] T071 Run the scope checks and report counts only.
+- [X] T071 Run the scope checks and report counts only.
   - `git diff --stat` shows no change under `deploy/demo/` and none to `DemoModeGuard` (FR-029).
   - No new script exists under `scripts/` or `web/scripts/` (FR-030).
   - `git diff Directory.Packages.props web/package.json package.json` shows no new package. In particular, no retry, resilience, OpenTelemetry or exporter package was added (FR-027, FR-028).
   - Run `pwsh ./scripts/denylist-check.ps1` in its default mode.
-- [ ] T072 Run the full AGENTS.md verification list for the phase-end gate. Report totals and coverage from the output only, and say what could not be run.
+- [X] T072 Run the full AGENTS.md verification list for the phase-end gate. Report totals and coverage from the output only, and say what could not be run.
   - `pnpm --filter web run typecheck`, `lint`, `test`, `build`, `test:e2e`
   - `bash scripts/linux-web-check.sh`
   - `pwsh ./scripts/test-fast.ps1`
   - `pre-commit run --all-files`
   - `pwsh ./scripts/review-gate.ps1`
-- [ ] T073 Record the Dozzle image tag and digest pinned in `deploy/docker-compose.logs.yml` (T039) in `docs/adr/0041-operability-logging-correlation-health.md`, under Decision Outcome. In the status line, replace the T073 reference with the pinned value. The ADR is already Accepted (T002). This is the last task: stop for review and do not commit.
+- [X] T073 Record the Dozzle image tag and digest pinned in `deploy/docker-compose.logs.yml` (T039) in `docs/adr/0041-operability-logging-correlation-health.md`, under Decision Outcome. In the status line, replace the T073 reference with the pinned value. The ADR is already Accepted (T002). This is the last task: stop for review and do not commit.
 
 ## Dependencies
 
@@ -647,3 +647,20 @@ Within each story, tests come before implementation, and each test task is shown
     - `pwsh ./scripts/test-images.ps1` (`Lane=images|Lane=web-container`), on `gate-us3` tags: first run 58 passed and 1 failed, after the fix 59/59. The failure was real: `ContainerHealthCheckLaunchedHostTests` runs the API with an unreachable Mongo to prove a hardened image starts, and it never set its own health URL (the task text assumed it did), so the new `/health/ready` default made the container correctly unhealthy. The API case now sets `ROLERADAR_HEALTHCHECK_URL` to `/health/live`. The default readiness URL against a live Mongo is covered by the real-stack run, where the compose-style healthcheck passes.
     - `pre-commit run --all-files`: every hook passed. It only reads tracked files, so `pre-commit run --files` was run on the nine changed and new files too: every hook passed.
     - Not run: nothing from the T068 list was skipped. The `gate-us3` images were removed afterwards. The dev stack (`roleradar-mongo` on 27017, `deploy-*` on 5001 to 5003) was running throughout and was not touched. `test-images.ps1` rebuilds `roleradar-api:test` and `roleradar-identity:test` itself (the test's own docker build), which is existing behavior.
+
+- Polish (T069 to T073, 2026-11-10), numbers from command output:
+  - **T069.** `docs/operations/logs-and-health.md` (fictional examples only), linked from the README docs list (no new section) and from `docs/README.md`.
+  - **T070.** `docs/threat-model.md`: a "Logs and the audit trail" section (the redaction control, the tests that prove it, sign-in events without the username, the audit trail), a subsection on the optional viewer's read-only Docker socket and why it is accepted, and a "Logs are not a secret store" line under what is not claimed.
+  - **T071 (scope checks, counts only).** `deploy/demo/`: 0 changes; `DemoModeGuard`: 0 changes (FR-029). New files under `scripts/` or `web/scripts/` versus `main`: 0 (FR-030). `pnpm-lock.yaml`: 0 changes. `package.json`: 0 changes. `web/package.json`: 1 script line (`test:e2e:real` also runs the operability spec), no dependency. `Directory.Packages.props`: 1 new entry, `Microsoft.Extensions.Logging.Console` 10.0.14, a direct reference of `RoleRadar.Observability`. No retry, resilience, OpenTelemetry or exporter package anywhere (FR-027, FR-028). ADR 0041 said "no new package" and was corrected to name this one and why. `scripts/denylist-check.ps1` has no default mode (`-Mode` is mandatory); `-Mode Staged` with nothing staged checked nothing, so everything was staged briefly, the check ran on 4 files (exit 0), and the index was reset to empty again.
+  - **T073.** ADR 0041 records `amir20/dozzle:v11.3.5@sha256:dd09e6aaa9d5ad686b6017427a502c40dc862ba28445609813e5ea1f66f6dbdf` in the status line and under Decision Outcome; it matches `deploy/docker-compose.logs.yml` and the locally pulled image. `plan.md` no longer says "pin pending T073".
+  - **T072 (phase-end gate).**
+    - `dotnet build RoleRadar.sln -c Release -v q --nologo -warnaserror`: 0 warnings, 0 errors.
+    - `pwsh ./scripts/test-fast.ps1`: Architecture 66/66, Unit 939/939, Contract 278/278.
+    - Full Integration lane (`Lane!=images&Lane!=web-container&Lane!=real-stack&Lane!=scan`): 699/699.
+    - `pnpm --filter web run`: typecheck exit 0; lint 0 errors and 1 warning (unused `findByPlaceholderText` in `postings.component.test.tsx`, untouched); test 101 files, 1282/1282; build ok; `test:e2e` on Windows 176 passed, 77 skipped.
+    - `bash scripts/linux-web-check.sh`: PASS. Typecheck and lint clean (same warning), 101 files, 1280 passed and 2 skipped, coverage 90.73% lines, 83.55% branches, build ok, e2e 154 passed and 99 skipped.
+    - `pwsh ./scripts/test-e2e-real.ps1`: 1/1. `pwsh ./scripts/test-images.ps1`: 59/59. Both on throwaway `gate-t072` image tags, removed afterwards.
+    - `pre-commit run --all-files`: every hook passed.
+    - `pwsh ./scripts/review-gate.ps1`: ALL GATES PASSED. Locked restore, format, warnings build and typecheck PASS; tests PASS (Unit 939, Architecture 66, Contract 278, Integration 757, total 2040); Domain plus Application coverage 92.62% (gate 85%); image builds PASS (CLI 338.9 MB, MCP 174.4 MB, Identity 237.3 MB, Web 315.7 MB, API 216.2 MB); web image smoke PASS; container scan PASS (5 reports, 0 CRITICAL, scan tests 2 passed); images lane 58 passed, 0 failed; script lint PASS.
+    - **The gate failed twice before it passed, for an environment reason, not a code one.** `ODataDocsExamplesTests.EveryDocumentedExample_Works_AsTheLiteralCurlCommand` runs each documented `curl` line through the first `bash` on `PATH`. In the shell the agent runs in, that is the WSL launcher (`C:\Windows\system32\bash.exe`, no distro), so all 38 commands failed with `execvpe(/bin/bash) failed` and an empty status; Git Bash is not on that `PATH`. The cause was read from a debug copy of the gate that dumped the test output (deleted afterwards; `scripts/` has no change). The passing run put `C:\Program Files\Git\bin` first on `PATH` and changed nothing else. A developer terminal with Git Bash first needs no change. The test has no guard for this: it checks that `bash` exists, not that it works.
+    - Not run: nothing from the T072 list. The dev stack (`roleradar-mongo` on 27017, `deploy-*` on 5001 to 5003) ran throughout and was not touched (the gate's own canary check passed). `roleradar-cli:review-3400a6511e1e4c16bb09e02702344fa1` is an older image from before this session and was left alone.
