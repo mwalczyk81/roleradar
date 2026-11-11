@@ -49,6 +49,7 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0044](./0044-problem-details-and-trace-context.md) | RFC 9457 Problem Documents and W3C Trace Context | Accepted | `014-standards-first` |
 | [ADR-0045](./0045-web-retry-and-limiter-libraries.md) | Web Retry, Timeout and Concurrency Limit From ky and p-limit | Accepted | `014-standards-first` |
 | [ADR-0046](./0046-log-redaction.md) | Log Redaction Stays With LogScrubber | Accepted | `014-standards-first` |
+| [ADR-0047](./0047-console-formatter-and-validators.md) | The Console Formatter and the Command Validators Stay Hand-Written | Accepted | `014-standards-first` |
 
 ## P4 outcomes
 
@@ -57,3 +58,5 @@ Feature 014 story P4 evaluates four hand-written mechanisms against a standard. 
 | Item | Jira card | Decision and ADR |
 | ------ | ----------- | ------------------ |
 | Log redaction | RR-80 | Keep `LogScrubber`; `Microsoft.Extensions.Compliance.Redaction` closes no gap and removes no code. [ADR-0046](./0046-log-redaction.md) |
+| Console formatter | RR-81 | Keep `RoleRadarConsoleFormatter`: no built-in or Serilog formatter has a hook for scrubbing final text (required), and a custom `ConsoleFormatter` is the platform's extension point. Failing the 17 cases is not the reason (10 test the incidental 013 shape). A custom Serilog `ITextFormatter` passes all 17 and is about 24 percent smaller (owner may overrule). Revisit when feature 015's OpenTelemetry log exporter lands; the OTLP data model may be a better record shape and a log processor may be where scrubbing moves (notes in the ADR, not decisions). [ADR-0047](./0047-console-formatter-and-validators.md) |
+| Command validators | RR-81 | Keep the hand-written validators; FluentValidation reaches parity only through a workaround, and saves about 5 percent of characters. [ADR-0047](./0047-console-formatter-and-validators.md) |
