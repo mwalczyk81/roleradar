@@ -21,7 +21,7 @@ How to prove each story. It uses fictional data and isolated containers only. It
 
 1. Run the Identity contract tests and the 013 sign-in event tests: events 5001 to 5004 fire once per outcome with the same fields, lockout is at 5 attempts and 15 minutes.
 2. Window scenario: codes for the current step and two steps either side are accepted once each; a code three steps away is rejected.
-3. Replay scenario: accept a code, submit it again (sequential, then two at the same moment, then after restarting the Identity test host): every second use is rejected, counts as one failed attempt and raises 5004.
+3. Replay scenario: accept a code, submit it again (sequential, then two at the same moment): every second use is rejected, counts as one failed attempt and raises 5004. Restart is proven at the store level: a new guard and a new database context on the same store still reject a recorded code (`ARestart_NewGuardAndNewContextOnTheSameStore_StillRejectsARecordedCode`). No test restarts a whole Identity host.
 4. Enrolment scenario: activate with a code, then sign in with the same code: rejected; the next code works.
 5. Existing enrolment: a user whose key is in today's format signs in with no re-enrolment (the probe from research R-001 is an automated test, FR-018).
 6. `demo totp` prints the current code and its remaining seconds. The RFC 6238 vectors pass against Otp.NET and `otpauth`.
@@ -40,14 +40,14 @@ How to prove each story. It uses fictional data and isolated containers only. It
 
 1. `pnpm --filter web run test`: the 013 `api-policy` and Insights tests pass unchanged; the new `Retry-After` and attempt-count tests pass with fake timers.
 2. Search `web/app` for a hand-written retry loop, `sleep`, `abortable` or limiter: none.
-3. `pnpm install --frozen-lockfile` and the licence check pass with `ky` and `p-limit`.
+3. `pnpm install --frozen-lockfile` passes with `ky` and `p-limit` pinned exactly in `web/package.json`. No repo command checks their licences: `scripts/licence-audit.mjs` covers only the Markdown packages. Both are MIT, checked when they were adopted (ADR 0045), and Dependency Review checks dependency changes on a pull request.
 4. The 013 spec shows the FR-027 pointer to this feature.
 
 ## P4: each item on its own
 
 - **Redaction, formatter, validators**: the 013 redaction suites, the formatter tests and the validator tests pass unchanged after a swap; otherwise the ADR (0046, 0047) names the standard it lost to, with the numbers.
 - **Backup (RR-82)**: the comparison runs in a Testcontainers scratch Mongo with fictional documents only. Restore verification goes into a scratch database. An archive made by the current format restores. Nothing touches the compose Mongo or the owner's database, and nothing is run against real data by an agent. ADR 0043 records the decision, including "keep".
-- **Scripts (RR-83)**: for each policy, a deliberate violation (never committed) fails the script and the replacement tool; then replace or keep with a one-line justification. CI stays green. ADR 0048.
+- **Scripts (RR-83)**: for each policy, a deliberate violation (working tree only, never committed) was run against the script and the replacement tool. `scripts/licence-audit.mjs` stays, because no tool fails on a missing or empty licence field. `scripts/verify-action-pins.ps1` was retired: CI runs `pre-commit run zizmor --all-files --verbose` in its own step with `GH_TOKEN: ${{ github.token }}`, and the main pre-commit step skips zizmor so the other hooks never see the token. `web/tests/tooling/workflow-zizmor.test.ts` guards that step. After a merge, the pull request's own CI log for that step must show no "running in offline mode" warning. ADR 0048.
 
 ## Done for the feature
 
