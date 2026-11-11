@@ -144,4 +144,32 @@ public sealed class ApiExceptionHandlerTests
         Assert.Equal(500, status);
         Assert.Equal("internal_error", body.GetProperty("errorCode").GetString());
     }
+
+    [Fact]
+    public async Task HandlerAlone_WithoutSpanProcessor_ProducesSpanWithoutSensitiveMessageOrStackOrStatusDescription()
+    {
+        const string sentinel = "SENTINEL-EXCEPTION-SECRET-1234";
+        using var activity = new Activity("test-span").Start();
+        var context = new DefaultHttpContext
+        {
+            RequestServices = new ServiceCollection().AddLogging().BuildServiceProvider()
+        };
+        context.Response.Body = new MemoryStream();
+
+        var logger = new ListLogger();
+        var exception = new InvalidOperationException($"Crash with {sentinel}");
+        var handled = await new ApiExceptionHandler(logger).TryHandleAsync(context, exception, CancellationToken.None);
+
+        Assert.True(handled);
+        Assert.Equal(ActivityStatusCode.Error, activity.Status);
+        Assert.True(string.IsNullOrEmpty(activity.StatusDescription));
+        Assert.Equal(exception.GetType().FullName, activity.GetTagItem("error.type"));
+
+        var exEvent = Assert.Single(activity.Events, e => e.Name == "exception");
+        var tags = exEvent.Tags.ToDictionary(t => t.Key, t => t.Value?.ToString());
+        Assert.Equal(exception.GetType().FullName, tags["exception.type"]);
+        Assert.False(tags.ContainsKey("exception.message"));
+        Assert.False(tags.ContainsKey("exception.stacktrace"));
+        Assert.DoesNotContain(sentinel, string.Join(" | ", tags.Values));
+    }
 }

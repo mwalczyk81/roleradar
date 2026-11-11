@@ -4,9 +4,11 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 import { pathToFileURL } from "node:url";
+import { SpanStatusCode, context as otelContext } from "@opentelemetry/api";
 import { createRequestListener } from "@react-router/node";
 import { log } from "./app/lib/log.server.js";
-import { startTrace } from "./app/lib/trace-context.server.js";
+import { initializeWebTelemetry } from "./app/lib/telemetry.server.js";
+import { startServerRequestSpan } from "./app/lib/trace-context.server.js";
 import { getRequestContext, runWithRequestContext } from "./app/lib/request-context.server.js";
 
 export function validateSecretsOrExit(): void {
@@ -167,17 +169,29 @@ function singleHeader(value: string | string[] | undefined): string | undefined 
 }
 
 export function createRequestHandler() {
-  return async (req: http.IncomingMessage, res: http.ServerResponse) => {
-    // Feature 014: start the W3C trace at the edge (a valid inbound traceparent is honoured, anything else is replaced),
-    // keep it in the request context, return no trace header, and write one RequestCompleted record per request (no query
-    // string; /health at debug so healthchecks do not flood the log).
-    const { traceId, spanId } = startTrace(singleHeader(req.headers["traceparent"]));
+  initializeWebTelemetry();
 
+  return async (req: http.IncomingMessage, res: http.ServerResponse) => {
+    // Feature 014 & 015: start the W3C trace and OpenTelemetry server span at the edge (a valid inbound traceparent is
+    // honoured, anything else is replaced), keep it in the request context, return no trace header, and write one
+    // RequestCompleted record per request (no query string; /health at debug so healthchecks do not flood the log).
     const started = performance.now();
     const method = req.method ?? "GET";
     const path = (req.url ?? "/").split("?")[0];
+    const { span, activeContext, traceId, spanId } = startServerRequestSpan(
+      method,
+      path,
+      singleHeader(req.headers["traceparent"])
+    );
+
     res.on("finish", () => {
       const status = res.statusCode;
+      span.setAttribute("http.response.status_code", status);
+      if (status >= 500) {
+        span.setStatus({ code: SpanStatusCode.ERROR });
+      }
+      span.end();
+
       const fields = {
         event: "RequestCompleted",
         traceId,
@@ -192,39 +206,45 @@ export function createRequestHandler() {
     });
 
     const context = { traceId, spanId, nonce: "" };
-    await runWithRequestContext(context, async () => {
-      if (req.url === "/health") {
-        res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ status: "ok" }));
-        return;
-      }
-
-      if (req.url && serveStaticFile(req.url, res)) {
-        return;
-      }
-
-      if (req.url === "/favicon.ico") {
-        res.writeHead(204);
-        res.end();
-        return;
-      }
-
-      const nonce = generateCspNonce();
-      context.nonce = nonce;
-      applySecurityHeaders(res, nonce);
-      req.headers["x-csp-nonce"] = nonce;
-
-      try {
-        const listener = await getRequestListener();
-        await listener(req, res);
-      } catch (err) {
-        log.error("Failed to handle web request", { error: err });
-        if (!res.headersSent) {
-          res.writeHead(500, { "Content-Type": "text/plain" });
+    await runWithRequestContext(context, () =>
+      otelContext.with(activeContext, async () => {
+        if (req.url === "/health") {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ status: "ok" }));
+          return;
         }
-        res.end("Internal Server Error");
-      }
-    });
+
+        if (req.url && serveStaticFile(req.url, res)) {
+          return;
+        }
+
+        if (req.url === "/favicon.ico") {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
+
+        const nonce = generateCspNonce();
+        context.nonce = nonce;
+        applySecurityHeaders(res, nonce);
+        req.headers["x-csp-nonce"] = nonce;
+
+        try {
+          const listener = await getRequestListener();
+          await listener(req, res);
+        } catch (err) {
+          if (err instanceof Error) {
+            span.recordException(err);
+          }
+          span.setStatus({ code: SpanStatusCode.ERROR });
+          log.error("Failed to handle web request", { error: err });
+          if (!res.headersSent) {
+            res.writeHead(500, { "Content-Type": "text/plain" });
+          }
+          res.end("Internal Server Error");
+        }
+      })
+    );
   };
 }
 

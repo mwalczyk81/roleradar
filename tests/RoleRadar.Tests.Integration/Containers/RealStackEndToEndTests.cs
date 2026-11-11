@@ -30,6 +30,8 @@ public sealed class RealStackEndToEndTests
     private const string DefaultIdentityImage = "roleradar-identity:local";
     private const string DefaultApiImage = "roleradar-api:local";
     private const string DefaultWebImage = "roleradar-web:local";
+    private const string OtelCollectorImage =
+        "otel/opentelemetry-collector-contrib:0.164.0@sha256:340c9ca6a36617084c6661bdc4f0fe92b7cda5a805d61673ec8db375fddc522b";
 
     [Fact]
     [Trait("Category", "Slow")]
@@ -60,6 +62,7 @@ public sealed class RealStackEndToEndTests
 
         // Throwaway resource names with runId suffix
         var networkName = $"rrtest-real-net-{runId}";
+        var collectorContainerName = $"rrtest-real-otel-{runId}";
         var mongoContainerName = $"rrtest-real-mongo-{runId}";
         var idContainerName = $"rrtest-real-id-{runId}";
         var apiContainerName = $"rrtest-real-api-{runId}";
@@ -73,6 +76,11 @@ public sealed class RealStackEndToEndTests
 
         var identityTempDir = Path.Combine(Path.GetTempPath(), $"rrtest-real-iddata-{runId}");
         Directory.CreateDirectory(identityTempDir);
+
+        var telemetryTempDir = Path.Combine(Path.GetTempPath(), $"rrtest-real-telemetry-{runId}");
+        Directory.CreateDirectory(telemetryTempDir);
+        var collectorConfigPath = Path.Combine(telemetryTempDir, "collector-config.yaml");
+        var otlpJsonlPath = Path.Combine(telemetryTempDir, "otlp.jsonl");
 
         var pfxCertPath = Path.Combine(certTempDir, "cert.pfx");
         var pemCertPath = Path.Combine(certTempDir, "dev-cert.crt");
@@ -104,6 +112,36 @@ public sealed class RealStackEndToEndTests
             // 3. Create throwaway docker network
             var createNet = await RunDockerAsync($"network create {networkName}", repoRoot, 30);
             Assert.True(createNet.ExitCode == 0, $"Failed creating network {networkName}:\n{createNet.StdErr}");
+
+            // 3b. Start isolated OpenTelemetry Collector container writing spans to /telemetry/otlp.jsonl (Feature 015, SC-001, SC-002)
+            await File.WriteAllTextAsync(
+                collectorConfigPath,
+                "receivers:\n" +
+                "  otlp:\n" +
+                "    protocols:\n" +
+                "      grpc:\n" +
+                "        endpoint: 0.0.0.0:4317\n" +
+                "      http:\n" +
+                "        endpoint: 0.0.0.0:4318\n" +
+                "exporters:\n" +
+                "  file:\n" +
+                "    path: /telemetry/otlp.jsonl\n" +
+                "    flush_interval: 100ms\n" +
+                "service:\n" +
+                "  pipelines:\n" +
+                "    traces:\n" +
+                "      receivers: [otlp]\n" +
+                "      exporters: [file]\n");
+            await File.WriteAllTextAsync(otlpJsonlPath, string.Empty);
+
+            var telemetryMount = telemetryTempDir.Replace('\\', '/');
+            var runCollectorCmd =
+                $"run -d --name {collectorContainerName} --network {networkName} --network-alias otel-collector " +
+                "--user 0:0 " +
+                $"-v \"{telemetryMount}:/telemetry:rw\" " +
+                $"{OtelCollectorImage} --config=/telemetry/collector-config.yaml";
+            var startCollector = await RunDockerAsync(runCollectorCmd, repoRoot, 120);
+            Assert.True(startCollector.ExitCode == 0, $"Failed starting OpenTelemetry Collector container:\n{startCollector.StdErr}");
 
             // 4. Run isolated MongoDB replica set container on throwaway network
             var runMongoCmd =
@@ -243,6 +281,9 @@ public sealed class RealStackEndToEndTests
                 $"-e ROLERADAR_HEADLESS_CLIENT_SECRET={headlessClientSecret} " +
                 $"-e Clients__Web__RedirectUri=https://127.0.0.1:{webHostPort}/auth/callback " +
                 $"-e Clients__Web__PostLogoutRedirectUri=https://127.0.0.1:{webHostPort}/auth/logout " +
+                "-e OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317 " +
+                "-e OTEL_SERVICE_NAME=roleradar-identity " +
+                "-e ROLERADAR_TELEMETRY_FLUSH_TIMEOUT_MS=1000 " +
                 "-e Kestrel__Endpoints__LoopbackHealth__Url=http://0.0.0.0:8080 " +
                 "-e Kestrel__Endpoints__Https__Url=https://*:5001 " +
                 "-e Kestrel__Endpoints__Https__Certificate__Path=/https/cert.pfx " +
@@ -273,6 +314,9 @@ public sealed class RealStackEndToEndTests
                 "-e ROLERADAR_OIDC_AUDIENCE=roleradar.api " +
                 $"-e Owner__AllowedSubjects__0={ownerSub} " +
                 "-e SSL_CERT_FILE=/https/dev-cert.crt " +
+                "-e OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317 " +
+                "-e OTEL_SERVICE_NAME=roleradar-api " +
+                "-e ROLERADAR_TELEMETRY_FLUSH_TIMEOUT_MS=1000 " +
                 "-e Kestrel__Endpoints__LoopbackHealth__Url=http://0.0.0.0:8080 " +
                 "-e Kestrel__Endpoints__Https__Url=https://*:5002 " +
                 "-e Kestrel__Endpoints__Https__Certificate__Path=/https/cert.pfx " +
@@ -308,6 +352,9 @@ public sealed class RealStackEndToEndTests
                 $"-e ROLERADAR_WEB_POST_LOGOUT_URI=https://127.0.0.1:{webHostPort}/auth/logout " +
                 "-e HTTPS_CERT_PATH=/https/cert.crt " +
                 "-e HTTPS_CERT_KEY_PATH=/https/cert.key " +
+                "-e OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 " +
+                "-e OTEL_SERVICE_NAME=roleradar-web " +
+                "-e ROLERADAR_TELEMETRY_FLUSH_TIMEOUT_MS=1000 " +
                 $"-p 127.0.0.1:{webHostPort}:5003 " +
                 "--cap-drop ALL --security-opt no-new-privileges " +
                 webImage;
@@ -446,6 +493,14 @@ public sealed class RealStackEndToEndTests
             Assert.Equal("company", compUpdateEntry.GetValue("entity_type", "").AsString);
             Assert.Equal(ownerSub, compUpdateEntry.GetValue("actor", "").AsString);
             Assert.Equal(company1Id, compUpdateEntry.GetValue("entity_id").AsGuid);
+
+            // 13. Feature 015 (SC-001, SC-002, ADR 0050): Assert OTLP spans written by the OpenTelemetry Collector to otlp.jsonl
+            await AssertRealStackOtlpSpansAsync(
+                otlpJsonlPath,
+                signInId,
+                followedId,
+                writeTraceId,
+                [webClientSecret, headlessClientSecret, sessionEncryptionKey, ownerPassword]);
         }
         finally
         {
@@ -454,6 +509,7 @@ public sealed class RealStackEndToEndTests
             await TryRunDockerAsync($"rm -f {apiContainerName}");
             await TryRunDockerAsync($"rm -f {idContainerName}");
             await TryRunDockerAsync($"rm -f {mongoContainerName}");
+            await TryRunDockerAsync($"rm -f {collectorContainerName}");
 
             await TryRunDockerAsync($"volume rm -f {mongoVolumeName}");
             await TryRunDockerAsync($"volume rm -f {idVolumeName}");
@@ -461,7 +517,204 @@ public sealed class RealStackEndToEndTests
 
             try { Directory.Delete(certTempDir, recursive: true); } catch { }
             try { Directory.Delete(identityTempDir, recursive: true); } catch { }
+            try { Directory.Delete(telemetryTempDir, recursive: true); } catch { }
         }
+    }
+
+    private sealed record ExportedSpanRecord(
+        string ServiceName,
+        string TraceId,
+        string SpanId,
+        string ParentSpanId,
+        string Name,
+        Dictionary<string, string> Attributes,
+        List<string> EventAttributeKeys);
+
+    private static async Task AssertRealStackOtlpSpansAsync(
+        string otlpJsonlPath,
+        string signInTraceId,
+        string followedTraceId,
+        string writeTraceId,
+        string[] forbiddenSecrets)
+    {
+        List<ExportedSpanRecord> spans = [];
+        string rawJsonl = string.Empty;
+
+        for (var attempt = 0; attempt < 40; attempt++)
+        {
+            if (File.Exists(otlpJsonlPath))
+            {
+                await using (var fs = new FileStream(
+                    otlpJsonlPath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.ReadWrite | FileShare.Delete))
+                using (var sr = new StreamReader(fs, System.Text.Encoding.UTF8))
+                {
+                    rawJsonl = await sr.ReadToEndAsync();
+                }
+
+                spans = ParseOtlpJsonlSpans(rawJsonl);
+
+                var hasSignInBoth = spans.Any(s => s.TraceId == signInTraceId && s.ServiceName == "roleradar-web")
+                                 && spans.Any(s => s.TraceId == signInTraceId && s.ServiceName == "roleradar-identity");
+                var hasFollowedBoth = spans.Any(s => s.TraceId == followedTraceId && s.ServiceName == "roleradar-web")
+                                   && spans.Any(s => s.TraceId == followedTraceId && s.ServiceName == "roleradar-api");
+                var hasWriteBoth = spans.Any(s => s.TraceId == writeTraceId && s.ServiceName == "roleradar-web")
+                                && spans.Any(s => s.TraceId == writeTraceId && s.ServiceName == "roleradar-api");
+
+                if (hasSignInBoth && hasFollowedBoth && hasWriteBoth)
+                {
+                    break;
+                }
+            }
+
+            await Task.Delay(250);
+        }
+
+        Assert.NotEmpty(spans);
+
+        // SC-001: Sign-in trace spans both roleradar-web and roleradar-identity
+        Assert.Contains(spans, s => s.TraceId == signInTraceId && s.ServiceName == "roleradar-web");
+        Assert.Contains(spans, s => s.TraceId == signInTraceId && s.ServiceName == "roleradar-identity");
+
+        // SC-001: Operability followed trace spans both roleradar-web and roleradar-api
+        Assert.Contains(spans, s => s.TraceId == followedTraceId && s.ServiceName == "roleradar-web");
+        Assert.Contains(spans, s => s.TraceId == followedTraceId && s.ServiceName == "roleradar-api");
+
+        // SC-001: Posting transition write trace spans roleradar-web, roleradar-api, and child MongoDB.Driver spans
+        Assert.Contains(spans, s => s.TraceId == writeTraceId && s.ServiceName == "roleradar-web");
+        Assert.Contains(spans, s => s.TraceId == writeTraceId && s.ServiceName == "roleradar-api");
+        Assert.Contains(
+            spans,
+            s => s.TraceId == writeTraceId
+              && s.ServiceName == "roleradar-api"
+              && (s.Attributes.TryGetValue("db.system.name", out var dbSys) && dbSys == "mongodb"
+                  || s.Attributes.TryGetValue("db.system", out var dbLegacy) && dbLegacy == "mongodb"));
+
+        // SC-002: Privacy gate assertions across all exported spans in otlp.jsonl
+        foreach (var span in spans)
+        {
+            Assert.False(span.Attributes.ContainsKey("url.query"), $"Span {span.Name} ({span.ServiceName}) leaked url.query");
+            Assert.False(span.Attributes.ContainsKey("db.query.text"), $"Span {span.Name} ({span.ServiceName}) leaked db.query.text");
+            Assert.False(span.Attributes.ContainsKey("db.statement"), $"Span {span.Name} ({span.ServiceName}) leaked db.statement");
+            Assert.DoesNotContain(span.Attributes.Keys, k => k.StartsWith("http.request.header.", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(span.Attributes.Keys, k => k.StartsWith("http.response.header.", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain("exception.message", span.EventAttributeKeys);
+            Assert.DoesNotContain("exception.stacktrace", span.EventAttributeKeys);
+        }
+
+        foreach (var secret in forbiddenSecrets)
+        {
+            Assert.DoesNotContain(secret, rawJsonl, StringComparison.Ordinal);
+        }
+    }
+
+    private static List<ExportedSpanRecord> ParseOtlpJsonlSpans(string rawJsonl)
+    {
+        var result = new List<ExportedSpanRecord>();
+        var lines = rawJsonl.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0);
+
+        foreach (var line in lines)
+        {
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(line);
+                if (!doc.RootElement.TryGetProperty("resourceSpans", out var resourceSpans))
+                {
+                    continue;
+                }
+
+                foreach (var rs in resourceSpans.EnumerateArray())
+                {
+                    var serviceName = "unknown";
+                    if (rs.TryGetProperty("resource", out var res) && res.TryGetProperty("attributes", out var resAttrs))
+                    {
+                        foreach (var attr in resAttrs.EnumerateArray())
+                        {
+                            if (attr.TryGetProperty("key", out var k) && k.GetString() == "service.name"
+                                && attr.TryGetProperty("value", out var v) && v.TryGetProperty("stringValue", out var sv))
+                            {
+                                serviceName = sv.GetString() ?? "unknown";
+                            }
+                        }
+                    }
+
+                    if (!rs.TryGetProperty("scopeSpans", out var scopeSpans))
+                    {
+                        continue;
+                    }
+
+                    foreach (var ss in scopeSpans.EnumerateArray())
+                    {
+                        if (!ss.TryGetProperty("spans", out var spansArray))
+                        {
+                            continue;
+                        }
+
+                        foreach (var sp in spansArray.EnumerateArray())
+                        {
+                            var traceId = sp.TryGetProperty("traceId", out var tid) ? (tid.GetString() ?? string.Empty).ToLowerInvariant() : string.Empty;
+                            var spanId = sp.TryGetProperty("spanId", out var sid) ? (sid.GetString() ?? string.Empty).ToLowerInvariant() : string.Empty;
+                            var parentSpanId = sp.TryGetProperty("parentSpanId", out var psid) ? (psid.GetString() ?? string.Empty).ToLowerInvariant() : string.Empty;
+                            var name = sp.TryGetProperty("name", out var nm) ? nm.GetString() ?? string.Empty : string.Empty;
+
+                            var attrs = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                            if (sp.TryGetProperty("attributes", out var spAttrs))
+                            {
+                                foreach (var attr in spAttrs.EnumerateArray())
+                                {
+                                    var key = attr.TryGetProperty("key", out var k) ? k.GetString() ?? string.Empty : string.Empty;
+                                    var valStr = string.Empty;
+                                    if (attr.TryGetProperty("value", out var v))
+                                    {
+                                        if (v.TryGetProperty("stringValue", out var sv))
+                                        {
+                                            valStr = sv.GetString() ?? string.Empty;
+                                        }
+                                        else
+                                        {
+                                            valStr = v.GetRawText();
+                                        }
+                                    }
+
+                                    if (key.Length > 0)
+                                    {
+                                        attrs[key] = valStr;
+                                    }
+                                }
+                            }
+
+                            var eventAttrKeys = new List<string>();
+                            if (sp.TryGetProperty("events", out var eventsArray))
+                            {
+                                foreach (var ev in eventsArray.EnumerateArray())
+                                {
+                                    if (ev.TryGetProperty("attributes", out var evAttrs))
+                                    {
+                                        foreach (var attr in evAttrs.EnumerateArray())
+                                        {
+                                            if (attr.TryGetProperty("key", out var k) && k.GetString() is { Length: > 0 } keyStr)
+                                            {
+                                                eventAttrKeys.Add(keyStr);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            result.Add(new ExportedSpanRecord(serviceName, traceId, spanId, parentSpanId, name, attrs, eventAttrKeys));
+                        }
+                    }
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Ignore partial line if collector is mid-flush
+            }
+        }
+
+        return result;
     }
 
     private static bool IsJsonObjectLine(string line)

@@ -74,6 +74,10 @@ public partial class Program
         // Logging first, so providers a test adds through configureBuilder are kept (feature 013, ADR 0041).
         builder.Logging.ClearProviders().AddRoleRadarLogging("api", LogStream.Split, builder.Configuration);
 
+        // OpenTelemetry tracing (feature 015, ADR 0050): registered before configureBuilder so RoleRadarSpanAttributeProcessor
+        // runs ahead of any test exporter added via ConfigureOpenTelemetryTracerProvider.
+        builder.Services.AddRoleRadarTelemetry("roleradar-api", builder.Configuration);
+
         configureBuilder?.Invoke(builder);
 
         builder.Services.AddHttpContextAccessor();

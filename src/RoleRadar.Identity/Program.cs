@@ -53,6 +53,10 @@ public partial class Program
         // Logging first, so providers a test adds through configureBuilder are kept (feature 013, ADR 0041).
         builder.Logging.ClearProviders().AddRoleRadarLogging("identity", LogStream.Split, builder.Configuration);
 
+        // OpenTelemetry tracing (feature 015, ADR 0050): registered before configureBuilder so RoleRadarSpanAttributeProcessor
+        // runs ahead of any test exporter added via ConfigureOpenTelemetryTracerProvider.
+        builder.Services.AddRoleRadarTelemetry("roleradar-identity", builder.Configuration);
+
         configureBuilder?.Invoke(builder);
 
         var identityConnectionString = builder.Configuration.GetConnectionString("IdentityConnection")

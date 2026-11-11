@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Diagnostics;
 using RoleRadar.Api.Problems;
 using RoleRadar.Infrastructure.Mongo;
@@ -35,6 +36,19 @@ public sealed partial class ApiExceptionHandler(ILogger<ApiExceptionHandler> log
         {
             LogClientAborted(logger);
             return true;
+        }
+
+        if (Activity.Current is { } activity)
+        {
+            activity.SetStatus(ActivityStatusCode.Error);
+            var exceptionType = exception.GetType().FullName ?? exception.GetType().Name;
+            activity.SetTag("error.type", exceptionType);
+            activity.AddEvent(new ActivityEvent(
+                "exception",
+                tags: new ActivityTagsCollection
+                {
+                    ["exception.type"] = exceptionType,
+                }));
         }
 
         IResult result;

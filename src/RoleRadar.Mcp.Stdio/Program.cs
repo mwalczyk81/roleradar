@@ -24,6 +24,13 @@ public static class Program
             builder.Logging.ClearProviders();
             builder.Logging.AddRoleRadarLogging("mcp", LogStream.StdErr, builder.Configuration);
 
+            // Feature 015 (FR-004, FR-017, SC-003, Principle VI): MCP registers OpenTelemetry only when OTEL_EXPORTER_OTLP_ENDPOINT
+            // is explicitly set, and never writes telemetry to stdout.
+            if (TelemetrySetup.IsOtlpEndpointConfigured(builder.Configuration))
+            {
+                builder.Services.AddRoleRadarTelemetry("roleradar-mcp", builder.Configuration);
+            }
+
             var connectionString = RoleRadar.Infrastructure.Mongo.MongoConnectionStringSource.Resolve(Environment.GetEnvironmentVariable);
             var databaseName = Environment.GetEnvironmentVariable("ROLERADAR_MONGO_DATABASE");
 
@@ -60,6 +67,10 @@ public static class Program
 
             // Eagerly resolve IMongoClient before starting transport to catch invalid connection strings without partial JSON-RPC
             app.Services.GetRequiredService<IMongoClient>();
+
+            var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+            lifetime.ApplicationStopping.Register(() =>
+                TelemetrySetup.FlushRoleRadarTelemetryWithBoundedTimeout(app.Services, builder.Configuration));
 
             await app.RunAsync();
             return 0;
