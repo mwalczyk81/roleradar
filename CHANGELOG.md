@@ -12,6 +12,8 @@ All notable changes to RoleRadar are recorded here. The format follows [Keep a C
 
 - The web server's retry, timeout and concurrency limit come from `ky` and `p-limit` instead of hand-written code, and the web now honours `Retry-After` on a 503: a wait of up to 2 seconds is waited out and retried, a longer one means no retry. The API always sends `Retry-After: 5`, so **a real 503 from the API is now returned at once and is not retried by the web** (a network error, a timeout, 502, 504 and a 503 without the header are still retried; reads at most 3 attempts, writes once, as before). The bound is one constant, `RETRY_AFTER_BOUND_MS`. See [ADR 0045](docs/adr/0045-web-retry-and-limiter-libraries.md).
 
+- CI checks workflow action pins with zizmor alone. zizmor now runs in its own step with the workflow token, so its online audits run and catch a pin to a commit that does not exist in the action's repository, or a version comment that does not match the pin. The hand-written `scripts/verify-action-pins.ps1` is gone. A missing `# vX.Y.Z` comment is no longer an error (the SHA is the pin; the comment only tells readers which version it is).
+
 ### Security
 
 - A one-time code can be used only once. A code that was already accepted is rejected as a failed attempt (it counts toward the lockout and raises the one-time-code-failed event), including when two sign-ins submit it together and after a restart. The enrolment code therefore cannot sign in straight away: wait for the next code.

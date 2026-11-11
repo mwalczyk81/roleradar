@@ -127,7 +127,7 @@ The GitHub Actions CI pipeline (`.github/workflows/ci.yml`) is structured to exe
 2. **`pre-commit` (Hygiene, Gitleaks, Zizmor & Action Pin Verification)**:
    - Runner: `ubuntu-24.04`
    - **Unconditional**: Executes on all pushes and pull requests regardless of changed paths.
-   - Runs `pre-commit` (gitleaks, markdownlint, zizmor, hygiene, forbidden-paths guard), `scripts/verify-action-pins.ps1`, and the zero-drift OpenAPI check (`git diff --exit-code -- contracts`).
+   - Runs `pre-commit` (gitleaks, markdownlint, hygiene, forbidden-paths guard) with zizmor skipped, then a separate step that runs only `pre-commit run zizmor --all-files --verbose` with `GH_TOKEN: ${{ github.token }}`, so zizmor's online audits (`impostor-commit`, `ref-version-mismatch`) run and no other hook sees the token, and the zero-drift OpenAPI check (`git diff --exit-code -- contracts`). Action pins are enforced by zizmor (`unpinned-uses` for hash pins, the online audits for a SHA that does not exist and a mismatched version comment); `scripts/verify-action-pins.ps1` was retired (ADR 0048). A test (`web/tests/tooling/workflow-zizmor.test.ts`) keeps the token on that one step.
 
 3. **`windows-verify` (Windows Build & Architecture Tests)**:
    - Check name: `Windows (Unit, Architecture & PSScriptAnalyzer)`
