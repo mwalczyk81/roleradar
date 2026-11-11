@@ -48,3 +48,12 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0042](./0042-authenticator-provider-and-replay-guard.md) | One-Time Codes Through the Platform Authenticator Provider, With a Temporary Replay Guard | Accepted | `014-standards-first` |
 | [ADR-0044](./0044-problem-details-and-trace-context.md) | RFC 9457 Problem Documents and W3C Trace Context | Accepted | `014-standards-first` |
 | [ADR-0045](./0045-web-retry-and-limiter-libraries.md) | Web Retry, Timeout and Concurrency Limit From ky and p-limit | Accepted | `014-standards-first` |
+| [ADR-0046](./0046-log-redaction.md) | Log Redaction Stays With LogScrubber | Accepted | `014-standards-first` |
+
+## P4 outcomes
+
+Feature 014 story P4 evaluates four hand-written mechanisms against a standard. Each ends in a swap with the existing tests unchanged, or an ADR naming the standard it lost to. The mechanisms and the standards compared are in the "Standards considered" table of [specs/014-standards-first/plan.md](../../specs/014-standards-first/plan.md#standards-considered).
+
+| Item | Jira card | Decision and ADR |
+| ------ | ----------- | ------------------ |
+| Log redaction | RR-80 | Keep `LogScrubber`; `Microsoft.Extensions.Compliance.Redaction` closes no gap and removes no code. [ADR-0046](./0046-log-redaction.md) |
