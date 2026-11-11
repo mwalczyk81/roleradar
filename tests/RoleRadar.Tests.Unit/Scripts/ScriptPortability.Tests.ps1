@@ -15,7 +15,6 @@ BeforeDiscovery {
         "test-all.ps1",
         "test-fast.ps1",
         "test-images.ps1",
-        "verify-action-pins.ps1",
         "check-tools-release.ps1",
         "review-gate.ps1"
     )

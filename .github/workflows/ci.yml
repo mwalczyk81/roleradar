@@ -99,19 +99,22 @@ jobs:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
 
-      - name: Run pre-commit hooks (gitleaks, hygiene, markdownlint, zizmor, and forbidden-paths guard)
+      - name: Run pre-commit hooks (gitleaks, hygiene, markdownlint, and forbidden-paths guard)
         env:
-          SKIP: roleradar-denylist,no-commit-to-branch
+          SKIP: roleradar-denylist,no-commit-to-branch,zizmor
         run: |
           pipx install pre-commit
           pre-commit run --all-files --show-diff-on-failure
           git diff --exit-code -- tests/fixtures
 
-      - name: Verify workflow action SHA pins exist on GitHub
-        shell: pwsh
+      # zizmor runs on its own so the token reaches it and no other hook. With a token it also runs its online audits
+      # (impostor-commit: a pinned SHA that is not in the action's repository; ref-version-mismatch: a version comment that
+      # does not match the pin). Without one the hook goes offline and says so in the log ("running in offline mode"), which
+      # is why --verbose is here: a passing hook prints nothing otherwise. ADR 0048 retired scripts/verify-action-pins.ps1.
+      - name: Run zizmor with its online audits (impostor-commit, ref-version-mismatch)
         env:
           GH_TOKEN: ${{ github.token }}
-        run: pwsh -NoProfile -ExecutionPolicy Bypass -File scripts/verify-action-pins.ps1
+        run: pre-commit run zizmor --all-files --verbose
 
       - name: Setup Node.js for the mutation minimum check
         if: github.event_name == 'pull_request'
