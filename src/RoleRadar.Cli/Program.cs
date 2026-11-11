@@ -36,36 +36,41 @@ public static class Program
 
             await using var services = BuildServiceProvider(args, isVerbose: isVerbose);
 
+            int exitCode;
             // One trace id for the whole run: an activity that joins the trace RunId names, so every record this process writes
             // carries it (the console formatter reads Activity.Current).
-            using var runActivity = TraceIds.StartActivity("roleradar.cli.run", RunId);
-
-            var rootCommand = new RootCommand("RoleRadar local CLI");
-            rootCommand.Add(StatusCommand.Create(services));
-            rootCommand.Add(ImportCommand.Create(services));
-            rootCommand.Add(BackupCommand.Create(services));
-            rootCommand.Add(RestoreCommand.Create(services));
-            rootCommand.Add(WipeCommand.Create(services));
-            rootCommand.Add(ContactCommand.Create(services));
-            rootCommand.Add(AuditCommand.Create(services));
-            rootCommand.Add(TrackerImportCommand.Create(services));
-            rootCommand.Add(VerifyCommand.Create(services));
-            rootCommand.Add(ReconcileReadModelsCommand.Create(services));
-            rootCommand.Add(RoleRadar.Cli.Commands.Identity.IdentityCommand.Create(services));
-            rootCommand.Add(RoleRadar.Cli.Demo.DemoCommand.Create(services));
-
-            var parseResult = rootCommand.Parse(args);
-
-            if (parseResult.Errors.Count == 0
-                && parseResult.Action is not System.CommandLine.Help.HelpAction
-                && parseResult.Action?.GetType().Name != "VersionOptionAction"
-                && parseResult.CommandResult.Command != rootCommand)
+            using (var runActivity = TraceIds.StartActivity("roleradar.cli.run", RunId))
             {
-                // Resolve IMongoClient lazily only when a command that needs it runs
-                services.GetRequiredService<IMongoClient>();
+                var rootCommand = new RootCommand("RoleRadar local CLI");
+                rootCommand.Add(StatusCommand.Create(services));
+                rootCommand.Add(ImportCommand.Create(services));
+                rootCommand.Add(BackupCommand.Create(services));
+                rootCommand.Add(RestoreCommand.Create(services));
+                rootCommand.Add(WipeCommand.Create(services));
+                rootCommand.Add(ContactCommand.Create(services));
+                rootCommand.Add(AuditCommand.Create(services));
+                rootCommand.Add(TrackerImportCommand.Create(services));
+                rootCommand.Add(VerifyCommand.Create(services));
+                rootCommand.Add(ReconcileReadModelsCommand.Create(services));
+                rootCommand.Add(RoleRadar.Cli.Commands.Identity.IdentityCommand.Create(services));
+                rootCommand.Add(RoleRadar.Cli.Demo.DemoCommand.Create(services));
+
+                var parseResult = rootCommand.Parse(args);
+
+                if (parseResult.Errors.Count == 0
+                    && parseResult.Action is not System.CommandLine.Help.HelpAction
+                    && parseResult.Action?.GetType().Name != "VersionOptionAction"
+                    && parseResult.CommandResult.Command != rootCommand)
+                {
+                    // Resolve IMongoClient lazily only when a command that needs it runs
+                    services.GetRequiredService<IMongoClient>();
+                }
+
+                exitCode = await parseResult.InvokeAsync(cancellationToken: cts.Token);
             }
 
-            return await parseResult.InvokeAsync(cancellationToken: cts.Token);
+            TelemetrySetup.FlushRoleRadarTelemetryWithBoundedTimeout(services);
+            return exitCode;
         }
         catch (OperationCanceledException) when (cts.IsCancellationRequested)
         {
@@ -96,6 +101,12 @@ public static class Program
             logging.SetMinimumLevel(logLevel);
             logging.AddRoleRadarLogging("cli", LogStream.StdErr);
         });
+
+        // Feature 015 (FR-004, FR-017, SC-003): CLI registers OpenTelemetry only when OTEL_EXPORTER_OTLP_ENDPOINT is explicitly set.
+        if (TelemetrySetup.IsOtlpEndpointConfigured())
+        {
+            services.AddRoleRadarTelemetry("roleradar-cli");
+        }
 
         var connectionString = RoleRadar.Infrastructure.Mongo.MongoConnectionStringSource.Resolve(Environment.GetEnvironmentVariable);
         var databaseName = Environment.GetEnvironmentVariable("ROLERADAR_MONGO_DATABASE");

@@ -53,6 +53,7 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0047](./0047-console-formatter-and-validators.md) | The Console Formatter and the Command Validators Stay Hand-Written | Accepted | `014-standards-first` |
 | [ADR-0048](./0048-scripts-and-existing-tools.md) | The Action-Pin Script Is Retired for zizmor With a Token; the Licence Audit Stays | Accepted | `014-standards-first` |
 | [ADR-0049](./0049-local-observability-apphost-and-dashboard.md) | Local Observability Orchestration — Aspire AppHost and Dashboard | Accepted | `015-observability` |
+| [ADR-0050](./0050-span-attribute-allowlist-processor.md) | Span Attribute Allowlist, Drop-List, and Exception-Event Sanitization Processor | Accepted | `015-observability` |
 
 ## P4 outcomes
 

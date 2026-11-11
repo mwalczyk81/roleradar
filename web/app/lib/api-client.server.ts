@@ -1,3 +1,11 @@
+import {
+  ROOT_CONTEXT,
+  SpanKind,
+  SpanStatusCode,
+  TraceFlags,
+  context as otelContext,
+  trace,
+} from "@opentelemetry/api";
 import ky, { isHTTPError, isNetworkError } from "ky";
 import createClient, { type Client } from "openapi-fetch";
 import type { components, paths } from "../../../contracts/client/api-types.js";
@@ -12,6 +20,8 @@ import {
   isReadMethod,
   retryAfterMs,
 } from "./observability.js";
+import { getRequestContext } from "./request-context.server.js";
+import { getWebTracer } from "./telemetry.server.js";
 import { withTraceparent } from "./trace-context.server.js";
 
 export interface UiError {
@@ -128,6 +138,35 @@ export async function fetchWithPolicy(request: Request): Promise<Response> {
   withTraceparent(request.headers);
   request.signal.throwIfAborted();
   const method = request.method.toUpperCase();
+  const parsedUrl = new URL(request.url);
+
+  let parentCtx = otelContext.active();
+  if (!trace.getSpan(parentCtx)) {
+    const reqCtx = getRequestContext();
+    if (reqCtx?.traceId && reqCtx.spanId) {
+      parentCtx = trace.setSpanContext(ROOT_CONTEXT, {
+        traceId: reqCtx.traceId,
+        spanId: reqCtx.spanId,
+        traceFlags: TraceFlags.SAMPLED,
+      });
+    }
+  }
+
+  const clientSpan = getWebTracer().startSpan(
+    `${method} ${parsedUrl.pathname}`,
+    {
+      kind: SpanKind.CLIENT,
+      attributes: {
+        "http.request.method": method,
+        "url.scheme": parsedUrl.protocol.replace(":", ""),
+        "url.path": parsedUrl.pathname,
+        "url.full": request.url,
+        "server.address": parsedUrl.hostname,
+      },
+    },
+    parentCtx
+  );
+
   let attempts = 1;
   // ky reads the body of the response it turns into an HTTPError (error.data), which would leave the caller nothing to
   // read, so the last retryable response is kept as a clone and that is what comes back once ky gives up.
@@ -171,12 +210,28 @@ export async function fetchWithPolicy(request: Request): Promise<Response> {
     if (isHTTPError(error)) {
       response = lastRetryable ?? error.response;
     } else if (isNetworkError(error) && error.cause !== undefined) {
+      if (error.cause instanceof Error) {
+        clientSpan.recordException(error.cause);
+      }
+      clientSpan.setStatus({ code: SpanStatusCode.ERROR });
+      clientSpan.end();
       // ky wraps the failed fetch; the callers (and the 013 contract) see the error fetch itself threw.
       throw error.cause;
     } else {
+      if (error instanceof Error) {
+        clientSpan.recordException(error);
+      }
+      clientSpan.setStatus({ code: SpanStatusCode.ERROR });
+      clientSpan.end();
       throw error;
     }
   }
+
+  clientSpan.setAttribute("http.response.status_code", response.status);
+  if (response.status >= 500) {
+    clientSpan.setStatus({ code: SpanStatusCode.ERROR });
+  }
+  clientSpan.end();
 
   if (response.status === 503) {
     await logServiceUnavailable(request, response, attempts);

@@ -13,6 +13,10 @@ namespace RoleRadar.Observability;
 /// </summary>
 public static class TraceIds
 {
+    public const string ActivitySourceName = "RoleRadar";
+
+    private static readonly ActivitySource Source = new(ActivitySourceName);
+
     /// <summary>
     /// The trace id of <see cref="Activity.Current"/>, or null when there is none (startup and shutdown records carry no id).
     /// This is the bare trace id, never <see cref="Activity.Id"/> (the full <c>traceparent</c> string, whose span part differs on
@@ -38,16 +42,35 @@ public static class TraceIds
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        var activity = new Activity(name);
         if (traceId is null)
         {
-            activity.SetIdFormat(ActivityIdFormat.W3C);
+            var activity = Source.StartActivity(name, ActivityKind.Internal, parentContext: default);
+            if (activity is not null)
+            {
+                return activity;
+            }
+
+            var fallback = new Activity(name);
+            fallback.SetIdFormat(ActivityIdFormat.W3C);
+            fallback.ActivityTraceFlags = ActivityTraceFlags.Recorded;
+            return fallback.Start();
         }
         else
         {
-            activity.SetParentId(ActivityTraceId.CreateFromString(traceId), ActivitySpanId.CreateRandom(), ActivityTraceFlags.None);
-        }
+            var parentContext = new ActivityContext(
+                ActivityTraceId.CreateFromString(traceId),
+                ActivitySpanId.CreateRandom(),
+                ActivityTraceFlags.Recorded);
 
-        return activity.Start();
+            var activity = Source.StartActivity(name, ActivityKind.Internal, parentContext);
+            if (activity is not null)
+            {
+                return activity;
+            }
+
+            var fallback = new Activity(name);
+            fallback.SetParentId(parentContext.TraceId, parentContext.SpanId, ActivityTraceFlags.Recorded);
+            return fallback.Start();
+        }
     }
 }

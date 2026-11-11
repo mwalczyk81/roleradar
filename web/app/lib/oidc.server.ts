@@ -1,5 +1,15 @@
+import {
+  ROOT_CONTEXT,
+  SpanKind,
+  SpanStatusCode,
+  TraceFlags,
+  context as otelContext,
+  trace,
+} from "@opentelemetry/api";
 import * as client from "openid-client";
 import { log } from "./log.server.js";
+import { getRequestContext } from "./request-context.server.js";
+import { getWebTracer } from "./telemetry.server.js";
 import { withTraceparent } from "./trace-context.server.js";
 
 interface RoleRadarOidcGlobal {
@@ -46,14 +56,60 @@ export function getPostLogoutRedirectUri(): string {
 
 /**
  * Every server-side call to Identity (discovery, code grant, refresh) carries the request's W3C traceparent
- * (feature 014). Reads globalThis.fetch per call so tests can stub it.
+ * (feature 014) and records a child OpenTelemetry CLIENT span (feature 015). Reads globalThis.fetch per call so tests can stub it.
  */
-const identityFetch: client.CustomFetch = (url, options) =>
-  globalThis.fetch(url, {
-    ...options,
-    body: toBodyInit(options.body),
-    headers: withTraceparent(new Headers(options.headers)),
-  });
+const identityFetch: client.CustomFetch = async (url, options) => {
+  const method = (options.method ?? "GET").toUpperCase();
+  const parsedUrl = new URL(url);
+
+  let parentCtx = otelContext.active();
+  if (!trace.getSpan(parentCtx)) {
+    const reqCtx = getRequestContext();
+    if (reqCtx?.traceId && reqCtx.spanId) {
+      parentCtx = trace.setSpanContext(ROOT_CONTEXT, {
+        traceId: reqCtx.traceId,
+        spanId: reqCtx.spanId,
+        traceFlags: TraceFlags.SAMPLED,
+      });
+    }
+  }
+
+  const clientSpan = getWebTracer().startSpan(
+    `${method} ${parsedUrl.pathname}`,
+    {
+      kind: SpanKind.CLIENT,
+      attributes: {
+        "http.request.method": method,
+        "url.scheme": parsedUrl.protocol.replace(":", ""),
+        "url.path": parsedUrl.pathname,
+        "url.full": parsedUrl.toString(),
+        "server.address": parsedUrl.hostname,
+      },
+    },
+    parentCtx
+  );
+
+  try {
+    const response = await globalThis.fetch(url, {
+      ...options,
+      body: toBodyInit(options.body),
+      headers: withTraceparent(new Headers(options.headers)),
+    });
+    clientSpan.setAttribute("http.response.status_code", response.status);
+    if (response.status >= 500) {
+      clientSpan.setStatus({ code: SpanStatusCode.ERROR });
+    }
+    return response;
+  } catch (err) {
+    if (err instanceof Error) {
+      clientSpan.recordException(err);
+    }
+    clientSpan.setStatus({ code: SpanStatusCode.ERROR });
+    throw err;
+  } finally {
+    clientSpan.end();
+  }
+};
 
 /** openid-client may hand over a Uint8Array view on any buffer; copy it so it is a standard BodyInit. */
 function toBodyInit(body: client.FetchBody): BodyInit | null | undefined {

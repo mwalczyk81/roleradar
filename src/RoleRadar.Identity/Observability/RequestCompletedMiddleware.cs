@@ -18,6 +18,30 @@ public sealed partial class RequestCompletedMiddleware(RequestDelegate next, ILo
         ArgumentNullException.ThrowIfNull(context);
 
         var started = Stopwatch.GetTimestamp();
+        var path = (context.Request.PathBase + context.Request.Path).ToString();
+        if (Activity.Current is { } startActivity)
+        {
+            if (startActivity.DisplayName == "Microsoft.AspNetCore.Hosting.HttpRequestIn" || string.IsNullOrEmpty(startActivity.DisplayName))
+            {
+                startActivity.DisplayName = $"{context.Request.Method} {path}";
+            }
+
+            if (startActivity.GetTagItem("http.request.method") is null)
+            {
+                startActivity.SetTag("http.request.method", context.Request.Method);
+            }
+
+            if (startActivity.GetTagItem("url.scheme") is null)
+            {
+                startActivity.SetTag("url.scheme", context.Request.Scheme);
+            }
+
+            if (startActivity.GetTagItem("url.path") is null)
+            {
+                startActivity.SetTag("url.path", path);
+            }
+        }
+
         var failed = false;
         try
         {
@@ -30,11 +54,35 @@ public sealed partial class RequestCompletedMiddleware(RequestDelegate next, ILo
         }
         finally
         {
-            var path = (context.Request.PathBase + context.Request.Path).ToString();
+            var status = failed && !context.Response.HasStarted ? StatusCodes.Status500InternalServerError : context.Response.StatusCode;
+            if (Activity.Current is { } endActivity)
+            {
+                if (endActivity.GetTagItem("http.response.status_code") is null)
+                {
+                    endActivity.SetTag("http.response.status_code", status);
+                }
+
+                if (context.GetEndpoint() is Microsoft.AspNetCore.Routing.RouteEndpoint routeEndpoint
+                    && routeEndpoint.RoutePattern.RawText is { Length: > 0 } rawRoute)
+                {
+                    var normalizedRoute = rawRoute.StartsWith('/') ? rawRoute : "/" + rawRoute;
+                    if (endActivity.GetTagItem("http.route") is null)
+                    {
+                        endActivity.SetTag("http.route", normalizedRoute);
+                    }
+
+                    endActivity.DisplayName = $"{context.Request.Method} {normalizedRoute}";
+                }
+
+                if (status >= StatusCodes.Status500InternalServerError && endActivity.Status != ActivityStatusCode.Error)
+                {
+                    endActivity.SetStatus(ActivityStatusCode.Error);
+                }
+            }
+
             var level = path.StartsWith("/health", StringComparison.OrdinalIgnoreCase) ? LogLevel.Debug : LogLevel.Information;
             if (logger.IsEnabled(level))
             {
-                var status = failed && !context.Response.HasStarted ? StatusCodes.Status500InternalServerError : context.Response.StatusCode;
                 var durationMs = Math.Round(Stopwatch.GetElapsedTime(started).TotalMilliseconds, 3);
                 LogRequestCompleted(logger, level, context.Request.Method, path, status, durationMs);
             }

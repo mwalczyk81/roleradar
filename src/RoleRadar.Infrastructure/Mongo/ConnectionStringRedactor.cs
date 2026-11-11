@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using MongoDB.Driver;
+using MongoDB.Driver.Core.Configuration;
 using MongoDB.Driver.Core.Servers;
 
 namespace RoleRadar.Infrastructure.Mongo;
@@ -48,6 +49,15 @@ public static class ConnectionStringRedactor
             // server-selection timeout a second time, doubling the time to a 503 (5.9 s measured against a paused container).
             // Callers that want a retry own it: the web retries GETs, bounded, in its outbound policy.
             settings.RetryReads = false;
+
+            // Feature 015 (FR-005, ADR 0050): Enable native MongoDB.Driver ActivitySource tracing with QueryTextMaxLength = 0
+            // so command spans (find, insert, update, commitTransaction) are emitted without serializing db.query.text.
+            settings.TracingOptions = new TracingOptions
+            {
+                Disabled = false,
+                QueryTextMaxLength = 0,
+            };
+
             return new MongoClient(settings);
         }
         catch (Exception ex) when (ex is MongoConfigurationException or FormatException or ArgumentException)
