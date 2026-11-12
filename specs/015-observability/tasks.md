@@ -304,8 +304,108 @@ description: "Task list for Feature 015: End-to-End Observability and Local Tele
 
 **Purpose**: Final cross-artifact verification and close-out audit across `SC-001` through `SC-007` and `FR-001` through `FR-017` using live command output only.
 
-- [ ] T077 [P] Verify `docs/adr/README.md` lists `0049-local-observability-apphost-and-dashboard.md`, `0050-span-attribute-allowlist-processor.md`, and `0051-otel-logs-and-runtime-scrubbing.md` in sequential numerical order with valid links and LF line endings
-- [ ] T078 Close-out verification (T-final): check every Success Criterion (`SC-001` through `SC-007`) and Functional Requirement (`FR-001` through `FR-017`) in `specs/015-observability/spec.md` against actual command output from `pwsh ./scripts/test-fast.ps1`, `bash scripts/linux-web-check.sh`, `pwsh ./scripts/test-e2e-real.ps1`, `pre-commit run --all-files`, and `pwsh ./scripts/review-gate.ps1` (run from Git Bash), plus the Gate 5 manual dashboard evidence record (`T074`), verify zero diff in `.github/dependabot.yml` and LF line endings on all touched files, and report exact numbers from command output only without committing or pushing
+- [X] T077 [P] Verify `docs/adr/README.md` lists `0049-local-observability-apphost-and-dashboard.md` through `0053-aspire-13-6-5-security-fix-release-age-waiver.md` (including 0052 store health and operation metrics, and 0053 the Aspire 13.6.5 release-age waiver) in sequential numerical order with valid links and LF line endings
+- [X] T078 Close-out verification (T-final): check every Success Criterion (`SC-001` through `SC-007`) and Functional Requirement (`FR-001` through `FR-017`) in `specs/015-observability/spec.md` against actual command output from `pwsh ./scripts/test-fast.ps1`, `bash scripts/linux-web-check.sh`, `pwsh ./scripts/test-e2e-real.ps1`, `pre-commit run --all-files`, and `pwsh ./scripts/review-gate.ps1` (run from Git Bash), plus the Gate 5 manual dashboard evidence record (`T074`), verify zero diff in `.github/dependabot.yml` and LF line endings on all touched files, and report exact numbers from command output only without committing or pushing
+
+> **Phase 8 / T078 Close-Out Verification Record (2026-11-12, epic RR-66, gates 1–5 merged in #91–#95, `main` at `c85a4b18f`)**:
+>
+> ### 1. Commands Re-Run from Git Bash & Exact Output Figures
+> - **`pwsh ./scripts/test-fast.ps1`**:
+>   - Architecture: 108 passed, 0 failed, 0 skipped (Duration: 3 s)
+>   - Unit: 1040 passed, 0 failed, 0 skipped (Duration: 38 s)
+>   - Contract: 339 passed, 0 failed, 0 skipped (Duration: 35 s)
+>   - Fast test loop completed successfully (Total: 1487 passed)
+> - **`bash scripts/linux-web-check.sh`**:
+>   - Typecheck: PASS (`tsc --noEmit`, exit 0)
+>   - Lint: 0 errors, 1 warning (existing, `eslint-plugin-react` peer warning)
+>   - Test suite: 114 test files passed (114), 1368 passed, 2 skipped (1370 total)
+>   - Coverage: Stmts 90.74%, Branch 82.99%, Funcs 87.01%, Lines 91.32%
+>   - Build: client built in 1.65s, server built in 273ms
+>   - Playwright E2E: 154 passed, 99 skipped (Duration: 3.3m)
+>   - Result: `LINUX WEB CHECK: PASS`
+> - **`pwsh ./scripts/test-e2e-real.ps1`**:
+>   - Container images built: `roleradar-identity:local`, `roleradar-api:local`, `roleradar-web:local`
+>   - `Lane=real-stack`: 1 passed, 0 failed, 0 skipped (Duration: 32 s)
+>   - Result: `Real-stack end-to-end user journey and audit assertions passed successfully!`
+> - **`pre-commit run --all-files`**:
+>   - 16 hooks checked: check merge conflicts, yaml, toml, json, case conflicts, detect private key, don't commit to branch, check added large files, trim trailing whitespace, fix end of files, mixed line ending, markdownlint-cli2, zizmor, Detect hardcoded secrets, staged-diff real-name denylist check all `Passed`; private directories `Skipped` (no files to check).
+> - **`pwsh ./scripts/review-gate.ps1 -IncludeE2E`**:
+>   - 1. Locked Restore: PASS
+>   - 2. Code Format: PASS
+>   - 3. WarningsBuild: PASS
+>   - 4. Typecheck: PASS
+>   - 5. Tests: PASS (Unit: 1040, Arch: 108, Contract: 339, Integration: 766 | Total: 2253)
+>   - 6. Domain+App Cov: 92.66% (Gate: >= 85%) -> PASS
+>   - 7. Image Builds: PASS (CLI: 340.1 MB, MCP: 175.3 MB, Identity: 238.7 MB, Web: 338 MB, API: 217.2 MB)
+>   - 8. Web image + smoke: PASS
+>   - 9. Container scan: PASS (reports: 5, CRITICAL: 0, HIGH: not scanned (policy CRITICAL); test passed: 2, skipped: 0)
+>   - 10. Images lane: PASS (passed: 64, failed: 0, skipped: 0)
+>   - 11. Real-stack E2E: PASS
+>   - Script lint: PASS
+>   - Verdict: `ALL GATES PASSED`
+>
+> ### 2. Success Criteria Audit (`SC-001` to `SC-007`)
+> - **`SC-001` (Connected Traces with 32-Hex `traceId` Across Services)**: **PASS** (with lane dependency note).
+>   - *Evidence*: `RealStackEndToEndTests.RealStack_WithCollector_TracesMultiServiceJourneyAcrossWebIdentityApiAndMongo` in `scripts/test-e2e-real.ps1` (1 passed, 32 s) verifies that a multi-service journey across Web, Identity, API, and MongoDB with an OTLP Collector container captures a single trace tree sharing the exact 32-hex `traceId` returned in RFC 9457 problem documents and logged to audit records (`request_correlation_id`). In-process contracts: `DistributedTracingContractTests` (10 passed) and `MongoTelemetryIntegrationTests` (3 passed).
+>   - *Follow-up*: None.
+> - **`SC-002` (Telemetry Privacy Gate — Zero Secrets Across Traces, Logs, Metrics)**: **PASS**.
+>   - *Evidence*: `TelemetryPrivacyGateTests` (10 passed in Unit) and `telemetry-privacy.test.ts` (6 passed in Web) prove all 7 secret categories and untrusted text payloads are stripped from spans, query strings removed, and exceptions sanitized to type. `LogScrubbingProcessorTests` (27 passed in Unit), `LogScrubbingObjectAttributeTests` (5 passed in Unit), `IdentityCodeVerifierLogContractTests` (3 passed in Contract), and `telemetry-logging.test.ts` (14 passed in Web) prove log records scrub all values (including structured object attributes like PKCE `code_verifier`). Pre-commit `Detect hardcoded secrets` (gitleaks) passed.
+>   - *Follow-up*: None.
+> - **`SC-003` (Default-Off Exporters & 100% Loopback Dashboard Binding)**: **PASS**.
+>   - *Evidence*: With `OTEL_EXPORTER_OTLP_ENDPOINT` unset, automated tests confirm 0 exporters registered and 0 outbound connections opened: `TelemetrySetupTests.ConfigureTelemetry_WithNoOtlpEndpoint_RegistersZeroExporters` (Unit), `CliMcpTelemetryIntegrationTests` (3 passed in Integration: 0 exporters, 0 stdout bytes, no listener), `telemetry-tracing.test.ts` (Web: 0 trace exporters). For the local Dashboard, `AppHostComposeParityArchitectureTests` (8 passed in Arch) and `AssertIsolatedAppHostEnvironment` enforce 100% loopback binding (`127.0.0.1`), confirmed in T074 manual verification.
+>   - *Follow-up*: None.
+> - **`SC-004` (Log Scrubber Producer Census & OTLP Correlation)**: **PASS**.
+>   - *Evidence*: `docs/adr/0051-otel-logs-and-runtime-scrubbing.md` records producer evidence for all 7 rules across all services and hosts, plus the Gate 5 addendum for structured object attributes. In Contract: `IdentityRedactionContractTests` (17 passed), `ApiProblemsContractTests` (7 passed), `DistributedTracingContractTests` (10 passed). In Unit: `RoleRadarConsoleFormatterTests` (17 passed), `LogScrubberTests` (38 passed). Exported log records carry matching `TraceId` and `SpanId`.
+>   - *Follow-up*: None.
+> - **`SC-005` (RED & Store Health Metrics with Zero Leaked Labels)**: **PASS** (proven by unit, contract, integration tests and manual check).
+>   - *Evidence*: `ServiceMetricsContractTests` (4 passed in Contract), `StoreMetricsTests` (6 passed in Unit), `telemetry-metrics.test.ts` (7 passed in Web), `MongoTelemetryIntegrationTests` (3 passed in Integration: driving forbidden tags through store meter and verifying Views drop them). Strict allowlist enforced by OpenTelemetry Views (`MetricStreamConfiguration.TagKeys` in .NET, `createAllowListAttributesProcessor` in JS).
+>   - *Follow-up*: None.
+> - **`SC-006` (Local Telemetry Setup, Multi-Doc Transactions, Dashboard Built-in Views, Zero Real Volume Mutation)**: **PASS** (manual evidence record from T074 in Gate 5 / PR #95).
+>   - *Evidence*: Documented in T074 execution notes: AppHost started on isolated ports (15001-15003, 37017, 15888-15891), Resources view showed all 4 services `Running` on throwaway `roleradar-apphost-*` volumes, Traces view showed 32-hex `traceId` (`7b1d36cf1b7dd89fa3b7e9873adcab04`) for a multi-document Mongo transaction (`insert audit_log`, `commitTransaction`), Structured Logs showed matching `TraceId`/`SpanId` with `[redacted]` placeholders, Metrics view showed duration and readiness instruments, and the real volumes (`roleradar-mongo-data`, `roleradar-identity-data`) were never mounted or named by any run and `docker volume ls` showed their names unchanged (the safety guard refuses them by construction; a byte-level check of the volume contents was not done, so "0 bytes modified" is shown by construction and not measured). Data seeding is manual.
+>   - *Follow-up*: `RR-96` (AppHost automated data seeding).
+> - **`SC-007` (Zero Parity Drift Between Local Setup and Packaged Compose Stack)**: **PASS**.
+>   - *Evidence*: `AppHostComposeParityArchitectureTests` (8 passed in Arch) validates 0 port drift, 0 environment variable drift, exact image digest match (`mongo:9.0.4`, `aspire-dashboard:13.6.5`), and no forbidden volume mounts.
+>   - *Follow-up*: None.
+>
+> ### 3. Functional Requirements Audit (`FR-001` to `FR-017`)
+> - **`FR-001` (OTLP Export for Web, API, Identity)**: **PASS**. Supported across Web, API, Identity (and opted-in CLI/Mcp) when configured via `OTEL_EXPORTER_OTLP_ENDPOINT`. Proven by contract and unit tests. Follow-up: None.
+> - **`FR-002` (W3C Trace Context 32-Hex `traceId` Direct Reuse)**: **PASS**. W3C `traceparent` preserved; `traceId` is identical in spans, console logs, RFC 9457 problem documents, and `request_correlation_id` audit records. Follow-up: None.
+> - **`FR-003` (Connected Traces with 100% Local Sampling)**: **PASS**. Spans link causally across Web -> Identity, Web -> API -> Mongo. Local sampling defaults to 100% (AlwaysOn). Follow-up: None.
+> - **`FR-004` (Telemetry Privacy Gate `RR-72` Shipping with First Exporter)**: **PASS**. Shipped in Gate 2 (`ADR 0050`), extended in Gate 3 (`ADR 0051`) and Gate 4 (`ADR 0052`). Strips query strings, headers, db statement text, and exception messages across all signals. Follow-up: None.
+> - **`FR-005` (Default-Off Exporters & Loopback Ingestion)**: **PASS**. 0 exporters registered when endpoint unset; Aspire Dashboard binds exclusively to `127.0.0.1`. Follow-up: None.
+> - **`FR-006` (Gate 3 Runtime Log Scrubbing Evaluation & `ADR 0051`)**: **PASS**. Census executed; `LogScrubber` kept and wired into `RoleRadarLogScrubbingProcessor` for OTLP logs; recorded in `ADR 0051`. Follow-up: None.
+> - **`FR-007` (Structured Logs Export with Trace Correlation & Redaction)**: **PARTIAL** (due to web log severity).
+>   - .NET services export structured logs correlated with `TraceId` and `SpanId`, with full redaction. Web exports structured logs with matching `TraceId` and `SpanId`, but log severity is currently unset on web OTLP log records.
+>   - *Follow-up*: `RR-95` (Web OTLP log record severity number and text mapping).
+> - **`FR-008` (Gate 4 Service RED, Runtime, and Datastore Health Metrics)**: **PASS**. Exported over OTLP: HTTP server request duration/active requests, client duration, node event loop utilization, process heap/rss, store operation duration, store readiness status and duration. Follow-up: None.
+> - **`FR-009` (Strict Metric Label Cardinality & Privacy)**: **PASS**. OpenTelemetry Views drop all non-allowlisted tags; 0 high-cardinality or personal identifiers exported. Follow-up: None.
+> - **`FR-010` (Gate 1 Spike in Scratch Directory & `ADR 0049`)**: **PASS**. Spike executed in `$TEMP/roleradar-spike-015/`; `ADR 0049` merged in PR #91. Follow-up: None.
+> - **`FR-011` (ADR 0049 Documented Checks 1–6)**: **PASS**. Replica-set Mongo, Identity TLS/issuer parity, drift checks, CLI/MCP default-off policy, built-in dashboard views, and Option 3 deferral documented. Follow-up: None.
+> - **`FR-012` (Gate 5 Local Setup & Built-in Views)**: **PASS**. `RoleRadar.AppHost` implemented and verified in T074. Follow-up: None.
+> - **`FR-013` (Dedicated Throwaway Volumes & Unchanged Packaged Compose Stack)**: **PASS**. AppHost enforces throwaway volume prefix `roleradar-apphost-*`; compose stack in `deploy/` untouched. Follow-up: None.
+> - **`FR-014` (Principles X Standards First & VIII Pinned Dependencies)**: **PASS**. Platform meters, driver events, and official OTel packages adopted; dependencies pinned to exact versions and digests. Follow-up: None.
+> - **`FR-015` (Fictional Demo/Seed Data Only)**: **PASS**. Strictly fictional data used across all tests, fixtures, and manual runs; 0 leaks. Follow-up: None.
+> - **`FR-016` (Five Sequential Verifiable Gates)**: **PASS**. Merged sequentially: Gate 1 (#91), Gate 2 (#92), Gate 2b/3 (#93), Gate 4 (#94), Gate 5 (#95). Follow-up: None.
+> - **`FR-017` (CLI and Mcp.Stdio Default-Off & stdout Hygiene)**: **PASS**. 0 exporters when unset; bounded flush on opt-in; `Mcp.Stdio` writes 0 bytes of diagnostics/telemetry to `stdout`. Follow-up: None.
+>
+> ### 4. Plan Deviations Decided During Gates
+> 1. **Aspire 13.6.5 Release-Age Waiver (ADR 0053)**: During the Gate 1 scratch spike, restoring `Aspire.Hosting` 13.6.4 raised `NU1903` (High severity CVE `GHSA-f7vh-h5g3-7jrh`). The 14-day rule was waived for the vendor patch `13.6.5` under owner waiver `ADR 0053`; `NU1903` was never suppressed.
+> 2. **Web Hand-Rolled RED Metrics (ADR 0052)**: Evaluated `@opentelemetry/instrumentation-http` and `@opentelemetry/instrumentation-undici` in Gate 4. Both were pinned in Gate 2 and never imported, and Gate 4 rejected them on the reasoning in ADR 0052: `server.ts` already runs a custom request handler with an edge-level server span that enforces strict W3C trace validation, so a second instrumentation would be a competing source for the same span (this is design reasoning; no duplicate-span run was done). Hand-rolled RED metrics using `matchRoutes` against `build.routes` were adopted, and unneeded package pins were removed.
+> 3. **Three Loopback HTTP Adjustments (Gate 5)**: Allowed running the dev loop over plain loopback HTTP without modifying machine certificate trust stores (`dotnet dev-certs https --trust` was not run):
+>    - Web server sets `HOST: 127.0.0.1` bind address.
+>    - Web OIDC client sets `allowInsecureRequests: true` strictly for `http://127.0.0.1:*` issuer.
+>    - Identity cookie authentication relaxes `SameSite=Lax` strictly for `http://127.0.0.1:*` issuer.
+> 4. **Per-RID Lock Files in AppHost (Gate 5)**: `RoleRadar.AppHost` restored with runtime identifiers for cross-platform support (`win-x64`, `linux-x64`, `linux-arm64`, `osx-arm64`).
+> 5. **Log Scrubber Object-Valued Attribute Fix (Gate 5 T074 Finding)**: Manual dashboard check T074 revealed Duende passing token validation details as a structured object (`{@details}`) containing PKCE `code_verifier`. `RoleRadarLogScrubbingProcessor` previously scrubbed only string-valued attributes. Fixed at the choke point (`LogScrubber.ScrubValue`) to scrub all attribute types, verified with contract and unit tests (`c366b721f`).
+>
+> ### 5. Hygiene & Verification Checks
+> - **Zero diff in `.github/dependabot.yml`**: Verified via `git diff 3cd4fbbef^ HEAD -- .github/dependabot.yml` (diff is empty).
+> - **LF line endings**: Verified on every file touched by feature 015 since `3cd4fbbef` (0 CRLF occurrences).
+> - **No leftover "13.6.4"**: Verified via `git grep "13.6.4"` (present only as history in ADR 0049, ADR 0053 and the affected-version note in `research.md`, and asserted absent from the package pins by `AppHostComposeParityArchitectureTests`).
+> - **Docker ps -a dev stack check**: Verified `docker ps -a` before and after runs; dev stack containers (`deploy-web-1`, `deploy-api-1`, `deploy-identity-1`, `roleradar-mongo`, `deploy-cli-1`, `deploy-mcp-1`) are intact and unchanged.
+> - **Certificate trust**: No certificate trust command was run (`dotnet dev-certs https --trust` was not executed).
+> - **Commands not run**: `git commit` and `git push` were not run; all changes remain staged in the working tree on branch `015-observability`. Also not run: the macOS and Linux arm64 builds. The `packages.osx-arm64.lock.json` and `packages.linux-arm64.lock.json` files were generated from Windows and have not been restored in locked mode on those platforms (the macOS CI job is skipped on pull requests and arm64 runs from its own workflow); this is tracked in RR-93.
+> - **Gate lesson recorded**: the `PASS` rows for `SC-002` and `SC-004` were also true after Gate 3, yet the manual check (T074) later found a PKCE `code_verifier` in an exported log record (fixed in `c366b721f`, ADR 0051 census corrected). Automated gates prove what they assert; the privacy tests had only covered failed token requests, so a successful token exchange was never exercised before the manual run.
 
 ---
 
