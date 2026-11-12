@@ -101,11 +101,13 @@ internal static class IdentityContractTestServer
             $"Expected redirect status, got {response.StatusCode}");
     }
 
+    private const string DefaultCodeVerifier = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~0123456789";
+
     public static async Task<string> LoginAndGetIdTokenAsync(
         HttpClient client,
-        IServiceProvider services)
+        IServiceProvider services,
+        string codeVerifier = DefaultCodeVerifier)
     {
-        var codeVerifier = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-._~0123456789";
         var challengeBytes = SHA256.HashData(Encoding.ASCII.GetBytes(codeVerifier));
         var codeChallenge = Base64UrlTextEncoder.Encode(challengeBytes);
         var state = "state-" + Guid.NewGuid().ToString("N");

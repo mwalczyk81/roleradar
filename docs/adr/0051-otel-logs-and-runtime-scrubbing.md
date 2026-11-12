@@ -41,7 +41,7 @@ Each of the 7 rules was executed against real producers using `PreScrubLogCaptur
 | **Rule 7** | Structured properties with sensitive keys (`IsSensitiveKey(key)`) | **No (Not observed in production codebase or pinned libraries)** | Synthetic harness only: `TelemetryPrivacyGateTests.StructuredArguments_WithSensitiveKey_AreRedacted` | *None found.* A search across `src/` and pinned dependencies identified zero calls that log structured properties matching `IsSensitiveKey`. | **No**: Dormant until code introduces a matching template property. | **Option A (Keep)**: Acts as a safeguard against developers accidentally logging `{Password}` or `{Token}` in future code.<br>**Option B (Drop)**: Removes key-checking logic; enforces sensitive parameter prevention solely via code review and architecture tests. |
 
 **Measured Conclusion Across All 7 Rules**:
-Following the addition of the source filter for Duende authorize endpoints in `DefaultLevels`, **zero rules have an active producer under default configuration**.
+Following the addition of the source filter for Duende authorize endpoints in `DefaultLevels`, **zero rules had an active producer in the census flows** (failed sign-ins, failed token requests, an authorize request). **Corrected at Gate 5 (see the addendum below):** a *successful* code exchange was not in those flows, and it does emit a PKCE `code_verifier` at the default level.
 
 ---
 
@@ -53,7 +53,7 @@ Empirical testing against `OpenTelemetry` `1.20.1` (`OpenTelemetry.Logs.LogRecor
 
 - `LogRecord.Body`: Public getter and setter (`CanWrite = true`). String bodies are rewritten via `LogScrubber.ScrubText(body)`.
 - `LogRecord.FormattedMessage`: Public getter and setter (`CanWrite = true`). Formatted strings are rewritten directly.
-- `LogRecord.Attributes`: Public getter and setter (`CanWrite = true`). The attribute collection is sanitized by redacting sensitive keys (`LogScrubber.IsSensitiveKey`) and scrubbing string values. Dropped attributes (such as `exception.stacktrace`) are removed.
+- `LogRecord.Attributes`: Public getter and setter (`CanWrite = true`). The attribute collection is sanitized by redacting sensitive keys (`LogScrubber.IsSensitiveKey`) and, for every other value, applying `LogScrubber.ScrubValue` (Gate 5: strings are scrubbed, numbers and booleans keep their type, and an object or a collection of objects becomes scrubbed text, because an exporter serialises an object attribute with its own `ToString()`). Dropped attributes (such as `exception.stacktrace`) are removed.
 - `LogRecord.Exception`: Public getter and setter (`CanWrite = true`). Mutating `Exception.Message` in-place is impossible because `Exception.Message` is get-only. Replacing `Exception` with `new InvalidOperationException(...)` loses the original exception type. **Resolved approach**: `RoleRadarLogScrubbingProcessor` sets `data.Exception = null`, and adds structured attributes:
   - `exception.type`: Full name of the original exception type (`data.Exception.GetType().FullName`).
   - `exception.message`: Scrubbed exception message (`LogScrubber.ScrubText(data.Exception.Message)`).
@@ -131,3 +131,17 @@ ASP.NET Core native HTTP logging (`AddHttpLogging` with `CombineLogs = true`) wa
 - **Good**: Unscrubbed scopes leak vector is eliminated by setting `IncludeScopes = false`.
 - **Good**: Net reduction of hand-written middleware by utilizing ASP.NET Core HTTP logging (Principle X).
 - **Good**: Protocol hygiene preserved on `stdout` in `Mcp.Stdio` (`FR-017`).
+
+## Gate 5 Addendum (2026-11-12): Object-Valued Attributes and the Successful Token Exchange (RR-71)
+
+**What the T074 dashboard check found.** An Identity log record showed the PKCE `code_verifier` in the clear. It is Duende's `Token request validation success` record, which carries the request as a structured object, `{@details}` (a `TokenRequestValidationLog` with `ClientId`, `GrantType`, `AuthorizationCode`, `RefreshToken` and a `Raw` dictionary of the request fields). Duende masks `code` and `client_secret` itself (`***REDACTED***`) but not `code_verifier`.
+
+**Why the scrubber did not apply.** It did apply to the console and to the formatted message and body (both showed `"code_verifier": "[redacted]"`). The leak was the *attribute*: `RoleRadarLogScrubbingProcessor` scrubbed only attribute values that were `string`, so the `{@details}` object went to the OTLP exporter as an object, which serialises it with its own `ToString()` and so skipped every text rule, including the JSON-pair rule that knows `code_verifier`. The console path was not affected because `LogScrubber.ScrubProperty` turns every value into text first.
+
+**Not a Development-only case.** Reproduced through the real Identity host, a full authorize, sign-in and code exchange with a sentinel verifier: the verifier is emitted before scrubbing at `Duende = Information` (the default, since `DefaultLevels` filters only the two authorize categories), `Debug` and `Trace`, and the OTLP record carried it in all three. So the packaged stack with an OTLP endpoint set was exposed too; the census had tested failed token requests and an authorize request, never a successful exchange. `LoggingSetup` does not branch on the environment, so `ASPNETCORE_ENVIRONMENT=Development` changes nothing here.
+
+**Fix at the choke point, not per key.** `LogScrubber.ScrubValue` is the one rule for any exported value, and the processor applies it to every attribute (and to a non-string body): numbers and booleans keep their type, text is scrubbed, an object or a sequence of objects becomes scrubbed text, and an array of primitives keeps its type. The console already worked this way.
+
+**Tests (red first).** `IdentityCodeVerifierLogContractTests` drives the real Identity host with a sentinel verifier at `Information`, `Debug` and `Trace`, asserts the record really carries it before scrubbing, and asserts it reaches neither the console bytes nor any OTLP record (body, formatted message, attribute), while `authorization_code`, `redirect_uri` and the `[redacted]` placeholder stay visible. `LogScrubbingObjectAttributeTests` runs the real `AddRoleRadarLogging` pipeline with the exact payload shape (and checks collections, a sensitive key with an object value, and that numbers and booleans keep their type); every .NET host shares that pipeline, so the API is covered by it. The web mirror already scrubbed object values (`String(value)` then the text rules); `telemetry-logs.test.ts` now guards that.
+
+**Census update.** Rule 5 (JSON `"key": "value"` pairs) and the exact key `code_verifier` now have an active producer at default levels: a successful `authorization_code` token exchange, through the object attribute. They are scrubbed on every sink.
