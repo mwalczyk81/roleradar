@@ -70,8 +70,8 @@ Dependencies point one way: Domain, then Application, then Infrastructure, then 
 
 RoleRadar is built spec first with [GitHub Spec Kit](https://github.com/github/spec-kit). Every feature has a spec, a plan and a task list under [specs/](specs/), written before any code and kept in step with it.
 
-- A [constitution](.specify/memory/constitution.md) of nine principles (privacy first, tests first, enforced layering, named seams only, untrusted posting text, stdout hygiene, durable data, ADRs for decisions, .NET 10 with UUIDv7 and UTC).
-- About forty [architecture decision records](docs/adr/README.md), one per library choice or design decision, including the ones that were rejected.
+- A [constitution](.specify/memory/constitution.md) of ten principles (privacy first, tests first, enforced layering, named seams only, untrusted posting text, stdout hygiene, durable data, ADRs for decisions, .NET 10 with UUIDv7 and UTC, and standards first: check for an RFC, a platform feature or a maintained library before building a mechanism).
+- Over fifty [architecture decision records](docs/adr/README.md), one per library choice or design decision, including the ones that were rejected.
 - Tests first and shown failing, architecture tests for the layering, contract tests for the API and MCP schemas, and integration tests against throwaway Mongo containers only.
 - A human review gate. Each phase stops for the owner's review, and the gate script rebuilds and retests a clean clone before a pull request.
 
@@ -140,7 +140,7 @@ Open the `http://127.0.0.1:15888/login?t=...` URL it prints. Press `Ctrl+C` in t
 
 ## CLI and MCP reference
 
-- CLI: `status`, `import`, `backup`, `restore`, `wipe` (needs a confirmation token), `reconcile-read-models` (dry run unless confirmed), and `demo` (demo stack only). Full options: [docs/cli-reference.md](docs/cli-reference.md).
+- CLI: `status`, `import`, `backup`, `restore`, `wipe` (needs a confirmation token), `reconcile-read-models` (dry run unless confirmed), `audit list` (read-only), and `demo` (demo stack only). Full options: [docs/cli-reference.md](docs/cli-reference.md).
 - MCP tools: `note_create`, `note_get`, `note_append`, `note_replace_section`, `note_search`, `note_archive`, `company_record`, `posting_record`, `posting_transition`, `tracker_query`, `tracker_log`, `application_record`. No tool deletes anything. Details: [docs/mcp-tools.md](docs/mcp-tools.md).
 
 ## Environment Variables
@@ -153,6 +153,8 @@ Open the `http://127.0.0.1:15888/login?t=...` URL it prints. Press `Ctrl+C` in t
 | `ROLERADAR_BACKUP_DUMP_COMMAND` | `docker compose -f <compose> exec -T mongo mongodump --archive --gzip --oplog` | Command executed to produce the plaintext backup stream. |
 | `ROLERADAR_BACKUP_RESTORE_COMMAND` | `docker compose -f <compose> exec -T mongo mongorestore --archive --gzip --oplogReplay --nsInclude "<db>.*"` | Command executed to consume the restored plaintext stream. |
 | `ROLERADAR_LOG_LEVEL` | `Warning` | Minimum logging verbosity for CLI (`Trace`, `Debug`, `Information`, `Warning`, `Error`). |
+| `ROLERADAR_LOG_FORMAT` | unset (`text`) | `json` or `text` for web, API, Identity, CLI and MCP logs. The shipped images set `json` ([logs and health](docs/operations/logs-and-health.md)). |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | Unset means telemetry is off: no exporter is registered and no connection is opened. Set it to an OTLP endpoint to export traces, logs and metrics from the web app, API and Identity (and, opt in, the CLI and MCP server). Secrets, query strings and personal identifiers are scrubbed first ([ADR 0049](docs/adr/0049-local-observability-apphost-and-dashboard.md), [ADR 0051](docs/adr/0051-otel-logs-and-runtime-scrubbing.md)). |
 
 ## Security and contributing
 
