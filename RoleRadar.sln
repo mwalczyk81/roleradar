@@ -31,6 +31,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RoleRadar.Api", "src\RoleRa
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RoleRadar.Observability", "src\RoleRadar.Observability\RoleRadar.Observability.csproj", "{F736B125-1FB4-4EDD-B32A-67368B0BB050}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RoleRadar.AppHost", "src\RoleRadar.AppHost\RoleRadar.AppHost.csproj", "{8F876F7D-63BE-4311-A50D-FB980EDD2118}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -185,6 +187,18 @@ Global
 		{F736B125-1FB4-4EDD-B32A-67368B0BB050}.Release|x64.Build.0 = Release|Any CPU
 		{F736B125-1FB4-4EDD-B32A-67368B0BB050}.Release|x86.ActiveCfg = Release|Any CPU
 		{F736B125-1FB4-4EDD-B32A-67368B0BB050}.Release|x86.Build.0 = Release|Any CPU
+		{8F876F7D-63BE-4311-A50D-FB980EDD2118}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8F876F7D-63BE-4311-A50D-FB980EDD2118}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8F876F7D-63BE-4311-A50D-FB980EDD2118}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8F876F7D-63BE-4311-A50D-FB980EDD2118}.Debug|x64.Build.0 = Debug|Any CPU
+		{8F876F7D-63BE-4311-A50D-FB980EDD2118}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8F876F7D-63BE-4311-A50D-FB980EDD2118}.Debug|x86.Build.0 = Debug|Any CPU
+		{8F876F7D-63BE-4311-A50D-FB980EDD2118}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8F876F7D-63BE-4311-A50D-FB980EDD2118}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8F876F7D-63BE-4311-A50D-FB980EDD2118}.Release|x64.ActiveCfg = Release|Any CPU
+		{8F876F7D-63BE-4311-A50D-FB980EDD2118}.Release|x64.Build.0 = Release|Any CPU
+		{8F876F7D-63BE-4311-A50D-FB980EDD2118}.Release|x86.ActiveCfg = Release|Any CPU
+		{8F876F7D-63BE-4311-A50D-FB980EDD2118}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -202,5 +216,6 @@ Global
 		{4D03C9A0-9D84-4A80-890F-62390500FA0D} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{C2722699-05DD-4828-8C28-FDAB46AFEAFD} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{F736B125-1FB4-4EDD-B32A-67368B0BB050} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
+		{8F876F7D-63BE-4311-A50D-FB980EDD2118} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 	EndGlobalSection
 EndGlobal

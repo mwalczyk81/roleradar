@@ -84,4 +84,33 @@ describe("Web OpenTelemetry Logs (Gate 3)", () => {
     expect(record.attributes?.["cookie"]).toBe("[redacted]");
     expect(record.attributes?.["safeProp"]).toBe("safe-value");
   });
+  it("scrubs an object-valued attribute the way the .NET hosts do (a PKCE code_verifier never reaches the exporter)", async () => {
+    resetWebTelemetryForTests();
+    initializeWebTelemetry({
+      env: { OTEL_EXPORTER_OTLP_ENDPOINT: "http://127.0.0.1:4318" },
+      forceReinit: true,
+      enableLogCaptureForTests: true,
+    });
+
+    const sentinelVerifier = "SENTINEL-VERIFIER-7b3e91d04f6a2c85e1d09a3b-0123456789"; // gitleaks:allow (fictional test vector, not a credential)
+    // An object whose own text carries the verifier, the shape Duende's validation log has, and a plain nested object.
+    const detailsLikeDuende = {
+      toString: () =>
+        `{ "GrantType": "authorization_code", "Raw": { "redirect_uri": "https://localhost:5003/auth/callback", "code_verifier": "${sentinelVerifier}" } }`,
+    };
+
+    log.info("Token request validation success", {
+      props: {
+        details: detailsLikeDuende,
+        nested: { code_verifier: sentinelVerifier },
+        list: [`"code_verifier": "${sentinelVerifier}"`],
+      },
+    });
+
+    const record = getTestExportedLogs().at(-1);
+    const serialized = JSON.stringify({ body: record?.body, attributes: record?.attributes ?? {} });
+    expect(serialized).not.toContain(sentinelVerifier);
+    expect(serialized).toContain("authorization_code");
+    expect(serialized).toContain("[redacted]");
+  });
 });

@@ -1,0 +1,42 @@
+<Project Sdk="Aspire.AppHost.Sdk">
+  <!--
+    Feature 015 Gate 5 (ADR 0049): the one-command local telemetry dev loop. A leaf orchestrator: it starts the Identity,
+    API and web hosts from source next to a throwaway replica-set MongoDB and shows them in the Aspire Dashboard.
+    Nothing references this project, it references no Duende package, and the packaged Compose stack stays unchanged.
+    The Aspire SDK version is pinned in global.json (msbuild-sdks); the package versions in Directory.Packages.props.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <!--
+      ASPIRE010 only says the optional Aspire CLI bundle is not used: the Dashboard and the orchestrator then come from the
+      pinned NuGet packages, which is what keeps the loop a plain "dotnet run" with nothing else to install. It is not a
+      security diagnostic. Advisory warnings (NU1901 to NU1904) are never suppressed anywhere (ADR 0053).
+    -->
+    <NoWarn>$(NoWarn);ASPIRE010</NoWarn>
+  </PropertyGroup>
+
+  <!--
+    The Aspire SDK adds Aspire.Dashboard.Sdk.<rid> and Aspire.Hosting.Orchestration.<rid> for the machine that restores, so
+    each platform CI builds on has its own lock file (a locked restore keeps working everywhere). win-x64, the
+    developer's machine, keeps the default packages.lock.json.
+  -->
+  <PropertyGroup>
+    <_AppHostOs Condition="$([MSBuild]::IsOSPlatform('Windows'))">win</_AppHostOs>
+    <_AppHostOs Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux</_AppHostOs>
+    <_AppHostOs Condition="$([MSBuild]::IsOSPlatform('OSX'))">osx</_AppHostOs>
+    <_AppHostArch>$([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString().ToLowerInvariant())</_AppHostArch>
+    <NuGetLockFilePath Condition="'$(_AppHostOs)-$(_AppHostArch)' != 'win-x64'">$(MSBuildProjectDirectory)/packages.$(_AppHostOs)-$(_AppHostArch).lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RoleRadar.Api\RoleRadar.Api.csproj" />
+    <ProjectReference Include="..\RoleRadar.Identity\RoleRadar.Identity.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.AppHost" />
+    <PackageReference Include="Aspire.Hosting.JavaScript" />
+    <PackageReference Include="Aspire.Hosting.MongoDB" />
+  </ItemGroup>
+</Project>

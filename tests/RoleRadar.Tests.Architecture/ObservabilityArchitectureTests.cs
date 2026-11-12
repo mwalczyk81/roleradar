@@ -152,4 +152,52 @@ public sealed class ObservabilityArchitectureTests
 
         throw new InvalidOperationException("Could not locate repository root containing RoleRadar.sln and src directory.");
     }
+
+    // ---- Gate 5 (feature 015, ADR 0049): the AppHost is a thin orchestrator that talks to the hosts only as processes ----
+
+    [Fact]
+    public void AppHost_ReferencesNoInnerLayerOrSharedObservabilityProject()
+    {
+        var csproj = Path.Combine(ObservabilityRepoRoot(), "src", "RoleRadar.AppHost", "RoleRadar.AppHost.csproj");
+        Assert.True(File.Exists(csproj), $"Expected {csproj} (Gate 5).");
+
+        var text = File.ReadAllText(csproj);
+        foreach (var forbidden in new[] { "RoleRadar.Domain", "RoleRadar.Application", "RoleRadar.Infrastructure", "RoleRadar.Observability", "RoleRadar.Cli", "RoleRadar.Mcp.Stdio", "MongoDB.Driver" })
+        {
+            Assert.DoesNotContain(forbidden, text, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void AppHost_ExportsOtlpOverLoopbackOnly_AndHttpProtobufForTheWebApp()
+    {
+        var appHostDir = Path.Combine(ObservabilityRepoRoot(), "src", "RoleRadar.AppHost");
+        var program = Path.Combine(appHostDir, "Program.cs");
+        var launch = Path.Combine(appHostDir, "Properties", "launchSettings.json");
+        Assert.True(File.Exists(program) && File.Exists(launch), "Expected AppHost Program.cs and Properties/launchSettings.json (Gate 5).");
+
+        // The web app uses the OTLP HTTP exporters, so it must be pointed at the dashboard's HTTP receiver.
+        Assert.Contains("OtlpProtocol.HttpProtobuf", File.ReadAllText(program), StringComparison.Ordinal);
+
+        var launchText = File.ReadAllText(launch);
+        Assert.Contains("ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL", launchText, StringComparison.Ordinal);
+        Assert.Contains("ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL", launchText, StringComparison.Ordinal);
+        Assert.DoesNotContain("0.0.0.0", launchText, StringComparison.Ordinal);
+    }
+
+    private static string ObservabilityRepoRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "RoleRadar.sln")))
+            {
+                return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate repository root.");
+    }
 }

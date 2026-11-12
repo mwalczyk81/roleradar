@@ -78,6 +78,34 @@ public static partial class LogScrubber
             || SensitiveKeyFragments.Any(fragment => normalized.Contains(fragment, StringComparison.Ordinal));
     }
 
+    /// <summary>
+    /// The value to export for a structured log field. Numbers and booleans keep their type. Text is scrubbed. Anything else, such as
+    /// the object Duende passes as <c>{@details}</c> or a collection of objects, becomes scrubbed text (the way the console already
+    /// writes it), because an exporter would otherwise serialise the object with its own ToString() and skip every text rule.
+    /// Arrays of primitives keep their type; any other sequence becomes an array of scrubbed text.
+    /// </summary>
+    public static object? ScrubValue(object? value)
+    {
+        switch (value)
+        {
+            case null:
+                return null;
+            case string text:
+                return ScrubText(text);
+            case bool or byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal:
+                return value;
+            case System.Collections.IEnumerable sequence:
+                if (value.GetType().GetElementType() is { IsPrimitive: true })
+                {
+                    return value;
+                }
+
+                return sequence.Cast<object?>().Select(element => ScrubText(Convert.ToString(ScrubValue(element), System.Globalization.CultureInfo.InvariantCulture))).ToArray();
+            default:
+                return ScrubText(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture));
+        }
+    }
+
     /// <summary>The value to log for a structured property: redacted for a sensitive key, otherwise scrubbed text.</summary>
     public static string ScrubProperty(string key, object? value) =>
         IsSensitiveKey(key) ? Redacted : ScrubText(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture));

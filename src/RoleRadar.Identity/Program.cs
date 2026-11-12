@@ -120,11 +120,26 @@ public partial class Program
 
         var clients = IdentityServerConfig.GetClients(builder.Configuration).ToList();
 
+        // Loopback HTTP (the local AppHost loop) cannot use SameSite=None cookies; every other setup keeps Duende's default.
+        var loopbackSameSite = LoopbackCookiePolicy.Resolve(issuerUri);
+        if (loopbackSameSite != SameSiteMode.Unspecified)
+        {
+            builder.Services.PostConfigure<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(
+                IdentityConstants.ApplicationScheme,
+                cookie => cookie.Cookie.SameSite = loopbackSameSite);
+        }
+
         builder.Services.AddIdentityServer(options =>
         {
             if (!string.IsNullOrWhiteSpace(issuerUri))
             {
                 options.IssuerUri = issuerUri.Trim();
+            }
+
+            if (loopbackSameSite != SameSiteMode.Unspecified)
+            {
+                options.Authentication.CookieSameSiteMode = loopbackSameSite;
+                options.Authentication.CheckSessionCookieSameSiteMode = loopbackSameSite;
             }
 
             options.Events.RaiseErrorEvents = true;

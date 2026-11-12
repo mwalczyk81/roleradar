@@ -52,4 +52,5 @@
    - `roleradar-web` exports Node runtime health metrics (memory working set / heap and event-loop lag).
 3. **Label cardinality allowlist**:
    - Metric attributes are restricted to bounded operational dimensions (`http.request.method`, `http.route`, `http.response.status_code`, `error.type`, `url.scheme`, `server.address`, `server.port`, `db.system.name`, `db.operation.name`, `db.collection.name`, `status`).
+   - Web server span names are `{method} {http.route}` and `http.route` is the same template used for the `http.server.request.duration` label; React Router single-fetch `.data` suffixes are normalised before matching, and `url.scheme` comes from the socket (`http` or `https`).
    - Raw request paths with dynamic IDs (when `http.route` is available, `http.route` is used; unmatched 404 paths collapse to a constant route template or omit path), `url.query`, `owner_id`, entity GUIDs, `sub`, `username`, and free text are forbidden on metrics.

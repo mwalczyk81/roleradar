@@ -192,11 +192,18 @@ export function createRequestHandler() {
     const { span, activeContext, traceId, spanId } = startServerRequestSpan(
       method,
       path,
-      singleHeader(req.headers["traceparent"])
+      singleHeader(req.headers["traceparent"]),
+      scheme,
+      resolveHttpRoute(path)
     );
 
     res.on("finish", () => {
       const status = res.statusCode;
+      // The route table is loaded lazily on the first page request, so the route is resolved again here: the span name and
+      // http.route are final once the response is done, and the metric label below is the same value.
+      const route = resolveHttpRoute(path);
+      span.updateName(`${method} ${route}`);
+      span.setAttribute("http.route", route);
       span.setAttribute("http.response.status_code", status);
       if (status >= 500) {
         span.setStatus({ code: SpanStatusCode.ERROR });
@@ -207,7 +214,7 @@ export function createRequestHandler() {
       const durationSeconds = (performance.now() - started) / 1000;
       recordServerRequestDuration(durationSeconds, {
         method,
-        route: resolveHttpRoute(path),
+        route,
         statusCode: status,
         scheme,
       });
@@ -292,9 +299,15 @@ export function createWebServer(): https.Server | http.Server {
   return http.createServer(handler);
 }
 
+/** The bind address: every interface by default (the packaged image), or whatever HOST says (the local AppHost uses 127.0.0.1). */
+export function resolveBindHost(): string {
+  const configured = process.env.HOST?.trim();
+  return configured && configured.length > 0 ? configured : "0.0.0.0";
+}
+
 export function startServer(port: number = 5003): https.Server | http.Server {
   const server = createWebServer();
-  server.listen(port, "0.0.0.0", () => {
+  server.listen(port, resolveBindHost(), () => {
     log.info(`RoleRadar Web listening on port ${port}`);
   });
   return server;

@@ -6,8 +6,8 @@ namespace RoleRadar.Observability;
 /// <summary>
 /// Gate 3 processor (ADR 0051, RR-86, RR-72) that sanitizes <see cref="LogRecord"/> instances
 /// before they are exported over OTLP.
-/// Scrubs Body, FormattedMessage, Attributes (redacting sensitive keys and scrubbing string values),
-/// and Exception text.
+/// Scrubs Body, FormattedMessage, Attributes (redacting sensitive keys, scrubbing strings, and turning any
+/// object or collection into scrubbed text), and Exception text.
 /// </summary>
 public sealed class RoleRadarLogScrubbingProcessor : BaseProcessor<LogRecord>
 {
@@ -15,9 +15,9 @@ public sealed class RoleRadarLogScrubbingProcessor : BaseProcessor<LogRecord>
     {
         ArgumentNullException.ThrowIfNull(data);
 
-        if (data.Body is string bodyStr)
+        if (data.Body is not null)
         {
-            data.Body = LogScrubber.ScrubText(bodyStr);
+            data.Body = LogScrubber.ScrubValue(data.Body) as string ?? data.Body;
         }
 
         if (data.FormattedMessage != null)
@@ -40,13 +40,11 @@ public sealed class RoleRadarLogScrubbingProcessor : BaseProcessor<LogRecord>
                 {
                     scrubbedAttrs.Add(new KeyValuePair<string, object?>(kv.Key, LogScrubber.Redacted));
                 }
-                else if (kv.Value is string strVal)
-                {
-                    scrubbedAttrs.Add(new KeyValuePair<string, object?>(kv.Key, LogScrubber.ScrubText(strVal)));
-                }
                 else
                 {
-                    scrubbedAttrs.Add(kv);
+                    // Every value goes through the same rule, not only strings: a structured object (Duende's {@details}) would
+                    // otherwise reach the exporter as an object and be serialised with its own ToString().
+                    scrubbedAttrs.Add(new KeyValuePair<string, object?>(kv.Key, LogScrubber.ScrubValue(kv.Value)));
                 }
             }
         }
