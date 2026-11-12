@@ -40,6 +40,8 @@ Represents a unit of work in a distributed trace (`RR-68`).
 | Database Attributes | `MongoDB.Driver` 3.13.0 (`MongoTelemetry`) | Allowlisted attributes (`db.system.name` = `"mongodb"`, `db.operation.name`, `db.operation.summary`, `db.command.name`, `db.namespace`, `db.collection.name`, `db.query.summary`, `server.address`, `server.port`, `network.transport`, `db.response.status_code`, `db.mongodb.lsid`, `db.mongodb.txn_number`, `db.mongodb.server_connection_id`, `db.mongodb.driver_connection_id`, `db.mongodb.cursor_id`). `TracingOptions.QueryTextMaxLength` is pinned to `0` and the span processor explicitly drops `db.query.text` and `db.statement`. |
 | Exception Events & Status Description | Span `exception` event & `StatusDescription` | Sanitized without `LogScrubber` (`ADR 0050`): on any span `exception` event, only `exception.type` is retained (and copied to `error.type` if unset), while `exception.message` and `exception.stacktrace` are dropped; any free-text span `StatusDescription` is cleared (`null`) so raw exception strings never leave on spans. |
 
+*Note*: `instrumentation-http` and `instrumentation-undici` were pinned in Gate 2, never imported, and removed in Gate 4 (ADR 0052).
+
 ## 4. `TelemetryLogRecord` (OTLP Log Record)
 
 Represents a structured log event exported over OTLP (`RR-70`, `RR-86`).

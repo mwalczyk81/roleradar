@@ -1,6 +1,7 @@
 #pragma warning disable CA1848, CA1873
 
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -8,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using OpenTelemetry;
 using OpenTelemetry.Exporter;
 using OpenTelemetry.Logs;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using RoleRadar.Observability;
@@ -424,5 +426,83 @@ public sealed class TelemetryPrivacyGateTests
         var combinedScopes = string.Join(" | ", scopeValues);
         Assert.DoesNotContain("SENTINEL-PW-996", combinedScopes, StringComparison.Ordinal); // gitleaks:allow
         Assert.DoesNotContain("SENTINEL-BEARER-TOKEN-991", combinedScopes, StringComparison.Ordinal); // gitleaks:allow
+    }
+
+    [Fact]
+    public void MetricViews_WhenForbiddenLabelsRecorded_OnlyAllowlistedTagsAreRetained()
+    {
+        var exported = new List<Metric>();
+        var services = new ServiceCollection();
+        services.AddRoleRadarTelemetry("test-service", configureMetrics: metrics =>
+        {
+            metrics.AddInMemoryExporter(exported);
+        });
+
+        using var sp = services.BuildServiceProvider();
+        var meterProvider = sp.GetService<MeterProvider>();
+        Assert.NotNull(meterProvider);
+
+        using var testMeter = new Meter("Microsoft.AspNetCore.Hosting");
+        var durationHistogram = testMeter.CreateHistogram<double>("http.server.request.duration", "s");
+
+        var tags = new TagList
+        {
+            { "http.request.method", "GET" },
+            { "http.route", "/postings/{id}" },
+            { "http.response.status_code", 200 },
+            { "url.scheme", "https" },
+            { "error.type", "none" },
+            // Forbidden / high-cardinality tags (data-model.md & SC-005):
+            { "owner_id", "0192e4a1-0000-7000-8000-0000000000aa" },
+            { "posting_id", "0192e4a1-0000-7000-8000-0000000000bb" },
+            { "company_id", "0192e4a1-0000-7000-8000-0000000000cc" },
+            { "application_id", "0192e4a1-0000-7000-8000-0000000000dd" },
+            { "note_id", "0192e4a1-0000-7000-8000-0000000000ee" },
+            { "traceId", "0af7651916cd43dd8448eb211c80319c" },
+            { "sub", "test-user-sub" },
+            { "username", "alice@example.com" },
+            { "url.full", "https://localhost:5002/postings/123?q=secret" },
+            { "url.query", "?q=secret" },
+            { "content", "SENTINEL-NOTE-BODY-1002" },
+            { "password", "SENTINEL-PW-996" } // gitleaks:allow (fictional test vector, not a credential)
+        };
+
+        durationHistogram.Record(0.025, tags);
+        meterProvider.ForceFlush();
+
+        var metric = Assert.Single(exported, m => m.Name == "http.server.request.duration");
+        var pointList = new List<MetricPoint>();
+        foreach (ref readonly var point in metric.GetMetricPoints())
+        {
+            pointList.Add(point);
+        }
+
+        var p = Assert.Single(pointList);
+        var exportedTags = new Dictionary<string, object?>();
+        foreach (var tag in p.Tags)
+        {
+            exportedTags[tag.Key] = tag.Value;
+        }
+
+        // Allowed tags stay
+        Assert.Equal("GET", exportedTags["http.request.method"]);
+        Assert.Equal("/postings/{id}", exportedTags["http.route"]);
+        Assert.Equal(200, exportedTags["http.response.status_code"]);
+        Assert.Equal("https", exportedTags["url.scheme"]);
+        Assert.Equal("none", exportedTags["error.type"]);
+
+        // Forbidden tags dropped
+        Assert.False(exportedTags.ContainsKey("owner_id"));
+        Assert.False(exportedTags.ContainsKey("posting_id"));
+        Assert.False(exportedTags.ContainsKey("company_id"));
+        Assert.False(exportedTags.ContainsKey("application_id"));
+        Assert.False(exportedTags.ContainsKey("note_id"));
+        Assert.False(exportedTags.ContainsKey("traceId"));
+        Assert.False(exportedTags.ContainsKey("sub"));
+        Assert.False(exportedTags.ContainsKey("username"));
+        Assert.False(exportedTags.ContainsKey("url.full"));
+        Assert.False(exportedTags.ContainsKey("url.query"));
+        Assert.False(exportedTags.ContainsKey("content"));
+        Assert.False(exportedTags.ContainsKey("password"));
     }
 }

@@ -1,7 +1,10 @@
+using System.Collections.Concurrent;
 using System.Text.RegularExpressions;
 using MongoDB.Driver;
 using MongoDB.Driver.Core.Configuration;
+using MongoDB.Driver.Core.Events;
 using MongoDB.Driver.Core.Servers;
+using RoleRadar.Domain.Common;
 
 namespace RoleRadar.Infrastructure.Mongo;
 
@@ -58,6 +61,48 @@ public static class ConnectionStringRedactor
                 QueryTextMaxLength = 0,
             };
 
+            // Feature 015 Gate 4 (RR-69, T061, ADR 0052): Record MongoDB command operations from driver events
+            settings.ClusterConfigurator = cb =>
+            {
+                cb.Subscribe<CommandStartedEvent>(e =>
+                {
+                    if (e.Command != null && e.Command.ElementCount > 0)
+                    {
+                        var firstElem = e.Command.GetElement(0);
+                        if (firstElem.Value != null && firstElem.Value.IsString)
+                        {
+                            var candidate = firstElem.Value.AsString;
+                            if (KnownCollections.Contains(candidate))
+                            {
+                                ActiveCommandCollections[e.RequestId] = candidate;
+                            }
+                        }
+                    }
+                });
+
+                cb.Subscribe<CommandSucceededEvent>(e =>
+                {
+                    ActiveCommandCollections.TryRemove(e.RequestId, out var collectionName);
+                    RoleRadarStoreMetrics.RecordOperation(
+                        e.Duration.TotalSeconds,
+                        RoleRadarStoreMetrics.SystemMongoDb,
+                        e.CommandName,
+                        collectionName,
+                        errorType: null);
+                });
+
+                cb.Subscribe<CommandFailedEvent>(e =>
+                {
+                    ActiveCommandCollections.TryRemove(e.RequestId, out var collectionName);
+                    RoleRadarStoreMetrics.RecordOperation(
+                        e.Duration.TotalSeconds,
+                        RoleRadarStoreMetrics.SystemMongoDb,
+                        e.CommandName,
+                        collectionName,
+                        errorType: e.Failure?.GetType().Name);
+                });
+            };
+
             return new MongoClient(settings);
         }
         catch (Exception ex) when (ex is MongoConfigurationException or FormatException or ArgumentException)
@@ -65,6 +110,24 @@ public static class ConnectionStringRedactor
             throw new InvalidOperationException(InvalidConnectionStringErrorMessage);
         }
     }
+
+    private static readonly ConcurrentDictionary<int, string> ActiveCommandCollections = new();
+
+    internal static readonly HashSet<string> KnownCollections = new(StringComparer.Ordinal)
+    {
+        TrackingMongoOptions.CompaniesCollectionName,
+        TrackingMongoOptions.CareerSourcesCollectionName,
+        TrackingMongoOptions.PostingsCollectionName,
+        TrackingMongoOptions.PostingSignalsCollectionName,
+        TrackingMongoOptions.CriteriaCollectionName,
+        TrackingMongoOptions.ApplicationsCollectionName,
+        TrackingMongoOptions.ApplicationEventsCollectionName,
+        TrackingMongoOptions.ContactsCollectionName,
+        TrackingMongoOptions.SearchRunsCollectionName,
+        MongoBootstrapAndIndexes.NotesCollectionName,
+        MongoBootstrapAndIndexes.NoteRevisionsCollectionName,
+        MongoBootstrapAndIndexes.AuditLogCollectionName,
+    };
 
     public static string Redact(string? connectionString)
     {

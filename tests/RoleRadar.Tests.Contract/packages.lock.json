@@ -897,6 +897,7 @@
           "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.14, )",
           "OpenTelemetry.Instrumentation.AspNetCore": "[1.20.1, )",
           "Otp.NET": "[1.4.1, )",
+          "RoleRadar.Domain": "[1.0.0, )",
           "RoleRadar.Observability": "[1.0.0, )"
         }
       },

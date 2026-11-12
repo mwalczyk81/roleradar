@@ -209,4 +209,86 @@ describe("WebSpanAttributeProcessor (ADR 0050)", () => {
     expect(nonCommentLines).not.toContain("LogScrubber");
     expect(nonCommentLines).not.toContain("scrub");
   });
+
+  it("metric views drop forbidden labels and retain allowlisted attributes (SC-005, ADR 0052)", async () => {
+    const { MeterProvider, MetricReader, createAllowListAttributesProcessor } = await import("@opentelemetry/sdk-metrics");
+    class TestMetricReader extends MetricReader {
+      protected async onShutdown(): Promise<void> {}
+      protected async onForceFlush(): Promise<void> {}
+    }
+    const reader = new TestMetricReader();
+    const meterProvider = new MeterProvider({
+      readers: [reader],
+      views: [
+        {
+          instrumentName: "http.server.request.duration",
+          attributesProcessors: [
+            createAllowListAttributesProcessor([
+              "http.request.method",
+              "http.route",
+              "http.response.status_code",
+              "error.type",
+              "url.scheme",
+            ]),
+          ],
+        },
+      ],
+    });
+
+    const meter = meterProvider.getMeter("test-meter");
+    const histogram = meter.createHistogram("http.server.request.duration");
+
+    histogram.record(0.042, {
+      "http.request.method": "GET",
+      "http.route": "/postings/:id",
+      "http.response.status_code": 200,
+      "url.scheme": "https",
+      "error.type": "none",
+      // Forbidden labels:
+      owner_id: "0192e4a1-0000-7000-8000-0000000000aa",
+      posting_id: "0192e4a1-0000-7000-8000-0000000000bb",
+      company_id: "0192e4a1-0000-7000-8000-0000000000cc",
+      application_id: "0192e4a1-0000-7000-8000-0000000000dd",
+      note_id: "0192e4a1-0000-7000-8000-0000000000ee",
+      traceId: "0af7651916cd43dd8448eb211c80319c",
+      sub: "test-user-sub",
+      username: "alice@example.com",
+      "url.full": "https://localhost:5003/postings/123?q=secret",
+      "url.query": "?q=secret",
+      content: "SENTINEL-NOTE-BODY-1002",
+      password: "SENTINEL-PW-996", // gitleaks:allow (fictional test vector, not a credential)
+    });
+
+    const metricsData = await reader.collect();
+    const scopeMetrics = metricsData.resourceMetrics.scopeMetrics;
+    const metric = scopeMetrics.flatMap((s) => s.metrics).find((m) => m.descriptor.name === "http.server.request.duration");
+    expect(metric).toBeDefined();
+
+    const dataPoints = metric?.dataPoints ?? [];
+    expect(dataPoints.length).toBe(1);
+    const attributes = dataPoints[0].attributes;
+
+    // Allowed tags stay
+    expect(attributes["http.request.method"]).toBe("GET");
+    expect(attributes["http.route"]).toBe("/postings/:id");
+    expect(attributes["http.response.status_code"]).toBe(200);
+    expect(attributes["url.scheme"]).toBe("https");
+    expect(attributes["error.type"]).toBe("none");
+
+    // Forbidden tags dropped
+    expect(attributes.owner_id).toBeUndefined();
+    expect(attributes.posting_id).toBeUndefined();
+    expect(attributes.company_id).toBeUndefined();
+    expect(attributes.application_id).toBeUndefined();
+    expect(attributes.note_id).toBeUndefined();
+    expect(attributes.traceId).toBeUndefined();
+    expect(attributes.sub).toBeUndefined();
+    expect(attributes.username).toBeUndefined();
+    expect(attributes["url.full"]).toBeUndefined();
+    expect(attributes["url.query"]).toBeUndefined();
+    expect(attributes.content).toBeUndefined();
+    expect(attributes.password).toBeUndefined();
+
+    await meterProvider.shutdown();
+  });
 });

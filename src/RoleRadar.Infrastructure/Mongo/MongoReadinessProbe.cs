@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.Metrics;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson;
@@ -11,6 +12,14 @@ public sealed class MongoReadinessProbe
 {
     public const string StartServicesCommand = "pwsh ./scripts/start-services.ps1";
     public const string DockerComposeCommand = "docker compose -f deploy/docker-compose.yml up -d";
+
+    private static void RecordReadiness(bool healthy, double durationSeconds)
+    {
+        RoleRadar.Domain.Common.RoleRadarStoreMetrics.RecordReadiness(
+            RoleRadar.Domain.Common.RoleRadarStoreMetrics.SystemMongoDb,
+            healthy,
+            durationSeconds);
+    }
 
     private static readonly Action<ILogger, string, Exception?> LogReadinessWarning =
         LoggerMessage.Define<string>(
@@ -82,6 +91,7 @@ public sealed class MongoReadinessProbe
 
             if (!isWritablePrimary)
             {
+                RecordReadiness(healthy: false, sw.Elapsed.TotalSeconds);
                 var notPrimaryMsg = FormatOfflineMessage(_options.ConnectionString);
                 return Result<StoreReadinessStatus>.Failure(
                     ErrorCode.DatastoreOffline,
@@ -93,6 +103,7 @@ public sealed class MongoReadinessProbe
                     });
             }
 
+            RecordReadiness(healthy: true, sw.Elapsed.TotalSeconds);
             return Result<StoreReadinessStatus>.Success(
                 new StoreReadinessStatus(
                     IsReady: true,
@@ -103,6 +114,7 @@ public sealed class MongoReadinessProbe
         catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             sw.Stop();
+            RecordReadiness(healthy: false, sw.Elapsed.TotalSeconds);
             // Log warning without exception object or stack trace; keep full exception only at Debug level
             LogReadinessWarning(_logger, redactedEndpoint, null);
             LogReadinessDebug(_logger, redactedEndpoint, ex);

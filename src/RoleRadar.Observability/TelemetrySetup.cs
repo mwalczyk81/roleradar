@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using OpenTelemetry.Exporter;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 
@@ -24,14 +25,60 @@ public static class TelemetrySetup
     public const string OtlpServiceNameEnvVar = "OTEL_SERVICE_NAME";
     public const string ServiceNameVariable = OtlpServiceNameEnvVar;
 
-    private static readonly string DefaultServiceVersion =
+    public static readonly string DefaultServiceVersion =
         typeof(TelemetrySetup).Assembly.GetName().Version?.ToString() ?? "0.1.0";
+
+    public const string StoreMeterName = "RoleRadar.Store";
+    public const string StoreOperationDurationInstrument = "roleradar.store.operation.duration";
+    public const string StoreReadinessStatusInstrument = "roleradar.store.readiness.status";
+    public const string StoreReadinessDurationInstrument = "roleradar.store.readiness.duration";
+
+    public static readonly string[] AllowedServerDurationTagKeys =
+    [
+        "http.request.method",
+        "http.route",
+        "http.response.status_code",
+        "error.type",
+        "url.scheme",
+        "network.protocol.version"
+    ];
+
+    public static readonly string[] AllowedServerActiveRequestsTagKeys =
+    [
+        "http.request.method",
+        "url.scheme"
+    ];
+
+    public static readonly string[] AllowedClientDurationTagKeys =
+    [
+        "http.request.method",
+        "http.response.status_code",
+        "server.address",
+        "server.port",
+        "url.scheme",
+        "error.type"
+    ];
+
+    public static readonly string[] AllowedStoreOperationDurationTagKeys =
+    [
+        "db.system.name",
+        "db.operation.name",
+        "db.collection.name",
+        "error.type"
+    ];
+
+    public static readonly string[] AllowedStoreReadinessTagKeys =
+    [
+        "db.system.name",
+        "status"
+    ];
 
     public static IServiceCollection AddRoleRadarTelemetry(
         this IServiceCollection services,
         string defaultServiceName,
         IConfiguration? configuration = null,
-        Action<TracerProviderBuilder>? configureTracing = null)
+        Action<TracerProviderBuilder>? configureTracing = null,
+        Action<MeterProviderBuilder>? configureMetrics = null)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentException.ThrowIfNullOrWhiteSpace(defaultServiceName);
@@ -93,6 +140,73 @@ public static class TelemetrySetup
                 }
 
                 configureTracing?.Invoke(tracing);
+            })
+            .WithMetrics(metrics =>
+            {
+                metrics
+                    .AddMeter(
+                        "Microsoft.AspNetCore.Hosting",
+                        "Microsoft.AspNetCore.Server.Kestrel",
+                        "Microsoft.AspNetCore.Routing",
+                        "Microsoft.AspNetCore.Diagnostics",
+                        "Microsoft.AspNetCore.RateLimiting",
+                        "System.Net.Http",
+                        "System.Net.NameResolution",
+                        "System.Runtime",
+                        StoreMeterName)
+                    .AddView(
+                        "http.server.request.duration",
+                        new MetricStreamConfiguration
+                        {
+                            TagKeys = AllowedServerDurationTagKeys
+                        })
+                    .AddView(
+                        "http.server.active_requests",
+                        new MetricStreamConfiguration
+                        {
+                            TagKeys = AllowedServerActiveRequestsTagKeys
+                        })
+                    .AddView(
+                        "http.client.request.duration",
+                        new MetricStreamConfiguration
+                        {
+                            TagKeys = AllowedClientDurationTagKeys
+                        })
+                    .AddView(
+                        StoreOperationDurationInstrument,
+                        new MetricStreamConfiguration
+                        {
+                            TagKeys = AllowedStoreOperationDurationTagKeys
+                        })
+                    .AddView(
+                        StoreReadinessStatusInstrument,
+                        new MetricStreamConfiguration
+                        {
+                            TagKeys = AllowedStoreReadinessTagKeys
+                        })
+                    .AddView(
+                        StoreReadinessDurationInstrument,
+                        new MetricStreamConfiguration
+                        {
+                            TagKeys = AllowedStoreReadinessTagKeys
+                        });
+
+                if (!string.IsNullOrWhiteSpace(endpoint))
+                {
+                    metrics.AddOtlpExporter(otlp =>
+                    {
+                        if (Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri))
+                        {
+                            otlp.Endpoint = endpointUri;
+                        }
+
+                        otlp.TimeoutMilliseconds = flushTimeoutMs;
+                        otlp.BatchExportProcessorOptions.ExporterTimeoutMilliseconds = flushTimeoutMs;
+                        otlp.BatchExportProcessorOptions.ScheduledDelayMilliseconds = Math.Min(1000, flushTimeoutMs);
+                    });
+                }
+
+                configureMetrics?.Invoke(metrics);
             });
 
         return services;
@@ -161,7 +275,10 @@ public static class TelemetrySetup
 
         try
         {
-            return tracerProvider.ForceFlush(effectiveTimeout);
+            var tracerFlushed = tracerProvider.ForceFlush(effectiveTimeout);
+            var meterProvider = services.GetService<MeterProvider>();
+            var meterFlushed = meterProvider?.ForceFlush(effectiveTimeout) ?? true;
+            return tracerFlushed && meterFlushed;
         }
         catch
         {

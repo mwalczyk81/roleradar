@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Xunit;
 
 namespace RoleRadar.Tests.Architecture;
@@ -14,6 +15,7 @@ public sealed class ObservabilityArchitectureTests
     private static readonly Assembly ApplicationAssembly = typeof(RoleRadar.Application.DependencyInjection).Assembly;
     private static readonly Assembly InfrastructureAssembly = typeof(RoleRadar.Infrastructure.DependencyInjection).Assembly;
     private static readonly Assembly IdentityAssembly = typeof(RoleRadar.Identity.Program).Assembly;
+    private static readonly Assembly ApiAssembly = typeof(RoleRadar.Api.Program).Assembly;
 
     private static string[] ReferencedNames(Assembly assembly) =>
         assembly.GetReferencedAssemblies().Select(a => a.Name ?? string.Empty).ToArray();
@@ -65,5 +67,89 @@ public sealed class ObservabilityArchitectureTests
             .ToArray();
 
         Assert.True(offenders.Length == 0, $"RoleRadar.Identity must not reference: {string.Join(", ", offenders)}");
+    }
+
+    [Fact]
+    public void ExactlyOneMeterNamedRoleRadarStore_ExistsAcrossSolution()
+    {
+        var assemblies = new[]
+        {
+            DomainAssembly,
+            ApplicationAssembly,
+            InfrastructureAssembly,
+            ObservabilityAssembly,
+            IdentityAssembly,
+            ApiAssembly
+        };
+
+        var typesWithStoreMeter = new List<string>();
+        foreach (var assembly in assemblies)
+        {
+            foreach (var type in assembly.GetTypes())
+            {
+                var fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Instance);
+                foreach (var field in fields)
+                {
+                    if (field.FieldType == typeof(System.Diagnostics.Metrics.Meter))
+                    {
+                        if (!field.IsStatic)
+                        {
+                            continue;
+                        }
+
+                        var meter = field.GetValue(null) as System.Diagnostics.Metrics.Meter;
+                        if (meter != null && string.Equals(meter.Name, "RoleRadar.Store", StringComparison.Ordinal))
+                        {
+                            typesWithStoreMeter.Add($"{type.FullName}.{field.Name}");
+                        }
+                    }
+                }
+            }
+        }
+
+        Assert.True(typesWithStoreMeter.Count == 1,
+            $"Expected exactly one Meter named 'RoleRadar.Store', but found {typesWithStoreMeter.Count}: {string.Join(", ", typesWithStoreMeter)}");
+
+        // Also fail on any source file under src/ that constructs a Meter named "RoleRadar.Store" outside RoleRadarStoreMetrics.cs
+        var repoRoot = LocateRepositoryRoot();
+        var srcDir = Path.Combine(repoRoot, "src");
+        var csFiles = Directory.EnumerateFiles(srcDir, "*.cs", SearchOption.AllDirectories);
+
+        var offendingSourceFiles = new List<string>();
+        foreach (var file in csFiles)
+        {
+            var fileName = Path.GetFileName(file);
+            if (string.Equals(fileName, "RoleRadarStoreMetrics.cs", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var text = File.ReadAllText(file);
+            if (Regex.IsMatch(text, @"\bnew\s+(?:System\.Diagnostics\.Metrics\.)?Meter\s*\([^)]*?(?:""RoleRadar\.Store""|RoleRadarStoreMetrics\.MeterName|StoreMeterName)", RegexOptions.CultureInvariant))
+            {
+                offendingSourceFiles.Add(Path.GetRelativePath(repoRoot, file));
+            }
+        }
+
+        Assert.True(
+            offendingSourceFiles.Count == 0,
+            $"Found unauthorized Meter(\"RoleRadar.Store\") construction in source files:\n{string.Join("\n", offendingSourceFiles)}");
+    }
+
+    private static string LocateRepositoryRoot()
+    {
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "RoleRadar.sln")) &&
+                Directory.Exists(Path.Combine(dir.FullName, "src")))
+            {
+                return dir.FullName;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate repository root containing RoleRadar.sln and src directory.");
     }
 }

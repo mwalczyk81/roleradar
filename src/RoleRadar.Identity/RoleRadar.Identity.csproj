@@ -24,6 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\RoleRadar.Domain\RoleRadar.Domain.csproj" />
     <ProjectReference Include="..\RoleRadar.Observability\RoleRadar.Observability.csproj" />
   </ItemGroup>
 

@@ -9,7 +9,7 @@ import {
 import * as client from "openid-client";
 import { log } from "./log.server.js";
 import { getRequestContext } from "./request-context.server.js";
-import { getWebTracer } from "./telemetry.server.js";
+import { getWebTracer, recordClientRequestDuration } from "./telemetry.server.js";
 import { withTraceparent } from "./trace-context.server.js";
 
 interface RoleRadarOidcGlobal {
@@ -59,6 +59,7 @@ export function getPostLogoutRedirectUri(): string {
  * (feature 014) and records a child OpenTelemetry CLIENT span (feature 015). Reads globalThis.fetch per call so tests can stub it.
  */
 const identityFetch: client.CustomFetch = async (url, options) => {
+  const started = performance.now();
   const method = (options.method ?? "GET").toUpperCase();
   const parsedUrl = new URL(url);
 
@@ -99,12 +100,27 @@ const identityFetch: client.CustomFetch = async (url, options) => {
     if (response.status >= 500) {
       clientSpan.setStatus({ code: SpanStatusCode.ERROR });
     }
+    recordClientRequestDuration((performance.now() - started) / 1000, {
+      method,
+      statusCode: response.status,
+      address: parsedUrl.hostname,
+      port: Number(parsedUrl.port || (parsedUrl.protocol === "https:" ? 443 : 80)),
+      scheme: parsedUrl.protocol.replace(":", ""),
+    });
     return response;
   } catch (err) {
     if (err instanceof Error) {
       clientSpan.recordException(err);
     }
     clientSpan.setStatus({ code: SpanStatusCode.ERROR });
+    recordClientRequestDuration((performance.now() - started) / 1000, {
+      method,
+      statusCode: 0,
+      address: parsedUrl.hostname,
+      port: Number(parsedUrl.port || (parsedUrl.protocol === "https:" ? 443 : 80)),
+      scheme: parsedUrl.protocol.replace(":", ""),
+      errorType: err instanceof Error ? err.name : "error",
+    });
     throw err;
   } finally {
     clientSpan.end();

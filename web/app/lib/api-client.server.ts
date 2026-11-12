@@ -21,7 +21,7 @@ import {
   retryAfterMs,
 } from "./observability.js";
 import { getRequestContext } from "./request-context.server.js";
-import { getWebTracer } from "./telemetry.server.js";
+import { getWebTracer, recordClientRequestDuration } from "./telemetry.server.js";
 import { withTraceparent } from "./trace-context.server.js";
 
 export interface UiError {
@@ -137,6 +137,7 @@ function asksForTooLongAWait(error: Error): boolean {
 export async function fetchWithPolicy(request: Request): Promise<Response> {
   withTraceparent(request.headers);
   request.signal.throwIfAborted();
+  const started = performance.now();
   const method = request.method.toUpperCase();
   const parsedUrl = new URL(request.url);
 
@@ -215,6 +216,14 @@ export async function fetchWithPolicy(request: Request): Promise<Response> {
       }
       clientSpan.setStatus({ code: SpanStatusCode.ERROR });
       clientSpan.end();
+      recordClientRequestDuration((performance.now() - started) / 1000, {
+        method,
+        statusCode: 0,
+        address: parsedUrl.hostname,
+        port: Number(parsedUrl.port || (parsedUrl.protocol === "https:" ? 443 : 80)),
+        scheme: parsedUrl.protocol.replace(":", ""),
+        errorType: error.cause instanceof Error ? error.cause.name : "error",
+      });
       // ky wraps the failed fetch; the callers (and the 013 contract) see the error fetch itself threw.
       throw error.cause;
     } else {
@@ -223,6 +232,14 @@ export async function fetchWithPolicy(request: Request): Promise<Response> {
       }
       clientSpan.setStatus({ code: SpanStatusCode.ERROR });
       clientSpan.end();
+      recordClientRequestDuration((performance.now() - started) / 1000, {
+        method,
+        statusCode: 0,
+        address: parsedUrl.hostname,
+        port: Number(parsedUrl.port || (parsedUrl.protocol === "https:" ? 443 : 80)),
+        scheme: parsedUrl.protocol.replace(":", ""),
+        errorType: error instanceof Error ? error.name : "error",
+      });
       throw error;
     }
   }
@@ -232,6 +249,13 @@ export async function fetchWithPolicy(request: Request): Promise<Response> {
     clientSpan.setStatus({ code: SpanStatusCode.ERROR });
   }
   clientSpan.end();
+  recordClientRequestDuration((performance.now() - started) / 1000, {
+    method,
+    statusCode: response.status,
+    address: parsedUrl.hostname,
+    port: Number(parsedUrl.port || (parsedUrl.protocol === "https:" ? 443 : 80)),
+    scheme: parsedUrl.protocol.replace(":", ""),
+  });
 
   if (response.status === 503) {
     await logServiceUnavailable(request, response, attempts);

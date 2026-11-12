@@ -7,7 +7,13 @@ import { pathToFileURL } from "node:url";
 import { SpanStatusCode, context as otelContext } from "@opentelemetry/api";
 import { createRequestListener } from "@react-router/node";
 import { log } from "./app/lib/log.server.js";
-import { initializeWebTelemetry } from "./app/lib/telemetry.server.js";
+import {
+  initializeWebTelemetry,
+  resolveHttpRoute,
+  setConfiguredRoutesForTelemetry,
+  recordServerRequestDuration,
+  trackServerActiveRequests,
+} from "./app/lib/telemetry.server.js";
 import { startServerRequestSpan } from "./app/lib/trace-context.server.js";
 import { getRequestContext, runWithRequestContext } from "./app/lib/request-context.server.js";
 
@@ -105,6 +111,9 @@ export async function getRequestListener(): Promise<RequestListener> {
     ];
     const target = candidates.find((c) => fs.existsSync(c)) ?? candidates[0];
     const build = await import(pathToFileURL(target).href);
+    if (build?.routes) {
+      setConfiguredRoutesForTelemetry(Object.values(build.routes));
+    }
     requestListener = createRequestListener({
       build,
       getLoadContext: (req) => {
@@ -178,6 +187,8 @@ export function createRequestHandler() {
     const started = performance.now();
     const method = req.method ?? "GET";
     const path = (req.url ?? "/").split("?")[0];
+    const scheme = (req.socket as { encrypted?: boolean })?.encrypted ? "https" : "http";
+    trackServerActiveRequests(method, scheme, 1);
     const { span, activeContext, traceId, spanId } = startServerRequestSpan(
       method,
       path,
@@ -191,6 +202,15 @@ export function createRequestHandler() {
         span.setStatus({ code: SpanStatusCode.ERROR });
       }
       span.end();
+
+      trackServerActiveRequests(method, scheme, -1);
+      const durationSeconds = (performance.now() - started) / 1000;
+      recordServerRequestDuration(durationSeconds, {
+        method,
+        route: resolveHttpRoute(path),
+        statusCode: status,
+        scheme,
+      });
 
       const fields = {
         event: "RequestCompleted",
