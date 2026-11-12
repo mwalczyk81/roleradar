@@ -49,7 +49,7 @@ Where do you get the id from? From the `traceId` member of an API error body, fr
 | Setting | Applies to | Values |
 | --- | --- | --- |
 | `ROLERADAR_LOG_FORMAT` | web, API, Identity, CLI, MCP | `json` or `text`. Unset means `text`. The shipped Dockerfiles set `json`. |
-| `Logging__LogLevel__<Category>` | API, Identity, MCP (.NET) | The standard .NET level for a category, for example `Logging__LogLevel__Default=Debug` or `Logging__LogLevel__RoleRadar.Application=Debug`. Categories you do not set default to `Information`, with `Microsoft` and `System` at `Warning`. |
+| `Logging__LogLevel__<Category>` | API, Identity, MCP (.NET) | The standard .NET level for a category, for example `Logging__LogLevel__Default=Debug` or `Logging__LogLevel__RoleRadar.Application=Debug`. Categories you do not set default to `Information`, with `Microsoft` and `System` at `Warning`, and the two Duende categories that log the raw authorize request (`Duende.IdentityServer.Validation.AuthorizeRequestValidator` and `Duende.IdentityServer.Endpoints.AuthorizeEndpoint`) at `Warning`. To turn those two on, set the full category name; a prefix such as `Logging__LogLevel__Duende` does not override them. |
 | `ROLERADAR_LOG_LEVEL` | web | `trace`, `debug`, `info`, `warn`, `error` or `fatal`. Default `info`. |
 | `ROLERADAR_LOG_LEVEL` and `--verbose` | CLI | The level variable names a .NET level. Without either, the CLI logs `Warning` and above, so `status` and `import --dry-run` stay quiet; `--verbose` (or `-v`) raises it to `Information`. |
 
@@ -65,7 +65,7 @@ One object per line:
 {"ts":"2026-11-09T14:03:22.418Z","level":"warn","service":"api","category":"RoleRadar.Api.Observability.ApiExceptionHandler","msg":"The data store did not answer; the request was answered with 503","eventId":6002,"event":"DatastoreUnavailable","traceId":"0af7651916cd43dd8448eb211c80319c"}
 ```
 
-`ts`, `level`, `service` and `msg` are always present. `category` and `eventId` appear for .NET services. `event`, `traceId` (inside a request, a CLI run or an MCP call), `props` (structured properties) and `error` (`type`, `message` and `stack`, each scrubbed) appear when there is something to say. Each request writes one `RequestCompleted` record with the method, the path without its query string, the status and the duration.
+`ts`, `level`, `service` and `msg` are always present. `category` and `eventId` appear for .NET services. `event`, `traceId` (inside a request, a CLI run or an MCP call), `props` (structured properties) and `error` (`type`, `message` and `stack`, each scrubbed) appear when there is something to say. Each request writes one `RequestResponseLog` (.NET API and Identity via ASP.NET Core HTTP logging) or `RequestCompleted` (web) record with the method, the path without its query string, the status and the duration.
 
 ### Sign-in events
 

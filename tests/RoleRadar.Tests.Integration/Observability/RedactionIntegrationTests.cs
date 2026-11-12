@@ -137,7 +137,7 @@ public sealed class RedactionIntegrationTests(SharedMongoFixture mongo)
             // Non-vacuous capture first.
             Assert.NotEmpty(capture.Lines);
             var records = ParseAll(capture.Lines);
-            Assert.Contains(records, r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestCompleted");
+            Assert.Contains(records, r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestResponseLog");
             AssertNoSentinels(capture.Text, SentinelToken, forged, valid);
         }
         finally
@@ -161,7 +161,7 @@ public sealed class RedactionIntegrationTests(SharedMongoFixture mongo)
 
             Assert.NotEmpty(capture.Lines);
             var records = ParseAll(capture.Lines);
-            Assert.Contains(records, r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestCompleted");
+            Assert.Contains(records, r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestResponseLog");
             AssertNoSentinels(capture.Text, SentinelPassword, SentinelUser);
         }
         finally

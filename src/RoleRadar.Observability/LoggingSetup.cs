@@ -1,6 +1,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
+using OpenTelemetry.Exporter;
+using OpenTelemetry.Logs;
+using OpenTelemetry.Resources;
 
 namespace RoleRadar.Observability;
 
@@ -18,6 +21,9 @@ public static class LoggingSetup
         ("Microsoft", LogLevel.Warning),
         ("System", LogLevel.Warning),
         ("Microsoft.Hosting.Lifetime", LogLevel.Information),
+        ("Microsoft.AspNetCore.HttpLogging", LogLevel.Information),
+        ("Duende.IdentityServer.Validation.AuthorizeRequestValidator", LogLevel.Warning),
+        ("Duende.IdentityServer.Endpoints.AuthorizeEndpoint", LogLevel.Warning),
     ];
 
     /// <summary><c>json</c> (any case, trimmed) gives JSON; anything else, including unset, gives text.</summary>
@@ -34,7 +40,8 @@ public static class LoggingSetup
         this ILoggingBuilder builder,
         string service,
         LogStream stream,
-        IConfiguration? configuration = null)
+        IConfiguration? configuration = null,
+        Action<OpenTelemetryLoggerOptions>? configureLogging = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrWhiteSpace(service);
@@ -55,10 +62,57 @@ public static class LoggingSetup
         var configured = configuration?.GetSection("Logging:LogLevel");
         foreach (var (category, level) in DefaultLevels)
         {
-            if (string.IsNullOrEmpty(configured?[category]))
+            var hasConfiguration = !string.IsNullOrEmpty(configuration?[$"Logging:LogLevel:{category}"])
+                || !string.IsNullOrEmpty(configuration?[$"Logging:LogLevel:{category.Replace('.', ':')}"])
+                || !string.IsNullOrEmpty(configured?[category]);
+
+            if (!hasConfiguration)
             {
                 builder.AddFilter(category, level);
             }
+        }
+
+        var endpoint = configuration?[TelemetrySetup.OtlpEndpointEnvVar]
+            ?? Environment.GetEnvironmentVariable(TelemetrySetup.OtlpEndpointEnvVar);
+
+        var isConfigured = !string.IsNullOrWhiteSpace(endpoint);
+        if (isConfigured || configureLogging != null)
+        {
+            var defaultServiceName = service.StartsWith("roleradar-", StringComparison.OrdinalIgnoreCase)
+                ? service
+                : $"roleradar-{service}";
+            var resolvedServiceName = TelemetrySetup.ResolveServiceName(defaultServiceName, configuration);
+            var flushTimeoutMs = TelemetrySetup.ResolveFlushTimeoutMs(configuration);
+
+            builder.AddOpenTelemetry(logging =>
+            {
+                logging.IncludeFormattedMessage = true;
+                logging.IncludeScopes = false;
+                logging.SetResourceBuilder(ResourceBuilder.CreateDefault().AddService(
+                    serviceName: resolvedServiceName,
+                    serviceNamespace: TelemetrySetup.ServiceNamespace,
+                    serviceVersion: typeof(TelemetrySetup).Assembly.GetName().Version?.ToString() ?? "0.1.0",
+                    autoGenerateServiceInstanceId: false));
+
+                logging.AddProcessor(new RoleRadarLogScrubbingProcessor());
+
+                if (isConfigured)
+                {
+                    logging.AddOtlpExporter(otlp =>
+                    {
+                        if (Uri.TryCreate(endpoint, UriKind.Absolute, out var endpointUri))
+                        {
+                            otlp.Endpoint = endpointUri;
+                        }
+
+                        otlp.TimeoutMilliseconds = flushTimeoutMs;
+                        otlp.BatchExportProcessorOptions.ExporterTimeoutMilliseconds = flushTimeoutMs;
+                        otlp.BatchExportProcessorOptions.ScheduledDelayMilliseconds = Math.Min(1000, flushTimeoutMs);
+                    });
+                }
+
+                configureLogging?.Invoke(logging);
+            });
         }
 
         return builder;

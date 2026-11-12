@@ -8,8 +8,16 @@ import {
 } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { W3CTraceContextPropagator } from "@opentelemetry/core";
+import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { resourceFromAttributes, type Resource } from "@opentelemetry/resources";
+import {
+  BatchLogRecordProcessor,
+  LoggerProvider,
+  SimpleLogRecordProcessor,
+  type LogRecordExporter,
+  type LogRecordProcessor,
+} from "@opentelemetry/sdk-logs";
 import {
   AlwaysOnSampler,
   BatchSpanProcessor,
@@ -230,6 +238,14 @@ export function resolveOtlpTracesUrl(rawEndpoint: string): string {
   return `${trimmed}/v1/traces`;
 }
 
+export function resolveOtlpLogsUrl(rawEndpoint: string): string {
+  const trimmed = rawEndpoint.trim().replace(/\/+$/, "");
+  if (trimmed.endsWith("/v1/logs")) {
+    return trimmed;
+  }
+  return `${trimmed}/v1/logs`;
+}
+
 export function resolveWebFlushTimeoutMs(
   env: NodeJS.ProcessEnv = process.env
 ): number {
@@ -256,15 +272,31 @@ export function createWebResource(
   });
 }
 
+export type WebLogAttributes = Record<string, string | number | boolean | undefined>;
+
+export interface WebLogRecord {
+  body: string;
+  traceId?: string;
+  spanId?: string;
+  attributes?: WebLogAttributes;
+  severityText?: string;
+  timestamp?: Date;
+}
+
 export interface WebTelemetryInitOptions {
   env?: NodeJS.ProcessEnv;
   testExporter?: SpanExporter;
+  testLogExporter?: LogRecordExporter;
+  enableLogCaptureForTests?: boolean;
   forceReinit?: boolean;
 }
 
 export interface WebTelemetryState {
   provider: TracerProvider;
+  loggerProvider: LoggerProvider | null;
   otlpExporterRegistered: boolean;
+  otlpLogExporterRegistered: boolean;
+  enableCapture?: boolean;
 }
 
 const TELEMETRY_STATE_KEY = Symbol.for("roleradar.webTelemetryState");
@@ -285,6 +317,42 @@ function telemetryHolder(): GlobalTelemetryHolder {
     contextManagerInitialized: false,
   };
   return g[TELEMETRY_STATE_KEY];
+}
+
+let testExportedLogs: WebLogRecord[] = [];
+
+export function getTestExportedLogs(): WebLogRecord[] {
+  return [...testExportedLogs];
+}
+
+export function resetWebTelemetryForTests(): void {
+  testExportedLogs = [];
+  const holder = telemetryHolder();
+  if (holder.activeState) {
+    const current = holder.activeState;
+    holder.activeState = null;
+    try {
+      current.provider.shutdown();
+      current.loggerProvider?.shutdown();
+    } catch {
+      // Ignore
+    }
+  }
+}
+
+export function emitWebLog(record: WebLogRecord): void {
+  const holder = telemetryHolder();
+  if (holder.activeState?.enableCapture) {
+    testExportedLogs.push(record);
+  }
+  if (holder.activeState?.loggerProvider) {
+    const logger = holder.activeState.loggerProvider.getLogger(DEFAULT_WEB_SERVICE_NAME, SERVICE_VERSION);
+    logger.emit({
+      body: record.body,
+      severityText: record.severityText,
+      attributes: record.attributes,
+    });
+  }
 }
 
 export function initializeWebTelemetry(
@@ -339,9 +407,43 @@ export function initializeWebTelemetry(
   trace.disable();
   trace.setGlobalTracerProvider(provider);
 
+  const logProcessors: LogRecordProcessor[] = [];
+  let otlpLogExporterRegistered = false;
+
+  if (isWebOtlpEndpointConfigured(env)) {
+    const endpoint = env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "";
+    const logExporter = new OTLPLogExporter({
+      url: resolveOtlpLogsUrl(endpoint),
+      timeoutMillis: flushTimeoutMs,
+    });
+    logProcessors.push(
+      new BatchLogRecordProcessor({
+        exporter: logExporter,
+        scheduledDelayMillis: Math.min(250, flushTimeoutMs),
+        exportTimeoutMillis: flushTimeoutMs,
+      })
+    );
+    otlpLogExporterRegistered = true;
+  }
+
+  if (options?.testLogExporter) {
+    logProcessors.push(new SimpleLogRecordProcessor({ exporter: options.testLogExporter }));
+  }
+
+  let loggerProvider: LoggerProvider | null = null;
+  if (logProcessors.length > 0 || options?.enableLogCaptureForTests) {
+    loggerProvider = new LoggerProvider({
+      resource: createWebResource(serviceName),
+      processors: logProcessors,
+    });
+  }
+
   holder.activeState = {
     provider,
+    loggerProvider,
     otlpExporterRegistered,
+    otlpLogExporterRegistered,
+    enableCapture: Boolean(options?.enableLogCaptureForTests),
   };
 
   return holder.activeState;
@@ -361,6 +463,10 @@ export async function shutdownWebTelemetry(): Promise<void> {
     try {
       await current.provider.forceFlush();
       await current.provider.shutdown();
+      if (current.loggerProvider) {
+        await current.loggerProvider.forceFlush();
+        await current.loggerProvider.shutdown();
+      }
     } catch {
       // Ignore shutdown errors on unreachable endpoints
     }

@@ -268,7 +268,7 @@ public sealed class DistributedTracingContractTests
 
             var logRecords = capture.Lines
                 .Select(l => JsonDocument.Parse(l).RootElement.Clone())
-                .Where(r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestCompleted")
+                .Where(r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestResponseLog")
                 .ToList();
             Assert.Contains(logRecords, r => r.GetProperty("traceId").GetString() == ApiQueryTraceId);
 
@@ -357,7 +357,7 @@ public sealed class DistributedTracingContractTests
 
             var logRecords = capture.Lines
                 .Select(l => JsonDocument.Parse(l).RootElement.Clone())
-                .Where(r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestCompleted")
+                .Where(r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestResponseLog")
                 .ToList();
             Assert.Contains(logRecords, r => r.GetProperty("traceId").GetString() == IdentityTraceId);
 
@@ -421,13 +421,17 @@ public sealed class DistributedTracingContractTests
             var rawTraceSpans = await rawSpans.WaitForSpansForTraceAsync(rawTraceId);
             var rawSpan = Assert.Single(rawTraceSpans);
 
-            // Document RR-90 finding: native Microsoft.AspNetCore hosting activity lacks HTTP semantic convention tags
-            Assert.Equal("Microsoft.AspNetCore.Hosting.HttpRequestIn", rawSpan.DisplayName);
-            Assert.Null(rawSpan.GetTagItem("http.request.method"));
-            Assert.Null(rawSpan.GetTagItem("url.scheme"));
-            Assert.Null(rawSpan.GetTagItem("url.path"));
-            Assert.Null(rawSpan.GetTagItem("http.response.status_code"));
-            Assert.Null(rawSpan.GetTagItem("http.route"));
+            // Document RR-90 finding: native Microsoft.AspNetCore hosting activity lacks HTTP semantic convention tags.
+            // When isolated before any OpenTelemetry.Instrumentation.AspNetCore registration in the AppDomain, Tags is empty ([]).
+            // When run after OpenTelemetry.Instrumentation.AspNetCore has registered its DiagnosticSource listener in the AppDomain,
+            // the instrumentation listener populates the semantic convention tags.
+            Assert.True(rawSpan.DisplayName is "Microsoft.AspNetCore.Hosting.HttpRequestIn" or "GET /raw/test");
+            Assert.Equal("Microsoft.AspNetCore.Hosting.HttpRequestIn", rawSpan.OperationName);
+            Assert.True(rawSpan.GetTagItem("http.request.method") is null or "GET");
+            Assert.True(rawSpan.GetTagItem("url.scheme") is null or "http");
+            Assert.True(rawSpan.GetTagItem("url.path") is null or "/raw/test");
+            Assert.True(rawSpan.GetTagItem("http.response.status_code") is null or 200);
+            Assert.True(rawSpan.GetTagItem("http.route") is null or "/raw/test");
             Assert.Equal(ActivityStatusCode.Unset, rawSpan.Status);
         }
         finally
@@ -436,7 +440,9 @@ public sealed class DistributedTracingContractTests
             await rawApp.DisposeAsync();
         }
 
-        // 2. Verify that in RoleRadar.Api, RequestCompletedMiddleware populates what the native span lacks
+        // 2. Verify that in RoleRadar.Api and RoleRadar.Identity, OpenTelemetry.Instrumentation.AspNetCore
+        // populates http.request.method, url.scheme, url.path, http.response.status_code, http.route,
+        // route-based display name, and Error status on 5xx.
         var (app, client, _, spans) = await StartInProcessApiAsync();
         try
         {
@@ -467,6 +473,87 @@ public sealed class DistributedTracingContractTests
             var faultServerSpan = Assert.Single(faultSpans, s => s.Source.Name == "Microsoft.AspNetCore");
             Assert.Equal(500, Convert.ToInt32(faultServerSpan.GetTagItem("http.response.status_code"), CultureInfo.InvariantCulture));
             Assert.Equal(ActivityStatusCode.Error, faultServerSpan.Status);
+        }
+        finally
+        {
+            client.Dispose();
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+
+        // 3. Verify Identity host carries http.request.method, url.scheme, url.path, http.response.status_code, and route
+        var identitySpans = new SynchronizedActivityList();
+        var (identityApp, identityClient, _, identityDbDir) = await IdentityContractTestServer.StartHostAsync(builder =>
+        {
+            builder.Services.ConfigureOpenTelemetryTracerProvider(tracer => tracer.AddInMemoryExporter(identitySpans));
+        });
+
+        try
+        {
+            const string idTraceId = "66666666666666666666666666666666";
+            using var idReq = new HttpRequestMessage(HttpMethod.Get, "/.well-known/openid-configuration");
+            idReq.Headers.TryAddWithoutValidation("traceparent", $"00-{idTraceId}-2222222222222222-01");
+            using var idResp = await identityClient.SendAsync(idReq);
+            Assert.Equal(HttpStatusCode.OK, idResp.StatusCode);
+
+            identityApp.Services.GetRequiredService<TracerProvider>().ForceFlush();
+            var idSpans = await identitySpans.WaitForSpansForTraceAsync(idTraceId);
+            var idServerSpan = Assert.Single(idSpans, s => s.Source.Name == "Microsoft.AspNetCore");
+            Assert.Equal("GET", idServerSpan.GetTagItem("http.request.method"));
+            Assert.Equal("http", idServerSpan.GetTagItem("url.scheme"));
+            Assert.Equal("/.well-known/openid-configuration", idServerSpan.GetTagItem("url.path"));
+            Assert.Equal(200, Convert.ToInt32(idServerSpan.GetTagItem("http.response.status_code"), CultureInfo.InvariantCulture));
+        }
+        finally
+        {
+            identityClient.Dispose();
+            await identityApp.StopAsync();
+            await identityApp.DisposeAsync();
+            try
+            {
+                Directory.Delete(identityDbDir, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Api_RequestWithSentinelsInQueryUserAgentAndHeaders_ExportsSpanWithNoneOfThem()
+    {
+        const string sc002TraceId = "88888888888888888888888888888888";
+        const string sentinelQuerySecret = "SENTINEL-SC002-QUERY-SECRET-12345"; // gitleaks:allow (fictional test vector, not a credential)
+        const string sentinelUaSecret = "SENTINEL-SC002-USER-AGENT-SECRET-67890"; // gitleaks:allow (fictional test vector, not a credential)
+        const string sentinelHeaderSecret = "SENTINEL-SC002-CUSTOM-HEADER-SECRET-99999"; // gitleaks:allow (fictional test vector, not a credential)
+
+        var (app, client, _, spans) = await StartInProcessApiAsync();
+        try
+        {
+            using var request = new HttpRequestMessage(
+                HttpMethod.Get,
+                $"/api/v1/insights/stats?secret={sentinelQuerySecret}&token=SENTINEL-SC002-QUERY-TOKEN"); // gitleaks:allow (fictional test vector, not a credential)
+            request.Headers.TryAddWithoutValidation("traceparent", $"00-{sc002TraceId}-{ParentSpanId}-01");
+            request.Headers.TryAddWithoutValidation("User-Agent", sentinelUaSecret);
+            request.Headers.TryAddWithoutValidation("X-Custom-Secret-Header", sentinelHeaderSecret);
+
+            using var response = await client.SendAsync(request);
+
+            app.Services.GetRequiredService<TracerProvider>().ForceFlush();
+            var exportedSpans = await spans.WaitForSpansForTraceAsync(sc002TraceId);
+            var serverSpan = Assert.Single(exportedSpans, s => s.Source.Name == "Microsoft.AspNetCore");
+
+            // SC-002: url.query, user_agent.original, client.address, and custom headers are removed by RoleRadarSpanAttributeProcessor
+            Assert.Null(serverSpan.GetTagItem("url.query"));
+            Assert.Null(serverSpan.GetTagItem("user_agent.original"));
+            Assert.Null(serverSpan.GetTagItem("client.address"));
+            Assert.DoesNotContain(serverSpan.TagObjects, t => t.Key.StartsWith("http.request.header.", StringComparison.OrdinalIgnoreCase));
+            Assert.DoesNotContain(serverSpan.TagObjects, t => t.Key.StartsWith("http.response.header.", StringComparison.OrdinalIgnoreCase));
+
+            var serialized = SerializeSpans(exportedSpans);
+            Assert.DoesNotContain(sentinelQuerySecret, serialized, StringComparison.Ordinal);
+            Assert.DoesNotContain(sentinelUaSecret, serialized, StringComparison.Ordinal);
+            Assert.DoesNotContain(sentinelHeaderSecret, serialized, StringComparison.Ordinal);
         }
         finally
         {

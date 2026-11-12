@@ -782,6 +782,7 @@
           "Microsoft.AspNetCore.Authentication.JwtBearer": "[10.0.14, )",
           "Microsoft.AspNetCore.OData": "[9.5.0, )",
           "Microsoft.AspNetCore.OpenApi": "[10.0.14, )",
+          "OpenTelemetry.Instrumentation.AspNetCore": "[1.20.1, )",
           "RoleRadar.Application": "[1.0.0, )",
           "RoleRadar.Domain": "[1.0.0, )",
           "RoleRadar.Infrastructure": "[1.0.0, )",
@@ -819,6 +820,7 @@
           "Duende.IdentityServer.EntityFramework": "[8.0.10, )",
           "Microsoft.AspNetCore.Identity.EntityFrameworkCore": "[10.0.14, )",
           "Microsoft.EntityFrameworkCore.Sqlite": "[10.0.14, )",
+          "OpenTelemetry.Instrumentation.AspNetCore": "[1.20.1, )",
           "Otp.NET": "[1.4.1, )",
           "RoleRadar.Observability": "[1.0.0, )"
         }
@@ -1082,6 +1084,15 @@
         "dependencies": {
           "Microsoft.Extensions.Hosting.Abstractions": "10.0.0",
           "OpenTelemetry": "1.20.1"
+        }
+      },
+      "OpenTelemetry.Instrumentation.AspNetCore": {
+        "type": "CentralTransitive",
+        "requested": "[1.20.1, )",
+        "resolved": "1.20.1",
+        "contentHash": "pDO+Ed5iblMTvSVGcXzoLp8q20XHhXmK0wD/H3PGNHwDFlwZpV+bDWd/Euo6hNB4E0ruqzTFD76Btm+m0uCYNw==",
+        "dependencies": {
+          "OpenTelemetry.Api.ProviderBuilderExtensions": "[1.20.1, 2.0.0)"
         }
       },
       "Otp.NET": {

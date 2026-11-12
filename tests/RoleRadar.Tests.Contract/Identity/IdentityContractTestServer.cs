@@ -32,14 +32,21 @@ internal static class IdentityContractTestServer
 {
     public static async Task<(WebApplication App, HttpClient Client, CookieContainer Cookies, string DbDir)> StartHostAsync(
         Action<WebApplicationBuilder>? configure = null,
-        OwnerSecondFactor secondFactor = OwnerSecondFactor.ActivatedByCode)
+        OwnerSecondFactor secondFactor = OwnerSecondFactor.ActivatedByCode,
+        string[]? extraArgs = null)
     {
         var tempDir = Path.Combine(Path.GetTempPath(), "rrtest_identity_contract_" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(tempDir);
         var dbPath = Path.Combine(tempDir, "identity.db");
 
+        var args = new List<string> { "--urls", "http://127.0.0.1:0" };
+        if (extraArgs is not null)
+        {
+            args.AddRange(extraArgs);
+        }
+
         var app = RoleRadar.Identity.Program.CreateApp(
-            ["--urls", "http://127.0.0.1:0"],
+            args.ToArray(),
             builder =>
             {
                 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
