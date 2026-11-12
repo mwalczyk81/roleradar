@@ -132,14 +132,29 @@ function toBodyInit(body: client.FetchBody): BodyInit | null | undefined {
   return body instanceof Uint8Array ? new Uint8Array(body) : body;
 }
 
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
+
+/**
+ * The local AppHost (feature 015 Gate 5, ADR 0049) runs Identity and the web app over loopback HTTP so no certificate has to
+ * be trusted. openid-client refuses http: unless it is told to allow it, so it is allowed only for a loopback host. Every other
+ * issuer (the packaged stack uses https) keeps the library's HTTPS-only rule. There is no environment check on purpose: the demo
+ * parity tests require production and demo to take the same paths.
+ */
+export function allowsInsecureLoopbackIssuer(issuer: URL): boolean {
+  return issuer.protocol === "http:" && LOOPBACK_HOSTS.has(issuer.hostname);
+}
+
 export async function getOidcConfig(): Promise<client.Configuration> {
   if (!oidcGlobal.__ROLERADAR_OIDC_CONFIG_PROMISE__) {
     const issuer = new URL(getOidcIssuerUri());
     const clientId = getWebClientId();
     const clientSecret = getWebClientSecret();
+    const options: client.DiscoveryRequestOptions = allowsInsecureLoopbackIssuer(issuer)
+      ? { [client.customFetch]: identityFetch, execute: [client.allowInsecureRequests] }
+      : { [client.customFetch]: identityFetch };
 
     oidcGlobal.__ROLERADAR_OIDC_CONFIG_PROMISE__ = client
-      .discovery(issuer, clientId, clientSecret, undefined, { [client.customFetch]: identityFetch })
+      .discovery(issuer, clientId, clientSecret, undefined, options)
       .then((config) => {
         config[client.customFetch] = identityFetch;
         return config;

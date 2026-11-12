@@ -56,6 +56,7 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0050](./0050-span-attribute-allowlist-processor.md) | Span Attribute Allowlist, Drop-List, and Exception-Event Sanitization Processor | Accepted | `015-observability` |
 | [ADR-0051](./0051-otel-logs-and-runtime-scrubbing.md) | OTLP Structured Logs, Runtime Scrubbing Processor, and Producer Census | Accepted | `015-observability` |
 | [ADR-0052](./0052-store-health-and-operation-metrics-meter.md) | Datastore Readiness, Command Health Metrics, and Metric View Tag Filtering | Accepted | `015-observability` |
+| [ADR-0053](./0053-aspire-13-6-5-security-fix-release-age-waiver.md) | Aspire 13.6.5 Security Fix and the Release-Age Waiver | Accepted | `015-observability` |
 
 ## P4 outcomes
 

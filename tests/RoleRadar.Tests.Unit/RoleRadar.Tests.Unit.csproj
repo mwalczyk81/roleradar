@@ -18,6 +18,9 @@
   <ItemGroup>
     <Compile Include="..\RoleRadar.Tests.Integration\Fixtures\FormatterLogCapture.cs" Link="Fixtures\FormatterLogCapture.cs" />
     <Compile Include="..\RoleRadar.Tests.Integration\Fixtures\TotpTestCodes.cs" Link="Fixtures\TotpTestCodes.cs" />
+    <!-- Gate 5 (feature 015): the AppHost's guard and settings are plain files with no Aspire dependency, linked as source so the guard is unit tested without referencing the AppHost project. -->
+    <Compile Include="..\..\src\RoleRadar.AppHost\AppHostSettings.cs" Link="LocalDevLoop\AppHostSettings.cs" />
+    <Compile Include="..\..\src\RoleRadar.AppHost\AppHostSafetyGuard.cs" Link="LocalDevLoop\AppHostSafetyGuard.cs" />
   </ItemGroup>
 
   <ItemGroup>

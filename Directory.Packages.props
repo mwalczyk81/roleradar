@@ -6,6 +6,10 @@
 
   <ItemGroup>
     <!-- Runtime / Host / Persistence / Crypto Dependencies -->
+    <!-- Local dev loop (feature 015 Gate 5, ADR 0049). 13.6.5 is the vendor fix for GHSA-f7vh-h5g3-7jrh (High, < 13.6.5); the owner waived the 14-day release-age rule on 2026-11-11 (ADR 0053). Never suppress NuGet audit warnings. -->
+    <PackageVersion Include="Aspire.Hosting.AppHost" Version="13.6.5" />
+    <PackageVersion Include="Aspire.Hosting.JavaScript" Version="13.6.5" />
+    <PackageVersion Include="Aspire.Hosting.MongoDB" Version="13.6.5" />
     <PackageVersion Include="Duende.IdentityServer" Version="8.0.10" />
     <PackageVersion Include="Duende.IdentityServer.AspNetIdentity" Version="8.0.10" />
     <PackageVersion Include="Duende.IdentityServer.EntityFramework" Version="8.0.10" />

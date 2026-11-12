@@ -292,9 +292,15 @@ export function createWebServer(): https.Server | http.Server {
   return http.createServer(handler);
 }
 
+/** The bind address: every interface by default (the packaged image), or whatever HOST says (the local AppHost uses 127.0.0.1). */
+export function resolveBindHost(): string {
+  const configured = process.env.HOST?.trim();
+  return configured && configured.length > 0 ? configured : "0.0.0.0";
+}
+
 export function startServer(port: number = 5003): https.Server | http.Server {
   const server = createWebServer();
-  server.listen(port, "0.0.0.0", () => {
+  server.listen(port, resolveBindHost(), () => {
     log.info(`RoleRadar Web listening on port ${port}`);
   });
   return server;

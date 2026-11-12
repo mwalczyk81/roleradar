@@ -161,6 +161,68 @@ public sealed class LayerDependencyArchitectureTests
             $"Hardcoded owner string literals must not appear outside Domain/Common/OwnerId.cs. Violations:\n{string.Join("\n", offendingFiles)}");
     }
 
+    // ---- Gate 5 (feature 015, ADR 0049): the local AppHost is a leaf orchestrator ----
+
+    private static string AppHostCsproj(string repoRoot) =>
+        Path.Combine(repoRoot, "src", "RoleRadar.AppHost", "RoleRadar.AppHost.csproj");
+
+    [Fact]
+    public void AppHost_ProjectExists_AndIsRegisteredInTheSolution_WithALockFile()
+    {
+        var repoRoot = LocateRepositoryRoot();
+        Assert.True(File.Exists(AppHostCsproj(repoRoot)), "Expected src/RoleRadar.AppHost/RoleRadar.AppHost.csproj (Gate 5, ADR 0049).");
+        Assert.True(
+            File.Exists(Path.Combine(repoRoot, "src", "RoleRadar.AppHost", "packages.lock.json")),
+            "RoleRadar.AppHost must have a committed packages.lock.json (restore --locked-mode).");
+
+        var solution = File.ReadAllText(Path.Combine(repoRoot, "RoleRadar.sln"));
+        Assert.Contains(@"src\RoleRadar.AppHost\RoleRadar.AppHost.csproj", solution, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AppHost_MayReferenceOnlyTheApiAndIdentityHostProjects()
+    {
+        var repoRoot = LocateRepositoryRoot();
+        var csproj = AppHostCsproj(repoRoot);
+        Assert.True(File.Exists(csproj), $"Expected {csproj}");
+
+        var references = XDocument.Load(csproj).Descendants("ProjectReference")
+            .Select(e => Path.GetFileNameWithoutExtension(((string?)e.Attribute("Include") ?? string.Empty).Replace('\\', '/')))
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+
+        Assert.Equal(["RoleRadar.Api", "RoleRadar.Identity"], references);
+    }
+
+    [Fact]
+    public void AppHost_DoesNotReferenceDuendePackages()
+    {
+        var csproj = AppHostCsproj(LocateRepositoryRoot());
+        Assert.True(File.Exists(csproj), $"Expected {csproj}");
+
+        var offenders = XDocument.Load(csproj).Descendants("PackageReference")
+            .Select(e => (string?)e.Attribute("Include") ?? string.Empty)
+            .Where(n => n.StartsWith("Duende.", StringComparison.OrdinalIgnoreCase))
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, $"RoleRadar.AppHost must not reference Duende packages: {string.Join(", ", offenders)}");
+    }
+
+    [Fact]
+    public void NoOtherSrcProject_ReferencesTheAppHost()
+    {
+        var repoRoot = LocateRepositoryRoot();
+        Assert.True(File.Exists(AppHostCsproj(repoRoot)), "Sentinel: the AppHost project must exist for this rule to mean anything.");
+
+        var offenders = Directory.EnumerateFiles(Path.Combine(repoRoot, "src"), "*.csproj", SearchOption.AllDirectories)
+            .Where(f => !string.Equals(Path.GetFileNameWithoutExtension(f), "RoleRadar.AppHost", StringComparison.Ordinal))
+            .Where(f => File.ReadAllText(f).Contains("RoleRadar.AppHost", StringComparison.Ordinal))
+            .Select(f => Path.GetRelativePath(repoRoot, f).Replace('\\', '/'))
+            .ToArray();
+
+        Assert.True(offenders.Length == 0, $"No src project may reference RoleRadar.AppHost: {string.Join(", ", offenders)}");
+    }
+
     private static string LocateRepositoryRoot()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
