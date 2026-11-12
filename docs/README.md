@@ -37,6 +37,7 @@ docker compose -p roleradar-demo -f deploy/demo/docker-compose.yml up --build --
 - [repo-settings.md](repo-settings.md): branch ruleset and repository settings.
 - [threat-model.md](threat-model.md): what is trusted, what is defended, the demo's exposure, and what is not claimed.
 - [pre-announce.md](pre-announce.md): the local secret, name and picture checks to run before announcing the repository.
+- [ai-assisted-development.md](ai-assisted-development.md): how AI-written code is governed here: who decides, what a machine checks, what is never delegated, and what review caught.
 - [denylist.example.txt](denylist.example.txt): the format of the private local list the privacy hooks scan for.
 
 ## Work on it
