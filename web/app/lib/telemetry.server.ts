@@ -729,6 +729,24 @@ export function setConfiguredRoutesForTelemetry(routes: RouteDefinition[] | null
   configuredRoutes = routes;
 }
 
+/**
+ * React Router single fetch asks for a route's data at the page URL plus ".data" ("/postings.data", "/companies/<id>.data",
+ * "/_root.data" for "/", and "/companies/_.data" for a trailing slash). The suffix is a transport detail, so it is removed before
+ * the path is matched: the request belongs to the route of the page, not to "unmatched".
+ */
+function stripSingleFetchSuffix(path: string): string {
+  if (path === "/_root.data") {
+    return "/";
+  }
+  if (path.endsWith("/_.data")) {
+    return path.slice(0, -"_.data".length);
+  }
+  if (path.endsWith(".data")) {
+    return path.slice(0, -".data".length) || "/";
+  }
+  return path;
+}
+
 export function resolveHttpRoute(rawPath: string, routes?: RouteDefinition[] | null): string {
   const activeRoutes = routes !== undefined ? routes : configuredRoutes;
   if (!activeRoutes || activeRoutes.length === 0) {
@@ -737,7 +755,7 @@ export function resolveHttpRoute(rawPath: string, routes?: RouteDefinition[] | n
   if (!rawPath || typeof rawPath !== "string") {
     return "unmatched";
   }
-  const cleanPath = rawPath.split("?")[0].split("#")[0].trim() || "/";
+  const cleanPath = stripSingleFetchSuffix(rawPath.split("?")[0].split("#")[0].trim() || "/");
   if (cleanPath === "/health" || cleanPath === "/health/live" || cleanPath === "/health/ready") {
     return cleanPath;
   }

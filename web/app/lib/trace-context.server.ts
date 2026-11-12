@@ -92,12 +92,17 @@ export function extractValidatedParentContext(
 /**
  * Starts an OpenTelemetry SERVER span for an incoming HTTP request, honouring a valid inbound `traceparent`
  * as the remote parent span context and otherwise starting a fresh root trace.
+ *
+ * Following the OpenTelemetry HTTP semantic conventions the span is named "{method} {http.route}" (a low-cardinality
+ * template, never the raw path) and carries `http.route`; `url.path` keeps the raw path with its query already removed.
+ * `scheme` has no default on purpose: a caller must say what the socket was, so a plain-HTTP request can never be reported as https.
  */
 export function startServerRequestSpan(
   method: string,
   path: string,
   inbound: string | null | undefined,
-  scheme: string = "https"
+  scheme: "http" | "https",
+  route: string
 ): {
   span: Span;
   activeContext: Context;
@@ -107,11 +112,12 @@ export function startServerRequestSpan(
   const parentContext = extractValidatedParentContext(inbound);
   const tracer = getWebTracer();
   const span = tracer.startSpan(
-    `${method} ${path}`,
+    `${method} ${route}`,
     {
       kind: SpanKind.SERVER,
       attributes: {
         "http.request.method": method,
+        "http.route": route,
         "url.path": path,
         "url.scheme": scheme,
       },
