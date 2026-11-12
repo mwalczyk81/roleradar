@@ -27,7 +27,8 @@ Then open <https://localhost:5103> and sign in with the printed username, passwo
 - **Job-search tracker**: companies, deduplicated postings, a disposition state machine, applications with timelines, criteria and search runs, plus an import of an existing tracker.
 - **Web app**: a server-rendered UI with password and TOTP sign-in, list pages read through an owner-scoped OData seam, and an Insights dashboard whose every count links to the list it counts.
 - **Durable and private**: loopback-only MongoDB, an append-only audit trail, and encrypted backups with a verified two-pass restore.
-- **Built in the open**: spec-driven development with a constitution, about forty ADRs, architecture tests, a review gate, and published test, coverage and mutation reports. AI agents wrote much of the code under that process, with a human review at every phase.
+- **Operable and observable**: structured, secret-scrubbed logs with a trace id on every line, truthful health endpoints, and opt-in OpenTelemetry traces, logs and metrics with a privacy gate. One command, `dotnet run --project src/RoleRadar.AppHost`, starts the stack from source with the Aspire Dashboard, isolated from a running stack. Nothing is exported unless you set an OTLP endpoint.
+- **Built in the open**: spec-driven development with a constitution, over fifty ADRs, architecture tests, a review gate, and published test, coverage and mutation reports. AI agents wrote much of the code under that process, with a human review at every phase.
 
 Full list: [CHANGELOG.md](https://github.com/mwalczyk81/roleradar/blob/main/CHANGELOG.md). Reports: <https://mwalczyk81.github.io/roleradar/>.
 
