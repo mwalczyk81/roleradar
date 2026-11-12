@@ -73,7 +73,7 @@ RoleRadar is built spec first with [GitHub Spec Kit](https://github.com/github/s
 - Tests first and shown failing, architecture tests for the layering, contract tests for the API and MCP schemas, and integration tests against throwaway Mongo containers only.
 - A human review gate. Each phase stops for the owner's review, and the gate script rebuilds and retests a clean clone before a pull request.
 
-**AI agents wrote much of the code, the tests and these docs, under that process.** The owner set the requirements, reviewed every phase stop and pull request, and made the calls recorded in the ADRs. The process is the point: specs, tests and gates are what keep agent-written code honest.
+**AI agents wrote much of the code, the tests and these docs, under that process.** The owner set the requirements, reviewed every phase stop and pull request, and made the calls recorded in the ADRs. The process is the point: specs, tests and gates are what keep agent-written code honest. [How AI-written code is governed here](docs/ai-assisted-development.md) says what is checked, what is never delegated, and what review caught.
 
 A worked example from spec to pull request is feature 008, rejecting an applied posting: [spec, plan and tasks](specs/008-posting-application-rejection-sync/), [ADR 0033](docs/adr/0033-posting-rejection-syncs-to-application.md) and [pull request #53](https://github.com/mwalczyk81/roleradar/pull/53).
 
