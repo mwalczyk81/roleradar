@@ -14,6 +14,8 @@ Local-first by design: everything stays on your machine, every write is audited,
   <img alt="The Insights page over the fictional demo data: a postings funnel and an applications funnel, every count a drill-down link" src="docs/images/insights-light.png">
 </picture>
 
+<img width="960" height="600" alt="A short screen recording of the demo stack over fictional data" src="https://github.com/user-attachments/assets/56be81e5-d08c-4cf9-a992-83b23afa91a8" />
+
 ## Try the demo
 
 You need Docker with Compose v2 ([versions](docs/demo.md#what-you-need)). Four steps:
@@ -133,6 +135,8 @@ dotnet run --project src/RoleRadar.AppHost
 ```
 
 Open the `http://127.0.0.1:15888/login?t=...` URL it prints. Press `Ctrl+C` in that terminal to stop it. The loop has its own loopback ports (`15001` to `15003`, Mongo on `37017`, Dashboard on `15888`) and its own `roleradar-apphost-*` containers and volumes, refuses to start if one of those ports is taken, never touches the real stack (`roleradar-mongo`, `roleradar-mongo-data`, `roleradar-identity-data`, port `27017`), and runs over loopback HTTP, so no certificate has to be trusted. It uses fictional data only. Sign-in, seeding a fictional posting, cleanup after an abrupt close and the Dashboard checklist are in [specs/015-observability/quickstart.md](specs/015-observability/quickstart.md).
+
+<img width="960" height="600" alt="A short screen recording of the Aspire Dashboard showing RoleRadar's services, traces and metrics from the local dev loop" src="https://github.com/user-attachments/assets/971c81b0-e98b-4289-89ab-7641eed1ff7b" />
 
 ## CLI and MCP reference
 
