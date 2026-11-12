@@ -136,3 +136,15 @@ Environment variable detectors, OS username detectors, and process command-line 
 - **Good**: Gate 2 (`RR-68` + `RR-72`) is 100% self-contained and independent of `RR-86`'s log-scrubbing evaluation in Gate 3 (`ADR 0051`).
 - **Good**: Because the processor enforces a closed attribute allowlist plus URL query/fragment stripping and `exception.message`/`exception.stacktrace` removal, new or unexpected tags added by future library upgrades fail closed (are dropped) rather than leaking over OTLP.
 - **Neutral**: Detailed exception text (after redaction) belongs to the structured log pipeline evaluated in Gate 3 (`ADR 0051`), while trace spans carry the correlated `traceId`/`spanId`, `error.type`, and `exception.type`.
+
+## Addendum: Maintained ASP.NET Core Instrumentation (Gate 2b, Principle X)
+
+- **Context & Decision**: In `RoleRadar.Api` and `RoleRadar.Identity`, replace hand-set HTTP span tags in `RequestCompletedMiddleware` with official `OpenTelemetry.Instrumentation.AspNetCore` (`1.20.1`, published 2026-10-21, clearing the 14-day rule). `RequestCompletedMiddleware` retains only the `RequestCompleted` log record; all Activity reads and writes (`DisplayName`, `SetTag`, `SetStatus`) are removed.
+- **Why Maintained Library First (Principle X)**: A bare ASP.NET Core application with `.AddSource("Microsoft.AspNetCore")` emits native activities named `"Microsoft.AspNetCore.Hosting.HttpRequestIn"`, but under .NET 10 it sets zero HTTP semantic convention tags (`http.request.method`, `url.scheme`, `url.path`, `http.response.status_code`, and `http.route` are all null, and status remains `Unset` on 5xx responses). Rather than hand-rolling tag extraction in custom middleware, `OpenTelemetry.Instrumentation.AspNetCore` implements the W3C and OpenTelemetry HTTP semantic conventions natively.
+- **Configuration & ActivitySource**:
+  - `RecordException = false`: Prevents raw unredacted exception messages and stack traces from being recorded by the instrumentation library.
+  - No enrich callbacks: No request or response headers are captured.
+  - Subscribing to `"Microsoft.AspNetCore"`: `AddAspNetCoreInstrumentation` automatically subscribes to `"Microsoft.AspNetCore"` internally. The redundant `.AddSource("Microsoft.AspNetCore")` in `TelemetrySetup.cs` is removed.
+- **Privacy Gate Interaction (What the Library Sets and the Processor Removes)**:
+  - By default, `OpenTelemetry.Instrumentation.AspNetCore` records `url.query` (from query strings), `user_agent.original` (from the `User-Agent` header), and `client.address` (from client IP).
+  - `RoleRadarSpanAttributeProcessor` drops `url.query`, `user_agent.original`, `client.address`, and any `http.request.header.*` tags per the allowlist and drop-list, leaving only safe operational attributes (`http.request.method`, `url.scheme`, `url.path`, `http.response.status_code`, `http.route`, route-based `DisplayName`) on exported spans (verified by `Api_RequestWithSentinelsInQueryUserAgentAndHeaders_ExportsSpanWithNoneOfThem`).

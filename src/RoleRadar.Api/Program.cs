@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.OData;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -10,6 +11,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OData.Edm;
 using Microsoft.OData.ModelBuilder;
+using OpenTelemetry.Trace;
 using RoleRadar.Api.Authentication;
 using RoleRadar.Api.Endpoints;
 using RoleRadar.Api.Filters;
@@ -74,9 +76,25 @@ public partial class Program
         // Logging first, so providers a test adds through configureBuilder are kept (feature 013, ADR 0041).
         builder.Logging.ClearProviders().AddRoleRadarLogging("api", LogStream.Split, builder.Configuration);
 
-        // OpenTelemetry tracing (feature 015, ADR 0050): registered before configureBuilder so RoleRadarSpanAttributeProcessor
+        // OpenTelemetry tracing (feature 015, ADR 0050, ADR 0050 addendum): registered before configureBuilder so RoleRadarSpanAttributeProcessor
         // runs ahead of any test exporter added via ConfigureOpenTelemetryTracerProvider.
-        builder.Services.AddRoleRadarTelemetry("roleradar-api", builder.Configuration);
+        // Uses OpenTelemetry.Instrumentation.AspNetCore (Principle X, maintained library) instead of hand-set span tags.
+        builder.Services.AddRoleRadarTelemetry("roleradar-api", builder.Configuration, tracing =>
+        {
+            tracing.AddAspNetCoreInstrumentation(options =>
+            {
+                options.RecordException = false;
+            });
+        });
+
+        builder.Services.AddHttpLogging(logging =>
+        {
+            logging.LoggingFields = HttpLoggingFields.RequestMethod
+                | HttpLoggingFields.RequestPath
+                | HttpLoggingFields.ResponseStatusCode
+                | HttpLoggingFields.Duration;
+            logging.CombineLogs = true;
+        });
 
         configureBuilder?.Invoke(builder);
 
@@ -208,7 +226,7 @@ public partial class Program
         // Intentionally zero CORS middleware registered (server-to-server only per ADR-0018 / FR-009)
         var app = builder.Build();
 
-        app.UseMiddleware<RequestCompletedMiddleware>();
+        app.UseHttpLogging();
 
         // Right after the request log middleware, so an escaped exception becomes a problem document with the request's trace id.
         // Every failure is handled by ApiExceptionHandler; the no-op delegate only satisfies the middleware's own options.
@@ -229,7 +247,8 @@ public partial class Program
 
         // Compatibility alias of /health/live. A plain endpoint, not a health check, so the OpenAPI document keeps listing it.
         app.MapGet("/health", () => Results.Ok(new { status = "Healthy" }))
-            .AllowAnonymous();
+            .AllowAnonymous()
+            .WithHttpLogging(HttpLoggingFields.None);
 
         var apiV1 = app.MapGroup("/api/v1")
             .RequireAuthorization(OwnerPolicyName)

@@ -208,6 +208,15 @@ public sealed partial class ODataDocsExamplesTests : IAsyncLifetime
 
     private static string? FindOnPath(string name)
     {
+        if (OperatingSystem.IsWindows() && string.Equals(name, "bash", StringComparison.OrdinalIgnoreCase))
+        {
+            var gitBash = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Git", "bin", "bash.exe");
+            if (File.Exists(gitBash))
+            {
+                return gitBash;
+            }
+        }
+
         var extensions = OperatingSystem.IsWindows() ? new[] { ".exe", ".cmd", "" } : new[] { "" };
         foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? string.Empty).Split(Path.PathSeparator))
         {

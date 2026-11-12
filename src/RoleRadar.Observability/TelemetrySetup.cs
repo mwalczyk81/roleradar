@@ -73,7 +73,6 @@ public static class TelemetrySetup
                     .SetSampler(new AlwaysOnSampler())
                     .AddSource(
                         TraceIds.ActivitySourceName,
-                        "Microsoft.AspNetCore",
                         "System.Net.Http",
                         "MongoDB.Driver")
                     .AddProcessor(new RoleRadarSpanAttributeProcessor());

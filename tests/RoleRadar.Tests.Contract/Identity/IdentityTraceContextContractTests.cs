@@ -46,7 +46,7 @@ public sealed class IdentityTraceContextContractTests
 
     private static List<JsonElement> RequestCompleted(FormatterLogCapture capture, string traceId) =>
         Records(capture)
-            .Where(r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestCompleted")
+            .Where(r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestResponseLog")
             .Where(r => r.TryGetProperty("traceId", out var c) && c.GetString() == traceId)
             .ToList();
 
@@ -100,9 +100,9 @@ public sealed class IdentityTraceContextContractTests
 
             Assert.NotEmpty(capture.Lines);
             var completed = Records(capture)
-                .Where(r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestCompleted")
+                .Where(r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestResponseLog")
                 .ToList();
-            var record = Assert.Single(completed, r => r.GetProperty("props").GetProperty("path").GetString() == "/Account/Login");
+            var record = Assert.Single(completed, r => r.GetProperty("props").GetProperty("Path").GetString() == "/Account/Login");
             var replaced = record.GetProperty("traceId").GetString();
             Assert.Matches(HexTraceId, replaced!);
             Assert.NotEqual(new string('0', 32), replaced);
@@ -127,7 +127,7 @@ public sealed class IdentityTraceContextContractTests
 
             Assert.NotEmpty(capture.Lines);
             var record = Assert.Single(RequestCompleted(capture, TraceId));
-            Assert.Equal("/connect/authorize", record.GetProperty("props").GetProperty("path").GetString());
+            Assert.Equal("/connect/authorize", record.GetProperty("props").GetProperty("Path").GetString());
             var leaking = capture.Lines.Where(l => l.Contains("SENTINEL-", StringComparison.Ordinal)).ToList();
             Assert.True(leaking.Count == 0, $"Query values reached the log:\n{string.Join("\n", leaking)}");
         }

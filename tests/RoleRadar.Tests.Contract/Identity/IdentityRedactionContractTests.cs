@@ -60,11 +60,11 @@ public sealed partial class IdentityRedactionContractTests
                 authenticatorKey = db.UserTokens.Single(t => t.UserId == user.Id && t.Name == "AuthenticatorKey").Value!;
             }
 
-            // Non-vacuous capture first: lines exist and the login request's RequestCompleted record is among them.
+            // Non-vacuous capture first: lines exist and the login request's RequestResponseLog record is among them.
             Assert.NotEmpty(capture.Lines);
             Assert.Contains(capture.Lines, line =>
-                line.Contains("\"event\":\"RequestCompleted\"", StringComparison.Ordinal)
-                && line.Contains("\"path\":\"/Account/Login\"", StringComparison.Ordinal));
+                line.Contains("\"event\":\"RequestResponseLog\"", StringComparison.Ordinal)
+                && line.Contains("\"Path\":\"/Account/Login\"", StringComparison.Ordinal));
 
             var text = capture.Text;
             foreach (var secret in new[] { SentinelPassword, SentinelUsername, TestOwnerPassword, WebClientSecret, idToken, authenticatorKey })

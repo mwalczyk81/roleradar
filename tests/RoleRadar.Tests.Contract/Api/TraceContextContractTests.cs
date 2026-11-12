@@ -54,7 +54,7 @@ public sealed class TraceContextContractTests(SharedMongoFixture sharedMongo)
 
     private static List<JsonElement> RequestCompleted(FormatterLogCapture capture, string traceId) =>
         Records(capture)
-            .Where(r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestCompleted")
+            .Where(r => r.TryGetProperty("event", out var e) && e.GetString() == "RequestResponseLog")
             .Where(r => r.TryGetProperty("traceId", out var c) && c.GetString() == traceId)
             .ToList();
 
@@ -182,15 +182,15 @@ public sealed class TraceContextContractTests(SharedMongoFixture sharedMongo)
         Assert.NotEmpty(capture.Lines);
         var record = Assert.Single(RequestCompleted(capture, TraceId));
         var props = record.GetProperty("props");
-        Assert.Equal("GET", props.GetProperty("method").GetString());
-        Assert.Equal("/odata/Postings", props.GetProperty("path").GetString());
-        Assert.Equal(400, props.GetProperty("status").GetInt32());
-        Assert.True(props.GetProperty("durationMs").GetDouble() >= 0);
+        Assert.Equal("GET", props.GetProperty("Method").GetString());
+        Assert.Equal("/odata/Postings", props.GetProperty("Path").GetString());
+        Assert.Equal(400, props.GetProperty("StatusCode").GetInt32());
+        Assert.True(props.GetProperty("Duration").GetDouble() >= 0);
         Assert.DoesNotContain("orderby", capture.Text, StringComparison.Ordinal);
     }
 
     [Fact]
-    public async Task HealthRequests_LogAtDebug_SoNoRequestCompletedRecordAppears()
+    public async Task HealthRequests_ExcludedFromHttpLogging_SoNoHttpLogRecordAppears()
     {
         var (host, capture) = await StartAsync("rrtest_api_trace_health");
         await using var hostScope = host;

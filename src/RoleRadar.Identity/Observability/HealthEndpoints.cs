@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 namespace RoleRadar.Identity.Observability;
@@ -16,9 +17,15 @@ public static class HealthEndpoints
     {
         ArgumentNullException.ThrowIfNull(app);
 
-        app.MapHealthChecks("/health/live", Options(_ => false)).AllowAnonymous();
-        app.MapHealthChecks("/health/ready", Options(registration => registration.Tags.Contains(ReadyTag))).AllowAnonymous();
-        app.MapHealthChecks("/health", Options(_ => false)).AllowAnonymous();
+        app.MapHealthChecks("/health/live", Options(_ => false))
+            .AllowAnonymous()
+            .WithHttpLogging(HttpLoggingFields.None);
+        app.MapHealthChecks("/health/ready", Options(registration => registration.Tags.Contains(ReadyTag)))
+            .AllowAnonymous()
+            .WithHttpLogging(HttpLoggingFields.None);
+        app.MapHealthChecks("/health", Options(_ => false))
+            .AllowAnonymous()
+            .WithHttpLogging(HttpLoggingFields.None);
         return app;
     }
 

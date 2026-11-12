@@ -107,8 +107,8 @@ public sealed partial class SignInEventContractTests
     {
         Assert.NotEmpty(capture.Lines);
         Assert.Contains(capture.Lines, line =>
-            line.Contains("\"event\":\"RequestCompleted\"", StringComparison.Ordinal)
-            && line.Contains("\"path\":\"/Account/Login\"", StringComparison.Ordinal));
+            line.Contains("\"event\":\"RequestResponseLog\"", StringComparison.Ordinal)
+            && line.Contains("\"Path\":\"/Account/Login\"", StringComparison.Ordinal));
         Assert.Contains(Events(capture), e => e.Name == expectedEvent);
     }
 

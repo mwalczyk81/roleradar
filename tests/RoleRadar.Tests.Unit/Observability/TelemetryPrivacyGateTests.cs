@@ -1,9 +1,13 @@
+#pragma warning disable CA1848, CA1873
+
 using System.Diagnostics;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenTelemetry;
 using OpenTelemetry.Exporter;
+using OpenTelemetry.Logs;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
 using RoleRadar.Observability;
@@ -288,5 +292,137 @@ public sealed class TelemetryPrivacyGateTests
 
         Assert.Contains("System.Diagnostics.Activity._events", ex.Message, StringComparison.Ordinal);
         Assert.Contains("RoleRadar telemetry", ex.Message, StringComparison.Ordinal);
+    }
+
+    private static (List<LogRecord> Exported, ILoggerFactory Factory) CreateLoggingPipeline()
+    {
+        var exported = new List<LogRecord>();
+        var factory = LoggerFactory.Create(builder =>
+        {
+            builder.AddOpenTelemetry(logging =>
+            {
+                logging.IncludeFormattedMessage = true;
+                logging.IncludeScopes = false;
+                logging.AddProcessor(new RoleRadarLogScrubbingProcessor());
+                logging.AddInMemoryExporter(exported);
+            });
+        });
+
+        return (exported, factory);
+    }
+
+    [Fact]
+    public void LogScrubbingProcessor_ScrubsBodyAndFormattedMessage_WhenSentinelsArePresent()
+    {
+        var (exported, factory) = CreateLoggingPipeline();
+        using var _ = factory;
+        var logger = factory.CreateLogger("PrivacyGate.Tests");
+
+        var sensitiveBody = "User authenticated with password=SENTINEL-EX-PW-1000 and token Bearer SENTINEL-EX-BEARER-1001"; // gitleaks:allow (fictional test vector, not a credential)
+        logger.LogInformation("{Message}", sensitiveBody);
+
+        var record = Assert.Single(exported);
+        Assert.DoesNotContain("SENTINEL-EX-PW-1000", record.Body ?? string.Empty, StringComparison.Ordinal); // gitleaks:allow (fictional test vector, not a credential)
+        Assert.DoesNotContain("SENTINEL-EX-BEARER-1001", record.Body ?? string.Empty, StringComparison.Ordinal); // gitleaks:allow (fictional test vector, not a credential)
+        Assert.DoesNotContain("SENTINEL-EX-PW-1000", record.FormattedMessage ?? string.Empty, StringComparison.Ordinal); // gitleaks:allow (fictional test vector, not a credential)
+        Assert.DoesNotContain("SENTINEL-EX-BEARER-1001", record.FormattedMessage ?? string.Empty, StringComparison.Ordinal); // gitleaks:allow (fictional test vector, not a credential)
+    }
+
+    [Fact]
+    public void LogScrubbingProcessor_ScrubsAttributes_RedactingSensitiveKeys_AndSanitizingStringValues()
+    {
+        var (exported, factory) = CreateLoggingPipeline();
+        using var _ = factory;
+        var logger = factory.CreateLogger("PrivacyGate.Tests");
+
+        logger.LogInformation(
+            "Operation started with {Password} and {Authorization} and {CustomUnlisted}",
+            "SENTINEL-PW-996", // gitleaks:allow (fictional test vector, not a credential)
+            "Bearer SENTINEL-BEARER-TOKEN-991", // gitleaks:allow (fictional test vector, not a credential)
+            "Embedded password=SENTINEL-EX-PW-1000 value"); // gitleaks:allow (fictional test vector, not a credential)
+
+        var record = Assert.Single(exported);
+        var attrs = record.Attributes?.ToDictionary(k => k.Key, k => k.Value?.ToString() ?? string.Empty)
+            ?? new Dictionary<string, string>();
+
+        foreach (var sentinel in SentinelSecrets)
+        {
+            foreach (var kv in attrs)
+            {
+                Assert.DoesNotContain(sentinel, kv.Value, StringComparison.Ordinal);
+            }
+        }
+
+        if (attrs.TryGetValue("Password", out var pwValue))
+        {
+            Assert.Equal(LogScrubber.Redacted, pwValue);
+        }
+        if (attrs.TryGetValue("Authorization", out var authValue))
+        {
+            Assert.Equal(LogScrubber.Redacted, authValue);
+        }
+    }
+
+    private sealed class DistinctiveSecretLeakException(string message) : Exception(message);
+
+    [Fact]
+    public void LogScrubbingProcessor_ScrubsException_NullsException_AndAddsScrubbedTypeAndMessageAttributesWithoutStacktrace()
+    {
+        var (exported, factory) = CreateLoggingPipeline();
+        using var _ = factory;
+        var logger = factory.CreateLogger("PrivacyGate.Tests");
+
+        var ex = new DistinctiveSecretLeakException("Auth failed: password=SENTINEL-EX-PW-1000 Bearer SENTINEL-EX-BEARER-1001"); // gitleaks:allow (fictional test vector, not a credential)
+        logger.LogError(ex, "An unhandled exception occurred");
+
+        var record = Assert.Single(exported);
+        Assert.Null(record.Exception);
+
+        var attrs = record.Attributes?.ToDictionary(k => k.Key, k => k.Value?.ToString() ?? string.Empty)
+            ?? new Dictionary<string, string>();
+
+        Assert.True(attrs.TryGetValue("exception.type", out var exType));
+        Assert.Equal(typeof(DistinctiveSecretLeakException).FullName, exType);
+
+        Assert.True(attrs.TryGetValue("exception.message", out var exMsg));
+        Assert.DoesNotContain("SENTINEL-EX-PW-1000", exMsg, StringComparison.Ordinal); // gitleaks:allow (fictional test vector, not a credential)
+        Assert.DoesNotContain("SENTINEL-EX-BEARER-1001", exMsg, StringComparison.Ordinal); // gitleaks:allow (fictional test vector, not a credential)
+        Assert.Contains(LogScrubber.Redacted, exMsg, StringComparison.Ordinal);
+
+        Assert.False(attrs.ContainsKey("exception.stacktrace"));
+    }
+
+    [Fact]
+    public void LogPipeline_WhenScopesUsed_ScopesAreNotExported_PreventingSentinelLeak()
+    {
+        var (exported, factory) = CreateLoggingPipeline();
+        using var _ = factory;
+        var logger = factory.CreateLogger("PrivacyGate.Tests");
+
+        using (logger.BeginScope("Scope with password={Password} and token Bearer {Token}", "SENTINEL-PW-996", "SENTINEL-BEARER-TOKEN-991")) // gitleaks:allow
+        {
+            logger.LogInformation("Operation inside scope");
+        }
+
+        var record = Assert.Single(exported);
+        var scopeCount = 0;
+        var scopeValues = new List<string>();
+        record.ForEachScope((scope, _) =>
+        {
+            scopeCount++;
+            if (scope.Scope != null)
+            {
+                scopeValues.Add(scope.Scope.ToString() ?? string.Empty);
+            }
+            foreach (KeyValuePair<string, object?> kvp in scope)
+            {
+                scopeValues.Add($"{kvp.Key}={kvp.Value}");
+            }
+        }, (object?)null);
+
+        Assert.Equal(0, scopeCount);
+        var combinedScopes = string.Join(" | ", scopeValues);
+        Assert.DoesNotContain("SENTINEL-PW-996", combinedScopes, StringComparison.Ordinal); // gitleaks:allow
+        Assert.DoesNotContain("SENTINEL-BEARER-TOKEN-991", combinedScopes, StringComparison.Ordinal); // gitleaks:allow
     }
 }

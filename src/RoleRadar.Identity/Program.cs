@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using OpenTelemetry.Trace;
 using RoleRadar.Identity.Configuration;
 using RoleRadar.Identity.Data;
 using RoleRadar.Identity.Observability;
@@ -53,9 +55,25 @@ public partial class Program
         // Logging first, so providers a test adds through configureBuilder are kept (feature 013, ADR 0041).
         builder.Logging.ClearProviders().AddRoleRadarLogging("identity", LogStream.Split, builder.Configuration);
 
-        // OpenTelemetry tracing (feature 015, ADR 0050): registered before configureBuilder so RoleRadarSpanAttributeProcessor
+        // OpenTelemetry tracing (feature 015, ADR 0050, ADR 0050 addendum): registered before configureBuilder so RoleRadarSpanAttributeProcessor
         // runs ahead of any test exporter added via ConfigureOpenTelemetryTracerProvider.
-        builder.Services.AddRoleRadarTelemetry("roleradar-identity", builder.Configuration);
+        // Uses OpenTelemetry.Instrumentation.AspNetCore (Principle X, maintained library) instead of hand-set span tags.
+        builder.Services.AddRoleRadarTelemetry("roleradar-identity", builder.Configuration, tracing =>
+        {
+            tracing.AddAspNetCoreInstrumentation(options =>
+            {
+                options.RecordException = false;
+            });
+        });
+
+        builder.Services.AddHttpLogging(logging =>
+        {
+            logging.LoggingFields = HttpLoggingFields.RequestMethod
+                | HttpLoggingFields.RequestPath
+                | HttpLoggingFields.ResponseStatusCode
+                | HttpLoggingFields.Duration;
+            logging.CombineLogs = true;
+        });
 
         configureBuilder?.Invoke(builder);
 
@@ -142,7 +160,7 @@ public partial class Program
             dbContext.Database.Migrate();
         }
 
-        app.UseMiddleware<RequestCompletedMiddleware>();
+        app.UseHttpLogging();
 
         // 009 US4: the kit and Identity assets, then the /Account headers (form-action comes from the registered clients).
         app.UseStaticFiles();
