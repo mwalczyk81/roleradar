@@ -55,6 +55,7 @@ All significant architectural and library decisions for RoleRadar are recorded h
 | [ADR-0049](./0049-local-observability-apphost-and-dashboard.md) | Local Observability Orchestration — Aspire AppHost and Dashboard | Accepted | `015-observability` |
 | [ADR-0050](./0050-span-attribute-allowlist-processor.md) | Span Attribute Allowlist, Drop-List, and Exception-Event Sanitization Processor | Accepted | `015-observability` |
 | [ADR-0051](./0051-otel-logs-and-runtime-scrubbing.md) | OTLP Structured Logs, Runtime Scrubbing Processor, and Producer Census | Accepted | `015-observability` |
+| [ADR-0052](./0052-store-health-and-operation-metrics-meter.md) | Datastore Readiness, Command Health Metrics, and Metric View Tag Filtering | Accepted | `015-observability` |
 
 ## P4 outcomes
 

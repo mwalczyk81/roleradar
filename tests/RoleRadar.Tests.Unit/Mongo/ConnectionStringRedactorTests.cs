@@ -71,4 +71,32 @@ public sealed class ConnectionStringRedactorTests
 
         property.QuickCheckThrowOnFailure();
     }
+
+    [Fact]
+    public void KnownCollections_ContainsAllConstantsFromTrackingMongoOptionsAndMongoBootstrapAndIndexes()
+    {
+        var expectedCollections = new HashSet<string>(StringComparer.Ordinal);
+        var types = new[] { typeof(TrackingMongoOptions), typeof(MongoBootstrapAndIndexes) };
+        foreach (var type in types)
+        {
+            var fields = type.GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.FlattenHierarchy)
+                .Where(f => f.IsLiteral && !f.IsInitOnly && f.FieldType == typeof(string) && f.Name.EndsWith("CollectionName", StringComparison.Ordinal));
+            foreach (var field in fields)
+            {
+                var val = (string?)field.GetValue(null);
+                if (!string.IsNullOrWhiteSpace(val))
+                {
+                    expectedCollections.Add(val);
+                }
+            }
+        }
+
+        Assert.NotEmpty(expectedCollections);
+        foreach (var expected in expectedCollections)
+        {
+            Assert.True(
+                ConnectionStringRedactor.KnownCollections.Contains(expected),
+                $"Collection '{expected}' defined in options/bootstrap constants is missing from ConnectionStringRedactor.KnownCollections");
+        }
+    }
 }

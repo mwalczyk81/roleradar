@@ -3,9 +3,11 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Exporter;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Tracking.Queries;
+using RoleRadar.Domain.Common;
 using RoleRadar.Observability;
 using RoleRadar.Tests.Integration.Fixtures;
 using RoleRadar.Tests.Integration.Hosting;
@@ -44,17 +46,21 @@ public sealed class CliMcpTelemetryIntegrationTests(SharedMongoFixture mongo)
                 var exporters = defaultProvider.GetServices<IConfigureOptions<OtlpExporterOptions>>().ToList();
                 Assert.Empty(exporters);
                 Assert.Null(defaultProvider.GetService<TracerProvider>());
+                Assert.Null(defaultProvider.GetService<MeterProvider>());
             }
 
             var exportedSpans = new List<Activity>();
+            var exportedMetrics = new List<Metric>();
             Environment.SetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1");
 
             await using (var optInProvider = RoleRadar.Cli.Program.BuildServiceProvider(services =>
             {
                 services.ConfigureOpenTelemetryTracerProvider(tracer => tracer.AddInMemoryExporter(exportedSpans));
+                services.ConfigureOpenTelemetryMeterProvider(metrics => metrics.AddInMemoryExporter(exportedMetrics));
             }))
             {
                 Assert.NotNull(optInProvider.GetService<TracerProvider>());
+                Assert.NotNull(optInProvider.GetService<MeterProvider>());
 
                 using (var runActivity = TraceIds.StartActivity("roleradar.cli.run", RoleRadar.Cli.Program.RunId))
                 {
@@ -121,5 +127,56 @@ public sealed class CliMcpTelemetryIntegrationTests(SharedMongoFixture mongo)
         sw.Stop();
 
         Assert.True(sw.Elapsed < TimeSpan.FromSeconds(15), $"MCP took {sw.Elapsed.TotalSeconds:F2}s to shut down despite 250ms bounded flush timeout.");
+    }
+
+    [Fact]
+    public async Task Cli_WhenOtlpEndpointIsUnset_RunsVerify_AndWritesZeroNonCliBytesToStdout()
+    {
+        var dbName = mongo.CreateDatabaseName("rrtest_cli_unset");
+        var env = new Dictionary<string, string>(mongo.CreateProcessEnvironment(dbName));
+        env.Remove("OTEL_EXPORTER_OTLP_ENDPOINT");
+
+        var sw = Stopwatch.StartNew();
+        var (exitCode, stdout, _) = await LaunchedCliRunner.RunCliAsync("verify", env, forceContainer: false);
+        sw.Stop();
+
+        Assert.Equal(0, exitCode);
+        Assert.DoesNotContain("OTEL", stdout, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Mcp_WhenOtlpEndpointIsUnset_HandlesToolCall_AndWritesZeroNonMcpBytesToStdout()
+    {
+        var dbName = mongo.CreateDatabaseName("rrtest_mcp_unset");
+        var env = new Dictionary<string, string>(mongo.CreateProcessEnvironment(dbName));
+        env.Remove("OTEL_EXPORTER_OTLP_ENDPOINT");
+
+        await using var mcp = await McpProcessClient.StartAsync(McpHostLocator.GetMcpDllPath(), env, forceContainer: false);
+        using var response = await mcp.CallToolRawAsync("note_search", new { query = "fictional" });
+        Assert.Equal(System.Text.Json.JsonValueKind.Object, response.RootElement.ValueKind);
+    }
+
+    [Fact]
+    public void Mcp_DefaultAndOptInTelemetry_RespectsOtlpEndpointConfiguration_AndAssertsMetricsBehavior()
+    {
+        var previousEndpoint = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
+        try
+        {
+            Environment.SetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT", null);
+            var defaultBuilder = RoleRadar.Mcp.Stdio.Program.CreateHostBuilder();
+            using var defaultApp = defaultBuilder.Build();
+            Assert.Null(defaultApp.Services.GetService<TracerProvider>());
+            Assert.Null(defaultApp.Services.GetService<MeterProvider>());
+
+            Environment.SetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT", "http://127.0.0.1:1");
+            var optInBuilder = RoleRadar.Mcp.Stdio.Program.CreateHostBuilder();
+            using var optInApp = optInBuilder.Build();
+            Assert.NotNull(optInApp.Services.GetService<TracerProvider>());
+            Assert.NotNull(optInApp.Services.GetService<MeterProvider>());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT", previousEndpoint);
+        }
     }
 }

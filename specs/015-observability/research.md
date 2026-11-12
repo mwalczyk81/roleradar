@@ -33,6 +33,7 @@
   - Only the 5-line strict 55-character lowercase pre-check before `propagation.extract` remains so Feature 014's edge validation contract (`trace-context.test.ts`: reject uppercase hex in version/flags and oversized headers) holds. The manual `randomBytes` loop and manual root span context construction are deleted—leaving **one mechanism, not two**.
 - **Alternatives considered**:
   - Keeping `trace-context.server.ts`'s manual `newTraceId()` / `newSpanId()` alongside the OpenTelemetry Node SDK: Rejected by the owner's "One mechanism, not two" rule because two parallel trace context mechanisms can drift on span IDs and require an ADR to justify duplication.
+- *Note*: `instrumentation-http` and `instrumentation-undici` were pinned in Gate 2, never imported, and removed in Gate 4 (ADR 0052).
 
 ## R-004: Span Attribute Allowlist/Drop-List Processor (`ADR 0050`, Gate 2) vs. Runtime Log Scrubbing (`RR-86`, `ADR 0051`, Gate 3)
 

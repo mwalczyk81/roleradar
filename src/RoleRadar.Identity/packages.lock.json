@@ -441,6 +441,9 @@
           "Microsoft.IdentityModel.Tokens": "8.19.2"
         }
       },
+      "roleradar.domain": {
+        "type": "Project"
+      },
       "roleradar.observability": {
         "type": "Project",
         "dependencies": {

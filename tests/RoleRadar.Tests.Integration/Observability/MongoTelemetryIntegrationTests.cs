@@ -17,10 +17,13 @@ using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using MongoDB.Bson;
 using MongoDB.Driver;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using RoleRadar.Application.Abstractions;
 using RoleRadar.Application.Tracking.Commands;
+using RoleRadar.Domain.Common;
 using RoleRadar.Infrastructure.Mongo;
+using RoleRadar.Observability;
 using RoleRadar.Tests.Integration.Fixtures;
 using Xunit;
 
@@ -330,6 +333,130 @@ public sealed class MongoTelemetryIntegrationTests(SharedMongoFixture mongo)
         finally
         {
             client.Dispose();
+            await app.StopAsync();
+            await app.DisposeAsync();
+        }
+    }
+
+    [Fact]
+    public async Task Api_RequestsAgainstMongo_EmitStoreMetrics_ObeyingLabelCardinalityAllowlist()
+    {
+        var dbName = mongo.CreateDatabaseName("rrtest_mongo_metrics");
+        var exportedMetrics = new List<Metric>();
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SigningSecret));
+
+        var app = RoleRadar.Api.Program.CreateApp(
+            ["--urls", "http://127.0.0.1:0"],
+            builder =>
+            {
+                builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["ConnectionStrings:MongoConnection"] = mongo.ConnectionString,
+                    ["DatabaseName"] = dbName,
+                    ["Authentication:Authority"] = Issuer,
+                    ["Authentication:Audience"] = Audience,
+                    ["Owner:AllowedSubjects:0"] = Subject,
+                });
+                builder.Services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, opts =>
+                {
+                    opts.Authority = string.Empty;
+                    opts.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(
+                        new OpenIdConnectConfiguration { Issuer = Issuer });
+                    opts.TokenValidationParameters = new TokenValidationParameters
+                    {
+                        ValidIssuer = Issuer,
+                        ValidAudience = Audience,
+                        IssuerSigningKey = key,
+                    };
+                });
+                builder.Services.ConfigureOpenTelemetryMeterProvider(meter => meter.AddInMemoryExporter(exportedMetrics));
+            });
+
+        await app.StartAsync();
+        var address = app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.Single();
+        using var client = new HttpClient { BaseAddress = new Uri(address) };
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", CreateValidToken());
+
+        try
+        {
+            // 1. Health readiness probe should record readiness metrics for MongoDB
+            var readyResponse = await client.GetAsync(new Uri("/health/ready", UriKind.Relative));
+            Assert.Equal(HttpStatusCode.OK, readyResponse.StatusCode);
+
+            // 2. Perform a Mongo write and read operation via API
+            using (var scope = app.Services.CreateScope())
+            {
+                var companyHandler = scope.ServiceProvider.GetRequiredService<ICommandHandler<RecordCompanyCommand, CompanyRecordResultDto>>();
+                var res = await companyHandler.HandleAsync(new RecordCompanyCommand(
+                    Actor: "system",
+                    Name: "Metrics Test Corp",
+                    Description: "Description"));
+                Assert.True(res.IsSuccess);
+            }
+
+            var readResponse = await client.GetAsync(new Uri("/odata/Companies", UriKind.Relative));
+            Assert.Equal(HttpStatusCode.OK, readResponse.StatusCode);
+
+            // Prove the Views drop forbidden tags with a test-owned Meter that creates an instrument with the same instrument name,
+            // subscribed by name in a MeterProvider built with the same TagKeys arrays TelemetrySetup uses.
+            using (var testStoreMeter = new System.Diagnostics.Metrics.Meter(RoleRadarStoreMetrics.MeterName))
+            {
+                var testOpDuration = testStoreMeter.CreateHistogram<double>(RoleRadarStoreMetrics.OperationDurationInstrument, "s");
+                testOpDuration.Record(0.030, new TagList
+                {
+                    { "db.system.name", "mongodb" },
+                    { "db.operation.name", "find" },
+                    { "db.collection.name", "companies" },
+                    { "owner_id", "0194fa10-1234-7000-8000-000000000001" },
+                    { "url.query", "?secret=sentinel-pw-999" },
+                    { "traceId", "4bf92f3577b34da6a3ce929d0e0e4736" }
+                });
+            }
+
+            // Flush metrics
+            var meterProvider = app.Services.GetRequiredService<MeterProvider>();
+            meterProvider.ForceFlush();
+
+            // Assert store readiness metrics are emitted
+            var readinessStatusMetric = exportedMetrics.FirstOrDefault(m => m.Name == RoleRadarStoreMetrics.ReadinessStatusInstrument);
+            Assert.NotNull(readinessStatusMetric);
+
+            var readinessDurationMetric = exportedMetrics.FirstOrDefault(m => m.Name == RoleRadarStoreMetrics.ReadinessDurationInstrument);
+            Assert.NotNull(readinessDurationMetric);
+
+            // Assert store operation duration metric is emitted
+            var operationDurationMetric = exportedMetrics.FirstOrDefault(m => m.Name == RoleRadarStoreMetrics.OperationDurationInstrument);
+            Assert.NotNull(operationDurationMetric);
+
+            // Assert every exported tag key on every metric point is in the allowlist for that instrument (using the same constants the Views use)
+            var allowlists = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["http.server.request.duration"] = [.. TelemetrySetup.AllowedServerDurationTagKeys],
+                ["http.server.active_requests"] = [.. TelemetrySetup.AllowedServerActiveRequestsTagKeys],
+                ["http.client.request.duration"] = [.. TelemetrySetup.AllowedClientDurationTagKeys],
+                [TelemetrySetup.StoreOperationDurationInstrument] = [.. TelemetrySetup.AllowedStoreOperationDurationTagKeys],
+                [TelemetrySetup.StoreReadinessStatusInstrument] = [.. TelemetrySetup.AllowedStoreReadinessTagKeys],
+                [TelemetrySetup.StoreReadinessDurationInstrument] = [.. TelemetrySetup.AllowedStoreReadinessTagKeys]
+            };
+
+            foreach (var m in exportedMetrics)
+            {
+                if (allowlists.TryGetValue(m.Name, out var allowed))
+                {
+                    foreach (ref readonly var point in m.GetMetricPoints())
+                    {
+                        foreach (var tag in point.Tags)
+                        {
+                            Assert.True(
+                                allowed.Contains(tag.Key),
+                                $"Tag key '{tag.Key}' on metric '{m.Name}' is not in allowlist ({string.Join(", ", allowed)})");
+                        }
+                    }
+                }
+            }
+        }
+        finally
+        {
             await app.StopAsync();
             await app.DisposeAsync();
         }
