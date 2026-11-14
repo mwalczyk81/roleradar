@@ -45,7 +45,7 @@ Standing rules for every web phase. A phase prompt only adds scope and contract 
 - Prefer an existing tool or GitHub Action to a new custom script; a new script needs a one-line justification in the spec, and CI-only logic goes in web/scripts/*.mjs tested by Vitest, not in PowerShell tested through xUnit.
 - Write every file with LF line endings (`.gitattributes` and `.editorconfig` say so; only `*.cmd` and `*.bat` use CRLF, and fixtures keep their exact bytes). Never write CRLF. If a tool or editor produced CRLF, convert the file before you report.
 - Expected failures return `Result<T>`; never throw them.
-- Every `ICommandHandler` is wrapped by `TransactionAndAuditCommandDecorator`.
+- Every `ICommandHandler` is wrapped by `TransactionCommandDecorator`.
 - No hard-delete tools or endpoints. Every write records an append-only audit entry.
 - `stdout` in `Mcp.Stdio` is reserved for MCP frames; log to `stderr`.
 - Owner ids come from `OwnerId` only; no string literals elsewhere.

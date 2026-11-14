@@ -15,9 +15,9 @@
    - **Commands**: `CreateNoteCommand`, `AppendToNoteCommand`, `ReplaceNoteSectionCommand`, `ArchiveNoteCommand`, `ImportMarkdownCommand`.
    - **Queries**: `GetNoteQuery`, `SearchNotesQuery`.
 3. **Mandatory Decorator Pipeline**:
-   - Every `ICommandHandler<TCommand, TResponse>` registration in DI is wrapped by `TransactionAndAuditCommandDecorator<TCommand, TResponse>` (which validates the command, checks datastore readiness, opens the atomic transaction scope, invokes the inner handler, and verifies/commits the audit entry) and outer `LoggingCommandDecorator<TCommand, TResponse>`.
+   - Every `ICommandHandler<TCommand, TResponse>` registration in DI is wrapped by `TransactionCommandDecorator<TCommand, TResponse>` (which validates the command, checks datastore readiness, opens the atomic transaction scope, invokes the inner handler, and verifies/commits the audit entry) and outer `LoggingCommandDecorator<TCommand, TResponse>`.
    - Every `IQueryHandler<TQuery, TResponse>` registration is wrapped by `LoggingQueryDecorator<TQuery, TResponse>`.
-   - An architecture test in `RoleRadar.Tests.Architecture` inspects the DI container registrations and fails the build if any `ICommandHandler<,>` is not wrapped by `TransactionAndAuditCommandDecorator<,>`.
+   - An architecture test in `RoleRadar.Tests.Architecture` inspects the DI container registrations and fails the build if any `ICommandHandler<,>` is not wrapped by `TransactionCommandDecorator<,>`.
 4. **Typed Failure Results (`Result<T>`)**: Expected failures (`NotFound`, `StaleVersionToken`, `SectionNotFound`, `AmbiguousHeading`, `ImportConflict`, `InvalidUtf8`, `DatastoreOffline`, `ValidationError`) are returned as `Result<T>` values, never thrown as exceptions.
 5. **Append-Only Revisions & Audit**: `INoteRepository` has **no** methods to update or delete `NoteRevision` or `AuditLogEntry` records, and **no** method for agent-facing hard deletion of a `Note`.
 
@@ -94,7 +94,7 @@ public interface INoteRepository
     /// <summary>
     /// Executes the supplied work within a single MongoDB multi-document ACID transaction across notes, note_revisions, and audit_log,
     /// rolling back completely if the returned Result is a failure or an unexpected fault occurs.
-    /// Invoked by TransactionAndAuditCommandDecorator.
+    /// Invoked by TransactionCommandDecorator.
     /// </summary>
     Task<Result<TResponse>> ExecuteInTransactionAsync<TResponse>(
         Func<INoteTransactionContext, CancellationToken, Task<Result<TResponse>>> work,
@@ -210,7 +210,7 @@ public interface INoteTransactionContext
 ## 4. Contract & Architecture Test Suite Requirements
 
 Per Constitution v1.1.0 Principles II, III, and IV:
-1. **Decorator Registration Architecture Test (`RoleRadar.Tests.Architecture`)**: Verifies that every concrete class implementing `ICommandHandler<,>` in `RoleRadar.Application` is registered in DI with `TransactionAndAuditCommandDecorator<,>` wrapping it, so no write path can bypass transaction or audit enforcement.
+1. **Decorator Registration Architecture Test (`RoleRadar.Tests.Architecture`)**: Verifies that every concrete class implementing `ICommandHandler<,>` in `RoleRadar.Application` is registered in DI with `TransactionCommandDecorator<,>` wrapping it, so no write path can bypass transaction or audit enforcement.
 2. **Append-Only Method Reflection Test (`RoleRadar.Tests.Architecture`)**: Reflection over `MongoNoteRepository` confirms no public or private method calls `Update*`, `Replace*`, or `Delete*` against `note_revisions` or `audit_log`, and no method calls `Delete*` against `notes`.
 3. **Fault-Injection Atomicity Contract Test (`RoleRadar.Tests.Contract`)**: When a fault is injected mid-transaction (after `notes` write or `note_revisions` insert, before `audit_log` insert), the transaction rolls back completely and zero changes are committed to any collection.
 4. **Typed Failure Contract Tests (`RoleRadar.Tests.Contract`)**: Verifies that `NotFound`, `StaleVersionToken`, and `ImportConflict` return `Result<T>.IsSuccess == false` with the expected `ErrorCode` rather than throwing exceptions.

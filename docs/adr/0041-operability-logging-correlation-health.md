@@ -60,7 +60,7 @@ Feature 013 specifies the outcomes. This ADR records the library and tooling cho
 
 ## Known limits and follow-ups
 
-Each is tracked in Jira project RR.
+Each is tracked in the owner's private backlog (project RR).
 
 - The web client ignores the API's `Retry-After` header on a 503 and uses its own fixed backoff (RR-79).
 - The Mongo client uses a polling server monitor and has the driver's read retry turned off, because the OData read path materialises with a `ToList()` that cannot take a cancellation token, so a request deadline cannot cut it short (RR-73).

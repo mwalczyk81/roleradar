@@ -10,7 +10,7 @@ The Gate 1 spike runs in an isolated scratch directory outside the repository us
 1. **Candidate Comparison**:
    - `.NET Aspire` (`Aspire.Hosting.AppHost` `13.6.5` + `Aspire.Dashboard` `13.6.5`) vs. `Seq`, `Jaeger`, and `Grafana LGTM` across licensing (MIT/Apache-2.0 required), signals supported (traces, logs, metrics, resource graph), footprint, and local loopback privacy.
 2. **Check 1 — MongoDB Replica Set (`rs0`)**:
-   - Verify that the local setup runs `mongo:9.0.4` with `--replSet rs0` and `GLIBC_TUNABLES=glibc.pthread.rseq=1`, initializes the single-node replica set, and completes a multi-document transaction (`TransactionAndAuditCommandDecorator`) without error.
+   - Verify that the local setup runs `mongo:9.0.4` with `--replSet rs0` and `GLIBC_TUNABLES=glibc.pthread.rseq=1`, initializes the single-node replica set, and completes a multi-document transaction (`TransactionCommandDecorator`) without error.
 3. **Check 2 — Identity Issuer URLs and TLS Parity**:
    - Verify that Identity's `ROLERADAR_IDENTITY_ISSUER_URI`, API's `ROLERADAR_OIDC_AUTHORITY`, Web's `ROLERADAR_IDENTITY_ISSUER_URI`, and the development TLS certificate SANs (`DNS:identity`, `DNS:api`, `DNS:localhost`, `IP:127.0.0.1` or `*.localhost`) allow both browser OIDC redirects and server-to-server backchannel discovery/JWKS/token calls to succeed over HTTPS.
 4. **Check 3 — Compose Drift Prevention Mechanism**:

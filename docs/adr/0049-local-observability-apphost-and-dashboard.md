@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-11-11
-- **Feature**: `015-observability` (Gate 1, Jira RR-67)
+- **Feature**: `015-observability` (Gate 1, backlog RR-67)
 
 ## Context and Problem Statement
 
@@ -13,7 +13,7 @@ We need a local developer observability loop and telemetry viewer that:
 1. Receives standard OpenTelemetry Protocol (OTLP) traces, logs, and metrics over loopback (`127.0.0.1`) so switching to a hosted backend later is a configuration change (`OTEL_EXPORTER_OTLP_ENDPOINT`) rather than a code change.
 2. Starts the local development loop with one command (`dotnet run --project src/RoleRadar.AppHost`) while keeping the Docker Compose stack (`deploy/docker-compose.yml` + `deploy/docker-compose.apps.yml`) as the packaged stack for real owner data, the `Lane=real-stack` end-to-end suite, the demo stack, and any future container deployment.
 3. Proves via an isolated scratch spike (using strictly fictional data and throwaway `roleradar-spike-*` containers/volumes on non-default ports, never touching the running developer stack on `27017`/`5001`/`5002`/`5003` or `roleradar-identity-data`) whether the .NET Aspire AppHost (`Option 2`) can faithfully reproduce:
-   - MongoDB `9.0.4` as a single-node replica set (`rs0`) supporting multi-document ACID transactions (`TransactionAndAuditCommandDecorator`).
+   - MongoDB `9.0.4` as a single-node replica set (`rs0`) supporting multi-document ACID transactions (`TransactionCommandDecorator`).
    - `RoleRadar.Identity` OIDC issuer URLs (`iss`) and strict TLS certificate validation across `Web`, `Api`, and `Identity` without `NODE_TLS_REJECT_UNAUTHORIZED=0` or `DangerousAcceptAnyServerCertificateValidator`.
    - Automated drift prevention between `src/RoleRadar.AppHost/Program.cs` and `deploy/docker-compose*.yml`.
    - Built-in local telemetry views in the Aspire Dashboard and verification of whether saved custom dashboards exist.

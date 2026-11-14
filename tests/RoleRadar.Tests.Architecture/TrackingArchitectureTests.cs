@@ -80,7 +80,7 @@ public sealed class TrackingArchitectureTests
     }
 
     [Fact]
-    public void Application_CommandHandlers_AreAllDecoratedWithTransactionAndAudit()
+    public void Application_CommandHandlers_AreAllDecoratedWithTransaction()
     {
         var services = new ServiceCollection();
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
@@ -109,7 +109,7 @@ public sealed class TrackingArchitectureTests
             var resolvedHandler = provider.GetService(handlerServiceType);
             Assert.NotNull(resolvedHandler);
 
-            // Handler should be wrapped by LoggingCommandDecorator wrapping TransactionAndAuditCommandDecorator
+            // Handler should be wrapped by LoggingCommandDecorator wrapping TransactionCommandDecorator
             var handlerType = resolvedHandler.GetType();
             Assert.Equal(typeof(RoleRadar.Application.Decorators.LoggingCommandDecorator<,>), handlerType.GetGenericTypeDefinition());
 
@@ -117,7 +117,7 @@ public sealed class TrackingArchitectureTests
             Assert.NotNull(innerField);
             var innerHandler = innerField.GetValue(resolvedHandler);
             Assert.NotNull(innerHandler);
-            Assert.Equal(typeof(RoleRadar.Application.Decorators.TransactionAndAuditCommandDecorator<,>), innerHandler.GetType().GetGenericTypeDefinition());
+            Assert.Equal(typeof(RoleRadar.Application.Decorators.TransactionCommandDecorator<,>), innerHandler.GetType().GetGenericTypeDefinition());
         }
     }
 

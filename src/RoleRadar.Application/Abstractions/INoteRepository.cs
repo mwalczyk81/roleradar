@@ -55,7 +55,7 @@ public interface INoteRepository
     /// <summary>
     /// Executes the supplied work within a single MongoDB multi-document ACID transaction across notes, note_revisions, and audit_log,
     /// rolling back completely if the returned Result is a failure or an unexpected fault occurs.
-    /// Invoked by TransactionAndAuditCommandDecorator.
+    /// Invoked by TransactionCommandDecorator.
     /// </summary>
     Task<Result<TResponse>> ExecuteInTransactionAsync<TResponse>(
         Func<INoteTransactionContext, CancellationToken, Task<Result<TResponse>>> work,

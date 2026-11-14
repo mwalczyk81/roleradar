@@ -2,6 +2,8 @@
 
 All significant architectural and library decisions for RoleRadar are recorded here in Markdown Architectural Decision Record (MADR) format per Constitution Principle VIII.
 
+Ids like `RR-82` are item numbers from the owner's private backlog. They are kept for traceability only; every ADR states its context, options and decision in full, so none needs the backlog to be understood.
+
 | ADR | Title | Status | Feature |
 | ----- | ------- | -------- | --------- |
 | [ADR-0001](./0001-mongo-only-for-feature-001.md) | MongoDB Replica Set Only for Feature 001 (Multi-Document Atomicity) | Accepted | `001-memory-replacement` |
@@ -62,7 +64,7 @@ All significant architectural and library decisions for RoleRadar are recorded h
 
 Feature 014 story P4 evaluates four hand-written mechanisms against a standard. Each ends in a swap with the existing tests unchanged, or an ADR naming the standard it lost to. The mechanisms and the standards compared are in the "Standards considered" table of [specs/014-standards-first/plan.md](../../specs/014-standards-first/plan.md#standards-considered).
 
-| Item | Jira card | Decision and ADR |
+| Item | Backlog id | Decision and ADR |
 | ------ | ----------- | ------------------ |
 | Log redaction | RR-80 | Keep `LogScrubber`; `Microsoft.Extensions.Compliance.Redaction` closes no gap and removes no code. [ADR-0046](./0046-log-redaction.md) |
 | Console formatter | RR-81 | Keep `RoleRadarConsoleFormatter`: no built-in or Serilog formatter has a hook for scrubbing final text (required), and a custom `ConsoleFormatter` is the platform's extension point. Failing the 17 cases is not the reason (10 test the incidental 013 shape). A custom Serilog `ITextFormatter` passes all 17 and is about 24 percent smaller (owner may overrule). Revisit when feature 015's OpenTelemetry log exporter lands; the OTLP data model may be a better record shape and a log processor may be where scrubbing moves (notes in the ADR, not decisions). [ADR-0047](./0047-console-formatter-and-validators.md) |

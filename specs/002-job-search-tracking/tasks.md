@@ -36,7 +36,7 @@
 - [x] T004 [P] Write failing unit and FsCheck property tests for `UrlNormalizer` and `TitleNormalizer` (tracking parameter denylist stripping `utm_*`, `ref`, `gh_src`, etc., protocol/host canonicalization, trailing slash removal, case/punctuation/whitespace folding, and property-based idempotence `Normalize(Normalize(u)) == Normalize(u)`) in `tests/RoleRadar.Tests.Unit/Tracking/NormalizerPropertyAndUnitTests.cs` (expected to fail before implementation)
 - [x] T005 [P] Write failing domain unit tests for tracking enums, domain primitives, `Company` and `CareerSource` invariants, `ContactAuditContentSummary` field-names-only privacy invariant, and typed `Result<T>` error codes in `tests/RoleRadar.Tests.Unit/Tracking/TrackingDomainAndAuditTests.cs` (expected to fail before implementation)
 - [x] T006 [P] Write failing MongoDB bootstrap and index initializer contract tests using Testcontainers verifying partial unique indexes for `dedup_key_a`, `dedup_key_b`, `dedup_key_c`, active criteria `{ owner_id: 1, key: 1 }` where `is_active == true`, career sources `{ owner_id: 1, company_id: 1, ats_type: 1, tenant: 1, slug: 1 }`, and unique index on `search_runs { owner_id: 1, started_at: 1 }` in `tests/RoleRadar.Tests.Contract/TrackingIndexInitializerContractTests.cs` (expected to fail before implementation)
-- [x] T007 [P] Create living architecture test file in `tests/RoleRadar.Tests.Architecture/TrackingArchitectureTests.cs` (asserting tool cap <= 12 and exactly 6 new once complete, no delete/remove repository methods or tool names, zero contact data on MCP, and `TransactionAndAuditCommandDecorator` registration for every new command handler)
+- [x] T007 [P] Create living architecture test file in `tests/RoleRadar.Tests.Architecture/TrackingArchitectureTests.cs` (asserting tool cap <= 12 and exactly 6 new once complete, no delete/remove repository methods or tool names, zero contact data on MCP, and `TransactionCommandDecorator` registration for every new command handler)
 - [x] T008 [P] Implement base process-based startup smoke test in `tests/RoleRadar.Tests.Integration/Smoke/StartupSmokeIntegrationTests.cs` that builds and launches the actual CLI and MCP DLLs as separate processes using default configuration (addressing the 001 lesson: tests must not build their own in-process service provider)
 
 ### Foundational Implementation
@@ -130,7 +130,7 @@
 ### Implementation for User Story 2
 
 - [x] T029 [P] [US2] Implement `RecordCompanyCommand`, `RecordCompanyCommandHandler`, and DTOs in `src/RoleRadar.Application/Tracking/Commands/RecordCompanyCommand.cs` (upserting career sources by id or composite key, handling `isActive` input parameter) (depends on T028 failing first)
-- [x] T030 [US2] Implement MCP tool `company_record` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs`, register handler wrapped by `TransactionAndAuditCommandDecorator` in `src/RoleRadar.Application/DependencyInjection.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for company recording (depends on T028 failing first and T029)
+- [x] T030 [US2] Implement MCP tool `company_record` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs`, register handler wrapped by `TransactionCommandDecorator` in `src/RoleRadar.Application/DependencyInjection.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for company recording (depends on T028 failing first and T029)
 
 **Checkpoint**: User Story 2 is complete and independently verified by `CompanyRecordContractTests`.  
 *Commit*: `feat(companies): implement company_record with career source upsert and is_active lifecycle`
@@ -164,7 +164,7 @@
   - `is_active`: Required boolean
   - `version_token`: Required binary subtype 4 GUID
 - [x] T034 [P] [US3] Implement `LogCriterionRevisionCommand`, `DeactivateCriterionCommand`, and handlers in `src/RoleRadar.Application/Tracking/Commands/CriterionCommands.cs` (enforcing strict `effectiveFrom` validation, closing active record, requiring `versionToken` when active exists) (depends on T031, T032 failing first and T033)
-- [x] T035 [US3] Implement `tracker_log` tool actions `criterion_revision` and `criterion_deactivate` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs`, register handlers wrapped by `TransactionAndAuditCommandDecorator` in `src/RoleRadar.Application/DependencyInjection.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for criteria logging (depends on T031 failing first and T034)
+- [x] T035 [US3] Implement `tracker_log` tool actions `criterion_revision` and `criterion_deactivate` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs`, register handlers wrapped by `TransactionCommandDecorator` in `src/RoleRadar.Application/DependencyInjection.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for criteria logging (depends on T031 failing first and T034)
 
 **Checkpoint**: User Story 3 is complete and independently verified by `TrackerLogCriteriaContractTests` and `CriterionVersionValidationTests`.  
 *Commit*: `feat(criteria): implement immutable criteria revisioning and deactivation in tracker_log`
@@ -208,7 +208,7 @@
   - `ApplicationEvent.event_source`: Optional string, max 100 chars
   - `ApplicationEvent.notes`: Optional string, max 500 chars
 - [x] T039 [P] [US4] Implement `RecordApplicationCommand`, `AppendApplicationEventCommand`, and handlers in `src/RoleRadar.Application/Tracking/Commands/ApplicationCommands.cs` (reopen-and-apply atomic override, disposition synchronization, accepting events on terminal postings) (depends on T036, T037 failing first and T038)
-- [x] T040 [US4] Implement MCP tool `application_record` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs`, register handlers wrapped by `TransactionAndAuditCommandDecorator` in `src/RoleRadar.Application/DependencyInjection.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for applications (depends on T036 failing first and T039)
+- [x] T040 [US4] Implement MCP tool `application_record` in `src/RoleRadar.Mcp.Stdio/Tools/TrackingMcpTools.cs`, register handlers wrapped by `TransactionCommandDecorator` in `src/RoleRadar.Application/DependencyInjection.cs`, and extend `TrackingArchitectureTests.cs` and `StartupSmokeIntegrationTests.cs` for applications (depends on T036 failing first and T039)
 
 **Checkpoint**: User Story 4 is complete and independently verified by `ApplicationRecordContractTests` and `ApplicationDomainTests`.  
 *Commit*: `feat(applications): implement application_record with atomic reopen-and-apply and timeline events`
@@ -349,7 +349,7 @@
   - Zero delete/remove methods across all 6 tracking repositories and CLI commands
   - Zero MCP tool names containing delete/remove
   - Zero MCP tools, parameters, or descriptions exposing or referencing contact data
-  - 100% of command handlers in `RoleRadar.Application` are wrapped by `TransactionAndAuditCommandDecorator`
+  - 100% of command handlers in `RoleRadar.Application` are wrapped by `TransactionCommandDecorator`
 - [x] T067 [P] Implement parallel-submit race integration tests in `tests/RoleRadar.Tests.Integration/Tracking/ParallelSubmitRaceIntegrationTests.cs` testing concurrent submissions for Tier A, Tier B, and Tier C collisions using Testcontainers
 - [x] T068 [P] Implement 5,000-posting performance benchmark tests in `tests/RoleRadar.Tests.Integration/Tracking/TrackingBenchmarkTests.cs` asserting p95 lookup latency < 100 ms and p95 search/filter latency < 200 ms across 5,000 postings
 - [x] T069 [P] Run backup, wipe, and restore round-trip integration tests in `tests/RoleRadar.Tests.Integration/Backup/TrackingBackupRestoreRoundTripTests.cs` asserting 100% data preservation across all 9 new collections

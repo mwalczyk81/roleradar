@@ -96,7 +96,7 @@ Part of the `Note` aggregate persisted via `INoteRepository`. Stores full prior-
 
 ## 3. Collection: `audit_log` (Append-Only)
 
-Records every write operation (`note_create`, `note_append`, `note_replace_section`, `note_archive`, `import_create`, `import_overwrite`) inside the same multi-document transaction as the note mutation (`RoleRadar.Domain.Audit.AuditLogEntry`), coordinated by `TransactionAndAuditCommandDecorator` and `INoteRepository`.
+Records every write operation (`note_create`, `note_append`, `note_replace_section`, `note_archive`, `import_create`, `import_overwrite`) inside the same multi-document transaction as the note mutation (`RoleRadar.Domain.Audit.AuditLogEntry`), coordinated by `TransactionCommandDecorator` and `INoteRepository`.
 
 ### Document Schema
 

@@ -243,6 +243,20 @@ public sealed class PostingDomainAndValidatorUnitTests
         Assert.Null(okCreate);
     }
 
+    [Theory]
+    [InlineData("applied")]
+    [InlineData("Applied")]
+    [InlineData("  applied  ")]
+    public void TransitionPostingCommandValidator_RejectsEveryFormOfTargetApplied(string target)
+    {
+        var validator = new TransitionPostingCommandValidator();
+
+        var error = validator.Validate(new TransitionPostingCommand(Guid.NewGuid(), target, Guid.NewGuid(), Actor: "mcp-stdio"));
+
+        Assert.NotNull(error);
+        Assert.Equal(ErrorCode.InvalidTransition, error.Value.Code);
+    }
+
     [Fact]
     public void TransitionPostingCommandValidator_ValidatesTransitions()
     {

@@ -12,7 +12,7 @@
 
 Feature 015 User Story 3 exports structured application and security logs over OpenTelemetry OTLP (`RR-70`), correlated with the active W3C `TraceId` and `SpanId` (`SC-004`), and protected by the privacy gate (`RR-72`, `SC-002`).
 
-In Feature 014, `ADR 0046` preserved the custom regex-based `LogScrubber` for console formatting after comparing it to `Microsoft.Extensions.Compliance.Redaction`. Jira issue `RR-86` requires an evidence-based census of all 7 `LogScrubber` rules across `src/`, `web/`, and pinned dependencies (`Duende.IdentityServer`, `Microsoft.AspNetCore.*`, `Microsoft.EntityFrameworkCore`, `MongoDB.Driver`, `System.Net.Http`) before wiring production OTLP log export.
+In Feature 014, `ADR 0046` preserved the custom regex-based `LogScrubber` for console formatting after comparing it to `Microsoft.Extensions.Compliance.Redaction`. Backlog item `RR-86` requires an evidence-based census of all 7 `LogScrubber` rules across `src/`, `web/`, and pinned dependencies (`Duende.IdentityServer`, `Microsoft.AspNetCore.*`, `Microsoft.EntityFrameworkCore`, `MongoDB.Driver`, `System.Net.Http`) before wiring production OTLP log export.
 
 The owner's standing governance principle is:
 > *"We should not log secrets in the first place."*
@@ -22,7 +22,7 @@ Therefore, filtering at the source is prioritized over scrubbing at the sink. A 
 Additionally:
 
 1. An isolated test harness evaluates what an OpenTelemetry `BaseProcessor<LogRecord>` can and cannot mutate across `Body`, `FormattedMessage`, `Attributes`, and `Exception` text.
-2. Jira issue `RR-90` requires comparing the existing hand-written `RequestCompletedMiddleware` with ASP.NET Core native HTTP logging (`AddHttpLogging` with `CombineLogs`).
+2. Backlog item `RR-90` requires comparing the existing hand-written `RequestCompletedMiddleware` with ASP.NET Core native HTTP logging (`AddHttpLogging` with `CombineLogs`).
 
 ---
 

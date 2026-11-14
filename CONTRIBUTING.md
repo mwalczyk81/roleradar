@@ -31,7 +31,7 @@ docker compose -p roleradar-demo -f deploy/demo/docker-compose.yml up --build --
    - Line coverage across `RoleRadar.Domain` and `RoleRadar.Application` must remain `>= 85%`.
 3. **Test-Enforced Layering & Named Seams (Principles III & IV)**:
    - `Domain` -> `Application` -> `Infrastructure` -> `Mcp.Stdio` / `Cli`.
-   - Every `ICommandHandler<,>` registration must be wrapped by `TransactionAndAuditCommandDecorator<,>`.
+   - Every `ICommandHandler<,>` registration must be wrapped by `TransactionCommandDecorator<,>`.
    - Expected failures (`NotFound`, `StaleVersionToken`, `SectionNotFound`, `AmbiguousHeading`, `ImportConflict`, `InvalidUtf8`, `DatastoreOffline`) must be returned as typed `Result<T>` values, never thrown as exceptions.
 
 ## Developer Workflow

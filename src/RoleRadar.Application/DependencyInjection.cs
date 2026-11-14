@@ -26,7 +26,7 @@ public static class DependencyInjection
         services.AddSingleton<ICommandValidator<ArchiveNoteCommand>, ArchiveNoteCommandValidator>();
         services.AddSingleton<ICommandValidator<Import.Commands.ImportMarkdownCommand>, Import.Commands.ImportMarkdownCommandValidator>();
 
-        // US1, US2 & US4 Command Handlers (wrapped by TransactionAndAuditCommandDecorator + LoggingCommandDecorator)
+        // US1, US2 & US4 Command Handlers (wrapped by TransactionCommandDecorator + LoggingCommandDecorator)
         services.AddCommandHandler<CreateNoteCommand, NoteCreatedDto, CreateNoteCommandHandler>();
         services.AddCommandHandler<AppendToNoteCommand, NoteUpdatedDto, AppendToNoteCommandHandler>();
         services.AddCommandHandler<ReplaceNoteSectionCommand, NoteSectionReplacedDto, ReplaceNoteSectionCommandHandler>();
@@ -80,7 +80,7 @@ public static class DependencyInjection
             var validators = sp.GetServices<ICommandValidator<TCommand>>();
             var logger = sp.GetRequiredService<ILogger<LoggingCommandDecorator<TCommand, TResponse>>>();
 
-            var transactional = new TransactionAndAuditCommandDecorator<TCommand, TResponse>(
+            var transactional = new TransactionCommandDecorator<TCommand, TResponse>(
                 inner,
                 repository,
                 validators);

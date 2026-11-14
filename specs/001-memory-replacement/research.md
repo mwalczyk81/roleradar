@@ -25,7 +25,7 @@
 - **Decision**: Define a single aggregate-level repository port, `INoteRepository`, in `RoleRadar.Application.Abstractions` whose methods express domain use cases covering a `Note`, its `NoteRevision` snapshots, and the `AuditLogEntry` written in the same transaction. Introduce no generic `IRepository<T>` over the database driver.
 - **Rationale**:
   - Directly satisfies Constitution v1.1.0 Principle IV (*Named Seams Only*), which adopts the repository pattern at the aggregate level (`INoteRepository`) and forbids generic `IRepository<T>` without an ADR.
-  - Works in concert with the `TransactionAndAuditCommandDecorator<TCommand, TResponse>` so that every command handler execution runs inside an atomic transaction and records its append-only `AuditLogEntry` in the same commit unit.
+  - Works in concert with the `TransactionCommandDecorator<TCommand, TResponse>` so that every command handler execution runs inside an atomic transaction and records its append-only `AuditLogEntry` in the same commit unit.
 - **Alternatives Considered**:
   - *Generic `IRepository<Note>`, `IRepository<NoteRevision>`, `IRepository<AuditLogEntry>`*: Explicitly forbidden by Constitution Principle IV because it leaks table-level CRUD semantics into `Application` and breaks aggregate transactional cohesion.
 
@@ -36,9 +36,9 @@
 - **Decision**: Implement each application use case as a plain handler class implementing `ICommandHandler<TCommand, Result<TResponse>>` or `IQueryHandler<TQuery, Result<TResponse>>`, injected directly into the `RoleRadar.Mcp.Stdio` tools and `RoleRadar.Cli` commands:
   - **Command Handlers (5)**: `CreateNoteCommandHandler`, `AppendToNoteCommandHandler`, `ReplaceNoteSectionCommandHandler`, `ArchiveNoteCommandHandler`, `ImportMarkdownCommandHandler`.
   - **Query Handlers (2)**: `GetNoteQueryHandler`, `SearchNotesQueryHandler`.
-  - **Decorators**: `TransactionAndAuditCommandDecorator<TCommand, TResponse>` wraps every `ICommandHandler<,>` registration (validating inputs, opening the atomic unit-of-work transaction, and enforcing audit entry recording); `LoggingDecorator` wraps both command and query handlers (routing logs to `stderr`).
+  - **Decorators**: `TransactionCommandDecorator<TCommand, TResponse>` wraps every `ICommandHandler<,>` registration (validating inputs, opening the atomic unit-of-work transaction, and enforcing audit entry recording); `LoggingDecorator` wraps both command and query handlers (routing logs to `stderr`).
   - **Typed Results**: Expected domain/application failures (`NotFound`, `StaleVersionToken`, `AmbiguousHeading`, `SectionNotFound`, `ImportConflict`, `InvalidUtf8`, `DatastoreOffline`) are returned via a discriminated `Result<T>` / `Error` type rather than thrown as exceptions.
-  - **Architecture Enforcement**: A dedicated test in `RoleRadar.Tests.Architecture` resolves the DI `IServiceProvider` / `IServiceCollection` descriptors and proves that every registered `ICommandHandler<,>` has `TransactionAndAuditCommandDecorator<,>` in its pipeline (Constitution v1.1.0 Principle III).
+  - **Architecture Enforcement**: A dedicated test in `RoleRadar.Tests.Architecture` resolves the DI `IServiceProvider` / `IServiceCollection` descriptors and proves that every registered `ICommandHandler<,>` has `TransactionCommandDecorator<,>` in its pipeline (Constitution v1.1.0 Principle III).
 - **Rationale**:
   - Keeps control flow explicit, allocation-light, and trivially navigable in Visual Studio ("Go To Implementation" jumps straight to the handler).
   - Avoids third-party mediator licensing risk: per secondary sources, `MediatR` 13+ transitioned to a dual-license model (Reciprocal Public License `RPL-1.5` or paid commercial license, to be verified before any future adoption), which is incompatible with RoleRadar's permissive `MIT` license (`Constitution Principle IV`).

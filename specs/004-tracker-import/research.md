@@ -11,7 +11,7 @@ The importer must execute all ingestion steps in dry-run mode by default, provid
 
 Key constraints:
 - Later stages (applications, duplicate rows) must observe earlier staged writes (postings, non-duplicate rows).
-- Handlers (`ICommandHandler`) and their `TransactionAndAuditCommandDecorator` must remain unchanged.
+- Handlers (`ICommandHandler`) and their `TransactionCommandDecorator` must remain unchanged.
 - Per-row error isolation must be preserved: a failure on row $N$ must be isolated to that row without aborting the batch.
 - Collection document counts and `audit_log` in the target database must be completely untouched.
 

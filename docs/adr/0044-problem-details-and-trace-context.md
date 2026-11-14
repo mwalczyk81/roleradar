@@ -2,7 +2,7 @@
 
 - **Status**: Accepted (2026-11-10)
 - **Date**: 2026-11-10
-- **Feature**: `014-standards-first` (story P2, Jira RR-74, RR-78, RR-64)
+- **Feature**: `014-standards-first` (story P2, backlog RR-74, RR-78, RR-64)
 
 ## Context and Problem Statement
 
