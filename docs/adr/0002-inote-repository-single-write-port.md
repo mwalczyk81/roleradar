@@ -13,7 +13,7 @@ How should the persistence port be structured so that domain invariants, prior-b
 ## Decision Drivers
 
 - **Constitution v1.1.0 Principle IV Compliance**: Repositories are aggregate-level, domain-specific ports whose methods express use cases (`INoteRepository`), and generic `IRepository<T>` is forbidden.
-- **Audit & Revision Safety by Construction**: Application command handlers and the `TransactionAndAuditCommandDecorator` must execute within a single atomic transaction covering `Note`, `NoteRevision`, and `AuditLogEntry`.
+- **Audit & Revision Safety by Construction**: Application command handlers and the `TransactionCommandDecorator` must execute within a single atomic transaction covering `Note`, `NoteRevision`, and `AuditLogEntry`.
 - **Typed Failure Results**: Expected failures (`NotFound`, `StaleVersionToken`, `ImportConflict`, `DatastoreOffline`) must be returned as typed `Result<T>` values, not thrown as exceptions.
 
 ## Considered Options
@@ -28,5 +28,5 @@ Chosen option: **Option 1 — Single aggregate-level `INoteRepository` port**, b
 ### Consequences
 
 - **Good**: Zero generic `IRepository<T>` leakage; 100% of aggregate persistence invariants can be tested through a single `INoteRepository` contract test suite (`Constitution Principle II`).
-- **Good**: Works seamlessly with `TransactionAndAuditCommandDecorator` so no command handler can mutate a note without recording an audit entry.
+- **Good**: Works seamlessly with `TransactionCommandDecorator` so no command handler can mutate a note without recording an audit entry.
 - **Bad / Trade-off**: `INoteRepository` is broader than a single-table CRUD interface because it spans the full `Note` aggregate (`notes` + `note_revisions`) and its transactional `audit_log` entry.

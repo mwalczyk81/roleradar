@@ -2,7 +2,7 @@
 
 - **Status**: Accepted (2026-11-10)
 - **Date**: 2026-11-10
-- **Feature**: `014-standards-first` (story P4, Jira RR-81)
+- **Feature**: `014-standards-first` (story P4, backlog RR-81)
 
 ## Context and Problem Statement
 
@@ -142,7 +142,7 @@ What the record looks like (the incidental part) is a separate question, and 015
 
 ### Note for feature 015's ADR (not a decision)
 
-Feature 015 (Jira RR-66) adds OpenTelemetry. This is the comparison to carry into its ADR. I read "Microsoft's OpenTelemetry logging exporter" as the OpenTelemetry .NET SDK's `ILoggingBuilder.AddOpenTelemetry` integration with the OTLP exporter (`OpenTelemetry` and `OpenTelemetry.Exporter.OpenTelemetryProtocol` 1.20.1, Apache-2.0, published 2026-10-20); the SDK is maintained under the OpenTelemetry project, not by Microsoft.
+Feature 015 (backlog RR-66) adds OpenTelemetry. This is the comparison to carry into its ADR. I read "Microsoft's OpenTelemetry logging exporter" as the OpenTelemetry .NET SDK's `ILoggingBuilder.AddOpenTelemetry` integration with the OTLP exporter (`OpenTelemetry` and `OpenTelemetry.Exporter.OpenTelemetryProtocol` 1.20.1, Apache-2.0, published 2026-10-20); the SDK is maintained under the OpenTelemetry project, not by Microsoft.
 
 - **It is the better base for 015, on this evidence.** The code logs only through `ILogger` (22 message definitions, no direct `Log*` calls, every host calling `AddRoleRadarLogging`). The OpenTelemetry integration is one more `ILoggerProvider` on that pipeline, so an OTLP exporter is added next to the console output and no call site changes. Serilog would be a second pipeline behind `SerilogLoggerProvider`, and its OTLP path is a further package (`Serilog.Sinks.OpenTelemetry` 4.2.0, Apache-2.0, 2025-05-31).
 - **Trace correlation does not separate them.** Both carry the current activity's trace and span ids (the spike saw `@tr` and `@sp` in Serilog's output).
@@ -160,7 +160,7 @@ Feature 015 (Jira RR-66) adds OpenTelemetry. This is the comparison to carry int
 
 ### What ADR 0006 and ADR 0009 record
 
-Neither record contains a reason against a validation library. ADR 0006 defines the seam, `ICommandValidator<in TCommand>` with `ResultError? Validate(TCommand command)`, run by `TransactionAndAuditCommandDecorator` before the readiness check, and rejects MediatR on licence grounds. ADR 0009 reuses the same patterns and rejects a state machine library and a CQRS framework. So the validators are hand-written because that was the default, not because a library was rejected. The decision here rests on the spike.
+Neither record contains a reason against a validation library. ADR 0006 defines the seam, `ICommandValidator<in TCommand>` with `ResultError? Validate(TCommand command)`, run by `TransactionCommandDecorator` before the readiness check, and rejects MediatR on licence grounds. ADR 0009 reuses the same patterns and rejects a state machine library and a CQRS framework. So the validators are hand-written because that was the default, not because a library was rejected. The decision here rests on the spike.
 
 ### The spike
 
@@ -200,7 +200,7 @@ By line count the swap removes more than half the validator code. By characters 
 
 **Keep the hand-written validators.** The rule was to adopt only if the change removes code without changing a result. The result half holds only after a workaround. The code half holds by lines (about 325 fewer across the nine) and fails by substance (about 5 percent fewer characters): the saving is mostly layout. Against it stand a package in the layer all three hosts share, nine lock files, an adapter, a standing trap for every future message that echoes input (the natural form changes a result and no existing test would notice), and parity for seven validators that would be argued, not shown. The existing validator tests would not catch a difference either; they assert `NotNull`, not the message.
 
-**What would change the decision.** If the validators grow past about a dozen, or a rule needs cross-property or async checks that the hand-written chain handles badly, the line saving starts to matter and the swap becomes a net win. Then it should be done with a parity test through `TransactionAndAuditCommandDecorator` that compares code, message and metadata on a grid like the spike's (the grid and the escaped-message finding are in the notes of `specs/014-standards-first/tasks.md`), and with the three echo rules written as `Custom` failures from the start.
+**What would change the decision.** If the validators grow past about a dozen, or a rule needs cross-property or async checks that the hand-written chain handles badly, the line saving starts to matter and the swap becomes a net win. Then it should be done with a parity test through `TransactionCommandDecorator` that compares code, message and metadata on a grid like the spike's (the grid and the escaped-message finding are in the notes of `specs/014-standards-first/tasks.md`), and with the three echo rules written as `Custom` failures from the start.
 
 ## Consequences
 

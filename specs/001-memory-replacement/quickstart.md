@@ -28,7 +28,7 @@ dotnet test RoleRadar.sln -c Release --collect:"XPlat Code Coverage"
 - Zero compiler, analyzer, formatting, or `NuGetAudit` warnings.
 - Architecture test (`RoleRadar.Tests.Architecture`) confirms:
   - Strict inward dependencies (`Domain` → `Application` → `Infrastructure` → `Hosts`).
-  - Every `ICommandHandler<,>` registration in DI is wrapped by `TransactionAndAuditCommandDecorator<,>` (Constitution v1.1.0 Principle III).
+  - Every `ICommandHandler<,>` registration in DI is wrapped by `TransactionCommandDecorator<,>` (Constitution v1.1.0 Principle III).
   - No `Update*`, `Replace*`, or `Delete*` methods exist against `note_revisions` or `audit_log`, and no hard-delete method exists on `INoteRepository`.
 - Contract & integration tests (`RoleRadar.Tests.Contract`, `RoleRadar.Tests.Integration`) provision an ephemeral `mongo:8.0.34` replica-set container via `Testcontainers.MongoDb` `4.16.0`, verify multi-document transaction rollback on injected faults, verify typed `Result<T>` outcomes for expected failures, verify all backup encryption tamper/truncation/reorder/two-pass restore cases, verify 5,000-note search p95 < 200 ms (`SC-003`), verify stdout protocol hygiene (`FR-020`), and verify >=85% line coverage across `RoleRadar.Domain` and `RoleRadar.Application`.
 

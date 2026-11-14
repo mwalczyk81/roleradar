@@ -3,7 +3,7 @@
 **Feature**: `002-job-search-tracking`  
 **Host**: `RoleRadar.Mcp.Stdio` (`ModelContextProtocol` `2.2.0`, `Microsoft.Extensions.Hosting` `10.0.13`, zero network listeners, all logs routed to `stderr`).  
 **Tool Cap**: Exactly 6 new tools exposed (12 total across Feature 001 and Feature 002, strictly obeying the <=12 limit and Constitution Principle V).  
-**Architecture Rules**: Declarative descriptions only without imperative LLM manipulation instructions (`CON-010`). All write operations go through `TransactionAndAuditCommandDecorator` inside MongoDB multi-document transactions. Zero hard delete tools (`CON-004`). Contacts management and referential integrity verification are strictly CLI-only (`FR-028`, `FR-033`, `FR-036`); no MCP tool, parameter, or description references contact data.
+**Architecture Rules**: Declarative descriptions only without imperative LLM manipulation instructions (`CON-010`). All write operations go through `TransactionCommandDecorator` inside MongoDB multi-document transactions. Zero hard delete tools (`CON-004`). Contacts management and referential integrity verification are strictly CLI-only (`FR-028`, `FR-033`, `FR-036`); no MCP tool, parameter, or description references contact data.
 
 ---
 
@@ -56,7 +56,7 @@ Every spec-mandated requirement for Feature 002 is mapped to its satisfying MCP 
 | **FR-040** | Exactly 6 new tools exposed (12 total ceiling) | `RoleRadar.Mcp.Stdio` tools catalog | **PASS** |
 | **FR-040a** | 100% operational write coverage via MCP or CLI | All write operations mapped above | **PASS** |
 | **FR-041** | `owner_id` on every document | MongoDB document schemas & repositories | **PASS** |
-| **FR-042** | Audited transactions for all writes | `TransactionAndAuditCommandDecorator` | **PASS** |
+| **FR-042** | Audited transactions for all writes | `TransactionCommandDecorator` | **PASS** |
 | **FR-043** | Zero hard deletes across all repositories and tools | Architecture reflection tests | **PASS** |
 | **FR-044** | Explicit typed operational failures (`ErrorCode`) | `Result<T>` and `ErrorCode` enum | **PASS** |
 | **FR-045** | 100% coverage by encrypted backup/restore pipeline | `scripts/backup.ps1` & `scripts/restore.ps1` | **PASS** |

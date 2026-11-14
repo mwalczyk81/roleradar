@@ -79,14 +79,16 @@ public sealed class TransitionPostingCommandValidator : ICommandValidator<Transi
             return new ResultError(ErrorCode.StaleVersionToken, "VersionToken is required.");
         }
 
-        if (string.Equals(command.TargetDisposition, "applied", StringComparison.OrdinalIgnoreCase))
-        {
-            return new ResultError(ErrorCode.InvalidTransition, "Target 'applied' is disallowed via posting_transition; applications must be created via application_record.");
-        }
-
         if (!TrackingEnumExtensions.TryParseDisposition(command.TargetDisposition, out var targetDisp))
         {
             return new ResultError(ErrorCode.ValidationError, $"Unknown disposition '{command.TargetDisposition}'.");
+        }
+
+        // Checked on the parsed value, not the raw string, so every spelling the parser accepts (case,
+        // surrounding whitespace, hyphens) is rejected here, in one place.
+        if (targetDisp == PostingDisposition.Applied)
+        {
+            return new ResultError(ErrorCode.InvalidTransition, "Target 'applied' is disallowed via posting_transition; applications must be created via application_record.");
         }
 
         // EventDate only matters when the transition records a rejection on the application. Rejected is
@@ -124,6 +126,8 @@ public sealed class TransitionPostingCommandHandler : ICommandHandler<Transition
     /// <summary>Event source recorded on the application event created by a posting transition (ADR 0033).</summary>
     public const string PostingTransitionEventSource = "posting_transition";
 
+    // The decorator runs the registered validator on the normal path. The handler keeps this call so a caller
+    // that constructs it directly (the contract tests do) cannot skip validation.
     private static readonly TransitionPostingCommandValidator Validator = new();
     private readonly ITrackingTransactionContext _context;
     private readonly IUtcClock _clock;
@@ -168,11 +172,7 @@ public sealed class TransitionPostingCommandHandler : ICommandHandler<Transition
             return Result<PostingTransitionResultDto>.Failure(ErrorCode.ValidationError, $"Unknown disposition '{command.TargetDisposition}'.");
         }
 
-        // Disallow target applied
-        if (targetDisposition == PostingDisposition.Applied)
-        {
-            return Result<PostingTransitionResultDto>.Failure(ErrorCode.InvalidTransition, "Target 'applied' is unreachable via posting_transition.");
-        }
+        // Target 'applied' is rejected by the validator above, so it never reaches the matrix.
 
         // Validate via DispositionMatrix
         if (!DispositionMatrix.CanTransition(posting.Disposition, targetDisposition, posting.ResurfacePolicy))

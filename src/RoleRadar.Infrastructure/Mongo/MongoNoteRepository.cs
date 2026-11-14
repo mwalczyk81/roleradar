@@ -76,7 +76,7 @@ public sealed class MongoNoteRepository : INoteRepository, IDisposable
             return Result<TResponse>.Failure(ErrorCode.ValidationError, ex.Message);
         }
 
-        // Support ambient transaction re-entrancy when TransactionAndAuditCommandDecorator wraps a handler
+        // Support ambient transaction re-entrancy when TransactionCommandDecorator wraps a handler
         // that itself calls ExecuteInTransactionAsync.
         var existingScope = CurrentTransactionScope.Value;
         if (existingScope is not null)

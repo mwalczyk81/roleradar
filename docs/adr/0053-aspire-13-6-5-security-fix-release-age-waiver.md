@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-11-12
-- **Feature**: `015-observability` (Gate 5, Jira RR-71)
+- **Feature**: `015-observability` (Gate 5, backlog RR-71)
 - **Decided by**: Matt (the owner), 2026-11-11
 
 ## Context and Problem Statement

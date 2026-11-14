@@ -9,7 +9,7 @@
 Feature 001 established core design patterns for RoleRadar:
 
 - Plain command and query handlers (`ICommandHandler<TCommand, TResult>`, `IQueryHandler<TQuery, TResult>`).
-- Cross-cutting decorators (`TransactionAndAuditCommandDecorator`, `LoggingCommandDecorator`, `LoggingQueryDecorator`).
+- Cross-cutting decorators (`TransactionCommandDecorator`, `LoggingCommandDecorator`, `LoggingQueryDecorator`).
 - Append-only collections (`AppendOnlyMongoCollection<T>`) for immutable event logs.
 - Typed results (`Result<T>`, `ErrorCode`, `ResultError`) without throwing exceptions for business outcomes.
 - Sensitive endpoint redaction (`ConnectionStringRedactor`).
@@ -27,7 +27,7 @@ Feature 002 introduces new domain operations (tiered posting deduplication, stat
 ## Considered Options
 
 1. **Strictly Reuse and Extend Feature 001 Patterns**:
-   - Register all Feature 002 commands behind `TransactionAndAuditCommandDecorator` and `LoggingCommandDecorator`.
+   - Register all Feature 002 commands behind `TransactionCommandDecorator` and `LoggingCommandDecorator`.
    - Use `AppendOnlyMongoCollection<T>` for `application_events`, `posting_signals`, and `search_runs`.
    - Extend `ErrorCode` with the domain failures specified in Feature 002 (`AlreadyDecided`, `AlreadyTracked`, `PossibleDuplicate`, `InvalidTransition`).
    - Use the same paged query conventions and bounds (default 50, max 200 items).
@@ -44,8 +44,8 @@ Chosen option: **Option 1 — Strictly Reuse and Extend Feature 001 Patterns**.
 
 1. **Handlers & Decorators**:
    - Every Feature 002 use case is implemented as an explicit `ICommandHandler` or `IQueryHandler`.
-   - Architecture tests enforce that 100% of command handler registrations are wrapped by `TransactionAndAuditCommandDecorator` and `LoggingCommandDecorator`.
-   - Any write operation, including updating `last_verified_at` across UTC days, is executed as an audited write through `TransactionAndAuditCommandDecorator`. Zero unaudited writes exist anywhere.
+   - Architecture tests enforce that 100% of command handler registrations are wrapped by `TransactionCommandDecorator` and `LoggingCommandDecorator`.
+   - Any write operation, including updating `last_verified_at` across UTC days, is executed as an audited write through `TransactionCommandDecorator`. Zero unaudited writes exist anywhere.
 2. **Typed Outcomes vs Failures**:
    - `ErrorCode` is expanded to include genuinely new failure codes:
      - `ErrorCode.InvalidTransition` (disallowed state transition, e.g. attempting to transition to `applied` via `posting_transition` or applying to decided posting without override)
@@ -53,7 +53,7 @@ Chosen option: **Option 1 — Strictly Reuse and Extend Feature 001 Patterns**.
      - `ErrorCode.StaleVersionToken` is reused for ALL optimistic concurrency, missing, or mismatched version token cases (no redundant `ConcurrencyConflict` code).
      - `ErrorCode.NotFound` and `ErrorCode.ValidationError`.
    - Domain outcomes representing legitimate operational results (`already_decided`, `already_tracked`, and `possible_duplicate`) are returned as SUCCESSFUL results (`Result<T>.Success(...)`) carrying a status discriminator:
-     - `already_tracked` on a subsequent UTC day bumps `last_verified_at` and generates an audit entry; because the command returns success, `TransactionAndAuditCommandDecorator` commits the transaction to MongoDB rather than rolling it back.
+     - `already_tracked` on a subsequent UTC day bumps `last_verified_at` and generates an audit entry; because the command returns success, `TransactionCommandDecorator` commits the transaction to MongoDB rather than rolling it back.
      - `already_decided` returns the existing posting, prior reason, and `can_reopen` indicator without mutation.
      - `possible_duplicate` returns candidate postings for advisory review without mutating records.
 3. **Append-Only Event Streams**:

@@ -91,7 +91,7 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
     }
 
     [Fact]
-    public void EveryCommandHandler_MustBeRegisteredAndWrappedBy_TransactionAndAuditCommandDecorator()
+    public void EveryCommandHandler_MustBeRegisteredAndWrappedBy_TransactionCommandDecorator()
     {
         var services = new ServiceCollection();
         services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
@@ -103,7 +103,7 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
         using var provider = services.BuildServiceProvider();
 
         // Verify the open/helper decorator registration pipeline wraps any ICommandHandler<,>
-        // with LoggingCommandDecorator<,> (outer) -> TransactionAndAuditCommandDecorator<,> -> Inner Handler
+        // with LoggingCommandDecorator<,> (outer) -> TransactionCommandDecorator<,> -> Inner Handler
         var testServices = new ServiceCollection();
         testServices.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
         testServices.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
@@ -115,8 +115,8 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
         using var testProvider = testServices.BuildServiceProvider();
         var resolvedSample = testProvider.GetRequiredService<ICommandHandler<SampleArchitectureCommand, string>>();
         Assert.True(
-            ContainsDecoratorInChain(resolvedSample, typeof(TransactionAndAuditCommandDecorator<,>)),
-            "AddCommandHandler must wrap handlers with TransactionAndAuditCommandDecorator.");
+            ContainsDecoratorInChain(resolvedSample, typeof(TransactionCommandDecorator<,>)),
+            "AddCommandHandler must wrap handlers with TransactionCommandDecorator.");
 
         // Also inspect every concrete ICommandHandler<,> in RoleRadar.Application as each handler lands across phases
         var concreteCommandHandlers = ApplicationAssembly.GetTypes()
@@ -134,8 +134,8 @@ public sealed class LayeringAndAppendOnlyArchitectureTests
                 $"Command handler {handlerType.FullName} implementing {serviceInterface.Name} is not registered in AddRoleRadarApplication().");
 
             Assert.True(
-                ContainsDecoratorInChain(resolved!, typeof(TransactionAndAuditCommandDecorator<,>)),
-                $"Command handler {handlerType.FullName} is not wrapped by TransactionAndAuditCommandDecorator<,>.");
+                ContainsDecoratorInChain(resolved!, typeof(TransactionCommandDecorator<,>)),
+                $"Command handler {handlerType.FullName} is not wrapped by TransactionCommandDecorator<,>.");
         }
     }
 
