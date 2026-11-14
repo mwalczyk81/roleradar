@@ -1,0 +1,1 @@
+{"id":"2397c7bd77f3e7b636ff501f7a355384.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/routes/index.test.ts.GET / (_index) &gt; redirects authenticated visitors to /postings","name":"GET / (_index) &gt; redirects authenticated visitors to /postings","status":"passed","testResultsByEnv":{"default":"d8b276792bab39847bc68e451c915c50"}}

@@ -1,0 +1,1 @@
+2026-11-14T12:55:43.237Z info web [e3f46769ea7a405ba7195d5d7544ea70] GET /favicon.ico responded 200 method=GET path=/favicon.ico status=200 durationMs=1.518

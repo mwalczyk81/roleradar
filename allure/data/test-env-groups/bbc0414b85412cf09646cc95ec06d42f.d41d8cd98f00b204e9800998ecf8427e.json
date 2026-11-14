@@ -1,0 +1,1 @@
+{"id":"bbc0414b85412cf09646cc95ec06d42f.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/tooling/allure-sanitize.test.ts.scrubText &gt; leaves repository-relative paths, public URLs and plain text alone","name":"scrubText &gt; leaves repository-relative paths, public URLs and plain text alone","status":"passed","testResultsByEnv":{"default":"6138761f96412b478715cca7b5bcdeba"}}

@@ -1,0 +1,1 @@
+{"id":"569d4e71f080d9bfd54e23f417fad937.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/trace-context.test.ts.startTrace &gt; discards a all-zero span id value and generates a new trace","name":"startTrace &gt; discards a all-zero span id value and generates a new trace","status":"passed","testResultsByEnv":{"default":"db289a49588b9304028797e52a8f238c"}}

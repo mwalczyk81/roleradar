@@ -1,0 +1,1 @@
+{"id":"f8167e69cd94bc73cc004d73b8ddc528.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/tooling/metrics-record.test.ts.appendRecord &gt; adds a missing final newline instead of joining two records","name":"appendRecord &gt; adds a missing final newline instead of joining two records","status":"passed","testResultsByEnv":{"default":"c0f647a45b6a1847c338859e70629e96"}}

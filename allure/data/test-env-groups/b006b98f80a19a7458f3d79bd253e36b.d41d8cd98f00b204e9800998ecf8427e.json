@@ -1,0 +1,1 @@
+{"id":"b006b98f80a19a7458f3d79bd253e36b.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/api-client-trace.test.ts.outbound traceparent header &gt; never logs the Authorization value","name":"outbound traceparent header &gt; never logs the Authorization value","status":"passed","testResultsByEnv":{"default":"a9f3e48b62568972e451bbf0d62e6b68"}}

@@ -1,0 +1,1 @@
+{"id":"717ad7296a355dfd2932c946b73ecd59.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/use-theme.test.ts.useTheme hook &gt; detects theme from matchMedia when no data-theme is present","name":"useTheme hook &gt; detects theme from matchMedia when no data-theme is present","status":"passed","testResultsByEnv":{"default":"6f3778372d50c8581dcc4b5d2794f1d3"}}

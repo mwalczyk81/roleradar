@@ -1,0 +1,1 @@
+{"id":"f0104dfed605d05f508a3be0f6472e1e.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/observability.test.ts.formatRecord &gt; uses a dash in text mode when there is no trace id","name":"formatRecord &gt; uses a dash in text mode when there is no trace id","status":"passed","testResultsByEnv":{"default":"9bce8ba0e9c7e00afaf103c51e1e5d2b"}}

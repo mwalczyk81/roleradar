@@ -1,0 +1,1 @@
+{"id":"e2eecdebbf9bbe6e47f34045a186042b.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/api-client-trace.test.ts.outbound traceparent header &gt; fetchOData sends the request&apos;s traceparent","name":"outbound traceparent header &gt; fetchOData sends the request&apos;s traceparent","status":"passed","testResultsByEnv":{"default":"2f77b25c48ca1f952f31e321351874d0"}}

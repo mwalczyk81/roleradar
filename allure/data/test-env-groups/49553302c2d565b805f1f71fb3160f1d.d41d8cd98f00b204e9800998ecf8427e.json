@@ -1,0 +1,1 @@
+{"id":"49553302c2d565b805f1f71fb3160f1d.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/insights-stats.test.ts.buildStatsView &gt; flags an empty weekly series (all-time with no applications)","name":"buildStatsView &gt; flags an empty weekly series (all-time with no applications)","status":"passed","testResultsByEnv":{"default":"fd93d301f3fe3a15253667167b9b7947"}}

@@ -1,0 +1,1 @@
+{"id":"49b5d63bdb2adffd5d8acf3c1b5e7970.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/tooling/metrics-record.test.ts.buildPrComment &gt; drops a link that is not https and a commit that is not a sha","name":"buildPrComment &gt; drops a link that is not https and a commit that is not a sha","status":"passed","testResultsByEnv":{"default":"5501474c4157784bf1c3a886babb8af0"}}

@@ -1,0 +1,1 @@
+{"id":"8152f9b2cecb088e37e8973db3bde9a8.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/observability.test.ts.scrub, one case per rule &gt; redacts mongodb user info","name":"scrub, one case per rule &gt; redacts mongodb user info","status":"passed","testResultsByEnv":{"default":"d474849563f878a3f95c3625382fef3e"}}

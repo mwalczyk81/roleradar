@@ -1,0 +1,9 @@
+No `HydrateFallback` element provided to render during initial hydration
+
+Encountered a script tag while rendering React component. Scripts inside React components are never executed when rendering on the client. Consider using template tag instead (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template).
+
+An empty string (&quot;&quot;) was passed to the href attribute. To fix this, either do not render the element at all or pass null to href instead of an empty string.
+An empty string (&quot;&quot;) was passed to the href attribute. To fix this, either do not render the element at all or pass null to href instead of an empty string.
+
+In HTML, &lt;html&gt; cannot be a child of &lt;div&gt;.
+This will cause a hydration error.

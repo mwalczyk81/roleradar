@@ -1,0 +1,1 @@
+{"id":"f71fd322d16fdd5b73a44d009c20d50c.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/tooling/metrics-record.test.ts.buildRecord &gt; leaves mutation out when the nightly file has no score","name":"buildRecord &gt; leaves mutation out when the nightly file has no score","status":"passed","testResultsByEnv":{"default":"cec02e50f3e7b0a1548e919b47c639c0"}}

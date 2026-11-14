@@ -1,0 +1,1 @@
+{"id":"805331d983477a3772924b73936ff281.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/markdown-url.test.ts.safeMarkdownUrl &gt; rejects a URL the platform cannot parse instead of throwing","name":"safeMarkdownUrl &gt; rejects a URL the platform cannot parse instead of throwing","status":"passed","testResultsByEnv":{"default":"55ce91a0fa28c616a6d2c601ef295146"}}

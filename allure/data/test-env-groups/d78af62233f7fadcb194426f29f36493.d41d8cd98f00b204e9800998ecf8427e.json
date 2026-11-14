@@ -1,0 +1,1 @@
+{"id":"d78af62233f7fadcb194426f29f36493.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/routes/index.test.ts.GET / (_index) &gt; redirects unauthenticated visitors to Identity login","name":"GET / (_index) &gt; redirects unauthenticated visitors to Identity login","status":"passed","testResultsByEnv":{"default":"83a9e9be413a16a37055b70f14e5a748"}}

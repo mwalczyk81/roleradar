@@ -1,0 +1,1 @@
+{"id":"64cf3cf4fb38d18deb91d9d206bba9e7.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/markdown-url.test.ts.safeMarkdownUrl &gt; rejects credentials in the URL, whether user, password or both","name":"safeMarkdownUrl &gt; rejects credentials in the URL, whether user, password or both","status":"passed","testResultsByEnv":{"default":"0d9f5ad8c5e5a2330ab9df88f1debe8c"}}

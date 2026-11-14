@@ -1,0 +1,1 @@
+{"id":"b304044bb9db163521f2abe6af8abf8e.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/trace-context.test.ts.outbound traceparent &gt; withTraceparent adds nothing outside a request","name":"outbound traceparent &gt; withTraceparent adds nothing outside a request","status":"passed","testResultsByEnv":{"default":"85da08c2df57de867f59c98621fe240a"}}

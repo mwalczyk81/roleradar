@@ -1,0 +1,1 @@
+{"id":"a5bcab5131fd3078469e6414ea2debbf.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/trace-context.test.ts.startTrace &gt; discards a empty value and generates a new trace","name":"startTrace &gt; discards a empty value and generates a new trace","status":"passed","testResultsByEnv":{"default":"4a37ae3538e971fae9200784cd55594f"}}

@@ -1,0 +1,1 @@
+{"id":"dd7ae2a287092a9b50078a7396fc5ecf.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/api-client-trace.test.ts.outbound traceparent header &gt; sends no traceparent outside a request","name":"outbound traceparent header &gt; sends no traceparent outside a request","status":"passed","testResultsByEnv":{"default":"f8b516caa1b4ef6971feb30c06145f9c"}}

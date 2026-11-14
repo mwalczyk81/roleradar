@@ -1,0 +1,1 @@
+{"id":"207dc400f87e2e8a9da4f6a977b09deb.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/insights-stats.test.ts.buildStatsView &gt; treats all-zero weeks as data, not as empty","name":"buildStatsView &gt; treats all-zero weeks as data, not as empty","status":"passed","testResultsByEnv":{"default":"e20c3c4601e8d3cd0d4fb35dddd6501e"}}

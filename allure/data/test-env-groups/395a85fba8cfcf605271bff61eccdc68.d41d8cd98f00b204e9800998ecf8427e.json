@@ -1,0 +1,1 @@
+{"id":"395a85fba8cfcf605271bff61eccdc68.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/tooling/mutation-ratchet.test.ts.score mode &gt; exits 2 and writes nothing when the report is not JSON","name":"score mode &gt; exits 2 and writes nothing when the report is not JSON","status":"passed","testResultsByEnv":{"default":"cfe2293a22dc7c5b973772a9b5a0f10d"}}

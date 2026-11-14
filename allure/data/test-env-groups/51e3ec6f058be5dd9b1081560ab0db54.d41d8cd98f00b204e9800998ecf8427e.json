@@ -1,0 +1,1 @@
+{"id":"51e3ec6f058be5dd9b1081560ab0db54.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/observability.test.ts.scrub, one case per rule &gt; redacts sensitive key=value pairs in free text","name":"scrub, one case per rule &gt; redacts sensitive key=value pairs in free text","status":"passed","testResultsByEnv":{"default":"bbdf29cf675d9d781a050e8d2d4f73e3"}}

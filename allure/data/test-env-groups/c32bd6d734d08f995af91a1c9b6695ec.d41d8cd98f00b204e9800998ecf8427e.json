@@ -1,0 +1,1 @@
+{"id":"c32bd6d734d08f995af91a1c9b6695ec.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/log-server.test.ts.log.server &gt; sends info and debug to stdout, warn, error and fatal to stderr","name":"log.server &gt; sends info and debug to stdout, warn, error and fatal to stderr","status":"passed","testResultsByEnv":{"default":"2eebf8977533cbb6f7185755d609c889"}}

@@ -1,0 +1,1 @@
+{"id":"040e7af4e6e261cc75bddd031a825096.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/trace-context.test.ts.startTrace &gt; discards a upper case value and generates a new trace","name":"startTrace &gt; discards a upper case value and generates a new trace","status":"passed","testResultsByEnv":{"default":"acfbc61415ea746b4ff4e45613d89893"}}

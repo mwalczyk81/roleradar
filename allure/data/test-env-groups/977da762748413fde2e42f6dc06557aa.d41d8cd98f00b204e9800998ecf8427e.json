@@ -1,0 +1,1 @@
+{"id":"977da762748413fde2e42f6dc06557aa.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/trace-context.test.ts.startTrace &gt; discards a malformed value and generates a new trace","name":"startTrace &gt; discards a malformed value and generates a new trace","status":"passed","testResultsByEnv":{"default":"820fdded3192d973c7ac2976cfb8590d"}}

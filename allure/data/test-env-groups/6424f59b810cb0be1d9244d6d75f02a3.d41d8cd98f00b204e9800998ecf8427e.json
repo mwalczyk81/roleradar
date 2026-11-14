@@ -1,0 +1,1 @@
+{"id":"6424f59b810cb0be1d9244d6d75f02a3.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/tooling/metrics-record.test.ts.buildPrComment &gt; escapes text from the inputs before it reaches Markdown","name":"buildPrComment &gt; escapes text from the inputs before it reaches Markdown","status":"passed","testResultsByEnv":{"default":"7afaa46bc27a8367e627909d8bcac10a"}}

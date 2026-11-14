@@ -1,0 +1,1 @@
+{"id":"8dab210e4130aa862a8e100734b70927.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/api-policy.test.ts.fetchWithPolicy &gt; puts the same traceparent on every attempt","name":"fetchWithPolicy &gt; puts the same traceparent on every attempt","status":"passed","testResultsByEnv":{"default":"8e059b62e6632f7df509b5582db5f8a9"}}

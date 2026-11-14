@@ -1,0 +1,1 @@
+{"id":"e47e22a24d6e6de2d0e5584b0d2c6bcd.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/log-server.test.ts.log.server &gt; writes JSON lines when ROLERADAR_LOG_FORMAT=json and text when unset","name":"log.server &gt; writes JSON lines when ROLERADAR_LOG_FORMAT=json and text when unset","status":"passed","testResultsByEnv":{"default":"916d056bab1979d85d23e1ffe4edcfd0"}}

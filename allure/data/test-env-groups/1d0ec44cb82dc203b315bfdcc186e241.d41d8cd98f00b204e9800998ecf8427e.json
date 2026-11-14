@@ -1,0 +1,1 @@
+{"id":"1d0ec44cb82dc203b315bfdcc186e241.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/trace-context.test.ts.startTrace &gt; discards a all-zero trace id value and generates a new trace","name":"startTrace &gt; discards a all-zero trace id value and generates a new trace","status":"passed","testResultsByEnv":{"default":"8a44f1cbb32da296c3c33ee4d6c141cc"}}

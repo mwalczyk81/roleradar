@@ -1,0 +1,1 @@
+{"id":"70ad78170bf8a01beaced2578c49a2bf.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/insights-stats.test.ts.buildStatsView &gt; keeps a zero-day median as a number, not &apos;No data&apos;","name":"buildStatsView &gt; keeps a zero-day median as a number, not &apos;No data&apos;","status":"passed","testResultsByEnv":{"default":"98a5b8b815054b75b69172b7a8fb287d"}}

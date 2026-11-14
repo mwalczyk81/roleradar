@@ -1,0 +1,1 @@
+{"id":"fdf08ffc97966157255538a9aee2a9ac.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/routes/postings.detail.test.tsx.GET /postings/:id (T031) &gt; handles 404 Not Found by throwing a 404 Response","name":"GET /postings/:id (T031) &gt; handles 404 Not Found by throwing a 404 Response","status":"passed","testResultsByEnv":{"default":"d79e666ddf0604bdfee632f375604ed2"}}

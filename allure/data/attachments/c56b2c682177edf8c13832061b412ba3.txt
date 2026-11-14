@@ -1,0 +1,7 @@
+2026-11-14T12:58:54.303Z info web [a88a8460b266761365874afec260902b] GET /postings responded 200 method=GET path=/postings status=200 durationMs=9.617
+2026-11-14T12:58:54.330Z info web [f682dad4c26e6c34c53a1de39c23c536] GET /assets/tokens-DXOBllYG.css responded 200 method=GET path=/assets/tokens-DXOBllYG.css status=200 durationMs=5.839
+2026-11-14T12:58:54.331Z info web [ef843bf38304955f48606e49d628be3a] GET /assets/bundle-DDsKLIgq.css responded 200 method=GET path=/assets/bundle-DDsKLIgq.css status=200 durationMs=2.345
+2026-11-14T12:58:54.331Z info web [faace54628fb3e20a8498cf4b22b1665] GET /assets/app-Bs9iUZ2J.css responded 200 method=GET path=/assets/app-Bs9iUZ2J.css status=200 durationMs=1.572
+2026-11-14T12:58:54.349Z info web [32311bd35aee2b5007324cdfa159d3f9] GET /assets/ibm-plex-sans-latin-wght-normal-IvpUvPa2.woff2 responded 200 method=GET path=/assets/ibm-plex-sans-latin-wght-normal-IvpUvPa2.woff2 status=200 durationMs=1.148
+2026-11-14T12:58:54.349Z info web [6bf09987aeac0db66ccbd3532d85cbdf] GET /assets/ibm-plex-serif-latin-600-normal-DAxitmSu.woff2 responded 200 method=GET path=/assets/ibm-plex-serif-latin-600-normal-DAxitmSu.woff2 status=200 durationMs=1.053
+2026-11-14T12:58:54.350Z info web [e5ae47ed194249d6c2ec0a7c5b977d00] GET /assets/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2 responded 200 method=GET path=/assets/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2 status=200 durationMs=0.781

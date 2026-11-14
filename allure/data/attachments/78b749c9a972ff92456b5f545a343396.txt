@@ -1,0 +1,1 @@
+identity Logout light: card edge vs ground 1.20:1, card surface vs ground 1.04:1

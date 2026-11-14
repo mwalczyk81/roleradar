@@ -1,0 +1,1 @@
+{"id":"507eb80067b04c84702373a80ac4f8fe.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/trace-context.test.ts.startTrace &gt; discards a extra trailing fields value and generates a new trace","name":"startTrace &gt; discards a extra trailing fields value and generates a new trace","status":"passed","testResultsByEnv":{"default":"eec9cad767deb62896fb4c9081a4f8de"}}
