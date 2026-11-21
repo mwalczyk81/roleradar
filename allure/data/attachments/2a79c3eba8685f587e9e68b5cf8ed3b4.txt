@@ -1,0 +1,12 @@
+2026-11-21T09:34:08.146Z info web [b3ef6a311db6dfcb0f40eb42a3be6f62] GET /auth/logout responded 200 method=GET path=/auth/logout status=200 durationMs=9.064
+2026-11-21T09:34:08.162Z info web [569c251a80b6c4101f7829927e7887c3] GET /assets/entry.client-CbX-eFt0.js responded 200 method=GET path=/assets/entry.client-CbX-eFt0.js status=200 durationMs=3.331
+2026-11-21T09:34:08.171Z info web [a1f40eabc0e9600cd411296a28eef478] GET /assets/tokens-DXOBllYG.css responded 200 method=GET path=/assets/tokens-DXOBllYG.css status=200 durationMs=4.303
+2026-11-21T09:34:08.172Z info web [dc22d451fa823268cbf57bda6a8d12b7] GET /assets/rolldown-runtime-XKyaHtl9.js responded 200 method=GET path=/assets/rolldown-runtime-XKyaHtl9.js status=200 durationMs=6.123
+2026-11-21T09:34:08.172Z info web [35b2c51c5d09f86423f20c96bcc91f84] GET /assets/jsx-runtime-LKYXHABd.js responded 200 method=GET path=/assets/jsx-runtime-LKYXHABd.js status=200 durationMs=4.161
+2026-11-21T09:34:08.172Z info web [ee16b4af02b09579fd28f4236e812f22] GET /assets/bundle-DDsKLIgq.css responded 200 method=GET path=/assets/bundle-DDsKLIgq.css status=200 durationMs=3.866
+2026-11-21T09:34:08.172Z info web [0d8ad5e1e40fd19825090799bdbabef9] GET /assets/app-Bs9iUZ2J.css responded 200 method=GET path=/assets/app-Bs9iUZ2J.css status=200 durationMs=3.643
+2026-11-21T09:34:08.176Z info web [c094e07bf0f7d6b6d63241ccd4aec5e4] GET /assets/chunk-6KYCQHYJ-BCRixN82.js responded 200 method=GET path=/assets/chunk-6KYCQHYJ-BCRixN82.js status=200 durationMs=6.557
+2026-11-21T09:34:08.180Z info web [57be99c9d9044393dd10aca7cc6b9390] GET /assets/root-DBnxH-DQ.js responded 200 method=GET path=/assets/root-DBnxH-DQ.js status=200 durationMs=7.502
+2026-11-21T09:34:08.181Z info web [ef13e1536100853d1ad01129b3a46b90] GET /assets/use-theme-flgkNN2l.js responded 200 method=GET path=/assets/use-theme-flgkNN2l.js status=200 durationMs=7.531
+2026-11-21T09:34:08.181Z info web [63b8e4808c7a1a4f06290fd3d98222a7] GET /assets/auth.logout-CaFbtjsE.js responded 200 method=GET path=/assets/auth.logout-CaFbtjsE.js status=200 durationMs=6.497
+2026-11-21T09:34:08.238Z info web [1a881b9b99e486f4ddc938bd87003186] GET /__manifest responded 200 method=GET path=/__manifest status=200 durationMs=1.592

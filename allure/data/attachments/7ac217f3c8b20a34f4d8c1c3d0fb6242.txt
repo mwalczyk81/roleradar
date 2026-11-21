@@ -1,0 +1,11 @@
+2026-11-21T09:26:37.792Z info web [5bf0c7c8589dd6e20c30221ee47ba361] GET /auth/callback responded 200 method=GET path=/auth/callback status=200 durationMs=7.839
+2026-11-21T09:26:37.813Z info web [9fe3787230241f6dd36556f9ff911039] GET /assets/entry.client-CbX-eFt0.js responded 200 method=GET path=/assets/entry.client-CbX-eFt0.js status=200 durationMs=8.607
+2026-11-21T09:26:37.817Z info web [559813fee90edf8d7ea3c984a4a0ac66] GET /assets/tokens-DXOBllYG.css responded 200 method=GET path=/assets/tokens-DXOBllYG.css status=200 durationMs=7.932
+2026-11-21T09:26:37.818Z info web [b63c5bbda7f19297e4741feb5d76143d] GET /assets/bundle-DDsKLIgq.css responded 200 method=GET path=/assets/bundle-DDsKLIgq.css status=200 durationMs=7.128
+2026-11-21T09:26:37.819Z info web [75a00ee4077d3dbc303a7e85911ae74c] GET /assets/jsx-runtime-LKYXHABd.js responded 200 method=GET path=/assets/jsx-runtime-LKYXHABd.js status=200 durationMs=4.396
+2026-11-21T09:26:37.819Z info web [a3c0a12a7100532332b775c0d0703d27] GET /assets/app-Bs9iUZ2J.css responded 200 method=GET path=/assets/app-Bs9iUZ2J.css status=200 durationMs=4.083
+2026-11-21T09:26:37.819Z info web [32fc91440c519af5290d522fade89b11] GET /assets/rolldown-runtime-XKyaHtl9.js responded 200 method=GET path=/assets/rolldown-runtime-XKyaHtl9.js status=200 durationMs=3.797
+2026-11-21T09:26:37.821Z info web [fda0e5222616c757db31ea016bf4e92d] GET /assets/chunk-6KYCQHYJ-BCRixN82.js responded 200 method=GET path=/assets/chunk-6KYCQHYJ-BCRixN82.js status=200 durationMs=7.393
+2026-11-21T09:26:37.823Z info web [28e1d8d0195057afc86da3f35100e500] GET /assets/root-DBnxH-DQ.js responded 200 method=GET path=/assets/root-DBnxH-DQ.js status=200 durationMs=4.729
+2026-11-21T09:26:37.824Z info web [cd14342fe0fda5ce6cc2fc82b73f8a76] GET /assets/use-theme-flgkNN2l.js responded 200 method=GET path=/assets/use-theme-flgkNN2l.js status=200 durationMs=3.726
+2026-11-21T09:26:37.824Z info web [1231725950f5f6725d781c3f483a248b] GET /assets/auth.callback-B2-fwtkS.js responded 200 method=GET path=/assets/auth.callback-B2-fwtkS.js status=200 durationMs=3.595

@@ -1,0 +1,30 @@
+Error: Boom test failure
+    at Component ([path]/root.test.tsx:141:17)
+    at Object.react_stack_bottom_frame ([path]/react-dom-client.development.js:28571:20)
+    at renderWithHooks ([path]/react-dom-client.development.js:8030:22)
+    at updateFunctionComponent ([path]/react-dom-client.development.js:10569:19)
+    at beginWork ([path]/react-dom-client.development.js:12205:18)
+    at runWithFiberInDEV ([path]/react-dom-client.development.js:1048:13)
+    at performUnitOfWork ([path]/react-dom-client.development.js:19176:22)
+    at workLoopSync ([path]/react-dom-client.development.js:19004:41)
+    at renderRootSync ([path]/react-dom-client.development.js:18985:11)
+    at performWorkOnRoot ([path]/react-dom-client.development.js:18094:35) {
+  [stack]: [Getter/Setter],
+  [message]: &apos;Boom test failure&apos;
+}
+
+The above error occurred in the &lt;Component&gt; component.
+
+React will try to recreate this component tree from scratch using the error boundary you provided, RenderErrorBoundary.
+
+React Router caught the following error during render Error: Boom test failure
+    at Component ([path]/root.test.tsx:141:17)
+    at Object.react_stack_bottom_frame ([path]/react-dom-client.development.js:28571:20)
+    at renderWithHooks ([path]/react-dom-client.development.js:8030:22)
+    at updateFunctionComponent ([path]/react-dom-client.development.js:10569:19)
+    at beginWork ([path]/react-dom-client.development.js:12205:18)
+    at runWithFiberInDEV ([path]/react-dom-client.development.js:1048:13)
+    at performUnitOfWork ([path]/react-dom-client.development.js:19176:22)
+    at workLoopSync ([path]/react-dom-client.development.js:19004:41)
+    at renderRootSync ([path]/react-dom-client.development.js:18985:11)
+    at performWorkOnRoot ([path]/react-dom-client.development.js:18094:35)

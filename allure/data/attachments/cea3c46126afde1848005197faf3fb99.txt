@@ -1,0 +1,3 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+BENCH Applications | filter status + appliedAt sort + count     | median    10.9 ms | max    18.2 ms | n=9 | /odata/Applications?$filter=status eq 'applied'&amp;$orderby=appliedAt desc&amp;$top=25&amp;$skip=1000&amp;$count=true

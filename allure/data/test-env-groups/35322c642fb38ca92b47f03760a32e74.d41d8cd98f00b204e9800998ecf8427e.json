@@ -1,0 +1,1 @@
+{"id":"35322c642fb38ca92b47f03760a32e74.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/api-policy.test.ts.fetchWithPolicy &gt; keeps the method, URL, headers and body of the original request","name":"fetchWithPolicy &gt; keeps the method, URL, headers and body of the original request","status":"passed","testResultsByEnv":{"default":"9c8c214badc06c8270b4228483d9d6d2"}}

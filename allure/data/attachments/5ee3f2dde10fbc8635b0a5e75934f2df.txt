@@ -1,0 +1,11 @@
+2026-11-21T09:18:34.407Z info web [37a63eae1e9b18a1507d40f2fda7cd66] GET /no-such-route responded 404 method=GET path=/no-such-route status=404 durationMs=10.626
+2026-11-21T09:18:34.429Z info web [b45fb91f69f05238bab760ceae8b8efb] GET /assets/entry.client-CbX-eFt0.js responded 200 method=GET path=/assets/entry.client-CbX-eFt0.js status=200 durationMs=10.692
+2026-11-21T09:18:34.433Z info web [a14b67267c47cb0651a4cd19a53a7111] GET /assets/bundle-DDsKLIgq.css responded 200 method=GET path=/assets/bundle-DDsKLIgq.css status=200 durationMs=8.675
+2026-11-21T09:18:34.433Z info web [473baf86ab4ec53fb804e6a845de18ad] GET /assets/tokens-DXOBllYG.css responded 200 method=GET path=/assets/tokens-DXOBllYG.css status=200 durationMs=9.779
+2026-11-21T09:18:34.435Z info web [e6ce427daf33fb7ead4d75c902eed001] GET /assets/rolldown-runtime-XKyaHtl9.js responded 200 method=GET path=/assets/rolldown-runtime-XKyaHtl9.js status=200 durationMs=8.224
+2026-11-21T09:18:34.435Z info web [222eb275e4a7e307982748bdad7d55a3] GET /assets/app-Bs9iUZ2J.css responded 200 method=GET path=/assets/app-Bs9iUZ2J.css status=200 durationMs=7.842
+2026-11-21T09:18:34.437Z info web [6947740e36c9e5d6aabe0bea3bfc014f] GET /assets/jsx-runtime-LKYXHABd.js responded 200 method=GET path=/assets/jsx-runtime-LKYXHABd.js status=200 durationMs=6.754
+2026-11-21T09:18:34.439Z info web [887f01b9fddaa57357cd3a441e660b68] GET /assets/chunk-6KYCQHYJ-BCRixN82.js responded 200 method=GET path=/assets/chunk-6KYCQHYJ-BCRixN82.js status=200 durationMs=8.173
+2026-11-21T09:18:34.441Z info web [3056c817032fc6bbcc1791fe54ccd137] GET /assets/root-DBnxH-DQ.js responded 200 method=GET path=/assets/root-DBnxH-DQ.js status=200 durationMs=7.237
+2026-11-21T09:18:34.442Z info web [aef8cf33b15984a4bad09d4abd26cf6d] GET /assets/use-theme-flgkNN2l.js responded 200 method=GET path=/assets/use-theme-flgkNN2l.js status=200 durationMs=5.165
+2026-11-21T09:18:34.491Z info web [be74b4e7ab70471f4268e8ae08d879c3] GET /__manifest responded 200 method=GET path=/__manifest status=200 durationMs=1.505

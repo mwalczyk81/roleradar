@@ -1,0 +1,3 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+BENCH Criteria     | name asc (collation)                       | median     3.8 ms | max     4.5 ms | n=9 | /odata/Criteria?$orderby=name asc&amp;$top=25&amp;$skip=500

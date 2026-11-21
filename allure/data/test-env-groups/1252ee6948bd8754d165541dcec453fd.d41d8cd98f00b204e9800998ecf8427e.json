@@ -1,0 +1,1 @@
+{"id":"1252ee6948bd8754d165541dcec453fd.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/tooling/mutation-ratchet.test.ts.scoreReport &gt; returns no score, not 100, when no mutant is scorable","name":"scoreReport &gt; returns no score, not 100, when no mutant is scorable","status":"passed","testResultsByEnv":{"default":"6d2bc5f2633096800e8ed290e3aa762e"}}

@@ -1,0 +1,15 @@
+2026-11-21T09:26:36.247Z info web [c3be65513a276c483dffcf8823d6d048] GET /service-unavailable responded 200 method=GET path=/service-unavailable status=200 durationMs=6.136
+2026-11-21T09:26:36.263Z info web [1667d1fa85671f0a4e2bedbafeae306b] GET /assets/entry.client-CbX-eFt0.js responded 200 method=GET path=/assets/entry.client-CbX-eFt0.js status=200 durationMs=4.645
+2026-11-21T09:26:36.269Z info web [46db4b03ee8006158713285e906fdff3] GET /assets/rolldown-runtime-XKyaHtl9.js responded 200 method=GET path=/assets/rolldown-runtime-XKyaHtl9.js status=200 durationMs=4.785
+2026-11-21T09:26:36.270Z info web [1a18828baeab33fc98d3c6582f8f2c33] GET /assets/tokens-DXOBllYG.css responded 200 method=GET path=/assets/tokens-DXOBllYG.css status=200 durationMs=4.509
+2026-11-21T09:26:36.270Z info web [fed8c08e04406bd5ac6016add542acfa] GET /assets/bundle-DDsKLIgq.css responded 200 method=GET path=/assets/bundle-DDsKLIgq.css status=200 durationMs=4.311
+2026-11-21T09:26:36.272Z info web [6098dda30a6d7fe202f0c6d031f8dc72] GET /assets/jsx-runtime-LKYXHABd.js responded 200 method=GET path=/assets/jsx-runtime-LKYXHABd.js status=200 durationMs=5.485
+2026-11-21T09:26:36.272Z info web [0f106d0187f3b084785dade1e7226231] GET /assets/app-Bs9iUZ2J.css responded 200 method=GET path=/assets/app-Bs9iUZ2J.css status=200 durationMs=5.322
+2026-11-21T09:26:36.276Z info web [994d9cf4e2227d2cbc91dd8fd0aaf51c] GET /assets/chunk-6KYCQHYJ-BCRixN82.js responded 200 method=GET path=/assets/chunk-6KYCQHYJ-BCRixN82.js status=200 durationMs=8.112
+2026-11-21T09:26:36.279Z info web [0ec8f0070646cb41b3da6d7659b0cbd8] GET /assets/root-DBnxH-DQ.js responded 200 method=GET path=/assets/root-DBnxH-DQ.js status=200 durationMs=8.218
+2026-11-21T09:26:36.279Z info web [4233e6b1a5293edfa472a486f7fc1bed] GET /assets/use-theme-flgkNN2l.js responded 200 method=GET path=/assets/use-theme-flgkNN2l.js status=200 durationMs=8.149
+2026-11-21T09:26:36.280Z info web [276bc458c50952af0557d1ceafe942df] GET /assets/service-unavailable-DPg8cuwh.js responded 200 method=GET path=/assets/service-unavailable-DPg8cuwh.js status=200 durationMs=7.361
+2026-11-21T09:26:36.280Z info web [6044f49533cd555727d74ce8656232e2] GET /assets/ui-BiKpo2_6.js responded 200 method=GET path=/assets/ui-BiKpo2_6.js status=200 durationMs=5.972
+2026-11-21T09:26:36.281Z info web [a67c2c35ef668fae00c8fe93e77f5211] GET /assets/createLucideIcon-_u83IJSA.js responded 200 method=GET path=/assets/createLucideIcon-_u83IJSA.js status=200 durationMs=5.741
+2026-11-21T09:26:36.293Z info web [a04ca89e6f326c265a594b2a156ce640] GET /assets/ibm-plex-sans-latin-wght-normal-IvpUvPa2.woff2 responded 200 method=GET path=/assets/ibm-plex-sans-latin-wght-normal-IvpUvPa2.woff2 status=200 durationMs=3.232
+2026-11-21T09:26:36.298Z info web [4d30f04b04dac84f22beccd6e8d9059d] GET /assets/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2 responded 200 method=GET path=/assets/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2 status=200 durationMs=4.322

@@ -1,0 +1,6 @@
+2026-11-21T09:27:04.623Z info web [0fb6673679d99850b02d3d8cfadfcc66] GET /service-unavailable responded 200 method=GET path=/service-unavailable status=200 durationMs=5.9
+2026-11-21T09:27:04.641Z info web [d017019eb2edcca333acdea25d4c31b8] GET /assets/tokens-DXOBllYG.css responded 200 method=GET path=/assets/tokens-DXOBllYG.css status=200 durationMs=4.537
+2026-11-21T09:27:04.643Z info web [c8ee63e0ede34c15d04aa5ea0fe2f064] GET /assets/bundle-DDsKLIgq.css responded 200 method=GET path=/assets/bundle-DDsKLIgq.css status=200 durationMs=2.926
+2026-11-21T09:27:04.644Z info web [1e22d3a3aeff14b276e9cd8c5d2c670a] GET /assets/app-Bs9iUZ2J.css responded 200 method=GET path=/assets/app-Bs9iUZ2J.css status=200 durationMs=1.667
+2026-11-21T09:27:04.654Z info web [0125b1045819a8699de78989a41c46c3] GET /assets/ibm-plex-sans-latin-wght-normal-IvpUvPa2.woff2 responded 200 method=GET path=/assets/ibm-plex-sans-latin-wght-normal-IvpUvPa2.woff2 status=200 durationMs=2.166
+2026-11-21T09:27:04.654Z info web [9720a6179b983025e9aefbcada58e950] GET /assets/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2 responded 200 method=GET path=/assets/ibm-plex-mono-latin-400-normal-DMJ8VG8y.woff2 status=200 durationMs=2.348

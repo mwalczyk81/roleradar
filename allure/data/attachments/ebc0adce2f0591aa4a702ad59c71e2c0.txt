@@ -1,0 +1,14 @@
+2026-11-21T09:30:47.535Z info web [4dad97082176030fc79c015677b28122] GET /not-authorized responded 200 method=GET path=/not-authorized status=200 durationMs=5.189
+2026-11-21T09:30:47.557Z info web [3ca81c58d7c9f2693fb8c7a9326037b4] GET /assets/tokens-DXOBllYG.css responded 200 method=GET path=/assets/tokens-DXOBllYG.css status=200 durationMs=3.98
+2026-11-21T09:30:47.558Z info web [2d43adb041a2fe4c6759c0171aa27278] GET /assets/bundle-DDsKLIgq.css responded 200 method=GET path=/assets/bundle-DDsKLIgq.css status=200 durationMs=3.242
+2026-11-21T09:30:47.558Z info web [73fc5480722cbfa3a0522343e7148a6a] GET /assets/app-Bs9iUZ2J.css responded 200 method=GET path=/assets/app-Bs9iUZ2J.css status=200 durationMs=2.966
+2026-11-21T09:30:47.584Z info web [f639fbc3acc84037d5b8a71e524b6856] GET /assets/ibm-plex-sans-latin-wght-normal-IvpUvPa2.woff2 responded 200 method=GET path=/assets/ibm-plex-sans-latin-wght-normal-IvpUvPa2.woff2 status=200 durationMs=1.655
+2026-11-21T09:30:47.637Z info web [2342791f90cd4eb081bea06413ae3405] GET /assets/rolldown-runtime-XKyaHtl9.js responded 200 method=GET path=/assets/rolldown-runtime-XKyaHtl9.js status=200 durationMs=6.126
+2026-11-21T09:30:47.642Z info web [6a3cb6a9746669bfa9c4ab6febe0b86c] GET /assets/chunk-6KYCQHYJ-BCRixN82.js responded 200 method=GET path=/assets/chunk-6KYCQHYJ-BCRixN82.js status=200 durationMs=9.591
+2026-11-21T09:30:47.643Z info web [90b054da8c63cc45afb6b566c5cb51cc] GET /assets/entry.client-CbX-eFt0.js responded 200 method=GET path=/assets/entry.client-CbX-eFt0.js status=200 durationMs=12.696
+2026-11-21T09:30:47.644Z info web [0048abb8cc46f25ace91b8059867e135] GET /assets/jsx-runtime-LKYXHABd.js responded 200 method=GET path=/assets/jsx-runtime-LKYXHABd.js status=200 durationMs=8.006
+2026-11-21T09:30:47.646Z info web [7585ffb3b1034889028d758c712f7385] GET /assets/root-DBnxH-DQ.js responded 200 method=GET path=/assets/root-DBnxH-DQ.js status=200 durationMs=7.789
+2026-11-21T09:30:47.647Z info web [77394f329bd6d3c8e09216182b64c2a0] GET /assets/not-authorized-CrOmTysf.js responded 200 method=GET path=/assets/not-authorized-CrOmTysf.js status=200 durationMs=6.134
+2026-11-21T09:30:47.647Z info web [49fc02fc5e9090dcd140858c3260397b] GET /assets/use-theme-flgkNN2l.js responded 200 method=GET path=/assets/use-theme-flgkNN2l.js status=200 durationMs=5.743
+2026-11-21T09:30:47.649Z info web [122e41ab23d62d651a6ade57830db575] GET /assets/ui-BiKpo2_6.js responded 200 method=GET path=/assets/ui-BiKpo2_6.js status=200 durationMs=6.478
+2026-11-21T09:30:47.650Z info web [b20b0da6660721b5c598e2235ce515fe] GET /assets/createLucideIcon-_u83IJSA.js responded 200 method=GET path=/assets/createLucideIcon-_u83IJSA.js status=200 durationMs=5.108

@@ -1,0 +1,3 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+BENCH Criteria     | category filter                            | median    12.5 ms | max    13.4 ms | n=9 | /odata/Criteria?$filter=category eq 'weight' and isActive eq true&amp;$orderby=effectiveFrom desc&amp;$top=25&amp;$count=true
