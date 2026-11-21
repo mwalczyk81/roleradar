@@ -10,6 +10,16 @@ dotnet publish src/RoleRadar.Mcp.Stdio -c Release -o ./dist/mcp
 
 The compiled binary will be located at `./dist/mcp/RoleRadar.Mcp.Stdio.exe` (or `RoleRadar.Mcp.Stdio.dll` run via `dotnet`).
 
+## Keep the published build current
+
+Clients run the published binary, not the working tree. After any change that touches a derived stored field (`company_name`, `disposition_rank`, `has_*` flags, milestones), a repository write path or a tool schema, republish and restart the client. A stale build keeps writing rows without the new fields, and the Insights page then shows "Some numbers need a one-time backfill" again.
+
+1. Publish to a new folder, because a running server locks the DLLs in the old one: `dotnet publish src/RoleRadar.Mcp.Stdio -c Release -o ./dist/mcp-<short-sha>`.
+2. Point the client config at the new `RoleRadar.Mcp.Stdio.dll` and restart the client (Claude desktop reads its config only at start).
+3. Check the build: search `RoleRadar.Infrastructure.dll` in the new folder for the field names as UTF-16 text (a plain-text search finds nothing, because .NET stores string literals as UTF-16). For example `python -I -c "print(open('dist/mcp-<short-sha>/RoleRadar.Infrastructure.dll','rb').read().count('has_application'.encode('utf-16-le')))"` must print more than 0.
+4. Run `reconcile-read-models` once, by the owner, to backfill rows written by the old build ([guide](operations/reconcile-read-models.md)).
+5. Delete the old `dist/mcp*` folder when nothing runs from it.
+
 ## Claude Code CLI
 
 Register RoleRadar into Claude Code (the target path must be absolute because Claude Code launches MCP servers from arbitrary working directories):

@@ -54,6 +54,7 @@ Standing rules for every web phase. A phase prompt only adds scope and contract 
 - All OData reads go through `IOwnerReadSeam`, which scopes by `OwnerId`. The API never touches Mongo directly.
 - String `$filter` terms must be `tolower()` over a lowercase literal; anything else is rejected with 400.
 - Derived stored fields (`disposition_rank`, `company_name`, `has_*` flags, milestones) are written only at the repository choke point. Never bypass it; after changing a derived field run `reconcile-read-models`.
+- The MCP server Claude uses is a published build (`dist/mcp*`, see `docs/mcp-clients.md`), not the working tree. A change to a derived field, a repository write path or a tool schema does nothing for rows Claude adds until the owner republishes it; a stale build writes rows without the new fields and the Insights page then shows "needs a one-time backfill". When a change touches any of these, the hand-off must say, in its own lines: republish the MCP build, restart Claude desktop, then run `reconcile-read-models` (owner only). Never publish into or edit `dist/` yourself.
 
 ## Constitution (full text: `.specify/memory/constitution.md`)
 

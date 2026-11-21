@@ -29,6 +29,10 @@ The Insights dashboard and its drill-down filters rely on four derived fields ad
 
 Documents written before feature 007 lack these fields. Run the procedure below after deploying the feature. Until it has run, the Insights page shows "needs backfill" instead of numbers that depend on them, because a MongoDB filter such as `{ field: false }` does not match a document that lacks the field. The first dry run is expected to report every posting and every application as needing an update; the dry run after the confirmed run must report zero.
 
+### If the "needs backfill" notice comes back
+
+Reconcile only fixes rows that exist. If new rows keep missing the fields after a run, a client is still writing through an old published build (the MCP server in `dist/mcp*`, or a stale `roleradar-*:local` image). Republish it first ([Keep the published build current](../mcp-clients.md#keep-the-published-build-current)), then run reconcile once more.
+
 ## Operational Rules & Safety
 
 > [!IMPORTANT]
