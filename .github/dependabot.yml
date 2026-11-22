@@ -28,6 +28,11 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "Microsoft.AspNetCore.OpenApi"
         update-types: ["version-update:semver-major"]
+      # System.CommandLine 2.0.x follows .NET 10 servicing (2.0.14 and 2.0.15 match 10.0.14 and 10.0.15). 3.0.0 comes from
+      # the .NET 11 train, and on 3.0.0 the Ubuntu Integration lane hung with no output for over 25 minutes on two CI runs
+      # (#120) while the same lane passed locally on Windows and on main.
+      - dependency-name: "System.CommandLine"
+        update-types: ["version-update:semver-major"]
 
   # Digest bumps are not minor/patch updates, so a minor/patch group never matches them.
   # Group everything per ecosystem and let CI (image build + smoke test) judge the result.
