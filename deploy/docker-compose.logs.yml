@@ -17,7 +17,7 @@ x-logging: &default-logging
 
 services:
   logs:
-    image: amir20/dozzle:v11.4.1@sha256:915a5acf91b01bb4d11de1fde7e30d55646211240269e4404c03a6f71c5fc91e
+    image: amir20/dozzle:v11.4.3@sha256:244f218c876d6ed766277e71a537f34bfb2c01829e1927737e3673a8327deeb8
     logging: *default-logging
     read_only: true
     tmpfs:
