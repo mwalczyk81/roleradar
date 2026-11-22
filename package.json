@@ -12,9 +12,9 @@
     "lint": "nx run-many -t lint"
   },
   "devDependencies": {
-    "@nx/dotnet": "24.0.5",
-    "@nx/js": "24.0.5",
-    "nx": "24.0.5"
+    "@nx/dotnet": "24.0.6",
+    "@nx/js": "24.0.6",
+    "nx": "24.0.6"
   },
   "pnpm": {
     "overrides": {
