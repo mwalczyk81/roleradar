@@ -13,6 +13,21 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    ignore:
+      # The runtime-line packages track the .NET 10 SDK pinned in global.json. Their 11.x releases target the .NET 11
+      # runtime (Microsoft.Extensions.ApiDescription.Server 11.0.0 runs a build-time tool that needs it), and Dependabot
+      # opened them as separate "multi" PRs that no group matched. Moving to .NET 11 is a deliberate change with its
+      # own spec; remove these entries then. Minor and patch updates still arrive in nuget-minor-patch.
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.EntityFrameworkCore.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.AspNetCore.Authentication.JwtBearer"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.AspNetCore.Identity.EntityFrameworkCore"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.AspNetCore.OpenApi"
+        update-types: ["version-update:semver-major"]
 
   # Digest bumps are not minor/patch updates, so a minor/patch group never matches them.
   # Group everything per ecosystem and let CI (image build + smoke test) judge the result.
