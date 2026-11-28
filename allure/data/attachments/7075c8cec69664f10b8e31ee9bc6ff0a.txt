@@ -1,0 +1,1 @@
+2026-11-28T09:57:47.705Z info web [e703da88eb411d77e4139dd0489dfe8f] GET /postings responded 200 method=GET path=/postings status=200 durationMs=9.619

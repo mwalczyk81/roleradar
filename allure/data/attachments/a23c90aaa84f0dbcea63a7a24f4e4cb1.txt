@@ -1,0 +1,3 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+BENCH Applications | company search                             | median    10.4 ms | max    12.0 ms | n=9 | /odata/Applications?$filter=contains(tolower(companyName),'company 7')&amp;$orderby=companyName asc&amp;$top=25

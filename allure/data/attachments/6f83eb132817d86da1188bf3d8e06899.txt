@@ -1,0 +1,5 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+MEASURED read 503: 2576 ms (bound 5000 ms)
+MEASURED write 503: 3024 ms (bound 5000 ms)
+MEASURED recovery to 200: 450 ms (bound 30000 ms)

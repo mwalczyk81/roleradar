@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'none'" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RoleRadar test quality trends</title>
+    <link rel="stylesheet" href="trends.css" />
+  </head>
+  <body>
+    <h1>Test quality trends</h1>
+    <p>One record per run on the main branch, read from <code>metrics.jsonl</code>. The numbers come from the pipeline, not from this page.</p>
+    <div id="trends-root"><p>Loading metrics...</p></div>
+    <script type="module" src="trends.js"></script>
+  </body>
+</html>

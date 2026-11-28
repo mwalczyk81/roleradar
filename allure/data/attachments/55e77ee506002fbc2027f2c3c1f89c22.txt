@@ -1,0 +1,3 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+BENCH Notes        | created filter + sort                      | median    30.6 ms | max   100.9 ms | n=9 | /odata/Notes?$filter=createdAt ge 2026-01-01T00:00:00Z&amp;$orderby=createdAt desc&amp;$top=25&amp;$count=true

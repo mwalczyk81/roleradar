@@ -1,0 +1,3 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+BENCH Criteria     | interval filter + sort + count             | median     5.5 ms | max     8.7 ms | n=9 | /odata/Criteria?$filter=(effectiveFrom le 2026-06-01T00:00:00Z) and ((effectiveTo eq null) or (effectiveTo gt 2026-06-01T00:00:00Z))&amp;$orderby=name asc&amp;$top=25&amp;$count=true

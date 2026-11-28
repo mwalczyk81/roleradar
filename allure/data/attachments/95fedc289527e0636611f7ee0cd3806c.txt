@@ -1,0 +1,3 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+BENCH Criteria     | effectiveTo asc nulls last                 | median    10.3 ms | max    12.9 ms | n=9 | /odata/Criteria?$orderby=effectiveTo asc&amp;$top=25

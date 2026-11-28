@@ -1,0 +1,11 @@
+2026-11-28T10:09:40.956Z info web [ad7538f6c8cd62423fb740b4488dc97f] GET /no-such-route responded 404 method=GET path=/no-such-route status=404 durationMs=10.435
+2026-11-28T10:09:40.976Z info web [b5e1074212d7a43ef32955bc138e43e4] GET /assets/entry.client-CbX-eFt0.js responded 200 method=GET path=/assets/entry.client-CbX-eFt0.js status=200 durationMs=8.901
+2026-11-28T10:09:40.979Z info web [02d9b1dee7f743248782ccc5abacdf97] GET /assets/bundle-DDsKLIgq.css responded 200 method=GET path=/assets/bundle-DDsKLIgq.css status=200 durationMs=5.936
+2026-11-28T10:09:40.980Z info web [c6bbfb5267380c651bdda5744ddd3e62] GET /assets/app-Bs9iUZ2J.css responded 200 method=GET path=/assets/app-Bs9iUZ2J.css status=200 durationMs=5.539
+2026-11-28T10:09:40.980Z info web [af681b649beeb5d2e45d29a15ed3f642] GET /assets/tokens-DXOBllYG.css responded 200 method=GET path=/assets/tokens-DXOBllYG.css status=200 durationMs=4.31
+2026-11-28T10:09:40.981Z info web [070674c6606c774bd845c97efb7ff086] GET /assets/jsx-runtime-LKYXHABd.js responded 200 method=GET path=/assets/jsx-runtime-LKYXHABd.js status=200 durationMs=4.594
+2026-11-28T10:09:40.982Z info web [bc629b92c4b7231749740263d5f0b8b0] GET /assets/rolldown-runtime-XKyaHtl9.js responded 200 method=GET path=/assets/rolldown-runtime-XKyaHtl9.js status=200 durationMs=4.468
+2026-11-28T10:09:40.983Z info web [e0f39cf1512dda5a99888a50975840bf] GET /assets/chunk-6KYCQHYJ-BCRixN82.js responded 200 method=GET path=/assets/chunk-6KYCQHYJ-BCRixN82.js status=200 durationMs=5.905
+2026-11-28T10:09:40.986Z info web [cb24a17aaf576ff49accc5fd03c7d86c] GET /assets/root-DBnxH-DQ.js responded 200 method=GET path=/assets/root-DBnxH-DQ.js status=200 durationMs=5.33
+2026-11-28T10:09:40.987Z info web [7f2769421de71e9aa009ed8507edeb74] GET /assets/use-theme-flgkNN2l.js responded 200 method=GET path=/assets/use-theme-flgkNN2l.js status=200 durationMs=3.879
+2026-11-28T10:09:41.038Z info web [706d48acf194bd73b9ebea704817be00] GET /__manifest responded 200 method=GET path=/__manifest status=200 durationMs=1.604

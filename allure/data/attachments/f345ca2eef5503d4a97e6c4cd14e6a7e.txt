@@ -1,0 +1,12 @@
+2026-11-28T10:05:57.634Z info web [cef26982d3dab8a9fcf4bdc34eca1ec3] GET /auth/logout responded 200 method=GET path=/auth/logout status=200 durationMs=7.113
+2026-11-28T10:05:57.659Z info web [344ad639cca3be76a95a24a3a8d98f9a] GET /assets/entry.client-CbX-eFt0.js responded 200 method=GET path=/assets/entry.client-CbX-eFt0.js status=200 durationMs=11.377
+2026-11-28T10:05:57.662Z info web [d44c2e39153069b2e734b44c78861b15] GET /assets/app-Bs9iUZ2J.css responded 200 method=GET path=/assets/app-Bs9iUZ2J.css status=200 durationMs=7.908
+2026-11-28T10:05:57.662Z info web [1e6db53fa6a393aca50bfc3b427a7683] GET /assets/tokens-DXOBllYG.css responded 200 method=GET path=/assets/tokens-DXOBllYG.css status=200 durationMs=6.069
+2026-11-28T10:05:57.663Z info web [9701c9d3de7c1e7d82304596c8849329] GET /assets/bundle-DDsKLIgq.css responded 200 method=GET path=/assets/bundle-DDsKLIgq.css status=200 durationMs=5.967
+2026-11-28T10:05:57.665Z info web [2b574e0b3561e458e30267fa8cc5f0b5] GET /assets/rolldown-runtime-XKyaHtl9.js responded 200 method=GET path=/assets/rolldown-runtime-XKyaHtl9.js status=200 durationMs=6.893
+2026-11-28T10:05:57.667Z info web [dc33f99e52259dbc7bd349eb1ee63e6e] GET /assets/chunk-6KYCQHYJ-BCRixN82.js responded 200 method=GET path=/assets/chunk-6KYCQHYJ-BCRixN82.js status=200 durationMs=9.24
+2026-11-28T10:05:57.668Z info web [a7a922d68a2e5cd445df76d0bffa06e0] GET /assets/jsx-runtime-LKYXHABd.js responded 200 method=GET path=/assets/jsx-runtime-LKYXHABd.js status=200 durationMs=7.256
+2026-11-28T10:05:57.671Z info web [9846593fc30b76d5a09149f7953625ed] GET /assets/root-DBnxH-DQ.js responded 200 method=GET path=/assets/root-DBnxH-DQ.js status=200 durationMs=6.625
+2026-11-28T10:05:57.671Z info web [d51822f11af84b14d3026c3953739335] GET /assets/auth.logout-CaFbtjsE.js responded 200 method=GET path=/assets/auth.logout-CaFbtjsE.js status=200 durationMs=6.09
+2026-11-28T10:05:57.671Z info web [1a17aabf87ab7a2e6c1113e3cd38964d] GET /assets/use-theme-flgkNN2l.js responded 200 method=GET path=/assets/use-theme-flgkNN2l.js status=200 durationMs=6.737
+2026-11-28T10:05:57.727Z info web [e2f96798ffbde2ef80690b3a9bb4a3c8] GET /__manifest responded 200 method=GET path=/__manifest status=200 durationMs=1.206

@@ -1,0 +1,1 @@
+{"id":"6d0ef0ec7a47c30b84bd93b461b15ad5.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/loopback-dev-loop.test.ts.server bind address (HOST) &gt; binds loopback only when HOST is 127.0.0.1","name":"server bind address (HOST) &gt; binds loopback only when HOST is 127.0.0.1","status":"passed","testResultsByEnv":{"default":"9b18cd37e4b06eb5346a82f69d52fb34"}}

@@ -1,0 +1,17 @@
+2026-11-28T09:55:22.121Z info web [6699ef03dfc5bf5b26e2a13f45b6ab79] GET /notes responded 200 method=GET path=/notes status=200 durationMs=8.784
+2026-11-28T09:55:22.139Z info web [8d37e1057cb084607fc11f1c9ea8833b] GET /assets/entry.client-CbX-eFt0.js responded 200 method=GET path=/assets/entry.client-CbX-eFt0.js status=200 durationMs=5.929
+2026-11-28T09:55:22.148Z info web [4f8ca32f2665dc2fdee5ed6e9a6d8cc5] GET /assets/jsx-runtime-LKYXHABd.js responded 200 method=GET path=/assets/jsx-runtime-LKYXHABd.js status=200 durationMs=8.252
+2026-11-28T09:55:22.148Z info web [a8fa91929e363348524da0c9be9e2ee5] GET /assets/tokens-DXOBllYG.css responded 200 method=GET path=/assets/tokens-DXOBllYG.css status=200 durationMs=7.94
+2026-11-28T09:55:22.148Z info web [a59af0c8a392455b330ad66a3788754e] GET /assets/bundle-DDsKLIgq.css responded 200 method=GET path=/assets/bundle-DDsKLIgq.css status=200 durationMs=6.082
+2026-11-28T09:55:22.148Z info web [ffb784ff995e74ca88aee5dccff0e1bc] GET /assets/rolldown-runtime-XKyaHtl9.js responded 200 method=GET path=/assets/rolldown-runtime-XKyaHtl9.js status=200 durationMs=5.865
+2026-11-28T09:55:22.149Z info web [1b0cf88e110c0a3a666462d86fec9c31] GET /assets/chunk-6KYCQHYJ-BCRixN82.js responded 200 method=GET path=/assets/chunk-6KYCQHYJ-BCRixN82.js status=200 durationMs=5.159
+2026-11-28T09:55:22.150Z info web [26c2631486a4c83deb72c0968847bdcb] GET /assets/app-Bs9iUZ2J.css responded 200 method=GET path=/assets/app-Bs9iUZ2J.css status=200 durationMs=4.468
+2026-11-28T09:55:22.158Z info web [320ce9a346b91b266362b82f6147a689] GET /assets/root-DBnxH-DQ.js responded 200 method=GET path=/assets/root-DBnxH-DQ.js status=200 durationMs=7.418
+2026-11-28T09:55:22.158Z info web [7df653d643455cafc36acdfb0616610c] GET /assets/use-theme-flgkNN2l.js responded 200 method=GET path=/assets/use-theme-flgkNN2l.js status=200 durationMs=7.435
+2026-11-28T09:55:22.158Z info web [fc43e77c0256fb274e09c7607a18da6c] GET /assets/notes._index-D5AXotPH.js responded 200 method=GET path=/assets/notes._index-D5AXotPH.js status=200 durationMs=7.319
+2026-11-28T09:55:22.159Z info web [84bf657e72d1c32e7cf0a915a9e5514f] GET /assets/nav-BkYXQsAg.js responded 200 method=GET path=/assets/nav-BkYXQsAg.js status=200 durationMs=8.146
+2026-11-28T09:55:22.160Z info web [0c33be1fbd768e88c00fc2e2243f12b2] GET /assets/format-date-D6DoLrzR.js responded 200 method=GET path=/assets/format-date-D6DoLrzR.js status=200 durationMs=8.185
+2026-11-28T09:55:22.161Z info web [498cdcb43f03f3e870aeaa0c7efc4262] GET /assets/ui-BiKpo2_6.js responded 200 method=GET path=/assets/ui-BiKpo2_6.js status=200 durationMs=8.787
+2026-11-28T09:55:22.173Z info web [d56356c347b5d11a0779012bf3780967] GET /assets/ibm-plex-sans-latin-wght-normal-IvpUvPa2.woff2 responded 200 method=GET path=/assets/ibm-plex-sans-latin-wght-normal-IvpUvPa2.woff2 status=200 durationMs=3.02
+2026-11-28T09:55:22.173Z info web [8c81eebd6513606e4897ef42d6ecb1f6] GET /assets/ibm-plex-serif-latin-600-normal-DAxitmSu.woff2 responded 200 method=GET path=/assets/ibm-plex-serif-latin-600-normal-DAxitmSu.woff2 status=200 durationMs=2.541
+2026-11-28T09:55:22.242Z info web [d7e12c3c005b96f3ffb8fc5095ad80d4] GET /__manifest responded 200 method=GET path=/__manifest status=200 durationMs=1.102

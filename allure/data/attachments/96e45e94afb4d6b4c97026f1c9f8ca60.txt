@@ -1,0 +1,3 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+BENCH Notes        | heading asc (collation)                    | median    26.1 ms | max    34.4 ms | n=9 | /odata/Notes?$orderby=heading asc&amp;$top=25&amp;$skip=100

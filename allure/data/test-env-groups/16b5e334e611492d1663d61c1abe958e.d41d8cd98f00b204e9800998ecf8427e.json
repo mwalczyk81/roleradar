@@ -1,0 +1,1 @@
+{"id":"16b5e334e611492d1663d61c1abe958e.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/concurrency-limit.test.ts.p-limit as the Insights loaders use it &gt; runs at most `limit` tasks together","name":"p-limit as the Insights loaders use it &gt; runs at most `limit` tasks together","status":"passed","testResultsByEnv":{"default":"366b4d54d7b07ab1797177a22e8c3a14"}}

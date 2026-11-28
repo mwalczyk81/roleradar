@@ -1,0 +1,3 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+BENCH Companies    | filter status + name desc + count          | median     9.5 ms | max    12.7 ms | n=9 | /odata/Companies?$filter=status eq 'active'&amp;$orderby=name desc&amp;$top=25&amp;$count=true

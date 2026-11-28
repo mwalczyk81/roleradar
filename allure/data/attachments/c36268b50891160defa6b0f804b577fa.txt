@@ -1,0 +1,11 @@
+2026-11-28T09:58:24.446Z info web [31e0323f81dc35217e8d119d172ee3d0] GET /no-such-route responded 404 method=GET path=/no-such-route status=404 durationMs=10.293
+2026-11-28T09:58:24.462Z info web [b6fcfbd4cf491c8da9e223a0aaeb3598] GET /assets/entry.client-CbX-eFt0.js responded 200 method=GET path=/assets/entry.client-CbX-eFt0.js status=200 durationMs=2.703
+2026-11-28T09:58:24.471Z info web [08bd63bc2780948def768180ee96b04c] GET /assets/app-Bs9iUZ2J.css responded 200 method=GET path=/assets/app-Bs9iUZ2J.css status=200 durationMs=6.994
+2026-11-28T09:58:24.471Z info web [2cf49cdffd8a29f456827f0f28987b07] GET /assets/tokens-DXOBllYG.css responded 200 method=GET path=/assets/tokens-DXOBllYG.css status=200 durationMs=5.42
+2026-11-28T09:58:24.472Z info web [b8b421a3ad77e35b1c4dc21338dbbf13] GET /assets/bundle-DDsKLIgq.css responded 200 method=GET path=/assets/bundle-DDsKLIgq.css status=200 durationMs=4.281
+2026-11-28T09:58:24.472Z info web [8520f286d620a1fabd02bfdc647c161e] GET /assets/jsx-runtime-LKYXHABd.js responded 200 method=GET path=/assets/jsx-runtime-LKYXHABd.js status=200 durationMs=3.591
+2026-11-28T09:58:24.472Z info web [5b26a36cf3a43b3c0dd45d4a46173970] GET /assets/rolldown-runtime-XKyaHtl9.js responded 200 method=GET path=/assets/rolldown-runtime-XKyaHtl9.js status=200 durationMs=3.463
+2026-11-28T09:58:24.473Z info web [e9fc43c15df4fc036d3f9db21ebedc5c] GET /assets/chunk-6KYCQHYJ-BCRixN82.js responded 200 method=GET path=/assets/chunk-6KYCQHYJ-BCRixN82.js status=200 durationMs=5.153
+2026-11-28T09:58:24.477Z info web [4d4ce9053a5286c935a8bc852c3b5e47] GET /assets/root-DBnxH-DQ.js responded 200 method=GET path=/assets/root-DBnxH-DQ.js status=200 durationMs=1.839
+2026-11-28T09:58:24.478Z info web [fe06d5f24b5d21a9d36f10ccdb0d5486] GET /assets/use-theme-flgkNN2l.js responded 200 method=GET path=/assets/use-theme-flgkNN2l.js status=200 durationMs=1.774
+2026-11-28T09:58:24.536Z info web [0d281bad7d1eab01a5f5a1abc1660e33] GET /__manifest responded 200 method=GET path=/__manifest status=200 durationMs=1.378

@@ -1,0 +1,1 @@
+{"id":"4ac780bc82fc1f984469fe82734bc6cd.d41d8cd98f00b204e9800998ecf8427e","fullName":"tests/unit/trace-context.test.ts.startTrace &gt; never logs a discarded value","name":"startTrace &gt; never logs a discarded value","status":"passed","testResultsByEnv":{"default":"be1f148e9ad21eb4d029b9e3d26ba995"}}

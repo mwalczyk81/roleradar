@@ -1,0 +1,3 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+BENCH Postings     | filter disposition + sort + count          | median    14.9 ms | max    18.2 ms | n=9 | /odata/Postings?$filter=disposition eq 'lead'&amp;$orderby=updatedAt desc&amp;$top=25&amp;$count=true

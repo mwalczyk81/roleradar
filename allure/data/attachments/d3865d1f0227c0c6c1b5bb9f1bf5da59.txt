@@ -1,0 +1,11 @@
+Error: No route matches URL "/no-such-route"
+    at getInternalRouterError ([path]/chunk-6KYCQHYJ.mjs:5587:5)
+    at Object.query ([path]/chunk-6KYCQHYJ.mjs:3588:19)
+    at handleDocumentRequest ([path]/chunk-JAHXRPFV.mjs:1438:38)
+    at requestHandler ([path]/chunk-JAHXRPFV.mjs:1298:24)
+    at requestHandler ([path]/chunk-JAHXRPFV.mjs:1352:12)
+    at [path]/index.mjs:19:12
+    at processTicksAndRejections (node:internal/process/task_queues:103:5)
+    at [path]/node-fetch-server.js:17:18
+    at [path]/server.ts:261:11
+    at Server.<anonymous> ([path]/server.ts:236:5)

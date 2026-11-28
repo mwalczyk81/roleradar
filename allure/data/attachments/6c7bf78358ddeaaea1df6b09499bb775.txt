@@ -1,0 +1,3 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+BENCH Postings     | score desc nulls last, deep page           | median    11.5 ms | max    14.3 ms | n=9 | /odata/Postings?$orderby=score desc&amp;$top=25&amp;$skip=4000

@@ -1,0 +1,3 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+BENCH Postings     | title asc (collation), page 2              | median     2.3 ms | max     2.5 ms | n=9 | /odata/Postings?$orderby=title asc&amp;$top=25&amp;$skip=25

@@ -1,0 +1,3 @@
+&lt;&lt;&lt; Test output &gt;&gt;&gt;
+
+BENCH Notes        | notes list deep page                       | median    38.6 ms | max    46.6 ms | n=9 | /odata/Notes?$top=25&amp;$skip=4000&amp;$count=true
